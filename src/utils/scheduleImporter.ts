@@ -133,6 +133,29 @@ export const guessDepartment = (text: string): DepartmentType => {
   return '共同科目';
 };
 
+interface TeacherSlotHit {
+  rowNumber: number;
+  className: string;
+  subjectName: string;
+  subjectCode: string;
+}
+
+const normalizeClashText = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+
+/** 忠/孝等同科同時段合班，或完全重複列，不視為教師衝堂 */
+const isCombinedOrDuplicateTeacherSlot = (
+  prev: TeacherSlotHit,
+  className: string,
+  subjectName: string,
+  subjectCode: string
+) => {
+  const sameSubject =
+    (subjectName && normalizeClashText(prev.subjectName) === normalizeClashText(subjectName)) ||
+    (subjectCode && prev.subjectCode && prev.subjectCode === subjectCode);
+  if (!sameSubject) return false;
+  return true;
+};
+
 /**
  * Parse an uploaded Excel file / CSV buffer into structured parsed rows
  */
@@ -170,7 +193,7 @@ export const parseScheduleFile = async (
   const venueNameMap = new Map(existingVenues.map((v) => [v.name.trim(), v]));
 
   // Track collisions in file (day + period + teacher/class/venue)
-  const teacherTimeSlot = new Map<string, number>();
+  const teacherTimeSlot = new Map<string, TeacherSlotHit>();
   const classTimeSlot = new Map<string, number>();
   const venueTimeSlot = new Map<string, number>();
   const clashesInFile: string[] = [];
@@ -536,10 +559,13 @@ export const parseScheduleFile = async (
     const timeVal = findField(['時間', '時段', '上課時間', '節次時間', 'Time', 'time']);
     const dayVal = findField(['星期', '週次', '週', '星期幾', 'Day', 'dayOfWeek']) || timeVal;
     const periodVal = findField(['節次', '節', '堂次', 'Period', 'period']) || timeVal;
-    const classVal = String(findField(['班級名稱', '班級', 'Class', 'className', '班級代碼'])).trim();
-    const subjectVal = String(findField(['科目名稱', '課程名稱', '科目', 'Subject', 'subjectName', '科目代碼'])).trim();
-    const rawTeacherVal = String(findField(['授課教師', '任課教師', '教師姓名', '教師', 'Teacher', 'teacherName', '校內教師姓名'])).trim();
-    const teacherVal = cleanTeacherName(rawTeacherVal) || '未指派教師';
+    const classVal = String(findField(['班級名稱', '班級', 'Class', 'className'])).trim()
+      || String(findField(['班級代號', '班級代碼'])).trim();
+    const subjectVal = String(findField(['科目名稱', '課程名稱', '科目', 'Subject', 'subjectName'])).trim();
+    const subjectCodeVal = String(findField(['科目代號', '科目代碼'])).trim();
+    const teacherNameRaw = String(findField(['教師名稱', '授課教師', '任課教師', '教師姓名', '校內教師姓名', 'Teacher', 'teacherName'])).trim();
+    const teacherCodeRaw = String(findField(['教師代號', '教師代碼', '教師編號'])).trim();
+    const teacherVal = cleanTeacherName(teacherNameRaw || teacherCodeRaw) || '未指派教師';
     const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName', '教室名稱'])).trim();
     const deptVal = String(findField(['科別', '群科', '教師科別', 'Department', 'department'])).trim();
     const practicalVal = findField(['是否為實習', '實習課', '實習', '屬性', 'isPractical', '實作', '課程類別']);
@@ -598,19 +624,28 @@ export const parseScheduleFile = async (
     if (dayOfWeek && period) {
       const timeKey = `d${dayOfWeek}-p${period}`;
       
-      // Teacher clash (skip if unassigned)
+      // Teacher clash (skip unassigned, 合班/同科同時段, and duplicate rows)
       if (teacherVal && teacherVal !== '未指派教師') {
         const subTeachers = teacherVal.split('/').map((s) => s.trim()).filter(Boolean);
         subTeachers.forEach((tName) => {
           if (tName && tName !== '未指派教師') {
-            const teacherKey = `${timeKey}-t:${tName}`;
-            if (teacherTimeSlot.has(teacherKey)) {
-              const prevRow = teacherTimeSlot.get(teacherKey);
-              const msg = `第 ${rowNumber} 列與第 ${prevRow} 列衝突：教師「${tName}」在 週${dayOfWeek} 第${period}節 排定兩門課程`;
+            const identity = teacherCodeRaw || tName;
+            const teacherKey = `${timeKey}-t:${identity}`;
+            const prev = teacherTimeSlot.get(teacherKey);
+            if (prev) {
+              if (isCombinedOrDuplicateTeacherSlot(prev, classVal, subjectVal, subjectCodeVal)) {
+                return;
+              }
+              const msg = `第 ${rowNumber} 列與第 ${prev.rowNumber} 列衝突：教師「${tName}」在 週${dayOfWeek} 第${period}節 排定兩門課程`;
               warnings.push(msg);
               clashesInFile.push(msg);
             } else {
-              teacherTimeSlot.set(teacherKey, rowNumber);
+              teacherTimeSlot.set(teacherKey, {
+                rowNumber,
+                className: classVal,
+                subjectName: subjectVal,
+                subjectCode: subjectCodeVal,
+              });
             }
           }
         });
