@@ -3,12 +3,14 @@ import { useApp } from '../../context/AppContext';
 import { TeacherSchedule } from './TeacherSchedule';
 import { TeacherRequestsList } from './TeacherRequestsList';
 import { RequestModal } from './RequestModal';
-import { Calendar, FileText, Plus } from 'lucide-react';
+import { Calendar, FileText, Plus, Cloud } from 'lucide-react';
+import { CloudSyncJoinModal } from '../Common/CloudSyncJoinModal';
 
 export const TeacherPortalMain: React.FC = () => {
-  const { requests, currentTeacher, requestTeacherActionAuth } = useApp();
+  const { requests, currentTeacher, requestTeacherActionAuth, cloudSyncStatus } = useApp();
   const [activeTab, setActiveTab] = useState<'schedule' | 'requests'>('schedule');
   const [isTopRequestModalOpen, setIsTopRequestModalOpen] = useState(false);
+  const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
 
   const myPendingCount = requests.filter(
     (r) => r.applicantTeacherId === currentTeacher?.id && r.status === 'pending'
@@ -16,7 +18,22 @@ export const TeacherPortalMain: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      
+      {cloudSyncStatus === 'off' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-sm text-sky-950">
+            這台電腦尚未加入學校同步。輸入教學組給的<strong>同步密碼</strong>即可看到同一份課表，不必用管理員帳號。
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsSyncJoinOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-sky-500"
+          >
+            <Cloud className="w-4 h-4" />
+            加入同步
+          </button>
+        </div>
+      )}
+
       {/* Top Tabs */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-200 pb-3 gap-2">
         <div className="flex items-center space-x-2">
@@ -82,6 +99,7 @@ export const TeacherPortalMain: React.FC = () => {
         />
       )}
 
+      <CloudSyncJoinModal isOpen={isSyncJoinOpen} onClose={() => setIsSyncJoinOpen(false)} />
     </div>
   );
 };

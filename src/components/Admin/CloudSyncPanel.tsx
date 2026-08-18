@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Cloud, CloudOff, Check, AlertCircle, Loader2, KeyRound, Link as LinkIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CloudSyncSettings, testCloudSyncConnection } from '../../utils/cloudSync';
+import { CloudSyncSettings, DEFAULT_DATABASE_URL, testCloudSyncConnection } from '../../utils/cloudSync';
 
 export const CloudSyncPanel: React.FC = () => {
   const {
@@ -66,7 +66,7 @@ export const CloudSyncPanel: React.FC = () => {
               跨電腦即時同步（A 匯入，B 可以看到）
             </h3>
             <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-              啟用後，課表、教師、教學組名冊、密碼與申請單會寫入學校共用雲端。A 電腦匯入課表後，B 電腦約數秒內會自動更新。登入身分仍是各電腦自己選。
+              啟用後，課表、教師、教學組名冊、密碼與申請單會寫入學校共用雲端。教師電腦不必進本頁：畫面右上角「加入同步」或教師端橫幅，只要輸入學校同步密碼即可。登入身分仍是各電腦自己選。
             </p>
           </div>
           <span
@@ -116,7 +116,7 @@ export const CloudSyncPanel: React.FC = () => {
               type="url"
               value={form.databaseUrl}
               onChange={(e) => setForm({ ...form, databaseUrl: e.target.value })}
-              placeholder="https://你的專案-default-rtdb.asia-southeast1.firebasedatabase.app"
+              placeholder={DEFAULT_DATABASE_URL}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
           </div>
@@ -196,7 +196,9 @@ export const CloudSyncPanel: React.FC = () => {
 }`}</pre>
             </li>
             <li>複製資料庫網址（結尾通常是 <code>.firebasedatabase.app</code> 或 <code>.firebaseio.com</code>）。</li>
-            <li>A、B 兩台電腦都貼上同一網址、同一學校同步密碼，並勾選啟用。</li>
+            <li>
+              管理員在本頁填網址與學校同步密碼並啟用。老師電腦只要在右上角按「加入同步」、輸入同一組學校同步密碼即可，不必登入系統管理員。
+            </li>
           </ol>
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
             啟用後請在 A 再匯入一次課表（或任意改一個設定），B 電腦保持網頁開著或重新整理即可看到。

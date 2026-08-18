@@ -2,6 +2,8 @@ import { AcademicStaff, CourseSession, SubstituteRequest, SystemConfig, Teacher,
 
 export const CLOUD_SYNC_STORAGE_KEY = 'voc_cloud_sync_v1';
 export const CLOUD_SYNC_UPDATED_AT_KEY = 'voc_cloud_sync_updated_at';
+export const DEFAULT_DATABASE_URL =
+  'https://linetalk-3d25e-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 export interface CloudSyncSettings {
   enabled: boolean;
@@ -32,15 +34,15 @@ const decoder = new TextDecoder();
 export const loadCloudSyncSettings = (): CloudSyncSettings => {
   try {
     const raw = localStorage.getItem(CLOUD_SYNC_STORAGE_KEY);
-    if (!raw) return { enabled: false, databaseUrl: '', schoolKey: '' };
+    if (!raw) return { enabled: false, databaseUrl: DEFAULT_DATABASE_URL, schoolKey: '' };
     const parsed = JSON.parse(raw);
     return {
       enabled: Boolean(parsed.enabled),
-      databaseUrl: String(parsed.databaseUrl || '').trim(),
+      databaseUrl: String(parsed.databaseUrl || DEFAULT_DATABASE_URL).trim() || DEFAULT_DATABASE_URL,
       schoolKey: String(parsed.schoolKey || '').trim(),
     };
   } catch {
-    return { enabled: false, databaseUrl: '', schoolKey: '' };
+    return { enabled: false, databaseUrl: DEFAULT_DATABASE_URL, schoolKey: '' };
   }
 };
 

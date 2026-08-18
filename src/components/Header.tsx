@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { BackupTransferButtons } from './Common/BackupTransferButtons';
+import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
 
 export const Header: React.FC = () => {
   const {
@@ -39,6 +40,7 @@ export const Header: React.FC = () => {
   } = useApp();
 
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
@@ -93,16 +95,28 @@ export const Header: React.FC = () => {
 
           {/* Right Actions: AI Advisor & Reset */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            {cloudSyncStatus !== 'off' && (
-              <span
-                className={`hidden md:flex items-center space-x-1 px-2 py-1.5 rounded-lg text-[11px] border ${
+            {cloudSyncStatus === 'off' ? (
+              <button
+                type="button"
+                onClick={() => setIsSyncJoinOpen(true)}
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-[11px] sm:text-xs font-bold border border-sky-500/40 transition"
+                title="教師電腦不必進系統管理員，輸入學校同步密碼即可"
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>加入同步</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsSyncJoinOpen(true)}
+                className={`flex items-center space-x-1 px-2 py-1.5 rounded-lg text-[11px] border ${
                   cloudSyncStatus === 'synced'
                     ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                     : cloudSyncStatus === 'error'
                     ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
                     : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                 }`}
-                title="跨電腦同步狀態（於系統管理員 ➔ 跨電腦同步 設定）"
+                title="點擊可重新輸入學校同步密碼"
               >
                 {cloudSyncStatus === 'synced' ? (
                   <Cloud className="w-3.5 h-3.5" />
@@ -114,7 +128,7 @@ export const Header: React.FC = () => {
                 <span>
                   {cloudSyncStatus === 'synced' ? '已跨電腦同步' : cloudSyncStatus === 'error' ? '同步失敗' : '同步中'}
                 </span>
-              </span>
+              </button>
             )}
 
             {/* AI Advisor Button */}
@@ -192,6 +206,8 @@ export const Header: React.FC = () => {
             </div>
           </div>
         )}
+
+        <CloudSyncJoinModal isOpen={isSyncJoinOpen} onClose={() => setIsSyncJoinOpen(false)} />
 
         {/* Sub-header Navigation / Role Switcher */}
         <div className="flex flex-wrap items-center justify-between border-t border-slate-800/80 py-2 gap-2">
