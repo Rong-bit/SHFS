@@ -445,27 +445,6 @@ export const AdminSettings: React.FC = () => {
           </button>
 
           <BackupTransferButtons variant="light" />
-
-          {/* Reset Defaults */}
-          <button
-            id="btn-admin-reset-defaults"
-            onClick={() => {
-              setConfirmDialog({
-                isOpen: true,
-                title: '確認重設系統預設值',
-                message: '確定要將所有系統參數、師資、工場與課表重設回預設高職示範值嗎？',
-                warningMessage: '此操作將還原所有自訂課表與師資至預設示範狀態。',
-                onConfirm: () => {
-                  resetToMockData();
-                  setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-                },
-              });
-            }}
-            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">重設預設值</span>
-          </button>
         </div>
       </div>
 
@@ -1527,7 +1506,7 @@ export const AdminSettings: React.FC = () => {
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <div className="font-bold text-slate-900">重設示範資料</div>
                   <p className="text-slate-500 text-[11px]">
-                    若排課或測試資料需還原為系統初始高職示範資料（含電機、資訊、機械、餐飲等群科課表），可隨時一鍵重設。
+                    僅供測試。正式課表請勿按此，否則示範資料會同步到其他已加入同步的電腦。
                   </p>
                   <button
                     onClick={() => {

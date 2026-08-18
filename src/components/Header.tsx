@@ -10,17 +10,11 @@ import {
   Calculator, 
   Settings, 
   Sparkles, 
-  RotateCcw,
-  BookOpen,
-  AlertCircle,
-  AlertTriangle,
-  X,
   Cloud,
   CloudOff,
   Loader2
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
-import { BackupTransferButtons } from './Common/BackupTransferButtons';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
 
 export const Header: React.FC = () => {
@@ -33,13 +27,11 @@ export const Header: React.FC = () => {
     requests,
     systemConfig,
     setIsAiAdvisorOpen,
-    resetToMockData,
     requestRoleSwitchWithAuth,
     requestTeacherSwitchWithAuth,
     cloudSyncStatus,
   } = useApp();
 
-  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
@@ -143,69 +135,8 @@ export const Header: React.FC = () => {
                 (法規與智慧排課)
               </span>
             </button>
-
-            <BackupTransferButtons variant="header" />
-
-            {/* Reset Mock Data */}
-            <button
-              id="btn-reset-demo-data"
-              onClick={() => setIsResetConfirmOpen(true)}
-              title="重設為預設高職示範課表與申請單"
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700 transition"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">重設資料</span>
-            </button>
           </div>
         </div>
-
-        {/* In-App Reset Confirmation Dialog Modal */}
-        {isResetConfirmOpen && (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
-              <div className="bg-slate-800 text-white p-4 flex items-center justify-between border-b border-slate-700">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-400" />
-                  <span className="font-bold text-sm">確認重設示範資料庫</span>
-                </div>
-                <button
-                  onClick={() => setIsResetConfirmOpen(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-6 space-y-3">
-                <p className="text-slate-200 text-sm font-medium leading-relaxed">
-                  確定要重設所有測試資料回初始示範狀態嗎？
-                </p>
-                <div className="p-3 bg-amber-950/50 rounded-xl border border-amber-800/80 text-xs text-amber-300">
-                  ⚠️ 這將清空您目前輸入的自訂課表、審核單據與自訂名冊，並恢復至系統預設高職示範課表。
-                </div>
-              </div>
-              <div className="p-4 bg-slate-800/60 border-t border-slate-800 flex items-center justify-end space-x-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsResetConfirmOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-slate-700"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetToMockData();
-                    setIsResetConfirmOpen(false);
-                  }}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1.5"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>確認重設</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         <CloudSyncJoinModal isOpen={isSyncJoinOpen} onClose={() => setIsSyncJoinOpen(false)} />
 

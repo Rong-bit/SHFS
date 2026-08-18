@@ -205,7 +205,7 @@ export const CloudSyncPanel: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5 text-slate-500">
             <CloudOff className="w-3.5 h-3.5" />
-            未啟用時仍可使用「匯出／匯入整份備份」手動搬資料。
+            雲端同步故障時，系統管理員仍可用「匯出／匯入整份備份」當保險。
           </div>
         </div>
       </div>

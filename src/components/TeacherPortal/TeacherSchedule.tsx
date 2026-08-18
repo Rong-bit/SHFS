@@ -35,6 +35,7 @@ export const TeacherSchedule: React.FC = () => {
     requestTeacherSwitchWithAuth,
     requestTeacherActionAuth,
     updateTeacherPassword,
+    updateTeacher,
     sessions, 
     teachers, 
     systemConfig, 
@@ -43,6 +44,10 @@ export const TeacherSchedule: React.FC = () => {
   const [selectedSessionForModal, setSelectedSessionForModal] = useState<CourseSession | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isEditContactOpen, setIsEditContactOpen] = useState(false);
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [contactSavedNotice, setContactSavedNotice] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [passwordSavedNotice, setPasswordSavedNotice] = useState(false);
 
@@ -151,8 +156,26 @@ export const TeacherSchedule: React.FC = () => {
                       <span>設定密碼</span>
                     </button>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    聯絡分機：{currentTeacher.phone} ｜ {currentTeacher.email}
+                  <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                    <span>聯絡分機：{currentTeacher.phone || '尚未填寫'} ｜ {currentTeacher.email || '尚未填寫信箱'}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        requestTeacherActionAuth(
+                          currentTeacher.id,
+                          () => {
+                            setEditPhone(currentTeacher.phone || '');
+                            setEditEmail(currentTeacher.email || '');
+                            setContactSavedNotice(false);
+                            setIsEditContactOpen(true);
+                          },
+                          '編輯聯絡資料'
+                        );
+                      }}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded text-[11px] font-medium"
+                    >
+                      填寫分機 / 信箱
+                    </button>
                   </p>
                 </div>
               </div>
@@ -463,6 +486,77 @@ export const TeacherSchedule: React.FC = () => {
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow transition"
                 >
                   儲存密碼
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditContactOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden text-left">
+            <div className="bg-slate-800 px-6 py-4 flex items-center justify-between border-b border-slate-700">
+              <span className="font-bold text-white text-sm">填寫【{currentTeacher.name}】分機與信箱</span>
+              <button
+                type="button"
+                onClick={() => setIsEditContactOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-400">
+                匯入課表時會先帶入示範分機與信箱，請改成自己的公務分機與學校信箱。儲存後其他電腦同步也會一起更新。
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">公務分機</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="例如：分機 301"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 text-sm focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">電子郵件</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="例如：huang@ccvs.edu.tw"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 text-sm focus:outline-none"
+                />
+              </div>
+              {contactSavedNotice && (
+                <div className="p-3 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-300 text-xs flex items-center space-x-2">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>已儲存聯絡資料。</span>
+                </div>
+              )}
+              <div className="flex items-center justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditContactOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700"
+                >
+                  關閉
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateTeacher(currentTeacher.id, {
+                      phone: editPhone.trim() || currentTeacher.phone,
+                      email: editEmail.trim() || currentTeacher.email,
+                    });
+                    setContactSavedNotice(true);
+                    window.setTimeout(() => setIsEditContactOpen(false), 800);
+                  }}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl"
+                >
+                  儲存
                 </button>
               </div>
             </div>
