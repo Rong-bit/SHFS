@@ -28,6 +28,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
+import { displayTeacherTitle } from '../../utils/schoolDepartments';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -140,7 +141,7 @@ export const TeacherSchedule: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <h2 className="text-lg font-bold text-slate-100">{currentTeacher.name}</h2>
                     <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-xs font-semibold">
-                      {currentTeacher.title}
+                      {displayTeacherTitle(currentTeacher)}
                     </span>
                     <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-xs">
                       {currentTeacher.department}

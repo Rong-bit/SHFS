@@ -37,6 +37,7 @@ export interface Teacher {
   name: string;
   title: TeacherTitle;
   department: DepartmentType;
+  homeroomClass?: string; // 由星期三下午團體活動判斷，例如 電機三忠
   basePeriods: number; // 每週基本授課節數 (如專任16、導師12、主任10、組長8)
   weeklyActualPeriods: number; // 本學期每週排定節數
   email: string;
@@ -169,6 +170,7 @@ export interface MonthlyTeacherSettlement {
   teacherName: string;
   department: DepartmentType;
   title: TeacherTitle;
+  homeroomClass?: string;
   basePeriods: number; // 基本節數
   weeklyActualPeriods: number; // 本職每週排定節數
   weeklyOverloadPeriods: number; // 每週超鐘點節數 (Math.max(0, weeklyActualPeriods - basePeriods))

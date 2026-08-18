@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, User, Check, ChevronDown, X } from 'lucide-react';
 import { Teacher } from '../../types';
+import { displayTeacherTitle } from '../../utils/schoolDepartments';
 
 interface TeacherSearchComboboxProps {
   teachers: Teacher[];
@@ -35,7 +36,8 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
     return (
       t.name.toLowerCase().includes(q) ||
       (t.department && t.department.toLowerCase().includes(q)) ||
-      (t.title && t.title.toLowerCase().includes(q))
+      (t.title && t.title.toLowerCase().includes(q)) ||
+      (t.homeroomClass && t.homeroomClass.toLowerCase().includes(q))
     );
   });
 
@@ -191,7 +193,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
                         <div className="font-bold flex items-center gap-1.5">
                           <span>{teacher.name}</span>
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700 font-normal">
-                            {teacher.title || '專任教師'}
+                            {displayTeacherTitle(teacher)}
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400 truncate">

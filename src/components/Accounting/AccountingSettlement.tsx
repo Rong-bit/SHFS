@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import * as XLSX from 'xlsx';
 import { 
   Calculator, 
@@ -43,7 +43,7 @@ export const AccountingSettlement: React.FC = () => {
       '序號': index + 1,
       '教師姓名': s.teacherName,
       '科別': s.department,
-      '職務': s.title,
+      '職務': displayTeacherTitle(s),
       '基本授課節數 (節/週)': s.basePeriods,
       '本學期排定節數 (節/週)': s.weeklyActualPeriods,
       '每週超鐘點節數': s.weeklyOverloadPeriods,
@@ -279,7 +279,7 @@ export const AccountingSettlement: React.FC = () => {
 
                   <td className="p-3 text-slate-700">
                     <span className="font-semibold">{s.department}</span>
-                    <span className="ml-1 text-slate-500 text-[11px]">({s.title})</span>
+                    <span className="ml-1 text-slate-500 text-[11px]">({displayTeacherTitle(s)})</span>
                   </td>
 
                   <td className="p-3 text-center font-medium text-slate-600">

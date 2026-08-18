@@ -19,7 +19,7 @@ import {
   Download
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
-import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 
 export const SchoolTimetableMatrix: React.FC = () => {
   const { sessions, teachers, venues, systemConfig, setIsImportModalOpen } = useApp();
@@ -165,7 +165,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
               >
                 {teachers.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} ({t.department} · {t.title} · 每週{t.weeklyActualPeriods}節)
+                    {t.name} ({t.department} · {displayTeacherTitle(t)} · 每週{t.weeklyActualPeriods}節)
                   </option>
                 ))}
               </select>

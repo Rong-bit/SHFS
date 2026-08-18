@@ -116,3 +116,112 @@ export const applyTeacherDepartmentsFromSessions = <T extends Pick<Teacher, 'id'
     return department === t.department ? t : { ...t, department };
   });
 };
+
+const isGroupActivity = (subjectName: string) => /團體活動/.test(subjectName || '');
+const isAfternoonPeriod = (period: number) => period >= 5;
+
+const sessionTeacherKeys = (session: CourseSession) => {
+  const names = String(session.teacherName || '')
+    .split('/')
+    .map((s) => s.trim())
+    .filter((n) => n && n !== '未指派教師');
+  return { names, teacherId: session.teacherId };
+};
+
+/** 星期三下午團體活動的老師 = 該班導師。若該班週三沒排，才改看其他下午團體活動。 */
+export const buildHomeroomClassByTeacher = (sessions: CourseSession[]) => {
+  const wedByClass = new Map<string, string[]>();
+  const otherByClass = new Map<string, string[]>();
+
+  sessions.forEach((s) => {
+    if (!isGroupActivity(s.subjectName) || !isAfternoonPeriod(s.period)) return;
+    const { names } = sessionTeacherKeys(s);
+    if (names.length === 0) return;
+    const target = s.dayOfWeek === 3 ? wedByClass : otherByClass;
+    const prev = target.get(s.className) || [];
+    names.forEach((n) => {
+      if (!prev.includes(n)) prev.push(n);
+    });
+    target.set(s.className, prev);
+  });
+
+  const classToTeachers = new Map<string, string[]>();
+  const allClasses = new Set([...wedByClass.keys(), ...otherByClass.keys()]);
+  allClasses.forEach((className) => {
+    classToTeachers.set(className, wedByClass.get(className) || otherByClass.get(className) || []);
+  });
+
+  const teacherToClasses = new Map<string, string[]>();
+  classToTeachers.forEach((names, className) => {
+    names.forEach((name) => {
+      const list = teacherToClasses.get(name) || [];
+      if (!list.includes(className)) list.push(className);
+      teacherToClasses.set(name, list);
+    });
+  });
+  return teacherToClasses;
+};
+
+export const displayTeacherTitle = (teacher: Pick<Teacher, 'title' | 'homeroomClass'>) => {
+  if (teacher.homeroomClass) return `${teacher.homeroomClass}導師`;
+  return teacher.title;
+};
+
+export const applyTeacherHomeroomFromSessions = <
+  T extends Pick<Teacher, 'id' | 'name' | 'title' | 'basePeriods' | 'homeroomClass'>
+>(
+  teachers: T[],
+  sessions: CourseSession[],
+  basePeriods: { fulltime: number; homeroom: number }
+): T[] => {
+  if (!sessions.some((s) => isGroupActivity(s.subjectName))) return teachers;
+  const homeroomByTeacher = buildHomeroomClassByTeacher(sessions);
+
+  return teachers.map((t) => {
+    const classes =
+      homeroomByTeacher.get(t.name.trim()) ||
+      [...homeroomByTeacher.entries()].find(([name]) => teacherNameMatches(name, t.name))?.[1] ||
+      [];
+    const homeroomClass = classes.length ? classes.join('、') : undefined;
+    const keepAdminTitle = t.title === '科主任' || t.title === '教學組長';
+
+    if (homeroomClass) {
+      if (keepAdminTitle) {
+        return homeroomClass === t.homeroomClass ? t : { ...t, homeroomClass };
+      }
+      if (t.title === '導師' && t.homeroomClass === homeroomClass && t.basePeriods === basePeriods.homeroom) {
+        return t;
+      }
+      return {
+        ...t,
+        title: '導師',
+        homeroomClass,
+        basePeriods: basePeriods.homeroom,
+      };
+    }
+
+    if (keepAdminTitle) {
+      return t.homeroomClass ? { ...t, homeroomClass: undefined } : t;
+    }
+    if (t.title === '導師' || t.homeroomClass) {
+      return {
+        ...t,
+        title: '專任教師',
+        homeroomClass: undefined,
+        basePeriods: basePeriods.fulltime,
+      };
+    }
+    return t;
+  });
+};
+
+export const enrichTeachersFromSessions = (
+  teachers: Teacher[],
+  sessions: CourseSession[],
+  basePeriods: { fulltime: number; homeroom: number }
+) =>
+  applyTeacherHomeroomFromSessions(
+    applyTeacherDepartmentsFromSessions(teachers, sessions),
+    sessions,
+    basePeriods
+  );

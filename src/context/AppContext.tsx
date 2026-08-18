@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { applyTeacherDepartmentsFromSessions, departmentFromLabel, inferTeacherDepartmentFromPracticalRows } from '../utils/schoolDepartments';
+import { departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -178,7 +178,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const withEmail = list.map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) }));
     const savedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     const sessionList: CourseSession[] = savedSessions ? JSON.parse(savedSessions) : INITIAL_SESSIONS;
-    return applyTeacherDepartmentsFromSessions(withEmail, sessionList);
+    let basePeriods = INITIAL_SYSTEM_CONFIG.standardBasePeriods;
+    try {
+      const savedConfig = localStorage.getItem(STORAGE_KEYS.CONFIG);
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        basePeriods = {
+          ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
+          ...(parsed.standardBasePeriods || {}),
+        };
+      }
+    } catch {
+      /* keep defaults */
+    }
+    return enrichTeachersFromSessions(withEmail, sessionList, basePeriods);
   });
 
   const [venues, setVenues] = useState<WorkshopVenue[]>(() => {
@@ -351,7 +364,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: ensureSchoolEmail(t.name, t.email),
     }));
     const remoteSessions = remote.sessions || [];
-    setTeachers(applyTeacherDepartmentsFromSessions(remoteTeachers, remoteSessions));
+    setTeachers(
+      enrichTeachersFromSessions(
+        remoteTeachers,
+        remoteSessions,
+        {
+          ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
+          ...(remote.systemConfig?.standardBasePeriods || {}),
+        }
+      )
+    );
     setVenues(remote.venues || []);
     setSessions(remote.sessions || []);
     setRequests(remote.requests || []);
@@ -1118,12 +1140,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teacherPeriodCount.set(s.teacherId, (teacherPeriodCount.get(s.teacherId) || 0) + 1);
     });
 
-    updatedTeachers = applyTeacherDepartmentsFromSessions(
+    updatedTeachers = enrichTeachersFromSessions(
       updatedTeachers.map((t) => ({
         ...t,
         weeklyActualPeriods: teacherPeriodCount.get(t.id) || 0,
       })),
-      finalSessions
+      finalSessions,
+      systemConfig.standardBasePeriods
     );
 
     setTeachers(updatedTeachers);
@@ -1275,6 +1298,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacherName: teacher.name,
         department: teacher.department,
         title: teacher.title,
+        homeroomClass: teacher.homeroomClass,
         basePeriods: base,
         weeklyActualPeriods: weeklyActual,
         weeklyOverloadPeriods: weeklyOverload,

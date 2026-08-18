@@ -10,7 +10,7 @@ import {
   Teacher 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
-import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import { 
   UserCheck, 
   User, 
@@ -722,7 +722,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   >
                     {filteredTeachers.map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.name} ({t.department} · {t.title} · 基本{t.basePeriods}節 / 現排{t.weeklyActualPeriods}節)
+                        {t.name} ({t.department} · {displayTeacherTitle(t)} · 基本{t.basePeriods}節 / 現排{t.weeklyActualPeriods}節)
                       </option>
                     ))}
                   </select>

@@ -38,7 +38,7 @@ import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/schedu
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 
 export const AdminSettings: React.FC = () => {
@@ -1229,7 +1229,7 @@ export const AdminSettings: React.FC = () => {
                         <tr key={t.id} className="hover:bg-slate-50/80 transition">
                           <td className="p-3.5">
                             <div className="font-bold text-slate-900 text-sm">{t.name}</div>
-                            <span className="text-[11px] text-slate-500 font-medium">{t.title}</span>
+                            <span className="text-[11px] text-slate-500 font-medium">{displayTeacherTitle(t)}</span>
                           </td>
                           <td className="p-3.5">
                             <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-semibold text-[11px]">
