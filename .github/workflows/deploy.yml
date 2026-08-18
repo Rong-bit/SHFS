@@ -34,7 +34,10 @@ jobs:
         run: npm ci
 
       - name: Build static site
-        run: npm run build:pages
+        run: |
+          npx vite build
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
