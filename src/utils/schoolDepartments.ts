@@ -1,4 +1,4 @@
-import { CourseSession, DepartmentType, Teacher } from '../types';
+import { CourseSession, DepartmentType, Teacher, TeacherTitle } from '../types';
 
 /** 本校課表會出現的科別（含示範資料用的餐飲／廣告） */
 export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
@@ -128,13 +128,53 @@ export const teacherWeeklyOverload = (
     teacher.basePeriods
   );
 
-/** 導師任務減授 1、基本 12；科主任減授 2、基本 7；組長基本 0；專任減授 0、基本 16 */
+/** 專任基本固定 16；導師／組長／科主任／主任基本鐘點由系統設定。 */
 export const HOMEROOM_DEFAULT_DUTY_REDUCTION = 1;
 export const HOMEROOM_BASE_PERIODS = 12;
 export const HEAD_DEFAULT_DUTY_REDUCTION = 2;
 export const HEAD_BASE_PERIODS = 7;
 export const CHIEF_DEFAULT_DUTY_REDUCTION = 0;
 export const CHIEF_BASE_PERIODS = 0;
+export const DIRECTOR_DEFAULT_DUTY_REDUCTION = 0;
+export const DIRECTOR_BASE_PERIODS = 0;
+export const FULLTIME_BASE_PERIODS = 16;
+
+export type StandardBasePeriodsConfig = {
+  fulltime: number;
+  homeroom: number;
+  head: number;
+  sectionChief: number;
+  director: number;
+};
+
+const asNonNegInt = (value: unknown, fallback: number) => {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
+};
+
+/** 專任固定 16；導師／組長／科主任／主任由系統設定（0 也算有效值）。 */
+export const normalizeStandardBasePeriods = (
+  raw?: Partial<StandardBasePeriodsConfig> | null
+): StandardBasePeriodsConfig => ({
+  fulltime: FULLTIME_BASE_PERIODS,
+  homeroom: asNonNegInt(raw?.homeroom, HOMEROOM_BASE_PERIODS),
+  head: asNonNegInt(raw?.head, HEAD_BASE_PERIODS),
+  sectionChief: asNonNegInt(raw?.sectionChief, CHIEF_BASE_PERIODS),
+  director: asNonNegInt(raw?.director, DIRECTOR_BASE_PERIODS),
+});
+
+export const TEACHER_TITLES: TeacherTitle[] = ['導師', '組長', '科主任', '主任', '專任教師'];
+
+export const normalizeTeacherTitle = (title: string): TeacherTitle => {
+  if (title === '教學組長') return '組長';
+  if ((TEACHER_TITLES as string[]).includes(title)) return title as TeacherTitle;
+  return '專任教師';
+};
+
+export const isAdminTeacherTitle = (title: string) => {
+  const next = normalizeTeacherTitle(title);
+  return next === '組長' || next === '科主任' || next === '主任';
+};
 
 /** 真正的實習／實作課；團體活動、普通教室學科不算 */
 export const isInternshipCourse = (subjectName: string) => {
@@ -240,36 +280,45 @@ export const teacherBasePeriods = (
 const isLeftoverReduction = (value: number | undefined, leftovers: number[]) =>
   value == null || leftovers.includes(value);
 
-/** 專任基本 16；導師基本 12、減授 1；科主任基本 7、減授 2；組長基本 0。超鐘點＝正課＋減授−基本。 */
+/** 專任基本固定 16；其餘職稱基本鐘點由系統設定。超鐘點＝正課＋減授−基本。 */
 export const resolveTeacherBasePeriods = (
   teacher: Pick<Teacher, 'dutyReductionPeriods' | 'basePeriods' | 'homeroomClass' | 'title'>,
   fulltimeStandard: number,
   homeroomStandard = HOMEROOM_BASE_PERIODS,
   headStandard = HEAD_BASE_PERIODS,
-  chiefStandard = CHIEF_BASE_PERIODS
+  chiefStandard = CHIEF_BASE_PERIODS,
+  directorStandard = DIRECTOR_BASE_PERIODS
 ) => {
-  if (teacher.title === '科主任') {
+  const title = normalizeTeacherTitle(teacher.title);
+  if (title === '主任') {
+    const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [1, 4, 5, 6, 8])
+      ? DIRECTOR_DEFAULT_DUTY_REDUCTION
+      : Math.max(0, teacher.dutyReductionPeriods ?? DIRECTOR_DEFAULT_DUTY_REDUCTION);
+    return { dutyReductionPeriods, basePeriods: directorStandard, title };
+  }
+  if (title === '科主任') {
     const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [0, 1, 4, 5, 6])
       ? HEAD_DEFAULT_DUTY_REDUCTION
       : Math.max(0, teacher.dutyReductionPeriods ?? HEAD_DEFAULT_DUTY_REDUCTION);
-    return { dutyReductionPeriods, basePeriods: headStandard };
+    return { dutyReductionPeriods, basePeriods: headStandard, title };
   }
-  if (teacher.title === '教學組長') {
+  if (title === '組長') {
     const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [1, 4, 5, 6, 8])
       ? CHIEF_DEFAULT_DUTY_REDUCTION
       : Math.max(0, teacher.dutyReductionPeriods ?? CHIEF_DEFAULT_DUTY_REDUCTION);
-    return { dutyReductionPeriods, basePeriods: chiefStandard };
+    return { dutyReductionPeriods, basePeriods: chiefStandard, title };
   }
-  if (teacher.homeroomClass || teacher.title === '導師') {
+  if (teacher.homeroomClass || title === '導師') {
     const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [0, 4, 5, 6])
       ? HOMEROOM_DEFAULT_DUTY_REDUCTION
       : Math.max(0, teacher.dutyReductionPeriods ?? HOMEROOM_DEFAULT_DUTY_REDUCTION);
-    return { dutyReductionPeriods, basePeriods: homeroomStandard };
+    return { dutyReductionPeriods, basePeriods: homeroomStandard, title: teacher.homeroomClass ? ('導師' as TeacherTitle) : title };
   }
   const dutyReductionPeriods = resolveDutyReductionPeriods(fulltimeStandard, teacher);
   return {
     dutyReductionPeriods,
-    basePeriods: teacherBasePeriods(fulltimeStandard, dutyReductionPeriods),
+    basePeriods: FULLTIME_BASE_PERIODS,
+    title,
   };
 };
 
@@ -283,8 +332,12 @@ export const resolveDutyReductionPeriods = (
 };
 
 export const displayTeacherTitle = (teacher: Pick<Teacher, 'title' | 'homeroomClass'>) => {
+  const title = normalizeTeacherTitle(teacher.title);
+  if (isAdminTeacherTitle(title)) {
+    return teacher.homeroomClass ? `${teacher.homeroomClass}導師／${title}` : title;
+  }
   if (teacher.homeroomClass) return `${teacher.homeroomClass}導師`;
-  return teacher.title;
+  return title;
 };
 
 export const applyTeacherHomeroomFromSessions = <
@@ -302,7 +355,7 @@ export const applyTeacherHomeroomFromSessions = <
       [...homeroomByTeacher.entries()].find(([name]) => teacherNameMatches(name, t.name))?.[1] ||
       [];
     const homeroomClass = classes.length ? classes.join('、') : undefined;
-    const keepAdminTitle = t.title === '科主任' || t.title === '教學組長';
+    const keepAdminTitle = isAdminTeacherTitle(t.title);
 
     if (homeroomClass) {
       if (keepAdminTitle) {
@@ -325,31 +378,34 @@ export const applyTeacherHomeroomFromSessions = <
 export const enrichTeachersFromSessions = (
   teachers: Teacher[],
   sessions: CourseSession[],
-  fulltimeStandard = 16,
+  fulltimeStandard = FULLTIME_BASE_PERIODS,
   homeroomStandard = HOMEROOM_BASE_PERIODS,
   headStandard = HEAD_BASE_PERIODS,
-  chiefStandard = CHIEF_BASE_PERIODS
+  chiefStandard = CHIEF_BASE_PERIODS,
+  directorStandard = DIRECTOR_BASE_PERIODS
 ) => {
   const next = applyTeacherHomeroomFromSessions(
     applyTeacherDepartmentsFromSessions(teachers, sessions),
     sessions
   );
   return next.map((t) => {
-    const { dutyReductionPeriods, basePeriods } = resolveTeacherBasePeriods(
+    const { dutyReductionPeriods, basePeriods, title } = resolveTeacherBasePeriods(
       t,
       fulltimeStandard,
       homeroomStandard,
       headStandard,
-      chiefStandard
+      chiefStandard,
+      directorStandard
     );
     const weeklyActualPeriods = countWeeklyTeachingPeriods(sessions, t.id);
     if (
+      t.title === title &&
       t.dutyReductionPeriods === dutyReductionPeriods &&
       t.basePeriods === basePeriods &&
       t.weeklyActualPeriods === weeklyActualPeriods
     ) {
       return t;
     }
-    return { ...t, dutyReductionPeriods, basePeriods, weeklyActualPeriods };
+    return { ...t, title, dutyReductionPeriods, basePeriods, weeklyActualPeriods };
   });
 };

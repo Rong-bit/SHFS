@@ -79,6 +79,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
     homeroom: 12,
     fulltime: 16,
     sectionChief: 0,
+    director: 0,
   },
   academicYear: '114',
   semester: '1',
@@ -242,7 +243,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
   {
     id: 't-chief-chen',
     name: '陳雅筑 組長',
-    title: '教學組長',
+    title: '組長',
     department: '共同科目',
     dutyReductionPeriods: 8,
     basePeriods: 8,

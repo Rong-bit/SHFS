@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, resolveTeacherBasePeriods, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
+import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, normalizeStandardBasePeriods, resolveTeacherBasePeriods, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -178,18 +178,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const withEmail = list.map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) }));
     const savedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     const sessionList: CourseSession[] = savedSessions ? JSON.parse(savedSessions) : INITIAL_SESSIONS;
-    let basePeriods = INITIAL_SYSTEM_CONFIG.standardBasePeriods;
+    let basePeriods = normalizeStandardBasePeriods(INITIAL_SYSTEM_CONFIG.standardBasePeriods);
     try {
       const savedConfig = localStorage.getItem(STORAGE_KEYS.CONFIG);
       if (savedConfig) {
         const parsed = JSON.parse(savedConfig);
-        basePeriods = {
-          ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
-          ...(parsed.standardBasePeriods || {}),
-        };
-        if (basePeriods.homeroom === 15) basePeriods.homeroom = 12;
-        if (basePeriods.head === 10) basePeriods.head = 7;
-        if (basePeriods.sectionChief === 8) basePeriods.sectionChief = 0;
+        basePeriods = normalizeStandardBasePeriods(
+          parsed.standardBasePeriods || parsed.basePeriodsStandard
+        );
       }
     } catch {
       /* keep defaults */
@@ -200,7 +196,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       basePeriods.fulltime,
       basePeriods.homeroom,
       basePeriods.head,
-      basePeriods.sectionChief
+      basePeriods.sectionChief,
+      basePeriods.director
     );
   });
 
@@ -227,19 +224,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         ...INITIAL_SYSTEM_CONFIG,
         ...parsed,
-        standardBasePeriods: {
-          ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
-          ...(parsed.standardBasePeriods || parsed.basePeriodsStandard || {}),
-          ...((parsed.standardBasePeriods || parsed.basePeriodsStandard || {}).homeroom === 15
-            ? { homeroom: 12 }
-            : {}),
-          ...((parsed.standardBasePeriods || parsed.basePeriodsStandard || {}).head === 10
-            ? { head: 7 }
-            : {}),
-          ...((parsed.standardBasePeriods || parsed.basePeriodsStandard || {}).sectionChief === 8
-            ? { sectionChief: 0 }
-            : {}),
-        },
+        standardBasePeriods: normalizeStandardBasePeriods(
+          parsed.standardBasePeriods || parsed.basePeriodsStandard
+        ),
         authConfig: withMigratedAuthConfig(parsed.authConfig || INITIAL_SYSTEM_CONFIG.authConfig),
       };
     } catch {
@@ -387,19 +374,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: ensureSchoolEmail(t.name, t.email),
     }));
     const remoteSessions = remote.sessions || [];
-    const remoteStd = remote.systemConfig?.standardBasePeriods || {};
-    const fulltimeStd = remoteStd.fulltime || INITIAL_SYSTEM_CONFIG.standardBasePeriods.fulltime;
-    const homeroomStd = remoteStd.homeroom === 15 ? 12 : (remoteStd.homeroom || INITIAL_SYSTEM_CONFIG.standardBasePeriods.homeroom);
-    const headStd = remoteStd.head === 10 ? 7 : (remoteStd.head || INITIAL_SYSTEM_CONFIG.standardBasePeriods.head);
-    const chiefStd = remoteStd.sectionChief === 8 ? 0 : (remoteStd.sectionChief ?? INITIAL_SYSTEM_CONFIG.standardBasePeriods.sectionChief);
+    const remoteStd = normalizeStandardBasePeriods(remote.systemConfig?.standardBasePeriods);
     setTeachers(
       enrichTeachersFromSessions(
         remoteTeachers,
         remoteSessions,
-        fulltimeStd,
-        homeroomStd,
-        headStd,
-        chiefStd
+        remoteStd.fulltime,
+        remoteStd.homeroom,
+        remoteStd.head,
+        remoteStd.sectionChief,
+        remoteStd.director
       )
     );
     setVenues(remote.venues || []);
@@ -408,13 +392,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,
       ...(remote.systemConfig || {}),
-      standardBasePeriods: {
-        ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
-        ...(remote.systemConfig?.standardBasePeriods || {}),
-        ...(remote.systemConfig?.standardBasePeriods?.homeroom === 15 ? { homeroom: 12 } : {}),
-        ...(remote.systemConfig?.standardBasePeriods?.head === 10 ? { head: 7 } : {}),
-        ...(remote.systemConfig?.standardBasePeriods?.sectionChief === 8 ? { sectionChief: 0 } : {}),
-      },
+      standardBasePeriods: remoteStd,
       authConfig: withMigratedAuthConfig({
         ...INITIAL_SYSTEM_CONFIG.authConfig,
         ...(remote.systemConfig?.authConfig || {}),
@@ -931,30 +909,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSystemConfig = (newConfig: Partial<SystemConfig>) => {
-    setSystemConfig((prev) => ({ ...prev, ...newConfig }));
-    const fulltime = newConfig.standardBasePeriods?.fulltime;
-    const homeroom = newConfig.standardBasePeriods?.homeroom;
-    const head = newConfig.standardBasePeriods?.head;
-    const chief = newConfig.standardBasePeriods?.sectionChief;
-    if (
-      typeof fulltime === 'number' ||
-      typeof homeroom === 'number' ||
-      typeof head === 'number' ||
-      typeof chief === 'number'
-    ) {
-      setTeachers((prev) =>
-        prev.map((t) => {
-          const { dutyReductionPeriods, basePeriods } = resolveTeacherBasePeriods(
-            t,
-            typeof fulltime === 'number' ? fulltime : systemConfig.standardBasePeriods.fulltime,
-            typeof homeroom === 'number' ? homeroom : systemConfig.standardBasePeriods.homeroom,
-            typeof head === 'number' ? head : systemConfig.standardBasePeriods.head,
-            typeof chief === 'number' ? chief : systemConfig.standardBasePeriods.sectionChief
-          );
-          return { ...t, dutyReductionPeriods, basePeriods };
-        })
-      );
-    }
+    const nextBase = normalizeStandardBasePeriods({
+      ...systemConfig.standardBasePeriods,
+      ...(newConfig.standardBasePeriods || {}),
+    });
+    setSystemConfig((prev) => ({
+      ...prev,
+      ...newConfig,
+      standardBasePeriods: nextBase,
+    }));
+    setTeachers((prev) =>
+      prev.map((t) => {
+        const resolved = resolveTeacherBasePeriods(
+          t,
+          nextBase.fulltime,
+          nextBase.homeroom,
+          nextBase.head,
+          nextBase.sectionChief,
+          nextBase.director
+        );
+        return {
+          ...t,
+          dutyReductionPeriods: resolved.dutyReductionPeriods,
+          basePeriods: resolved.basePeriods,
+          title: resolved.title,
+        };
+      })
+    );
   };
 
   const importSchedule = (params: {
@@ -1169,7 +1150,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       systemConfig.standardBasePeriods.fulltime,
       systemConfig.standardBasePeriods.homeroom,
       systemConfig.standardBasePeriods.head,
-      systemConfig.standardBasePeriods.sectionChief
+      systemConfig.standardBasePeriods.sectionChief,
+      systemConfig.standardBasePeriods.director
     );
 
     setTeachers(updatedTeachers);
@@ -1217,14 +1199,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((t) => {
         if (t.id !== id) return t;
         const merged = { ...t, ...data };
-        if (data.dutyReductionPeriods !== undefined && data.basePeriods === undefined) {
-          merged.basePeriods = resolveTeacherBasePeriods(
+        if ((data.dutyReductionPeriods !== undefined || data.title !== undefined) && data.basePeriods === undefined) {
+          const resolved = resolveTeacherBasePeriods(
             merged,
             systemConfig.standardBasePeriods.fulltime,
             systemConfig.standardBasePeriods.homeroom,
             systemConfig.standardBasePeriods.head,
-            systemConfig.standardBasePeriods.sectionChief
-          ).basePeriods;
+            systemConfig.standardBasePeriods.sectionChief,
+            systemConfig.standardBasePeriods.director
+          );
+          merged.basePeriods = resolved.basePeriods;
+          merged.dutyReductionPeriods = resolved.dutyReductionPeriods;
+          merged.title = resolved.title;
         }
         return merged;
       })

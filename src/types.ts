@@ -30,7 +30,7 @@ export type DepartmentType =
   | '廣告設計科'
   | '共同科目';
 
-export type TeacherTitle = '科主任' | '導師' | '專任教師' | '教學組長';
+export type TeacherTitle = '專任教師' | '導師' | '組長' | '科主任' | '主任';
 
 export interface Teacher {
   id: string;
@@ -148,10 +148,11 @@ export interface SystemConfig {
   nightHourlyRate: number; // 夜間部/課輔每節鐘點費 (500)
   maxWeeklyOverloadPeriods: number; // 法定每週兼代課上限 (9)
   standardBasePeriods: {
-    head: number; // 科主任基本鐘點（本校 7）
-    homeroom: number; // 導師基本鐘點（本校 12），專任為 16
-    fulltime: number; // 專任 (16)
-    sectionChief: number; // 組長基本鐘點（本校 0）
+    head: number; // 科主任基本鐘點（可設定）
+    homeroom: number; // 導師基本鐘點（可設定）
+    fulltime: number; // 專任固定 16
+    sectionChief: number; // 組長基本鐘點（可設定）
+    director: number; // 主任基本鐘點（可設定）
   };
   academicYear: string; // 114
   semester: string; // 1
