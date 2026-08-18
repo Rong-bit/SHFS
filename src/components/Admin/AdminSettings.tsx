@@ -38,6 +38,7 @@ import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/schedu
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
+import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -1036,11 +1037,9 @@ export const AdminSettings: React.FC = () => {
                 className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">全部科別與場域</option>
-                <option value="電機科">電機科</option>
-                <option value="資訊科">資訊科</option>
-                <option value="機械科">機械科</option>
-                <option value="餐飲管理科">餐飲管理科</option>
-                <option value="廣告設計科">廣告設計科</option>
+                {SCHOOL_DEPARTMENTS.filter((d) => d !== '共同科目').map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
                 <option value="通用教室">通用教室</option>
               </select>
             </div>
@@ -1152,12 +1151,9 @@ export const AdminSettings: React.FC = () => {
                 className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">全部群科科別</option>
-                <option value="電機科">電機科</option>
-                <option value="資訊科">資訊科</option>
-                <option value="機械科">機械科</option>
-                <option value="餐飲管理科">餐飲管理科</option>
-                <option value="廣告設計科">廣告設計科</option>
-                <option value="共同科目">共同科目</option>
+                {SCHOOL_DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
               </select>
             </div>
 
@@ -1594,11 +1590,9 @@ export const AdminSettings: React.FC = () => {
                     onChange={(e) => setVenueFormData({ ...venueFormData, department: e.target.value as any })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
-                    <option value="電機科">電機科</option>
-                    <option value="資訊科">資訊科</option>
-                    <option value="機械科">機械科</option>
-                    <option value="餐飲管理科">餐飲管理科</option>
-                    <option value="廣告設計科">廣告設計科</option>
+                    {SCHOOL_DEPARTMENTS.filter((d) => d !== '共同科目').map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                     <option value="通用教室">通用教室</option>
                   </select>
                 </div>
@@ -1746,12 +1740,9 @@ export const AdminSettings: React.FC = () => {
                     onChange={(e) => setTeacherFormData({ ...teacherFormData, department: e.target.value as any })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
-                    <option value="電機科">電機科</option>
-                    <option value="資訊科">資訊科</option>
-                    <option value="機械科">機械科</option>
-                    <option value="餐飲管理科">餐飲管理科</option>
-                    <option value="廣告設計科">廣告設計科</option>
-                    <option value="共同科目">共同科目</option>
+                    {SCHOOL_DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                   </select>
                 </div>
 

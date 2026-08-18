@@ -11,12 +11,23 @@ export interface AcademicStaff {
   responsibleScope: string;
 }
 
-export type DepartmentType = 
-  | '電機科' 
-  | '資訊科' 
-  | '機械科' 
-  | '餐飲管理科' 
-  | '廣告設計科' 
+export type DepartmentType =
+  | '電機科'
+  | '電子科'
+  | '控制科'
+  | '冷凍科'
+  | '化工科'
+  | '建築科'
+  | '汽車科'
+  | '機械科'
+  | '資訊科'
+  | '製圖科'
+  | '金工科'
+  | '電圖科'
+  | '服務科'
+  | '普通科'
+  | '餐飲管理科'
+  | '廣告設計科'
   | '共同科目';
 
 export type TeacherTitle = '科主任' | '導師' | '專任教師' | '教學組長';

@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
+import { departmentFromClassName, departmentFromLabel } from './schoolDepartments';
 
 export interface ParsedImportRow {
   rowNumber: number;
@@ -123,14 +124,9 @@ export const cleanTeacherName = (val: string): string => {
   return cleanedList.join(' / ');
 };
 
-// Guess Department from Subject or Teacher or Class name
+// Guess Department from class name first (電機一忠 → 電機科), then subject / venue keywords
 export const guessDepartment = (text: string): DepartmentType => {
-  if (/電機|配線|電工|PLC|電子|控制/.test(text)) return '電機科';
-  if (/資訊|程式|軟體|物聯網|微處理|單晶片|網路/.test(text)) return '資訊科';
-  if (/機械|車床|銑床|CNC|製圖|加工|鉗工/.test(text)) return '機械科';
-  if (/餐飲|烘焙|西餐|中餐|飲料|調酒|觀光/.test(text)) return '餐飲管理科';
-  if (/廣告|設計|美工|多媒體|繪圖|排版/.test(text)) return '廣告設計科';
-  return '共同科目';
+  return departmentFromClassName(text) || departmentFromLabel(text) || '共同科目';
 };
 
 interface TeacherSlotHit {
@@ -300,9 +296,9 @@ export const parseScheduleFile = async (
       }
 
       const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
-      const department: DepartmentType = deptVal
-        ? (deptVal as DepartmentType)
-        : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal);
+      const department: DepartmentType =
+        departmentFromClassName(classVal) ||
+        (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal));
 
       let parsedHours = parseFloat(String(hoursVal));
       if (isNaN(parsedHours) || parsedHours <= 0) {
@@ -616,9 +612,9 @@ export const parseScheduleFile = async (
     const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
     if (isPractical) practicalCount++;
 
-    const department: DepartmentType = deptVal
-      ? (deptVal as DepartmentType)
-      : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal);
+    const department: DepartmentType =
+      departmentFromClassName(classVal) ||
+      (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal));
 
     // Collision check inside the imported batch
     if (dayOfWeek && period) {

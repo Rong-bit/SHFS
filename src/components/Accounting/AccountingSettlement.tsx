@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import * as XLSX from 'xlsx';
 import { 
   Calculator, 
@@ -223,7 +224,7 @@ export const AccountingSettlement: React.FC = () => {
           <div className="flex items-center space-x-2">
             <span className="text-xs font-bold text-slate-700">科別過濾：</span>
             <div className="flex flex-wrap gap-1 text-xs">
-              {['all', '電機科', '資訊科', '機械科', '餐飲管理科', '共同科目'].map((d) => (
+              {['all', ...SCHOOL_DEPARTMENTS].map((d) => (
                 <button
                   key={d}
                   onClick={() => setDepartmentFilter(d)}

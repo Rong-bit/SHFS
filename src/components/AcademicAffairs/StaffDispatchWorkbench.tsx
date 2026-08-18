@@ -10,6 +10,7 @@ import {
   Teacher 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
+import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import { 
   UserCheck, 
   User, 
@@ -702,10 +703,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       className="bg-slate-100 text-slate-800 font-medium px-2 py-1 rounded border border-slate-300 text-xs"
                     >
                       <option value="全部">全部科別</option>
-                      <option value="電機科">電機科</option>
-                      <option value="資訊科">資訊科</option>
-                      <option value="機械科">機械科</option>
-                      <option value="餐飲管理科">餐飲管理科</option>
+                      {SCHOOL_DEPARTMENTS.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

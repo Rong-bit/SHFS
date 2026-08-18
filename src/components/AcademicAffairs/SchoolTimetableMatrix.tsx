@@ -19,6 +19,7 @@ import {
   Download
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
+import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 
 export const SchoolTimetableMatrix: React.FC = () => {
   const { sessions, teachers, venues, systemConfig, setIsImportModalOpen } = useApp();
@@ -176,7 +177,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-700">選擇高職科別：</span>
               <div className="flex flex-wrap gap-1.5">
-                {(['電機科', '資訊科', '機械科', '餐飲管理科', '共同科目'] as DepartmentType[]).map((dept) => (
+                {SCHOOL_DEPARTMENTS.map((dept) => (
                   <button
                     key={dept}
                     onClick={() => setSelectedDepartment(dept)}

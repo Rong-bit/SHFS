@@ -23,6 +23,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
+import { applyTeacherDepartmentsFromSessions, departmentFromLabel, inferTeacherDepartmentFromPracticalRows } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -173,7 +174,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.TEACHERS);
     const list: Teacher[] = saved ? JSON.parse(saved) : INITIAL_TEACHERS;
-    return list.map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) }));
+    const withEmail = list.map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) }));
+    const savedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
+    const sessionList: CourseSession[] = savedSessions ? JSON.parse(savedSessions) : INITIAL_SESSIONS;
+    return applyTeacherDepartmentsFromSessions(withEmail, sessionList);
   });
 
   const [venues, setVenues] = useState<WorkshopVenue[]>(() => {
@@ -340,7 +344,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     academicStaffList: AcademicStaff[];
   }) => {
     skipCloudPushRef.current = true;
-    setTeachers((remote.teachers || []).map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) })));
+    const remoteTeachers = (remote.teachers || []).map((t) => ({
+      ...t,
+      email: ensureSchoolEmail(t.name, t.email),
+    }));
+    const remoteSessions = remote.sessions || [];
+    setTeachers(applyTeacherDepartmentsFromSessions(remoteTeachers, remoteSessions));
     setVenues(remote.venues || []);
     setSessions(remote.sessions || []);
     setRequests(remote.requests || []);
@@ -932,8 +941,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       importedTeacherNames.forEach((name, idx) => {
         // If an existing teacher has the same name, keep their customized info (e.g. title, basePeriods)
         const existing = teachers.find((t) => t.name.trim() === name);
-        const matchingRow = validRows.find((r) => r.teacherName.trim() === name);
-        const dept = matchingRow?.department || existing?.department || '共同科目';
+        const dept = inferTeacherDepartmentFromPracticalRows(name, validRows);
 
         const teacherObj: Teacher = existing
           ? {
@@ -971,8 +979,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       importedTeacherNames.forEach((name, idx) => {
         if (!teacherMap.has(name)) {
-          const matchingRow = validRows.find((r) => r.teacherName.trim() === name);
-          const dept = matchingRow?.department || '共同科目';
+          const dept = inferTeacherDepartmentFromPracticalRows(name, validRows);
           const newTeacher: Teacher = {
             id: `t-imp-${Date.now()}-${idx}`,
             name,
@@ -997,19 +1004,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let newVenuesCount = 0;
     const venueMap = new Map<string, WorkshopVenue>();
 
+    const getVenueDept = (vName: string): DepartmentType | '通用教室' => {
+      if (!vName.trim() || vName.includes('通用')) return '通用教室';
+      return departmentFromLabel(vName) || '共同科目';
+    };
+
     if (mode === 'overwrite') {
       importedVenueNames.forEach((name, idx) => {
         const existing = venues.find((v) => v.name.trim() === name);
         const isWorkshop = name.includes('工場') || name.includes('實習') || name.includes('教室');
-        const getVenueDept = (vName: string): DepartmentType | '通用教室' => {
-          if (vName.includes('電機')) return '電機科';
-          if (vName.includes('資訊') || vName.includes('電腦')) return '資訊科';
-          if (vName.includes('機械') || vName.includes('CNC')) return '機械科';
-          if (vName.includes('餐飲') || vName.includes('烘焙')) return '餐飲管理科';
-          if (vName.includes('設計') || vName.includes('繪圖')) return '廣告設計科';
-          if (vName.includes('普通') || vName.includes('通用')) return '通用教室';
-          return '共同科目';
-        };
 
         const venueObj: WorkshopVenue = existing
           ? existing
@@ -1033,15 +1036,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       importedVenueNames.forEach((name, idx) => {
         if (!venueMap.has(name)) {
           const isWorkshop = name.includes('工場') || name.includes('實習') || name.includes('教室');
-          const getVenueDept = (vName: string): DepartmentType | '通用教室' => {
-            if (vName.includes('電機')) return '電機科';
-            if (vName.includes('資訊') || vName.includes('電腦')) return '資訊科';
-            if (vName.includes('機械') || vName.includes('CNC')) return '機械科';
-            if (vName.includes('餐飲') || vName.includes('烘焙')) return '餐飲管理科';
-            if (vName.includes('設計') || vName.includes('繪圖')) return '廣告設計科';
-            if (vName.includes('普通') || vName.includes('通用')) return '通用教室';
-            return '共同科目';
-          };
 
           const newVenue: WorkshopVenue = {
             id: `v-imp-${Date.now()}-${idx}`,
@@ -1122,10 +1116,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teacherPeriodCount.set(s.teacherId, (teacherPeriodCount.get(s.teacherId) || 0) + 1);
     });
 
-    updatedTeachers = updatedTeachers.map((t) => ({
-      ...t,
-      weeklyActualPeriods: teacherPeriodCount.get(t.id) || 0,
-    }));
+    updatedTeachers = applyTeacherDepartmentsFromSessions(
+      updatedTeachers.map((t) => ({
+        ...t,
+        weeklyActualPeriods: teacherPeriodCount.get(t.id) || 0,
+      })),
+      finalSessions
+    );
 
     setTeachers(updatedTeachers);
     setVenues(updatedVenues);
