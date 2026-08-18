@@ -74,24 +74,27 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const [leaveDay, setLeaveDay] = useState<DayOfWeek | ''>('');
   const [leavePeriod, setLeavePeriod] = useState<number | ''>('');
 
-  // Smart candidate recommendations for substitute
-  const effectiveOriginalSession: CourseSession | undefined = selectedSession
-    ? selectedSession
-    : currentTeacher && leaveDay !== '' && leavePeriod !== ''
-      ? {
-          id: 's-placeholder',
-          dayOfWeek: leaveDay,
-          period: leavePeriod,
-          className: '未指派課堂',
-          subjectName: '請假派代',
-          teacherId: currentTeacher.id,
-          teacherName: currentTeacher.name,
-          venueId: '',
-          venueName: '原教室',
-          isPractical: false,
-          notes: '由系統暫代課堂資訊（僅用於計算代課教師資格）',
-        }
-      : undefined;
+  // Smart candidate recommendations / clash checking target:
+  // - substitute：必用（請假星期/節次）建立暫代課堂
+  // - swap/reschedule：使用原課堂 selectedSession
+  const effectiveOriginalSession: CourseSession | undefined =
+    requestType === 'substitute'
+      ? currentTeacher && leaveDay !== '' && leavePeriod !== ''
+        ? {
+            id: 's-placeholder',
+            dayOfWeek: leaveDay,
+            period: leavePeriod,
+            className: '未指派課堂',
+            subjectName: '請假派代',
+            teacherId: currentTeacher.id,
+            teacherName: currentTeacher.name,
+            venueId: '',
+            venueName: '原教室',
+            isPractical: false,
+            notes: '由系統暫代課堂資訊（僅用於計算代課教師資格）',
+          }
+        : undefined
+      : selectedSession;
 
   const candidateSubstitutes = useMemo(() => {
     if (!effectiveOriginalSession || !currentTeacher) return [];
@@ -192,7 +195,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       return;
     }
 
-    if (teacherSessions.length === 0 && requestType === 'substitute') {
+    if (requestType === 'substitute') {
       if (leaveDay === '' || leavePeriod === '') {
         alert('請先選擇「請假星期」與「請假節次」。');
         return;
@@ -265,27 +268,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         {/* Content Body */}
           <form onSubmit={handleSubmit} className="p-6 space-y-5 text-slate-800 text-sm">
             
-            {/* Step 1: Select Original Session */}
+            {/* Step 1: Select Original Session / Leave Slot */}
             <div>
-              {teacherSessions.length > 0 ? (
-                <>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    1. 選擇要調整的課堂（原授課堂）
-                  </label>
-                  <select
-                    id="select-original-session"
-                    value={selectedSessionId}
-                    onChange={(e) => setSelectedSessionId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  >
-                    {teacherSessions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find(p => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》 @ {s.venueName}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              ) : (
+              {requestType === 'substitute' ? (
                 <>
                   <div className="flex items-start space-x-2 mb-2">
                     <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5" />
@@ -294,7 +279,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                         1. 選擇要請假的節次
                       </label>
                       <p className="text-[11px] text-slate-500 mt-1">
-                        目前找不到你的排課資料，所以改用「週幾第幾節」建立派代申請。
+                        請先選擇請假「星期」與「節次」，再送出派代申請。
                       </p>
                     </div>
                   </div>
@@ -341,6 +326,24 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       </select>
                     </div>
                   </div>
+                </>
+              ) : (
+                <>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    1. 選擇要調整的課堂（原授課堂）
+                  </label>
+                  <select
+                    id="select-original-session"
+                    value={selectedSessionId}
+                    onChange={(e) => setSelectedSessionId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  >
+                    {teacherSessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find((p) => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》 @ {s.venueName}
+                      </option>
+                    ))}
+                  </select>
                 </>
               )}
             </div>
@@ -753,10 +756,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             <button
               type="submit"
               id="btn-submit-substitution-request"
-              disabled={
-                clashResult.hasClash ||
-                (teacherSessions.length === 0 && requestType === 'substitute' && !effectiveOriginalSession)
-              }
+              disabled={clashResult.hasClash || (requestType === 'substitute' && !effectiveOriginalSession)}
               className={`px-5 py-2.5 font-bold rounded-lg text-xs sm:text-sm shadow-sm transition flex items-center space-x-1.5 ${
                 clashResult.hasClash
                   ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
