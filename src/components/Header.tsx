@@ -9,7 +9,6 @@ import {
   ClipboardCheck, 
   Calculator, 
   Settings, 
-  Sparkles, 
   Cloud,
   CloudOff,
   Loader2
@@ -26,7 +25,6 @@ export const Header: React.FC = () => {
     teachers,
     requests,
     systemConfig,
-    setIsAiAdvisorOpen,
     requestRoleSwitchWithAuth,
     requestTeacherSwitchWithAuth,
     cloudSyncStatus,
@@ -123,18 +121,6 @@ export const Header: React.FC = () => {
               </button>
             )}
 
-            {/* AI Advisor Button */}
-            <button
-              id="btn-open-ai-advisor"
-              onClick={() => setIsAiAdvisorOpen(true)}
-              className="relative group flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all duration-150 hover:shadow-indigo-500/25 active:scale-95"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-              <span>✨ AI 顧問</span>
-              <span className="hidden lg:inline text-[11px] font-normal opacity-90">
-                (法規與智慧排課)
-              </span>
-            </button>
           </div>
         </div>
 

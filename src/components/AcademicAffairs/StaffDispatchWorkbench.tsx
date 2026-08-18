@@ -14,7 +14,6 @@ import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepar
 import { 
   UserCheck, 
   User, 
-  Sparkles, 
   Building2, 
   Clock, 
   Calendar, 
@@ -55,7 +54,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
     deleteRequest,
     batchApproveRequests,
     setPrintModalRequest,
-    setIsAiAdvisorOpen,
     checkClashes
   } = useApp();
 
@@ -1070,24 +1068,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 >
                   <Send className="w-4 h-4" />
                   <span>確定登記並執行派代</span>
-                </button>
-              </div>
-
-              {/* AI Guidance Box */}
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-xs space-y-2 text-indigo-900">
-                <div className="flex items-center space-x-1.5 font-bold text-indigo-950">
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span>高職調代課行政小幫手</span>
-                </div>
-                <p className="text-[11px] text-indigo-800 leading-relaxed">
-                  若教師因參加教育部技能競賽或產學檢定公差派代，依技術型高中標準由學校支付鐘點費 420 元/節，且代課節數不列入教師請假扣款。
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setIsAiAdvisorOpen(true)}
-                  className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs shadow-xs transition"
-                >
-                  詢問 AI 顧問法規
                 </button>
               </div>
 

@@ -18,8 +18,7 @@ import {
   CheckCircle2, 
   Info,
   Building2,
-  Calendar,
-  Sparkles
+  Calendar
 } from 'lucide-react';
 
 interface RequestModalProps {
@@ -36,7 +35,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     systemConfig,
     addSubstituteRequest,
     checkClashes,
-    setIsAiAdvisorOpen,
   } = useApp();
 
   // Current teacher's sessions
@@ -579,14 +577,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     <label className="block text-xs font-semibold text-slate-700">
                       指派代課教師（系統推薦該時段空堂師資，或留空由教學組媒合）
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsAiAdvisorOpen(true)}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      詢問 AI 推薦
-                    </button>
                   </div>
 
                   {/* Smart recommendation cards */}

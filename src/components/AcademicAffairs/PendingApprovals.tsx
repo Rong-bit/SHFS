@@ -9,7 +9,6 @@ import {
   AlertTriangle, 
   Clock, 
   Building2, 
-  Sparkles, 
   ArrowRight,
   Filter,
   Check,
@@ -27,7 +26,6 @@ export const PendingApprovals: React.FC = () => {
     deleteRequest, 
     clearAllRequests, 
     setPrintModalRequest, 
-    setIsAiAdvisorOpen, 
     currentAcademicStaff, 
     academicStaffList 
   } = useApp();
@@ -295,15 +293,6 @@ export const PendingApprovals: React.FC = () => {
                 {/* Bottom Actions */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
                   
-                  {/* AI Quick Recommendation button */}
-                  <button
-                    onClick={() => setIsAiAdvisorOpen(true)}
-                    className="flex items-center space-x-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>詢問 AI 顧問法規與專業師資媒合建議</span>
-                  </button>
-
                   {/* Operational Buttons */}
                   <div className="flex items-center space-x-2">
                     {req.status === 'pending' && (

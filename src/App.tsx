@@ -5,7 +5,6 @@ import { TeacherPortalMain } from './components/TeacherPortal/TeacherPortalMain'
 import { AcademicAffairsMain } from './components/AcademicAffairs/AcademicAffairsMain';
 import { AccountingSettlement } from './components/Accounting/AccountingSettlement';
 import { AdminSettings } from './components/Admin/AdminSettings';
-import { AiAdvisorModal } from './components/AiAdvisor/AiAdvisorModal';
 import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
@@ -49,9 +48,6 @@ const AppContent: React.FC = () => {
           </div>
         </div>
       </footer>
-
-      {/* AI Advisor Modal / Drawer */}
-      <AiAdvisorModal />
 
       {/* Timetable Excel / CSV Import Wizard Modal */}
       {isImportModalOpen && (
