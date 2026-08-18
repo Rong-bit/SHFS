@@ -57,6 +57,8 @@ interface AppContextType {
   batchApproveRequests: (requestIds: string[], reviewerName?: string) => number;
   rejectRequest: (requestId: string, reason: string, reviewerName?: string) => void;
   cancelRequest: (requestId: string) => void;
+  deleteRequest: (requestId: string) => void;
+  clearAllRequests: () => void;
   updateSystemConfig: (newConfig: Partial<SystemConfig>) => void;
   resetToMockData: () => void;
   addVenue: (venue: Omit<WorkshopVenue, 'id'>) => WorkshopVenue;
@@ -101,6 +103,17 @@ interface AppContextType {
   setIsImportModalOpen: (open: boolean) => void;
   printModalRequest: SubstituteRequest | null;
   setPrintModalRequest: (req: SubstituteRequest | null) => void;
+  
+  // Login & Password Security
+  isLoginAuthOpen: boolean;
+  setIsLoginAuthOpen: (open: boolean) => void;
+  loginAuthTarget: any;
+  setLoginAuthTarget: (target: any) => void;
+  authenticatedTeacherIds: string[];
+  requestRoleSwitchWithAuth: (role: UserRole, academicStaffId?: string) => void;
+  requestTeacherSwitchWithAuth: (teacherId: string) => void;
+  requestTeacherActionAuth: (teacherId: string, actionCallback: () => void, actionName?: string) => void;
+  updateTeacherPassword: (teacherId: string, newPassword: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -180,6 +193,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [printModalRequest, setPrintModalRequest] = useState<SubstituteRequest | null>(null);
 
+  // Authentication & Password Check States
+  const [isLoginAuthOpen, setIsLoginAuthOpen] = useState<boolean>(false);
+  const [loginAuthTarget, setLoginAuthTarget] = useState<any>(null);
+  const [authenticatedTeacherIds, setAuthenticatedTeacherIds] = useState<string[]>([]);
+
+  const requestRoleSwitchWithAuth = (targetRole: UserRole, academicStaffId?: string) => {
+    if (targetRole === 'teacher') {
+      setCurrentRole('teacher');
+      return;
+    }
+
+    if (targetRole === currentRole && (!academicStaffId || academicStaffId === currentAcademicStaffId)) {
+      return;
+    }
+    const requirePass = systemConfig.authConfig?.requirePassword !== false;
+    if (!requirePass) {
+      setCurrentRole(targetRole);
+      if (academicStaffId) setCurrentAcademicStaffId(academicStaffId);
+      return;
+    }
+    setLoginAuthTarget({
+      type: 'role',
+      targetRole,
+      academicStaffId,
+    });
+    setIsLoginAuthOpen(true);
+  };
+
+  // Switching teacher schedule view is open & instantaneous
+  const requestTeacherSwitchWithAuth = (targetTeacherId: string) => {
+    setCurrentTeacherId(targetTeacherId);
+    setCurrentRole('teacher');
+  };
+
+  // Security Gate: Verification required ONLY when initiating an action (like + 新增調代課申請 / 課堂調課)
+  const requestTeacherActionAuth = (teacherId: string, actionCallback: () => void, actionName?: string) => {
+    const targetTeacherId = teacherId || currentTeacherId || (teachers[0]?.id);
+    if (!targetTeacherId) {
+      actionCallback();
+      return;
+    }
+
+    setLoginAuthTarget({
+      type: 'teacher_action',
+      teacherId: targetTeacherId,
+      actionName: actionName || '新增調代課申請',
+      onSuccess: () => {
+        actionCallback();
+      },
+    });
+    setIsLoginAuthOpen(true);
+  };
+
+  const updateTeacherPassword = (teacherId: string, newPassword: string) => {
+    setTeachers((prev) =>
+      prev.map((t) => (t.id === teacherId ? { ...t, password: newPassword } : t))
+    );
+  };
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.STAFF_LIST, JSON.stringify(academicStaffList));
   }, [academicStaffList]);
@@ -195,6 +267,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CURRENT_TEACHER, currentTeacherId);
   }, [currentTeacherId]);
+
+  // Ensure current teacher always resolves to an existing teacher
+  useEffect(() => {
+    if (teachers.length > 0 && !teachers.some((t) => t.id === currentTeacherId)) {
+      setCurrentTeacherId(teachers[0].id);
+    }
+  }, [teachers, currentTeacherId]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(teachers));
@@ -640,6 +719,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const deleteRequest = (requestId: string) => {
+    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+  };
+
+  const clearAllRequests = () => {
+    setRequests([]);
+    localStorage.removeItem(STORAGE_KEYS.REQUESTS);
+  };
+
   const updateSystemConfig = (newConfig: Partial<SystemConfig>) => {
     setSystemConfig((prev) => ({ ...prev, ...newConfig }));
   };
@@ -650,60 +738,155 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newTeacherNames: string[];
     newVenueNames: string[];
   }) => {
-    const { validRows, mode, newTeacherNames, newVenueNames } = params;
+    const { validRows, mode } = params;
 
-    // 1. Process new teachers
-    let updatedTeachers = [...teachers];
+    // Collect all unique real teacher names in the imported file
+    const importedTeacherNames = Array.from(
+      new Set(
+        validRows
+          .map((r) => r.teacherName.trim())
+          .filter((n) => n && n !== '未指派教師')
+      )
+    );
+
+    const importedVenueNames = Array.from(
+      new Set(
+        validRows
+          .map((r) => r.venueName.trim())
+          .filter((n) => Boolean(n))
+      )
+    );
+
+    let updatedTeachers: Teacher[] = [];
     let newTeachersCount = 0;
+    const teacherMap = new Map<string, Teacher>();
 
-    const teacherMap = new Map<string, Teacher>(updatedTeachers.map((t) => [t.name.trim(), t]));
+    if (mode === 'overwrite') {
+      // OVERWRITE MODE: Completely purge old mock demo teachers (e.g. 鄭志華) and only keep real in-school teachers from file
+      importedTeacherNames.forEach((name, idx) => {
+        // If an existing teacher has the same name, keep their customized info (e.g. title, basePeriods)
+        const existing = teachers.find((t) => t.name.trim() === name);
+        const matchingRow = validRows.find((r) => r.teacherName.trim() === name);
+        const dept = matchingRow?.department || existing?.department || '共同科目';
 
-    newTeacherNames.forEach((name, idx) => {
-      const trimmed = name.trim();
-      if (!teacherMap.has(trimmed)) {
-        const matchingRow = validRows.find((r) => r.teacherName.trim() === trimmed);
-        const dept = matchingRow?.department || '共同科目';
-        const newTeacher: Teacher = {
-          id: `t-imp-${Date.now()}-${idx}`,
-          name: trimmed,
-          title: '專任教師',
-          department: dept,
-          basePeriods: systemConfig.standardBasePeriods.fulltime,
-          weeklyActualPeriods: 0,
-          email: `${trimmed}@vocation.edu.tw`,
-          phone: '04-2222-1111',
-          certifications: ['高職專業群科合格教師證'],
-          avatarBg: 'bg-emerald-600',
-        };
-        updatedTeachers.push(newTeacher);
-        teacherMap.set(trimmed, newTeacher);
-        newTeachersCount++;
+        const teacherObj: Teacher = existing
+          ? { ...existing, department: dept, weeklyActualPeriods: 0 }
+          : {
+              id: `t-imp-${Date.now()}-${idx}`,
+              name,
+              title: '專任教師',
+              department: dept,
+              basePeriods: systemConfig.standardBasePeriods.fulltime,
+              weeklyActualPeriods: 0,
+              email: `${name}@school.edu.tw`,
+              phone: '分機 301',
+              certifications: ['高職專業群科合格教師證'],
+              avatarBg: ['from-amber-600 to-amber-800', 'from-indigo-600 to-indigo-800', 'from-emerald-600 to-emerald-800', 'from-purple-600 to-purple-800', 'from-cyan-600 to-cyan-800'][idx % 5],
+            };
+
+        updatedTeachers.push(teacherObj);
+        teacherMap.set(name, teacherObj);
+        if (!existing) newTeachersCount++;
+      });
+
+      // Automatically switch logged-in teacher to the first real imported teacher
+      if (updatedTeachers.length > 0) {
+        setCurrentTeacherId(updatedTeachers[0].id);
       }
-    });
+    } else {
+      // APPEND MODE: Keep existing teachers and add new ones
+      updatedTeachers = [...teachers];
+      teachers.forEach((t) => teacherMap.set(t.name.trim(), t));
 
-    // 2. Process new venues
-    let updatedVenues = [...venues];
+      importedTeacherNames.forEach((name, idx) => {
+        if (!teacherMap.has(name)) {
+          const matchingRow = validRows.find((r) => r.teacherName.trim() === name);
+          const dept = matchingRow?.department || '共同科目';
+          const newTeacher: Teacher = {
+            id: `t-imp-${Date.now()}-${idx}`,
+            name,
+            title: '專任教師',
+            department: dept,
+            basePeriods: systemConfig.standardBasePeriods.fulltime,
+            weeklyActualPeriods: 0,
+            email: `${name}@school.edu.tw`,
+            phone: '分機 301',
+            certifications: ['高職專業群科合格教師證'],
+            avatarBg: 'from-emerald-600 to-emerald-800',
+          };
+          updatedTeachers.push(newTeacher);
+          teacherMap.set(name, newTeacher);
+          newTeachersCount++;
+        }
+      });
+    }
+
+    // 2. Process venues
+    let updatedVenues: WorkshopVenue[] = [];
     let newVenuesCount = 0;
-    const venueMap = new Map<string, WorkshopVenue>(updatedVenues.map((v) => [v.name.trim(), v]));
+    const venueMap = new Map<string, WorkshopVenue>();
 
-    newVenueNames.forEach((name, idx) => {
-      const trimmed = name.trim();
-      if (!venueMap.has(trimmed)) {
-        const isWorkshop = trimmed.includes('工場') || trimmed.includes('實習') || trimmed.includes('教室');
-        const newVenue: WorkshopVenue = {
-          id: `v-imp-${Date.now()}-${idx}`,
-          name: trimmed,
-          code: `IMP-${100 + idx}`,
-          department: trimmed.includes('普通') ? '通用教室' : '電機科',
-          capacity: 40,
-          safetyLevel: isWorkshop ? '標準' : '標準',
-          equipmentNote: '匯入課表時自動登記建立之教學場地',
+    if (mode === 'overwrite') {
+      importedVenueNames.forEach((name, idx) => {
+        const existing = venues.find((v) => v.name.trim() === name);
+        const isWorkshop = name.includes('工場') || name.includes('實習') || name.includes('教室');
+        const getVenueDept = (vName: string): DepartmentType | '通用教室' => {
+          if (vName.includes('電機')) return '電機科';
+          if (vName.includes('資訊') || vName.includes('電腦')) return '資訊科';
+          if (vName.includes('機械') || vName.includes('CNC')) return '機械科';
+          if (vName.includes('餐飲') || vName.includes('烘焙')) return '餐飲管理科';
+          if (vName.includes('設計') || vName.includes('繪圖')) return '廣告設計科';
+          if (vName.includes('普通') || vName.includes('通用')) return '通用教室';
+          return '共同科目';
         };
-        updatedVenues.push(newVenue);
-        venueMap.set(trimmed, newVenue);
-        newVenuesCount++;
-      }
-    });
+
+        const venueObj: WorkshopVenue = existing
+          ? existing
+          : {
+              id: `v-imp-${Date.now()}-${idx}`,
+              name,
+              code: `IMP-${100 + idx}`,
+              department: getVenueDept(name),
+              capacity: 40,
+              safetyLevel: isWorkshop ? '標準' : '標準',
+              equipmentNote: '匯入課表時自動登記建立之教學場地',
+            };
+        updatedVenues.push(venueObj);
+        venueMap.set(name, venueObj);
+        if (!existing) newVenuesCount++;
+      });
+    } else {
+      updatedVenues = [...venues];
+      venues.forEach((v) => venueMap.set(v.name.trim(), v));
+
+      importedVenueNames.forEach((name, idx) => {
+        if (!venueMap.has(name)) {
+          const isWorkshop = name.includes('工場') || name.includes('實習') || name.includes('教室');
+          const getVenueDept = (vName: string): DepartmentType | '通用教室' => {
+            if (vName.includes('電機')) return '電機科';
+            if (vName.includes('資訊') || vName.includes('電腦')) return '資訊科';
+            if (vName.includes('機械') || vName.includes('CNC')) return '機械科';
+            if (vName.includes('餐飲') || vName.includes('烘焙')) return '餐飲管理科';
+            if (vName.includes('設計') || vName.includes('繪圖')) return '廣告設計科';
+            if (vName.includes('普通') || vName.includes('通用')) return '通用教室';
+            return '共同科目';
+          };
+
+          const newVenue: WorkshopVenue = {
+            id: `v-imp-${Date.now()}-${idx}`,
+            name,
+            code: `IMP-${100 + idx}`,
+            department: getVenueDept(name),
+            capacity: 40,
+            safetyLevel: isWorkshop ? '標準' : '標準',
+            equipmentNote: '匯入課表時自動登記建立之教學場地',
+          };
+          updatedVenues.push(newVenue);
+          venueMap.set(name, newVenue);
+          newVenuesCount++;
+        }
+      });
+    }
 
     // 3. Convert parsed rows into CourseSession objects
     const newSessionsList: CourseSession[] = validRows.map((row, idx) => {
@@ -738,6 +921,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (mode === 'overwrite') {
       finalSessions = newSessionsList;
       addedCount = newSessionsList.length;
+      // Also clear old mock substitute requests when fully overwriting schedule
+      setRequests([]);
+      localStorage.removeItem(STORAGE_KEYS.REQUESTS);
     } else {
       // Append / Merge mode: overwrite existing session if same class at same day/period, else add
       const existingMap = new Map<string, CourseSession>();
@@ -962,6 +1148,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         batchApproveRequests,
         rejectRequest,
         cancelRequest,
+        deleteRequest,
+        clearAllRequests,
         updateSystemConfig,
         resetToMockData,
         addVenue,
@@ -979,6 +1167,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         importSchedule,
         printModalRequest,
         setPrintModalRequest,
+        isLoginAuthOpen,
+        setIsLoginAuthOpen,
+        loginAuthTarget,
+        setLoginAuthTarget,
+        requestRoleSwitchWithAuth,
+        requestTeacherSwitchWithAuth,
+        updateTeacherPassword,
       }}
     >
       {children}

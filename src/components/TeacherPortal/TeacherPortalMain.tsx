@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { TeacherSchedule } from './TeacherSchedule';
 import { TeacherRequestsList } from './TeacherRequestsList';
+import { RequestModal } from './RequestModal';
 import { Calendar, FileText, Plus } from 'lucide-react';
 
 export const TeacherPortalMain: React.FC = () => {
-  const { requests, currentTeacher } = useApp();
+  const { requests, currentTeacher, requestTeacherActionAuth } = useApp();
   const [activeTab, setActiveTab] = useState<'schedule' | 'requests'>('schedule');
+  const [isTopRequestModalOpen, setIsTopRequestModalOpen] = useState(false);
 
   const myPendingCount = requests.filter(
     (r) => r.applicantTeacherId === currentTeacher?.id && r.status === 'pending'
@@ -16,7 +18,7 @@ export const TeacherPortalMain: React.FC = () => {
     <div className="space-y-6">
       
       {/* Top Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-200 pb-3 gap-2">
         <div className="flex items-center space-x-2">
           <button
             id="tab-teacher-schedule"
@@ -49,10 +51,36 @@ export const TeacherPortalMain: React.FC = () => {
             )}
           </button>
         </div>
+
+        {currentTeacher && (
+          <button
+            id="btn-teacher-top-add-request"
+            onClick={() => {
+              requestTeacherActionAuth(
+                currentTeacher.id,
+                () => {
+                  setIsTopRequestModalOpen(true);
+                },
+                '+ 新增調代課申請'
+              );
+            }}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-slate-950" />
+            <span>+ 新增調代課申請</span>
+          </button>
+        )}
       </div>
 
       {/* Main Content */}
       {activeTab === 'schedule' ? <TeacherSchedule /> : <TeacherRequestsList />}
+
+      {/* Top Level Request Modal */}
+      {isTopRequestModalOpen && (
+        <RequestModal
+          onClose={() => setIsTopRequestModalOpen(false)}
+        />
+      )}
 
     </div>
   );

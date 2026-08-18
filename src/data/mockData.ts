@@ -66,6 +66,13 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   semester: '1',
   currentMonth: 10,
   weeksInMonth: 4,
+  authConfig: {
+    requirePassword: true,
+    defaultTeacherPassword: '1234',
+    adminPassword: 'admin',
+    academicPassword: '1234',
+    accountingPassword: '1234',
+  },
 };
 
 export const INITIAL_VENUES: WorkshopVenue[] = [

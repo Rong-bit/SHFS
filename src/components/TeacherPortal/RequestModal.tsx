@@ -203,26 +203,45 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 text-slate-800 text-sm">
-          
-          {/* Step 1: Select Original Session */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              1. 選擇要調整的課堂（原授課堂）
-            </label>
-            <select
-              id="select-original-session"
-              value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
-            >
-              {teacherSessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find(p => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》 @ {s.venueName}
-                </option>
-              ))}
-            </select>
+        {/* Content Body */}
+        {teacherSessions.length === 0 ? (
+          <div className="p-8 text-center space-y-3 text-slate-800">
+            <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
+            <h3 className="font-bold text-slate-800 text-base">目前【{currentTeacher?.name}】課表中尚無課堂資料</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              此教師目前尚未有排定之授課節數，無法發起調代課或移課。請先由【系統管理員】匯入全校課表或新增課堂。
+            </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition"
+              >
+                關閉視窗
+              </button>
+            </div>
           </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 space-y-5 text-slate-800 text-sm">
+            
+            {/* Step 1: Select Original Session */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                1. 選擇要調整的課堂（原授課堂）
+              </label>
+              <select
+                id="select-original-session"
+                value={selectedSessionId}
+                onChange={(e) => setSelectedSessionId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
+              >
+                {teacherSessions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find(p => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》 @ {s.venueName}
+                  </option>
+                ))}
+              </select>
+            </div>
 
           {/* Step 2: Request Type Switcher Tabs */}
           <div>
@@ -562,6 +581,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           </div>
 
         </form>
+        )}
       </div>
     </div>
   );

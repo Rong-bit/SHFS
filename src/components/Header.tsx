@@ -14,9 +14,9 @@ import {
   BookOpen,
   AlertCircle,
   AlertTriangle,
-  X,
-  FileSpreadsheet
+  X
 } from 'lucide-react';
+import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 
 export const Header: React.FC = () => {
   const {
@@ -32,7 +32,8 @@ export const Header: React.FC = () => {
     systemConfig,
     setIsAiAdvisorOpen,
     resetToMockData,
-    setIsImportModalOpen,
+    requestRoleSwitchWithAuth,
+    requestTeacherSwitchWithAuth,
   } = useApp();
 
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -90,17 +91,6 @@ export const Header: React.FC = () => {
 
           {/* Right Actions: AI Advisor & Reset */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            {/* Import Schedule Quick Button */}
-            <button
-              id="btn-header-import-schedule"
-              onClick={() => setIsImportModalOpen(true)}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 text-xs border border-slate-700 transition active:scale-95"
-              title="匯入現有課表 (Excel / CSV)"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline font-medium">匯入課表</span>
-            </button>
-
             {/* AI Advisor Button */}
             <button
               id="btn-open-ai-advisor"
@@ -185,7 +175,13 @@ export const Header: React.FC = () => {
                 <button
                   key={r.key}
                   id={`nav-role-${r.key}`}
-                  onClick={() => setCurrentRole(r.key)}
+                  onClick={() => {
+                    if (r.key === 'teacher') {
+                      requestRoleSwitchWithAuth('teacher');
+                    } else {
+                      requestRoleSwitchWithAuth(r.key);
+                    }
+                  }}
                   className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
                     isActive
                       ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
@@ -207,22 +203,16 @@ export const Header: React.FC = () => {
           {/* Teacher Selector (shown when in teacher role) */}
           {currentRole === 'teacher' && (
             <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
-              <span className="text-slate-400 flex items-center gap-1">
+              <span className="text-slate-400 flex items-center gap-1 shrink-0">
                 <User className="w-3.5 h-3.5 text-amber-400" />
                 當前登入身分：
               </span>
-              <select
-                id="select-teacher-identity"
-                value={currentTeacherId}
-                onChange={(e) => setCurrentTeacherId(e.target.value)}
-                className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
-              >
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.department} · {t.title} · 基本{t.basePeriods}節)
-                  </option>
-                ))}
-              </select>
+              <TeacherSearchCombobox
+                teachers={teachers}
+                currentTeacherId={currentTeacherId}
+                onSelectTeacher={(tId) => requestTeacherSwitchWithAuth(tId)}
+                placeholder="輸入姓名快速切換..."
+              />
             </div>
           )}
 
@@ -236,7 +226,7 @@ export const Header: React.FC = () => {
               <select
                 id="select-header-academic-staff"
                 value={currentAcademicStaffId}
-                onChange={(e) => setCurrentAcademicStaffId(e.target.value)}
+                onChange={(e) => requestRoleSwitchWithAuth('academic', e.target.value)}
                 className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
               >
                 {academicStaffList.map((s) => (

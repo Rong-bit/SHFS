@@ -25,6 +25,14 @@ import {
   ArrowRight,
   FileText,
   HelpCircle,
+  Terminal,
+  Copy,
+  Check,
+  Filter,
+  CheckCircle,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -73,6 +81,9 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
   // Filter in preview
   const [previewFilter, setPreviewFilter] = useState<'all' | 'practical' | 'warnings' | 'errors'>('all');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [copiedConsoleReport, setCopiedConsoleReport] = useState(false);
+  const [isConsoleExpanded, setIsConsoleExpanded] = useState(true);
+  const [consoleTab, setConsoleTab] = useState<'all' | 'errors' | 'warnings'>('all');
 
   const resetState = () => {
     setFile(null);
@@ -82,6 +93,43 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
     setIsSuccess(false);
     setSuccessReport(null);
     setSearchKeyword('');
+    setCopiedConsoleReport(false);
+  };
+
+  const handleCopyErrorReport = () => {
+    if (!parseResult) return;
+    const lines: string[] = [];
+    lines.push(`=== 高職課表匯入檢核診斷報告 ===`);
+    lines.push(`檔案名稱: ${file ? file.name : '示範課表資料'}`);
+    lines.push(`總筆數: ${parseResult.totalCount} | 成功解析: ${parseResult.validRows.length} | 異常需修正: ${parseResult.invalidRows.length}`);
+    lines.push(`實習連堂/工場課: ${parseResult.practicalCoursesCount} 節 | 新教師: ${parseResult.newTeachersDetected.length} 位`);
+    lines.push('');
+
+    if (parseResult.invalidRows.length > 0) {
+      lines.push(`--- 【異常錯誤清單 (需於本機 Excel 修正)】 ---`);
+      parseResult.invalidRows.forEach((row, i) => {
+        lines.push(`[第 ${row.rowNumber} 列] 班級: ${row.className || '未填'} | 科目: ${row.subjectName || '未填'} | 教師: ${row.teacherName || '未填'}`);
+        row.errors.forEach((err) => {
+          lines.push(`  ❌ 錯誤: ${err}`);
+        });
+        if (row.warnings.length > 0) {
+          row.warnings.forEach((w) => lines.push(`  ⚠️ 提示: ${w}`));
+        }
+      });
+      lines.push('');
+    }
+
+    if (parseResult.clashesInFile.length > 0) {
+      lines.push(`--- 【時間衝突與衝堂提示】 ---`);
+      parseResult.clashesInFile.forEach((c) => lines.push(`  ⚠️ 衝堂: ${c}`));
+      lines.push('');
+    }
+
+    lines.push(`產生時間: ${new Date().toLocaleString()}`);
+
+    navigator.clipboard.writeText(lines.join('\n'));
+    setCopiedConsoleReport(true);
+    setTimeout(() => setCopiedConsoleReport(false), 3000);
   };
 
   if (!isOpen) return null;
@@ -728,6 +776,194 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                     </div>
                   )}
 
+                  {/* Detailed Error & Validation Log Console */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-md text-slate-100 text-xs">
+                    {/* Console Header Bar */}
+                    <div className="bg-slate-950/80 px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="p-1.5 bg-slate-800 rounded-lg text-emerald-400">
+                          <Terminal className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-mono font-bold text-slate-200 flex items-center space-x-2">
+                            <span>資料檢核與格式診斷主控台</span>
+                            {parseResult.invalidRows.length > 0 ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                                發現 {parseResult.invalidRows.length} 筆異常需修正
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-1">
+                                <CheckCircle className="w-3 h-3" />
+                                <span>100% 格式檢核通過</span>
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            即時反饋各列欄位對齊、缺失值與高職實習連堂防呆檢核結果
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={handleCopyErrorReport}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 transition"
+                          title="複製整份檢核報告至剪貼簿"
+                        >
+                          {copiedConsoleReport ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-emerald-400 font-bold">已複製診斷報告</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-slate-400" />
+                              <span>複製錯誤診斷清單</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => setIsConsoleExpanded(!isConsoleExpanded)}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg transition"
+                          title={isConsoleExpanded ? '收合主控台' : '展開主控台'}
+                        >
+                          {isConsoleExpanded ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Console Body */}
+                    {isConsoleExpanded && (
+                      <div className="p-4 space-y-3 font-mono">
+                        {/* Sub Filter Tabs inside Console */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                          <div className="flex items-center space-x-1">
+                            <button
+                              onClick={() => setConsoleTab('all')}
+                              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                                consoleTab === 'all'
+                                  ? 'bg-slate-700 text-white font-bold'
+                                  : 'text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              全部日誌 ({parseResult.invalidRows.length + (parseResult.clashesInFile.length > 0 ? 1 : 0) + (parseResult.validRows.some(r => r.warnings.length > 0) ? 1 : 0)})
+                            </button>
+                            {parseResult.invalidRows.length > 0 && (
+                              <button
+                                onClick={() => setConsoleTab('errors')}
+                                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                                  consoleTab === 'errors'
+                                    ? 'bg-rose-900/60 text-rose-200 font-bold border border-rose-700'
+                                    : 'text-rose-400 hover:text-rose-200'
+                                }`}
+                              >
+                                ❌ 格式異常 ({parseResult.invalidRows.length})
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setConsoleTab('warnings')}
+                              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                                consoleTab === 'warnings'
+                                  ? 'bg-amber-900/60 text-amber-200 font-bold border border-amber-700'
+                                  : 'text-amber-400 hover:text-amber-200'
+                              }`}
+                            >
+                              ⚠️ 系統提示/自動排入
+                            </button>
+                          </div>
+
+                          <div className="text-[11px] text-slate-400">
+                            共解析 {parseResult.totalCount} 筆 | 有效 {parseResult.validRows.length} 堂課
+                          </div>
+                        </div>
+
+                        {/* Error Items List */}
+                        <div className="max-h-56 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                          {/* If Invalid Rows Exist */}
+                          {parseResult.invalidRows.length > 0 && (consoleTab === 'all' || consoleTab === 'errors') && (
+                            <div className="space-y-2">
+                              {parseResult.invalidRows.map((row, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-rose-950/40 border border-rose-800/80 rounded-xl p-3 text-xs space-y-1.5 transition hover:bg-rose-950/60"
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="px-2 py-0.5 bg-rose-800 text-rose-100 rounded font-bold">
+                                        Excel / CSV 第 {row.rowNumber} 列
+                                      </span>
+                                      <span className="text-slate-300 font-semibold">
+                                        班級: <span className="text-white font-bold">{row.className || '(未填寫)'}</span>
+                                      </span>
+                                      <span className="text-slate-400">·</span>
+                                      <span className="text-slate-300">
+                                        科目: <span className="text-white font-bold">{row.subjectName || '(未填寫)'}</span>
+                                      </span>
+                                    </div>
+                                    <span className="text-rose-400 text-[10px]">
+                                      授課教師: {row.teacherName || '未指定'}
+                                    </span>
+                                  </div>
+
+                                  {/* Error Reasons */}
+                                  <div className="space-y-1 pl-1">
+                                    {row.errors.map((err, errIdx) => (
+                                      <div key={errIdx} className="text-rose-300 flex items-start space-x-1.5 font-medium">
+                                        <span className="text-rose-400 font-bold shrink-0">❌ 錯誤原因:</span>
+                                        <span>{err}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Actionable Solution Box */}
+                                  <div className="bg-slate-900/90 border border-rose-900/50 rounded-lg px-2.5 py-1.5 text-[11px] text-amber-200/90 flex items-start space-x-1.5">
+                                    <span className="text-amber-400 font-bold shrink-0">💡 建議修正:</span>
+                                    <span>
+                                      請打開您本機的 Excel 檔案，至第 {row.rowNumber} 列確認「班級」、「科目名稱」與「時間/星期節次」欄位是否填寫完整，存檔後重新上傳即可。
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Clash Warnings */}
+                          {parseResult.clashesInFile.length > 0 && (consoleTab === 'all' || consoleTab === 'warnings') && (
+                            <div className="bg-amber-950/40 border border-amber-800/80 rounded-xl p-3 text-xs space-y-1.5">
+                              <div className="text-amber-300 font-bold flex items-center space-x-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                                <span>衝堂/時間衝突診斷：</span>
+                              </div>
+                              <ul className="list-disc list-inside space-y-1 text-amber-200/90 text-[11px] pl-1">
+                                {parseResult.clashesInFile.map((msg, i) => (
+                                  <li key={i}>{msg}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Success State */}
+                          {parseResult.invalidRows.length === 0 && parseResult.clashesInFile.length === 0 && (
+                            <div className="bg-emerald-950/30 border border-emerald-800/60 rounded-xl p-3.5 text-xs text-emerald-200 space-y-1">
+                              <div className="font-bold flex items-center space-x-1.5 text-emerald-300">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <span>[SUCCESS] 全數資料格式診斷合格</span>
+                              </div>
+                              <p className="text-[11px] text-emerald-300/80 pl-5 leading-relaxed">
+                                共 {parseResult.validRows.length} 堂課通過驗證。包含 {parseResult.practicalCoursesCount} 節高職專業實習連堂已完成工場配對。未發現任何格式缺失或教師衝堂，可直接點擊「確認匯入」寫入系統。
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Preview Table Header & Filters */}
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -841,15 +1077,20 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                                       <XCircle className="w-3.5 h-3.5" />
                                       {row.errors[0]}
                                     </span>
-                                  ) : hasWarning ? (
-                                    <span className="text-amber-700 font-medium text-[11px] flex items-center gap-1">
+                                  ) : row.warnings.some((w) => w.includes('衝突') || w.includes('衝堂')) ? (
+                                    <span className="text-amber-700 font-medium text-[11px] flex items-center gap-1" title={row.warnings.join(' | ')}>
                                       <AlertTriangle className="w-3.5 h-3.5" />
+                                      排課重疊提示
+                                    </span>
+                                  ) : row.warnings.some((w) => w.includes('自動註冊') || w.includes('自動排入')) ? (
+                                    <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-medium text-[11px] flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                       自動建檔
                                     </span>
                                   ) : (
                                     <span className="text-emerald-600 font-semibold text-[11px] flex items-center gap-1">
                                       <CheckCircle2 className="w-3.5 h-3.5" />
-                                      正常
+                                      驗證通過
                                     </span>
                                   )}
                                 </td>

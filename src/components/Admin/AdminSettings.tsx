@@ -29,7 +29,10 @@ import {
   Search,
   Filter,
   UserCheck,
-  BadgeCheck
+  BadgeCheck,
+  Lock,
+  KeyRound,
+  Key
 } from 'lucide-react';
 import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/scheduleImporter';
 
@@ -72,6 +75,13 @@ export const AdminSettings: React.FC = () => {
     semester: systemConfig?.semester ?? '1',
     currentMonth: systemConfig?.currentMonth ?? 10,
     weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+    authConfig: {
+      requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
+      defaultTeacherPassword: systemConfig?.authConfig?.defaultTeacherPassword ?? '1234',
+      adminPassword: systemConfig?.authConfig?.adminPassword ?? 'admin',
+      academicPassword: systemConfig?.authConfig?.academicPassword ?? '1234',
+      accountingPassword: systemConfig?.authConfig?.accountingPassword ?? '1234',
+    },
   }));
 
   // Sync if systemConfig changes
@@ -90,6 +100,13 @@ export const AdminSettings: React.FC = () => {
       semester: systemConfig?.semester ?? '1',
       currentMonth: systemConfig?.currentMonth ?? 10,
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+      authConfig: {
+        requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
+        defaultTeacherPassword: systemConfig?.authConfig?.defaultTeacherPassword ?? '1234',
+        adminPassword: systemConfig?.authConfig?.adminPassword ?? 'admin',
+        academicPassword: systemConfig?.authConfig?.academicPassword ?? '1234',
+        accountingPassword: systemConfig?.authConfig?.accountingPassword ?? '1234',
+      },
     });
   }, [systemConfig]);
 
@@ -402,18 +419,48 @@ export const AdminSettings: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Direct Import Schedule Button */}
+          <button
+            id="btn-admin-top-import-schedule"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+            title="開啟課表匯入精靈 (支援 Excel / CSV)"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-950" />
+            <span>匯入全校課表 (Excel/CSV)</span>
+          </button>
+
+          {/* Download Template Excel */}
+          <button
+            id="btn-admin-top-download-template"
+            onClick={generateTemplateExcel}
+            className="flex items-center space-x-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
+            title="下載標準課表 Excel 範本檔案"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <span className="hidden sm:inline">下載範本</span>
+          </button>
+
+          {/* Reset Defaults */}
           <button
             id="btn-admin-reset-defaults"
             onClick={() => {
-              if (window.confirm('確定要將所有系統參數、師資、工場與課表重設回預設高職示範值嗎？')) {
-                resetToMockData();
-              }
+              setConfirmDialog({
+                isOpen: true,
+                title: '確認重設系統預設值',
+                message: '確定要將所有系統參數、師資、工場與課表重設回預設高職示範值嗎？',
+                warningMessage: '此操作將還原所有自訂課表與師資至預設示範狀態。',
+                onConfirm: () => {
+                  resetToMockData();
+                  setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+                },
+              });
             }}
             className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>重設為系統預設值</span>
+            <span className="hidden md:inline">重設預設值</span>
           </button>
         </div>
       </div>
@@ -757,6 +804,171 @@ export const AdminSettings: React.FC = () => {
 
           </div>
 
+          {/* Security & Authentication Configuration Card */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                  <Lock className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    身分登入密碼驗證安全設定
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    啟用身分切換密碼保護，防止教師與行政人員端未授權切換或代為送出簽核
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center space-x-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formConfig.authConfig?.requirePassword ?? true}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      authConfig: {
+                        ...(formConfig.authConfig || {
+                          defaultTeacherPassword: '1234',
+                          adminPassword: 'admin',
+                          academicPassword: '1234',
+                          accountingPassword: '1234',
+                        }),
+                        requirePassword: e.target.checked,
+                      },
+                    })
+                  }
+                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                />
+                <span className="text-xs font-bold text-slate-800">
+                  {formConfig.authConfig?.requirePassword ? '🛡️ 密碼保護已啟用' : '🔓 密碼保護已關閉 (免密碼切換)'}
+                </span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                  <span>全校教師預設密碼</span>
+                  <span className="text-[10px] text-amber-600 font-mono">預設: 1234</span>
+                </label>
+                <input
+                  type="text"
+                  value={formConfig.authConfig?.defaultTeacherPassword || ''}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      authConfig: {
+                        ...(formConfig.authConfig || {
+                          requirePassword: true,
+                          adminPassword: 'admin',
+                          academicPassword: '1234',
+                          accountingPassword: '1234',
+                        }),
+                        defaultTeacherPassword: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
+                  placeholder="如 1234"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  個別教師亦可於其課表上方點擊「設定密碼」自訂專屬密碼。
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                  <span>教學組經辦密碼</span>
+                  <span className="text-[10px] text-indigo-600 font-mono">預設: 1234</span>
+                </label>
+                <input
+                  type="text"
+                  value={formConfig.authConfig?.academicPassword || ''}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      authConfig: {
+                        ...(formConfig.authConfig || {
+                          requirePassword: true,
+                          defaultTeacherPassword: '1234',
+                          adminPassword: 'admin',
+                          accountingPassword: '1234',
+                        }),
+                        academicPassword: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
+                  placeholder="如 1234"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  切換至【教務處教學組】身分時所需的確認密碼。
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                  <span>主計出納結算密碼</span>
+                  <span className="text-[10px] text-amber-600 font-mono">預設: 1234</span>
+                </label>
+                <input
+                  type="text"
+                  value={formConfig.authConfig?.accountingPassword || ''}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      authConfig: {
+                        ...(formConfig.authConfig || {
+                          requirePassword: true,
+                          defaultTeacherPassword: '1234',
+                          adminPassword: 'admin',
+                          academicPassword: '1234',
+                        }),
+                        accountingPassword: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
+                  placeholder="如 1234"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  切換至【主計出納處】結算身分時所需的確認密碼。
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                  <span>系統管理員密碼</span>
+                  <span className="text-[10px] text-rose-600 font-mono">預設: admin</span>
+                </label>
+                <input
+                  type="text"
+                  value={formConfig.authConfig?.adminPassword || ''}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      authConfig: {
+                        ...(formConfig.authConfig || {
+                          requirePassword: true,
+                          defaultTeacherPassword: '1234',
+                          academicPassword: '1234',
+                          accountingPassword: '1234',
+                        }),
+                        adminPassword: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
+                  placeholder="如 admin"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  切換至【系統管理員】後台維護時所需的最高權限密碼。
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Save Bar */}
           <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
             <div>
@@ -931,14 +1143,36 @@ export const AdminSettings: React.FC = () => {
               </select>
             </div>
 
-            <button
-              id="btn-admin-add-teacher"
-              onClick={handleOpenAddTeacher}
-              className="flex items-center space-x-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95"
-            >
-              <Plus className="w-4 h-4 text-emerald-400" />
-              <span>新增教師師資資料</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                id="btn-admin-purge-mock-teachers"
+                onClick={() => {
+                  const activeTeacherIds = new Set(sessions.map((s) => s.teacherId));
+                  const unusedMockTeachers = teachers.filter((t) => !activeTeacherIds.has(t.id));
+                  if (unusedMockTeachers.length === 0) {
+                    alert('目前名冊中所有教師皆有排定課堂，無多餘未排課之測試教師。');
+                    return;
+                  }
+                  if (confirm(`確定要清除未在課表中排課的 ${unusedMockTeachers.length} 位預設示範教師嗎？\n（包含：${unusedMockTeachers.map(t => t.name).slice(0, 5).join('、')}${unusedMockTeachers.length > 5 ? '...等' : ''}）`)) {
+                    unusedMockTeachers.forEach((t) => deleteTeacher(t.id));
+                  }
+                }}
+                className="flex items-center space-x-1 px-3 py-2 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 font-semibold text-xs rounded-xl border border-slate-200 hover:border-rose-300 transition"
+                title="清除未在課表中有任何授課節數的系統預設教師"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>清除未排課示範教師</span>
+              </button>
+
+              <button
+                id="btn-admin-add-teacher"
+                onClick={handleOpenAddTeacher}
+                className="flex items-center space-x-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95"
+              >
+                <Plus className="w-4 h-4 text-emerald-400" />
+                <span>新增教師師資資料</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1278,9 +1512,16 @@ export const AdminSettings: React.FC = () => {
                   </p>
                   <button
                     onClick={() => {
-                      if (window.confirm('確定要還原所有資料為初始示範狀態嗎？')) {
-                        resetToMockData();
-                      }
+                      setConfirmDialog({
+                        isOpen: true,
+                        title: '確認還原初始示範資料',
+                        message: '確定要還原所有資料為初始高職示範狀態嗎？',
+                        warningMessage: '包含電機、資訊、機械、餐飲等群科之預設課表與申請單。',
+                        onConfirm: () => {
+                          resetToMockData();
+                          setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+                        },
+                      });
                     }}
                     className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-bold text-xs transition"
                   >

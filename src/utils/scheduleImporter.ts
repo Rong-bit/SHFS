@@ -27,34 +27,58 @@ export interface ImportParseResult {
   clashesInFile: string[];
 }
 
-// Convert day string to number (1-5)
+// Convert day string to number (1-5), supports '週一 第1節', '星期一', '(一)', 'Mon 1' etc.
 export const parseDayOfWeek = (val: any): DayOfWeek | null => {
   if (val === undefined || val === null) return null;
   const str = String(val).trim();
-  if (['1', '週一', '星期一', '禮拜一', '一', 'Mon', 'Monday'].includes(str)) return 1;
-  if (['2', '週二', '星期二', '禮拜二', '二', 'Tue', 'Tuesday'].includes(str)) return 2;
-  if (['3', '週三', '星期三', '禮拜三', '三', 'Wed', 'Wednesday'].includes(str)) return 3;
-  if (['4', '週四', '星期四', '禮拜四', '四', 'Thu', 'Thursday'].includes(str)) return 4;
-  if (['5', '週五', '星期五', '禮拜五', '五', 'Fri', 'Friday'].includes(str)) return 5;
+  if (!str) return null;
+
+  if (/(?:週|星期|禮拜|\()一|Mon|Monday|^1$/i.test(str)) return 1;
+  if (/(?:週|星期|禮拜|\()二|Tue|Tuesday|^2$/i.test(str)) return 2;
+  if (/(?:週|星期|禮拜|\()三|Wed|Wednesday|^3$/i.test(str)) return 3;
+  if (/(?:週|星期|禮拜|\()四|Thu|Thursday|^4$/i.test(str)) return 4;
+  if (/(?:週|星期|禮拜|\()五|Fri|Friday|^5$/i.test(str)) return 5;
+
+  // Standalone single digit 1-5
   const num = parseInt(str, 10);
   if (num >= 1 && num <= 5) return num as DayOfWeek;
   return null;
 };
 
-// Convert period string to number (1-8)
+// Convert period string to number (1-8), supports '週一 第1節', '第1節', '3', '1-2節' etc.
 export const parsePeriod = (val: any): number | null => {
   if (val === undefined || val === null) return null;
   const str = String(val).trim();
-  const match = str.match(/\d+/);
-  if (match) {
-    const num = parseInt(match[0], 10);
+  if (!str) return null;
+
+  // 1. Explicit "第1節", "第 2 節" pattern
+  const nthMatch = str.match(/第\s*([0-9一二三四五六七八])\s*節?/);
+  if (nthMatch) {
+    const raw = nthMatch[1];
+    const chineseToNum: Record<string, number> = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8 };
+    if (chineseToNum[raw]) return chineseToNum[raw];
+    const n = parseInt(raw, 10);
+    if (n >= 1 && n <= 8) return n;
+  }
+
+  // 2. Strip day prefixes like "週一", "星期二", "Mon" etc.
+  const stripped = str
+    .replace(/(?:週|星期|禮拜|\()[一二三四五六七日1-5\)]/gi, '')
+    .replace(/Mon|Tue|Wed|Thu|Fri|Monday|Tuesday|Wednesday|Thursday|Friday/gi, '')
+    .trim();
+
+  // 3. Match first digit 1-8
+  const digitMatch = stripped.match(/\d+/);
+  if (digitMatch) {
+    const num = parseInt(digitMatch[0], 10);
     if (num >= 1 && num <= 8) return num;
   }
+
   const chineseMap: Record<string, number> = {
     '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8,
     '第一節': 1, '第二節': 2, '第三節': 3, '第四節': 4, '第五節': 5, '第六節': 6, '第七節': 7, '第八節': 8,
   };
-  if (chineseMap[str]) return chineseMap[str];
+  if (chineseMap[stripped]) return chineseMap[stripped];
   return null;
 };
 
@@ -69,16 +93,34 @@ export const inferIsPractical = (subjectName: string, venueName: string, explici
   return practicalKeywords.some((kw) => subjectName.includes(kw) || venueName.includes(kw));
 };
 
-// Clean teacher name from formats like "t0011.何雪玲", "0116_林冠妙", "(t1216)何建延"
+// Clean teacher name from formats like "t0011.何雪玲", "*t0711.林昇蒼,*t0714.葉珈誠", "0116_林冠妙", "(t1216)何建延", "彭韶郁,t1509.李萱"
 export const cleanTeacherName = (val: string): string => {
   if (!val) return '';
-  let cleaned = String(val).trim();
-  // Remove prefix like t0011. or 0116_ or t1216-
-  cleaned = cleaned.replace(/^[a-zA-Z0-9_-]+[\.\_\-\s]/, '');
-  // Remove parenthesized IDs like (t0011)
-  cleaned = cleaned.replace(/^\([a-zA-Z0-9_-]+\)/, '');
-  cleaned = cleaned.replace(/^\[[a-zA-Z0-9_-]+\]/, '');
-  return cleaned.trim();
+  const rawStr = String(val).trim();
+  if (!rawStr) return '';
+
+  // Split multiple teachers if separated by comma, slash, plus, ampersand, etc.
+  const parts = rawStr.split(/[,，/、\+＆&]/);
+  const cleanedList = parts
+    .map((p) => {
+      let s = p.trim();
+      // Remove leading asterisks or symbols
+      s = s.replace(/^[\*＊#\s]+/, '');
+      // Remove prefix like t0011., t05085., 0116_, t1216-, etc.
+      s = s.replace(/^[a-zA-Z0-9_-]+[\.\_\-\s]/, '');
+      // Remove parenthesized IDs like (t0011) or [t0011]
+      s = s.replace(/^\([a-zA-Z0-9_-]+\)/, '');
+      s = s.replace(/^\[[a-zA-Z0-9_-]+\]/, '');
+      // Remove any remaining asterisk or numbers with dot
+      s = s.replace(/[\*＊]/g, '');
+      s = s.replace(/^[0-9]+\./, '');
+      return s.trim();
+    })
+    .filter((n) => n && n !== '未指派' && n !== 'null' && n !== 'undefined');
+
+  if (cleanedList.length === 0) return '';
+  // Join back multiple co-teachers cleanly
+  return cleanedList.join(' / ');
 };
 
 // Guess Department from Subject or Teacher or Class name
@@ -133,29 +175,374 @@ export const parseScheduleFile = async (
   const venueTimeSlot = new Map<string, number>();
   const clashesInFile: string[] = [];
 
+  // Determine if file has explicit Day / Period schedule or is a "開課配課清單 (依每週時數自動排課)"
+  const hasExplicitDay = rawRows.some((raw) => {
+    for (const k of Object.keys(raw)) {
+      const cleaned = k.trim().replace(/\s+/g, '');
+      if (['星期', '週次', '星期幾', '時間', '時段', 'Day', 'dayOfWeek'].includes(cleaned)) {
+        const val = raw[k];
+        if (val !== undefined && val !== null && parseDayOfWeek(val) !== null) return true;
+      }
+    }
+    return false;
+  });
+
+  // ==========================================
+  // MODE A: 開課配課清冊 (時數檔) 自動智慧排入課表
+  // ==========================================
+  if (!hasExplicitDay) {
+    // Group courses by class
+    const classCoursesMap = new Map<string, Array<{
+      rawRowIndex: number;
+      className: string;
+      subjectName: string;
+      teacherName: string;
+      hours: number;
+      venueName: string;
+      deptName: string;
+      practicalVal: any;
+      notes: string;
+      isPractical: boolean;
+      department: DepartmentType;
+    }>>();
+
+    rawRows.forEach((raw, idx) => {
+      const rowNumber = idx + 2;
+      const findField = (keys: string[]) => {
+        for (const target of keys) {
+          for (const k of Object.keys(raw)) {
+            const cleaned = k.trim().replace(/\s+/g, '');
+            if (cleaned === target) {
+              const v = raw[k];
+              if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+            }
+          }
+        }
+        for (const target of keys) {
+          for (const k of Object.keys(raw)) {
+            const cleaned = k.trim().replace(/\s+/g, '');
+            if (cleaned.includes(target) && !cleaned.includes('代碼')) {
+              const v = raw[k];
+              if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+            }
+          }
+        }
+        for (const target of keys) {
+          for (const k of Object.keys(raw)) {
+            const cleaned = k.trim().replace(/\s+/g, '');
+            if (cleaned.includes(target)) {
+              const v = raw[k];
+              if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+            }
+          }
+        }
+        return '';
+      };
+
+      const classVal = String(findField(['班級名稱', '班級', 'Class', 'className', '班級代碼'])).trim();
+      const subjectVal = String(findField(['科目名稱', '課程名稱', '科目', 'Subject', 'subjectName', '科目代碼'])).trim();
+      const rawTeacherVal = String(findField(['授課教師', '任課教師', '教師姓名', '教師', 'Teacher', 'teacherName', '校內教師姓名'])).trim();
+      const teacherVal = cleanTeacherName(rawTeacherVal) || '未指派教師';
+      const hoursVal = findField(['時數', '每週時數', '節數', '學分', '時數/週', 'Hours', 'hours', 'credit']);
+      const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName', '教室名稱'])).trim();
+      const deptVal = String(findField(['科別', '群科', '教師科別', 'Department', 'department'])).trim();
+      const practicalVal = findField(['是否為實習', '實習課', '實習', '屬性', 'isPractical', '實作', '課程類別']);
+      const notesVal = String(findField(['備註', '說明', 'Notes', 'notes'])).trim();
+
+      if (!classVal || !subjectVal) {
+        invalidRows.push({
+          rowNumber,
+          dayOfWeek: 1,
+          period: 1,
+          className: classVal || '未填班級',
+          subjectName: subjectVal || '未填科目',
+          teacherName: teacherVal,
+          department: '共同科目',
+          venueName: venueVal || '原班教室',
+          isPractical: false,
+          errors: [!classVal ? '班級名稱未填寫' : '科目名稱未填寫'],
+          warnings: [],
+        });
+        return;
+      }
+
+      classesSet.add(classVal);
+      if (teacherVal && teacherVal !== '未指派教師' && !teacherNameMap.has(teacherVal)) {
+        newTeachersSet.add(teacherVal);
+      }
+
+      const finalVenue = venueVal || `${classVal} 原班普通教室`;
+      if (!venueNameMap.has(finalVenue)) {
+        newVenuesSet.add(finalVenue);
+      }
+
+      const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
+      const department: DepartmentType = deptVal
+        ? (deptVal as DepartmentType)
+        : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal);
+
+      let parsedHours = parseFloat(String(hoursVal));
+      if (isNaN(parsedHours) || parsedHours <= 0) {
+        parsedHours = isPractical ? 3 : 2;
+      }
+      const roundedHours = Math.max(1, Math.min(8, Math.round(parsedHours)));
+
+      if (!classCoursesMap.has(classVal)) {
+        classCoursesMap.set(classVal, []);
+      }
+      classCoursesMap.get(classVal)!.push({
+        rawRowIndex: rowNumber,
+        className: classVal,
+        subjectName: subjectVal,
+        teacherName: teacherVal,
+        hours: roundedHours,
+        venueName: finalVenue,
+        deptName: deptVal,
+        practicalVal,
+        notes: notesVal,
+        isPractical,
+        department,
+      });
+    });
+
+    // Global schedule tracker across all classes, teachers, venues
+    // key: "d-p"
+    const occupiedClass = new Map<string, Set<string>>(); // "d-p" -> Set<className>
+    const occupiedTeacher = new Map<string, Set<string>>(); // "d-p" -> Set<teacherName>
+    const occupiedVenue = new Map<string, Set<string>>(); // "d-p" -> Set<venueName>
+
+    const isSlotAvailable = (d: DayOfWeek, p: number, cName: string, tName: string, vName: string) => {
+      const slotKey = `${d}-${p}`;
+      if (occupiedClass.get(slotKey)?.has(cName)) return false;
+      if (tName && tName !== '未指派教師' && occupiedTeacher.get(slotKey)?.has(tName)) return false;
+      if (vName && !vName.includes('原班普通教室') && occupiedVenue.get(slotKey)?.has(vName)) return false;
+      return true;
+    };
+
+    const occupySlot = (d: DayOfWeek, p: number, cName: string, tName: string, vName: string) => {
+      const slotKey = `${d}-${p}`;
+      if (!occupiedClass.has(slotKey)) occupiedClass.set(slotKey, new Set());
+      occupiedClass.get(slotKey)!.add(cName);
+
+      if (tName && tName !== '未指派教師') {
+        if (!occupiedTeacher.has(slotKey)) occupiedTeacher.set(slotKey, new Set());
+        occupiedTeacher.get(slotKey)!.add(tName);
+      }
+
+      if (vName && !vName.includes('原班普通教室')) {
+        if (!occupiedVenue.has(slotKey)) occupiedVenue.set(slotKey, new Set());
+        occupiedVenue.get(slotKey)!.add(vName);
+      }
+    };
+
+    // Auto-allocate periods for each class
+    classCoursesMap.forEach((courses, cName) => {
+      // Sort: practical courses first (need contiguous blocks), then longer subjects
+      const sorted = [...courses].sort((a, b) => {
+        if (a.isPractical && !b.isPractical) return -1;
+        if (!a.isPractical && b.isPractical) return 1;
+        return b.hours - a.hours;
+      });
+
+      for (const item of sorted) {
+        let remainingHours = item.hours;
+
+        // If practical with 3-4 hours, try to find a consecutive morning (1-3/4) or afternoon (5-7/8) block
+        if (item.isPractical && remainingHours >= 3) {
+          const blockSize = Math.min(4, remainingHours);
+          let allocated = false;
+
+          // Try morning blocks (periods 1..1+blockSize-1) across days 1..5
+          for (let d = 1; d <= 5 && !allocated; d++) {
+            const day = d as DayOfWeek;
+            // Test morning: periods 1..blockSize
+            let morningOk = true;
+            for (let p = 1; p <= blockSize; p++) {
+              if (!isSlotAvailable(day, p, cName, item.teacherName, item.venueName)) {
+                morningOk = false;
+                break;
+              }
+            }
+            if (morningOk) {
+              for (let p = 1; p <= blockSize; p++) {
+                occupySlot(day, p, cName, item.teacherName, item.venueName);
+                validRows.push({
+                  rowNumber: item.rawRowIndex,
+                  dayOfWeek: day,
+                  period: p,
+                  className: cName,
+                  subjectName: item.subjectName,
+                  teacherName: item.teacherName,
+                  department: item.department,
+                  venueName: item.venueName,
+                  isPractical: true,
+                  notes: item.notes || `實習連堂 (${blockSize}節)`,
+                  errors: [],
+                  warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+                });
+                practicalCount++;
+              }
+              remainingHours -= blockSize;
+              allocated = true;
+              break;
+            }
+
+            // Test afternoon: periods 5..5+blockSize-1 (up to 7)
+            const aftBlock = Math.min(3, blockSize);
+            let aftOk = true;
+            for (let p = 5; p <= 4 + aftBlock; p++) {
+              if (!isSlotAvailable(day, p, cName, item.teacherName, item.venueName)) {
+                aftOk = false;
+                break;
+              }
+            }
+            if (aftOk) {
+              for (let p = 5; p <= 4 + aftBlock; p++) {
+                occupySlot(day, p, cName, item.teacherName, item.venueName);
+                validRows.push({
+                  rowNumber: item.rawRowIndex,
+                  dayOfWeek: day,
+                  period: p,
+                  className: cName,
+                  subjectName: item.subjectName,
+                  teacherName: item.teacherName,
+                  department: item.department,
+                  venueName: item.venueName,
+                  isPractical: true,
+                  notes: item.notes || `實習連堂 (${aftBlock}節)`,
+                  errors: [],
+                  warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+                });
+                practicalCount++;
+              }
+              remainingHours -= aftBlock;
+              allocated = true;
+              break;
+            }
+          }
+        }
+
+        // Allocate remaining hours across available slots (preferring 1 period per day)
+        for (let d = 1; d <= 5 && remainingHours > 0; d++) {
+          const day = d as DayOfWeek;
+          for (let p = 1; p <= 7 && remainingHours > 0; p++) {
+            if (isSlotAvailable(day, p, cName, item.teacherName, item.venueName)) {
+              occupySlot(day, p, cName, item.teacherName, item.venueName);
+              validRows.push({
+                rowNumber: item.rawRowIndex,
+                dayOfWeek: day,
+                period: p,
+                className: cName,
+                subjectName: item.subjectName,
+                teacherName: item.teacherName,
+                department: item.department,
+                venueName: item.venueName,
+                isPractical: item.isPractical,
+                notes: item.notes,
+                errors: [],
+                warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+              });
+              if (item.isPractical) practicalCount++;
+              remainingHours--;
+              break; // go to next day for even distribution
+            }
+          }
+        }
+
+        // If still remaining hours, fill any remaining available slot on any day
+        if (remainingHours > 0) {
+          for (let d = 1; d <= 5 && remainingHours > 0; d++) {
+            const day = d as DayOfWeek;
+            for (let p = 1; p <= 7 && remainingHours > 0; p++) {
+              if (isSlotAvailable(day, p, cName, item.teacherName, item.venueName)) {
+                occupySlot(day, p, cName, item.teacherName, item.venueName);
+                validRows.push({
+                  rowNumber: item.rawRowIndex,
+                  dayOfWeek: day,
+                  period: p,
+                  className: cName,
+                  subjectName: item.subjectName,
+                  teacherName: item.teacherName,
+                  department: item.department,
+                  venueName: item.venueName,
+                  isPractical: item.isPractical,
+                  notes: item.notes,
+                  errors: [],
+                  warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+                });
+                if (item.isPractical) practicalCount++;
+                remainingHours--;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return {
+      validRows,
+      invalidRows,
+      totalCount: rawRows.length,
+      newTeachersDetected: Array.from(newTeachersSet),
+      newVenuesDetected: Array.from(newVenuesSet),
+      practicalCoursesCount: practicalCount,
+      classesDetected: Array.from(classesSet),
+      clashesInFile: [],
+    };
+  }
+
+  // ==========================================
+  // MODE B: 標準日課表 (已有 星期 與 節次)
+  // ==========================================
   rawRows.forEach((raw, idx) => {
     const rowNumber = idx + 2; // Excel row index (assuming header is row 1)
 
-    // Normalize keys: match various column headers
+    // Normalize keys: match various column headers with prioritized precision
     const findField = (keys: string[]) => {
-      for (const k of Object.keys(raw)) {
-        const cleaned = k.trim().replace(/\s+/g, '');
-        if (keys.some((target) => cleaned.includes(target))) {
-          return raw[k];
+      // 1. Exact match first
+      for (const target of keys) {
+        for (const k of Object.keys(raw)) {
+          const cleaned = k.trim().replace(/\s+/g, '');
+          if (cleaned === target) {
+            const v = raw[k];
+            if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+          }
+        }
+      }
+      // 2. Partial match prioritizing non-code (exclude "代碼" when looking for name)
+      for (const target of keys) {
+        for (const k of Object.keys(raw)) {
+          const cleaned = k.trim().replace(/\s+/g, '');
+          if (cleaned.includes(target) && !cleaned.includes('代碼')) {
+            const v = raw[k];
+            if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+          }
+        }
+      }
+      // 3. General fallback partial match
+      for (const target of keys) {
+        for (const k of Object.keys(raw)) {
+          const cleaned = k.trim().replace(/\s+/g, '');
+          if (cleaned.includes(target)) {
+            const v = raw[k];
+            if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+          }
         }
       }
       return '';
     };
 
-    const dayVal = findField(['星期', '週次', '週', 'Day', 'dayOfWeek']);
-    const periodVal = findField(['節次', '節', 'Period', 'period']);
-    const classVal = String(findField(['班級', '班級名稱', 'Class', 'className'])).trim();
-    const subjectVal = String(findField(['科目', '科目名稱', '課程名稱', 'Subject', 'subjectName'])).trim();
-    const rawTeacherVal = String(findField(['授課教師', '任課教師', '教師姓名', '教師', 'Teacher', 'teacherName'])).trim();
-    const teacherVal = cleanTeacherName(rawTeacherVal);
-    const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName'])).trim();
+    // Support combined "時間" / "時段" (e.g. "週一 第1節")
+    const timeVal = findField(['時間', '時段', '上課時間', '節次時間', 'Time', 'time']);
+    const dayVal = findField(['星期', '週次', '週', '星期幾', 'Day', 'dayOfWeek']) || timeVal;
+    const periodVal = findField(['節次', '節', '堂次', 'Period', 'period']) || timeVal;
+    const classVal = String(findField(['班級名稱', '班級', 'Class', 'className', '班級代碼'])).trim();
+    const subjectVal = String(findField(['科目名稱', '課程名稱', '科目', 'Subject', 'subjectName', '科目代碼'])).trim();
+    const rawTeacherVal = String(findField(['授課教師', '任課教師', '教師姓名', '教師', 'Teacher', 'teacherName', '校內教師姓名'])).trim();
+    const teacherVal = cleanTeacherName(rawTeacherVal) || '未指派教師';
+    const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName', '教室名稱'])).trim();
     const deptVal = String(findField(['科別', '群科', '教師科別', 'Department', 'department'])).trim();
-    const practicalVal = findField(['是否為實習', '實習課', '實習', 'isPractical', '實作']);
+    const practicalVal = findField(['是否為實習', '實習課', '實習', '屬性', 'isPractical', '實作', '課程類別']);
     const notesVal = String(findField(['備註', '說明', 'Notes', 'notes'])).trim();
 
     const errors: string[] = [];
@@ -181,13 +568,17 @@ export const parseScheduleFile = async (
       errors.push('科目名稱未填寫');
     }
 
-    if (!teacherVal) {
-      errors.push('授課教師姓名未填寫');
+    if (!teacherVal || teacherVal === '未指派教師') {
+      warnings.push('本堂課尚未指派授課教師，匯入後可於課表中手動指定');
     } else {
-      if (!teacherNameMap.has(teacherVal)) {
-        newTeachersSet.add(teacherVal);
-        warnings.push(`教師「${teacherVal}」尚未存在於系統教師清冊，匯入時將自動註冊為新進教師`);
-      }
+      // Split co-teachers if any
+      const subTeachers = teacherVal.split('/').map((s) => s.trim()).filter(Boolean);
+      subTeachers.forEach((tName) => {
+        if (tName && tName !== '未指派教師' && !teacherNameMap.has(tName)) {
+          newTeachersSet.add(tName);
+          warnings.push(`教師「${tName}」將自動註冊加入師資名冊`);
+        }
+      });
     }
 
     const finalVenue = venueVal || `${classVal} 原班普通教室`;
@@ -207,27 +598,31 @@ export const parseScheduleFile = async (
     if (dayOfWeek && period) {
       const timeKey = `d${dayOfWeek}-p${period}`;
       
-      // Teacher clash
-      if (teacherVal) {
-        const teacherKey = `${timeKey}-t:${teacherVal}`;
-        if (teacherTimeSlot.has(teacherKey)) {
-          const prevRow = teacherTimeSlot.get(teacherKey);
-          const msg = `第 ${rowNumber} 列與第 ${prevRow} 列衝突：教師「${teacherVal}」在 週${dayOfWeek} 第${period}節 排定兩門課程`;
-          errors.push(msg);
-          clashesInFile.push(msg);
-        } else {
-          teacherTimeSlot.set(teacherKey, rowNumber);
-        }
+      // Teacher clash (skip if unassigned)
+      if (teacherVal && teacherVal !== '未指派教師') {
+        const subTeachers = teacherVal.split('/').map((s) => s.trim()).filter(Boolean);
+        subTeachers.forEach((tName) => {
+          if (tName && tName !== '未指派教師') {
+            const teacherKey = `${timeKey}-t:${tName}`;
+            if (teacherTimeSlot.has(teacherKey)) {
+              const prevRow = teacherTimeSlot.get(teacherKey);
+              const msg = `第 ${rowNumber} 列與第 ${prevRow} 列衝突：教師「${tName}」在 週${dayOfWeek} 第${period}節 排定兩門課程`;
+              warnings.push(msg);
+              clashesInFile.push(msg);
+            } else {
+              teacherTimeSlot.set(teacherKey, rowNumber);
+            }
+          }
+        });
       }
 
-      // Class clash
+      // Class clash (allow split-group practical courses as warnings instead of blocking failures)
       if (classVal) {
         const classKey = `${timeKey}-c:${classVal}`;
         if (classTimeSlot.has(classKey)) {
           const prevRow = classTimeSlot.get(classKey);
-          const msg = `第 ${rowNumber} 列與第 ${prevRow} 列衝突：班級「${classVal}」在 週${dayOfWeek} 第${period}節 排有重疊課堂`;
-          errors.push(msg);
-          clashesInFile.push(msg);
+          const msg = `第 ${rowNumber} 列與第 ${prevRow} 列提示：班級「${classVal}」在 週${dayOfWeek} 第${period}節 排有分組/實習連堂課`;
+          warnings.push(msg);
         } else {
           classTimeSlot.set(classKey, rowNumber);
         }
@@ -239,7 +634,7 @@ export const parseScheduleFile = async (
         if (venueTimeSlot.has(venueKey)) {
           const prevRow = venueTimeSlot.get(venueKey);
           const msg = `第 ${rowNumber} 列與第 ${prevRow} 列衝堂：實習工場「${finalVenue}」在 週${dayOfWeek} 第${period}節 重複被借用`;
-          errors.push(msg);
+          warnings.push(msg);
           clashesInFile.push(msg);
         } else {
           venueTimeSlot.set(venueKey, rowNumber);

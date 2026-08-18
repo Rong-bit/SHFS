@@ -14,14 +14,27 @@ import {
   Filter,
   Check,
   X,
-  UserCheck
+  UserCheck,
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 
 export const PendingApprovals: React.FC = () => {
-  const { requests, approveRequest, rejectRequest, setPrintModalRequest, setIsAiAdvisorOpen, currentAcademicStaff, academicStaffList } = useApp();
+  const { 
+    requests, 
+    approveRequest, 
+    rejectRequest, 
+    deleteRequest, 
+    clearAllRequests, 
+    setPrintModalRequest, 
+    setIsAiAdvisorOpen, 
+    currentAcademicStaff, 
+    academicStaffList 
+  } = useApp();
   const [filter, setFilter] = useState<'pending' | 'all' | 'approved' | 'rejected'>('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('時段衝堂或請假附件不全');
+  const [isClearAllConfirmOpen, setIsClearAllConfirmOpen] = useState(false);
 
   const activeStaff = currentAcademicStaff || academicStaffList[0];
   const reviewerSignature = activeStaff ? `${activeStaff.name} ${activeStaff.title} (教學組)` : '教學組長';
@@ -65,28 +78,41 @@ export const PendingApprovals: React.FC = () => {
           </p>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center space-x-2 text-xs">
-          {[
-            { key: 'pending', label: `待簽核 (${pendingRequests.length})`, isPending: true },
-            { key: 'all', label: `全部案件 (${requests.length})` },
-            { key: 'approved', label: '已核准' },
-            { key: 'rejected', label: '已駁回' },
-          ].map((f) => (
+        {/* Filter Pills and Actions */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl">
+            {[
+              { key: 'pending', label: `待簽核 (${pendingRequests.length})`, isPending: true },
+              { key: 'all', label: `全部案件 (${requests.length})` },
+              { key: 'approved', label: '已核准' },
+              { key: 'rejected', label: '已駁回' },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key as any)}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition ${
+                  filter === f.key
+                    ? f.isPending && pendingRequests.length > 0
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                      : 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {requests.length > 0 && (
             <button
-              key={f.key}
-              onClick={() => setFilter(f.key as any)}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition ${
-                filter === f.key
-                  ? f.isPending && pendingRequests.length > 0
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                    : 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+              onClick={() => setIsClearAllConfirmOpen(true)}
+              title="清空目前所有調代課申請單據（包含系統預設的示範資料）"
+              className="flex items-center space-x-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition"
             >
-              {f.label}
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>清空單據</span>
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -314,12 +340,55 @@ export const PendingApprovals: React.FC = () => {
                         🖨️ 列印調代課通知單
                       </button>
                     )}
+
+                    {/* Delete single request */}
+                    <button
+                      onClick={() => deleteRequest(req.id)}
+                      title="刪除此單據"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Clear All Confirmation Modal */}
+      {isClearAllConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center space-x-2 text-rose-600 font-bold text-base">
+              <AlertTriangle className="w-5 h-5" />
+              <span>確認清空所有調代課申請單據？</span>
+            </div>
+            <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+              這將移除目前教務處清單中的所有示範單據（共 {requests.length} 筆）。後續您可由教師端發起真實調代課申請，或由教學組逕行指派。
+            </p>
+            <div className="flex justify-end space-x-2 mt-5">
+              <button
+                type="button"
+                onClick={() => setIsClearAllConfirmOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearAllRequests();
+                  setIsClearAllConfirmOpen(false);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-xs transition"
+              >
+                確認清空
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

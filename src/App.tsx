@@ -8,9 +8,19 @@ import { AdminSettings } from './components/Admin/AdminSettings';
 import { AiAdvisorModal } from './components/AiAdvisor/AiAdvisorModal';
 import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
+import { LoginAuthModal } from './components/Common/LoginAuthModal';
 
 const AppContent: React.FC = () => {
-  const { currentRole, printModalRequest, setPrintModalRequest, isImportModalOpen, setIsImportModalOpen } = useApp();
+  const { 
+    currentRole, 
+    printModalRequest, 
+    setPrintModalRequest, 
+    isImportModalOpen, 
+    setIsImportModalOpen,
+    isLoginAuthOpen,
+    setIsLoginAuthOpen,
+    loginAuthTarget
+  } = useApp();
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -58,6 +68,13 @@ const AppContent: React.FC = () => {
           onClose={() => setPrintModalRequest(null)}
         />
       )}
+
+      {/* Identity Login Password Authentication Modal */}
+      <LoginAuthModal
+        isOpen={isLoginAuthOpen}
+        target={loginAuthTarget}
+        onClose={() => setIsLoginAuthOpen(false)}
+      />
 
     </div>
   );
