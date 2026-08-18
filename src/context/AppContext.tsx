@@ -22,6 +22,7 @@ import {
   INITIAL_ACADEMIC_STAFF,
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
+import { ensureSchoolEmail } from '../utils/schoolEmail';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -160,7 +161,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [academicStaffList, setAcademicStaffList] = useState<AcademicStaff[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.STAFF_LIST);
-    return saved ? JSON.parse(saved) : INITIAL_ACADEMIC_STAFF;
+    const list: AcademicStaff[] = saved ? JSON.parse(saved) : INITIAL_ACADEMIC_STAFF;
+    return list.map((s) => ({ ...s, email: ensureSchoolEmail(s.name, s.email) }));
   });
 
   const [currentAcademicStaffId, setCurrentAcademicStaffId] = useState<string>(() => {
@@ -170,7 +172,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.TEACHERS);
-    return saved ? JSON.parse(saved) : INITIAL_TEACHERS;
+    const list: Teacher[] = saved ? JSON.parse(saved) : INITIAL_TEACHERS;
+    return list.map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) }));
   });
 
   const [venues, setVenues] = useState<WorkshopVenue[]>(() => {
@@ -337,7 +340,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     academicStaffList: AcademicStaff[];
   }) => {
     skipCloudPushRef.current = true;
-    setTeachers(remote.teachers || []);
+    setTeachers((remote.teachers || []).map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) })));
     setVenues(remote.venues || []);
     setSessions(remote.sessions || []);
     setRequests(remote.requests || []);
@@ -354,7 +357,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     });
     if (remote.academicStaffList?.length) {
-      setAcademicStaffList(remote.academicStaffList);
+      setAcademicStaffList(
+        remote.academicStaffList.map((s) => ({ ...s, email: ensureSchoolEmail(s.name, s.email) }))
+      );
     }
     lastCloudSyncAtRef.current = remote.updatedAt;
     setLastCloudSyncAt(remote.updatedAt);
@@ -931,7 +936,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const dept = matchingRow?.department || existing?.department || '共同科目';
 
         const teacherObj: Teacher = existing
-          ? { ...existing, department: dept, weeklyActualPeriods: 0 }
+          ? {
+              ...existing,
+              department: dept,
+              weeklyActualPeriods: 0,
+              email: ensureSchoolEmail(name, existing.email),
+            }
           : {
               id: `t-imp-${Date.now()}-${idx}`,
               name,
@@ -939,7 +949,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               department: dept,
               basePeriods: systemConfig.standardBasePeriods.fulltime,
               weeklyActualPeriods: 0,
-              email: `${name}@school.edu.tw`,
+              email: ensureSchoolEmail(name),
               phone: '分機 301',
               certifications: ['高職專業群科合格教師證'],
               avatarBg: ['from-amber-600 to-amber-800', 'from-indigo-600 to-indigo-800', 'from-emerald-600 to-emerald-800', 'from-purple-600 to-purple-800', 'from-cyan-600 to-cyan-800'][idx % 5],
@@ -970,7 +980,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             department: dept,
             basePeriods: systemConfig.standardBasePeriods.fulltime,
             weeklyActualPeriods: 0,
-            email: `${name}@school.edu.tw`,
+            email: ensureSchoolEmail(name),
             phone: '分機 301',
             certifications: ['高職專業群科合格教師證'],
             avatarBg: 'from-emerald-600 to-emerald-800',

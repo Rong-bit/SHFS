@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
+import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -165,7 +166,7 @@ export const TeacherSchedule: React.FC = () => {
                           currentTeacher.id,
                           () => {
                             setEditPhone(currentTeacher.phone || '');
-                            setEditEmail(currentTeacher.email || '');
+                            setEditEmail(ensureSchoolEmail(currentTeacher.name, currentTeacher.email));
                             setContactSavedNotice(false);
                             setIsEditContactOpen(true);
                           },
@@ -508,7 +509,7 @@ export const TeacherSchedule: React.FC = () => {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-400">
-                匯入課表時會先帶入示範分機與信箱，請改成自己的公務分機與學校信箱。儲存後其他電腦同步也會一起更新。
+                匯入課表時會先帶入 <span className="text-amber-300">姓名@{SCHOOL_EMAIL_DOMAIN}</span>。若實際帳號不同，請在此修改；儲存後其他電腦同步也會一起更新。
               </p>
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">公務分機</label>
@@ -526,7 +527,7 @@ export const TeacherSchedule: React.FC = () => {
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="例如：huang@ccvs.edu.tw"
+                  placeholder={`例如：${defaultSchoolEmail('王小明')}`}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 text-sm focus:outline-none"
                 />
               </div>
@@ -549,7 +550,7 @@ export const TeacherSchedule: React.FC = () => {
                   onClick={() => {
                     updateTeacher(currentTeacher.id, {
                       phone: editPhone.trim() || currentTeacher.phone,
-                      email: editEmail.trim() || currentTeacher.email,
+                      email: ensureSchoolEmail(currentTeacher.name, editEmail),
                     });
                     setContactSavedNotice(true);
                     window.setTimeout(() => setIsEditContactOpen(false), 800);
