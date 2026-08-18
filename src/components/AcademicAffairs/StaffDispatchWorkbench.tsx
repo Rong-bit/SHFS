@@ -23,8 +23,9 @@ import {
   FileText, 
   Printer, 
   Plus, 
-  Check, 
-  Layers, 
+  Check,
+  Trash2,
+  Layers,
   Filter, 
   ShieldCheck, 
   ArrowRight, 
@@ -51,6 +52,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     systemConfig,
     createStaffDirectDispatch,
     approveRequest,
+    deleteRequest,
     batchApproveRequests,
     setPrintModalRequest,
     setIsAiAdvisorOpen,
@@ -67,6 +69,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [editPhone, setEditPhone] = useState('');
   const [editBadge, setEditBadge] = useState('');
   const [editScope, setEditScope] = useState('');
+  const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
 
   const handleOpenQuickEdit = () => {
     if (currentAcademicStaff) {
@@ -1314,6 +1317,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   <span>核定</span>
                                 </button>
                               )}
+
+                              <button
+                                type="button"
+                                onClick={() => setDeletingRequestId(req.id)}
+                                className="flex items-center space-x-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition"
+                                title="刪除此申請單（做錯可刪）"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>刪除</span>
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1325,6 +1338,44 @@ export const StaffDispatchWorkbench: React.FC = () => {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {deletingRequestId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+            <div className="flex items-center space-x-2 text-rose-600 font-bold text-base">
+              <AlertTriangle className="w-5 h-5" />
+              <span>確認刪除此調代課申請單？</span>
+            </div>
+            <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+              即將刪除{' '}
+              <strong className="text-slate-900">
+                {requests.find((r) => r.id === deletingRequestId)?.requestNumber || '此單'}
+              </strong>
+              。刪除後無法復原，也不再計入鐘點費結算。若只是填錯，刪除後可重新登錄。
+            </p>
+            <div className="flex justify-end space-x-2 mt-5">
+              <button
+                type="button"
+                onClick={() => setDeletingRequestId(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteRequest(deletingRequestId);
+                  setDeletingRequestId(null);
+                  setSelectedRequestIds((prev) => prev.filter((id) => id !== deletingRequestId));
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-xs transition"
+              >
+                確認刪除
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
