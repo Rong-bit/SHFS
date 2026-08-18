@@ -630,15 +630,23 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       {teachers
                         .filter((t) => t.id !== currentTeacher?.id)
                         .map((t) => {
-                          const hasClash = sessions.some(
-                            (s) =>
-                              s.teacherId === t.id &&
-                              s.dayOfWeek === selectedSession?.dayOfWeek &&
-                              s.period === selectedSession?.period
-                          );
+                          const targetDay = effectiveOriginalSession?.dayOfWeek;
+                          const targetP = effectiveOriginalSession?.period;
+                          const hasClash =
+                            typeof targetDay === 'number' && typeof targetP === 'number'
+                              ? sessions.some(
+                                  (s) =>
+                                    s.teacherId === t.id &&
+                                    s.dayOfWeek === targetDay &&
+                                    s.period === targetP
+                                )
+                              : false;
+
+                          // Only show selectable teachers (no clash), user asked to show "可選取部份就好".
+                          if (hasClash) return null;
+
                           return (
                             <option key={t.id} value={t.id}>
-                              {hasClash ? '🚫 ' : '✓ '}
                               {t.name} ({t.department} · {t.title})
                             </option>
                           );
