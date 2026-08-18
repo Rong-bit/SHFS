@@ -9,6 +9,7 @@ import {
   ClashCheckResult 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
+import { teacherWeeklyOverload } from '../../utils/schoolDepartments';
 import { 
   X, 
   ArrowLeftRight, 
@@ -110,7 +111,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           (s) => s.teacherId === t.id && s.dayOfWeek === targetDay && s.period === targetP
         );
         const isSameDept = t.department === currentTeacher.department;
-        const weeklyOverload = Math.max(0, t.weeklyActualPeriods - t.basePeriods);
+        const weeklyOverload = teacherWeeklyOverload(t);
         const isNearLimit = weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods;
         let score = 0;
         if (!hasClash) score += 50;

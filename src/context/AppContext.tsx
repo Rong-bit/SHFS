@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, resolveDutyReductionPeriods, teacherBasePeriods } from '../utils/schoolDepartments';
+import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, resolveTeacherBasePeriods, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -187,11 +187,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
           ...(parsed.standardBasePeriods || {}),
         };
+        if (basePeriods.homeroom === 15) basePeriods.homeroom = 12;
+        if (basePeriods.head === 10) basePeriods.head = 7;
+        if (basePeriods.sectionChief === 8) basePeriods.sectionChief = 0;
       }
     } catch {
       /* keep defaults */
     }
-    return enrichTeachersFromSessions(withEmail, sessionList, basePeriods.fulltime);
+    return enrichTeachersFromSessions(
+      withEmail,
+      sessionList,
+      basePeriods.fulltime,
+      basePeriods.homeroom,
+      basePeriods.head,
+      basePeriods.sectionChief
+    );
   });
 
   const [venues, setVenues] = useState<WorkshopVenue[]>(() => {
@@ -220,6 +230,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         standardBasePeriods: {
           ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
           ...(parsed.standardBasePeriods || parsed.basePeriodsStandard || {}),
+          ...((parsed.standardBasePeriods || parsed.basePeriodsStandard || {}).homeroom === 15
+            ? { homeroom: 12 }
+            : {}),
+          ...((parsed.standardBasePeriods || parsed.basePeriodsStandard || {}).head === 10
+            ? { head: 7 }
+            : {}),
+          ...((parsed.standardBasePeriods || parsed.basePeriodsStandard || {}).sectionChief === 8
+            ? { sectionChief: 0 }
+            : {}),
         },
         authConfig: withMigratedAuthConfig(parsed.authConfig || INITIAL_SYSTEM_CONFIG.authConfig),
       };
@@ -368,11 +387,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: ensureSchoolEmail(t.name, t.email),
     }));
     const remoteSessions = remote.sessions || [];
+    const remoteStd = remote.systemConfig?.standardBasePeriods || {};
+    const fulltimeStd = remoteStd.fulltime || INITIAL_SYSTEM_CONFIG.standardBasePeriods.fulltime;
+    const homeroomStd = remoteStd.homeroom === 15 ? 12 : (remoteStd.homeroom || INITIAL_SYSTEM_CONFIG.standardBasePeriods.homeroom);
+    const headStd = remoteStd.head === 10 ? 7 : (remoteStd.head || INITIAL_SYSTEM_CONFIG.standardBasePeriods.head);
+    const chiefStd = remoteStd.sectionChief === 8 ? 0 : (remoteStd.sectionChief ?? INITIAL_SYSTEM_CONFIG.standardBasePeriods.sectionChief);
     setTeachers(
       enrichTeachersFromSessions(
         remoteTeachers,
         remoteSessions,
-        remote.systemConfig?.standardBasePeriods?.fulltime || INITIAL_SYSTEM_CONFIG.standardBasePeriods.fulltime
+        fulltimeStd,
+        homeroomStd,
+        headStd,
+        chiefStd
       )
     );
     setVenues(remote.venues || []);
@@ -384,6 +411,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       standardBasePeriods: {
         ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
         ...(remote.systemConfig?.standardBasePeriods || {}),
+        ...(remote.systemConfig?.standardBasePeriods?.homeroom === 15 ? { homeroom: 12 } : {}),
+        ...(remote.systemConfig?.standardBasePeriods?.head === 10 ? { head: 7 } : {}),
+        ...(remote.systemConfig?.standardBasePeriods?.sectionChief === 8 ? { sectionChief: 0 } : {}),
       },
       authConfig: withMigratedAuthConfig({
         ...INITIAL_SYSTEM_CONFIG.authConfig,
@@ -665,7 +695,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Overload check (9 periods limit)
       if (subTeacher) {
-        const weeklyOverload = Math.max(0, subTeacher.weeklyActualPeriods - subTeacher.basePeriods);
+        const weeklyOverload = teacherWeeklyOverload(subTeacher);
         if (weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods) {
           messages.push(`【法規防呆警示】${subTeacher.name} 本週兼任超鐘點已達 ${weeklyOverload} 節（法定上限為 ${systemConfig.maxWeeklyOverloadPeriods} 節），若再承擔代課將超過法規上限！`);
           if (severity !== 'danger') severity = 'warning';
@@ -903,15 +933,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSystemConfig = (newConfig: Partial<SystemConfig>) => {
     setSystemConfig((prev) => ({ ...prev, ...newConfig }));
     const fulltime = newConfig.standardBasePeriods?.fulltime;
-    if (typeof fulltime === 'number') {
+    const homeroom = newConfig.standardBasePeriods?.homeroom;
+    const head = newConfig.standardBasePeriods?.head;
+    const chief = newConfig.standardBasePeriods?.sectionChief;
+    if (
+      typeof fulltime === 'number' ||
+      typeof homeroom === 'number' ||
+      typeof head === 'number' ||
+      typeof chief === 'number'
+    ) {
       setTeachers((prev) =>
         prev.map((t) => {
-          const reduction = resolveDutyReductionPeriods(fulltime, t);
-          return {
-            ...t,
-            dutyReductionPeriods: reduction,
-            basePeriods: teacherBasePeriods(fulltime, reduction),
-          };
+          const { dutyReductionPeriods, basePeriods } = resolveTeacherBasePeriods(
+            t,
+            typeof fulltime === 'number' ? fulltime : systemConfig.standardBasePeriods.fulltime,
+            typeof homeroom === 'number' ? homeroom : systemConfig.standardBasePeriods.homeroom,
+            typeof head === 'number' ? head : systemConfig.standardBasePeriods.head,
+            typeof chief === 'number' ? chief : systemConfig.standardBasePeriods.sectionChief
+          );
+          return { ...t, dutyReductionPeriods, basePeriods };
         })
       );
     }
@@ -1122,19 +1162,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       finalSessions = Array.from(existingMap.values());
     }
 
-    // 4. Update teachers' weeklyActualPeriods counts
-    const teacherPeriodCount = new Map<string, number>();
-    finalSessions.forEach((s) => {
-      teacherPeriodCount.set(s.teacherId, (teacherPeriodCount.get(s.teacherId) || 0) + 1);
-    });
-
+    // 4. 重算每週正課（不含團體活動）與基本節數
     updatedTeachers = enrichTeachersFromSessions(
-      updatedTeachers.map((t) => ({
-        ...t,
-        weeklyActualPeriods: teacherPeriodCount.get(t.id) || 0,
-      })),
+      updatedTeachers,
       finalSessions,
-      systemConfig.standardBasePeriods.fulltime
+      systemConfig.standardBasePeriods.fulltime,
+      systemConfig.standardBasePeriods.homeroom,
+      systemConfig.standardBasePeriods.head,
+      systemConfig.standardBasePeriods.sectionChief
     );
 
     setTeachers(updatedTeachers);
@@ -1183,10 +1218,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (t.id !== id) return t;
         const merged = { ...t, ...data };
         if (data.dutyReductionPeriods !== undefined && data.basePeriods === undefined) {
-          merged.basePeriods = teacherBasePeriods(
+          merged.basePeriods = resolveTeacherBasePeriods(
+            merged,
             systemConfig.standardBasePeriods.fulltime,
-            data.dutyReductionPeriods
-          );
+            systemConfig.standardBasePeriods.homeroom,
+            systemConfig.standardBasePeriods.head,
+            systemConfig.standardBasePeriods.sectionChief
+          ).basePeriods;
         }
         return merged;
       })
@@ -1247,9 +1285,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return teachers.map((teacher) => {
       // 1. Weekly actual and overload
-      const weeklyActual = teacher.weeklyActualPeriods;
+      const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id);
       const base = teacher.basePeriods;
-      const weeklyOverload = Math.max(0, weeklyActual - base);
+      const weeklyOverload = weeklyOverloadPeriods(
+        weeklyActual,
+        teacher.dutyReductionPeriods ?? 0,
+        base
+      );
       const monthlyOverloadAmount = weeklyOverload * weeks * hourlyRate;
 
       // 2. Tally approved substitution requests

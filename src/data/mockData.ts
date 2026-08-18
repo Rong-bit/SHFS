@@ -75,10 +75,10 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   nightHourlyRate: 500,
   maxWeeklyOverloadPeriods: 9,
   standardBasePeriods: {
-    head: 10,
+    head: 7,
     homeroom: 12,
     fulltime: 16,
-    sectionChief: 8,
+    sectionChief: 0,
   },
   academicYear: '114',
   semester: '1',

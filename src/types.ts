@@ -40,7 +40,7 @@ export interface Teacher {
   homeroomClass?: string; // 由星期三下午團體活動判斷，例如 電機三忠
   dutyReductionPeriods?: number; // 任務減授節數（導師等任務每人不同，例如減 1 節或數節）
   basePeriods: number; // 每週基本授課節數 = 專任標準 − 任務減授
-  weeklyActualPeriods: number; // 本學期每週排定節數
+  weeklyActualPeriods: number; // 每週正課節數（不含團體活動）
   email: string;
   phone: string;
   certifications: string[]; // 專業證照或任教專長
@@ -148,10 +148,10 @@ export interface SystemConfig {
   nightHourlyRate: number; // 夜間部/課輔每節鐘點費 (500)
   maxWeeklyOverloadPeriods: number; // 法定每週兼代課上限 (9)
   standardBasePeriods: {
-    head: number; // 科主任 (10)
-    homeroom: number; // 導師參考基本節數（常見 12），實際以各師任務減授為準
+    head: number; // 科主任基本鐘點（本校 7）
+    homeroom: number; // 導師基本鐘點（本校 12），專任為 16
     fulltime: number; // 專任 (16)
-    sectionChief: number; // 組長 (8)
+    sectionChief: number; // 組長基本鐘點（本校 0）
   };
   academicYear: string; // 114
   semester: string; // 1
@@ -173,8 +173,8 @@ export interface MonthlyTeacherSettlement {
   title: TeacherTitle;
   homeroomClass?: string;
   basePeriods: number; // 基本節數
-  weeklyActualPeriods: number; // 本職每週排定節數
-  weeklyOverloadPeriods: number; // 每週超鐘點節數 (Math.max(0, weeklyActualPeriods - basePeriods))
+  weeklyActualPeriods: number; // 本職每週正課（不含團體活動）
+  weeklyOverloadPeriods: number; // 每週超鐘點＝正課（不含團體活動）＋任務減授 − 基本
   monthlyOverloadAmount: number; // 超鐘點費 (每週超額 × 4週 × 420)
   
   // 公費代課 (學校公款加發)

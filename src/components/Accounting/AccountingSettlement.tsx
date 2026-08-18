@@ -45,7 +45,7 @@ export const AccountingSettlement: React.FC = () => {
       '科別': s.department,
       '職務': displayTeacherTitle(s),
       '基本授課節數 (節/週)': s.basePeriods,
-      '本學期排定節數 (節/週)': s.weeklyActualPeriods,
+      '本學期排定節數不含團體活動 (節/週)': s.weeklyActualPeriods,
       '每週超鐘點節數': s.weeklyOverloadPeriods,
       [`月超鐘點費 (${systemConfig.weeksInMonth}週×${systemConfig.dayHourlyRate}元)`]: s.monthlyOverloadAmount,
       '公費代課節數': s.publicSubstitutePeriods,
@@ -64,7 +64,7 @@ export const AccountingSettlement: React.FC = () => {
       '科別': '',
       '職務': '',
       '基本授課節數 (節/週)': 0 as any,
-      '本學期排定節數 (節/週)': 0 as any,
+      '本學期排定節數不含團體活動 (節/週)': 0 as any,
       '每週超鐘點節數': 0 as any,
       [`月超鐘點費 (${systemConfig.weeksInMonth}週×${systemConfig.dayHourlyRate}元)`]: totalOverloadAmount,
       '公費代課節數': 0 as any,
@@ -254,7 +254,7 @@ export const AccountingSettlement: React.FC = () => {
                 <th className="p-3">教師姓名</th>
                 <th className="p-3">科別 / 職務</th>
                 <th className="p-3 text-center">基本節數</th>
-                <th className="p-3 text-center">每週排定</th>
+                <th className="p-3 text-center">每週排定（不含團體活動）</th>
                 <th className="p-3 text-center">每週超額</th>
                 <th className="p-3 text-right">月超鐘點費 (4週)</th>
                 <th className="p-3 text-center">公費代課</th>

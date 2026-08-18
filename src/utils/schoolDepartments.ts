@@ -74,7 +74,67 @@ const teacherNameMatches = (rowTeacherName: string, teacherName: string) => {
   return rowParts.includes(name) || nameParts.some((p) => rowParts.includes(p));
 };
 
-const isGroupActivity = (subjectName: string) => /團體活動/.test(subjectName || '');
+/** 課表上的「團體活動時間」：含班會、團體活動；用來判斷導師，但不計入超鐘點正課 */
+export const isGroupActivity = (subjectName: string) => /團體活動|班會/.test(subjectName || '');
+
+const isAfternoonPeriod = (period: number) => period >= 5;
+
+export type WeeklyOverloadBreakdown = {
+  scheduleTotal: number;
+  regularTeaching: number;
+  groupActivityExcluded: number;
+  counted: number;
+};
+
+export const breakdownWeeklyOverloadPeriods = (
+  sessions: CourseSession[],
+  teacherId: string
+): WeeklyOverloadBreakdown => {
+  const mine = sessions.filter((s) => s.teacherId === teacherId);
+  let groupActivityExcluded = 0;
+  let counted = 0;
+  mine.forEach((s) => {
+    if (isGroupActivity(s.subjectName)) {
+      groupActivityExcluded += 1;
+      return;
+    }
+    counted += 1;
+  });
+  return {
+    scheduleTotal: mine.length,
+    regularTeaching: counted,
+    groupActivityExcluded,
+    counted,
+  };
+};
+
+/** 超鐘點用正課：不含 3 節團體活動（班會、團體活動、社團對開都不算） */
+export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
+  breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
+
+/** 超鐘點 = 正課（不含團體活動）＋任務減授 − 基本鐘點 */
+export const weeklyOverloadPeriods = (
+  teachingPeriods: number,
+  dutyReductionPeriods: number,
+  basePeriods: number
+) => Math.max(0, teachingPeriods + Math.max(0, dutyReductionPeriods) - basePeriods);
+
+export const teacherWeeklyOverload = (
+  teacher: Pick<Teacher, 'weeklyActualPeriods' | 'dutyReductionPeriods' | 'basePeriods'>
+) =>
+  weeklyOverloadPeriods(
+    teacher.weeklyActualPeriods,
+    teacher.dutyReductionPeriods ?? 0,
+    teacher.basePeriods
+  );
+
+/** 導師任務減授 1、基本 12；科主任減授 2、基本 7；組長基本 0；專任減授 0、基本 16 */
+export const HOMEROOM_DEFAULT_DUTY_REDUCTION = 1;
+export const HOMEROOM_BASE_PERIODS = 12;
+export const HEAD_DEFAULT_DUTY_REDUCTION = 2;
+export const HEAD_BASE_PERIODS = 7;
+export const CHIEF_DEFAULT_DUTY_REDUCTION = 0;
+export const CHIEF_BASE_PERIODS = 0;
 
 /** 真正的實習／實作課；團體活動、普通教室學科不算 */
 export const isInternshipCourse = (subjectName: string) => {
@@ -126,8 +186,6 @@ export const applyTeacherDepartmentsFromSessions = <T extends Pick<Teacher, 'id'
   });
 };
 
-const isAfternoonPeriod = (period: number) => period >= 5;
-
 const sessionTeacherKeys = (session: CourseSession) => {
   const names = String(session.teacherName || '')
     .split('/')
@@ -170,13 +228,55 @@ export const buildHomeroomClassByTeacher = (sessions: CourseSession[]) => {
   return teacherToClasses;
 };
 
-export const teacherBasePeriods = (fulltimeStandard: number, dutyReductionPeriods = 0) =>
-  Math.max(0, fulltimeStandard - Math.max(0, dutyReductionPeriods));
+export const teacherBasePeriods = (
+  fulltimeStandard: number,
+  dutyReductionPeriods = 0,
+  homeroomStandard?: number
+) => {
+  if (homeroomStandard != null && homeroomStandard > 0) return homeroomStandard;
+  return Math.max(0, fulltimeStandard - Math.max(0, dutyReductionPeriods));
+};
 
-/** 任務減授：已填寫則用填值；舊資料沒填時，由既有基本節數反推，避免導師一律被重設成 16。 */
+const isLeftoverReduction = (value: number | undefined, leftovers: number[]) =>
+  value == null || leftovers.includes(value);
+
+/** 專任基本 16；導師基本 12、減授 1；科主任基本 7、減授 2；組長基本 0。超鐘點＝正課＋減授−基本。 */
+export const resolveTeacherBasePeriods = (
+  teacher: Pick<Teacher, 'dutyReductionPeriods' | 'basePeriods' | 'homeroomClass' | 'title'>,
+  fulltimeStandard: number,
+  homeroomStandard = HOMEROOM_BASE_PERIODS,
+  headStandard = HEAD_BASE_PERIODS,
+  chiefStandard = CHIEF_BASE_PERIODS
+) => {
+  if (teacher.title === '科主任') {
+    const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [0, 1, 4, 5, 6])
+      ? HEAD_DEFAULT_DUTY_REDUCTION
+      : Math.max(0, teacher.dutyReductionPeriods ?? HEAD_DEFAULT_DUTY_REDUCTION);
+    return { dutyReductionPeriods, basePeriods: headStandard };
+  }
+  if (teacher.title === '教學組長') {
+    const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [1, 4, 5, 6, 8])
+      ? CHIEF_DEFAULT_DUTY_REDUCTION
+      : Math.max(0, teacher.dutyReductionPeriods ?? CHIEF_DEFAULT_DUTY_REDUCTION);
+    return { dutyReductionPeriods, basePeriods: chiefStandard };
+  }
+  if (teacher.homeroomClass || teacher.title === '導師') {
+    const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [0, 4, 5, 6])
+      ? HOMEROOM_DEFAULT_DUTY_REDUCTION
+      : Math.max(0, teacher.dutyReductionPeriods ?? HOMEROOM_DEFAULT_DUTY_REDUCTION);
+    return { dutyReductionPeriods, basePeriods: homeroomStandard };
+  }
+  const dutyReductionPeriods = resolveDutyReductionPeriods(fulltimeStandard, teacher);
+  return {
+    dutyReductionPeriods,
+    basePeriods: teacherBasePeriods(fulltimeStandard, dutyReductionPeriods),
+  };
+};
+
+/** 專任任務減授：名冊填值；未填則 0。導師／科主任請走 resolveTeacherBasePeriods。 */
 export const resolveDutyReductionPeriods = (
   fulltimeStandard: number,
-  teacher: Pick<Teacher, 'dutyReductionPeriods' | 'basePeriods'>
+  teacher: Pick<Teacher, 'dutyReductionPeriods' | 'basePeriods' | 'homeroomClass'>
 ) => {
   if (teacher.dutyReductionPeriods != null) return Math.max(0, teacher.dutyReductionPeriods);
   return Math.max(0, fulltimeStandard - (teacher.basePeriods ?? fulltimeStandard));
@@ -225,16 +325,31 @@ export const applyTeacherHomeroomFromSessions = <
 export const enrichTeachersFromSessions = (
   teachers: Teacher[],
   sessions: CourseSession[],
-  fulltimeStandard = 16
+  fulltimeStandard = 16,
+  homeroomStandard = HOMEROOM_BASE_PERIODS,
+  headStandard = HEAD_BASE_PERIODS,
+  chiefStandard = CHIEF_BASE_PERIODS
 ) => {
   const next = applyTeacherHomeroomFromSessions(
     applyTeacherDepartmentsFromSessions(teachers, sessions),
     sessions
   );
   return next.map((t) => {
-    const dutyReductionPeriods = resolveDutyReductionPeriods(fulltimeStandard, t);
-    const basePeriods = teacherBasePeriods(fulltimeStandard, dutyReductionPeriods);
-    if (t.dutyReductionPeriods === dutyReductionPeriods && t.basePeriods === basePeriods) return t;
-    return { ...t, dutyReductionPeriods, basePeriods };
+    const { dutyReductionPeriods, basePeriods } = resolveTeacherBasePeriods(
+      t,
+      fulltimeStandard,
+      homeroomStandard,
+      headStandard,
+      chiefStandard
+    );
+    const weeklyActualPeriods = countWeeklyTeachingPeriods(sessions, t.id);
+    if (
+      t.dutyReductionPeriods === dutyReductionPeriods &&
+      t.basePeriods === basePeriods &&
+      t.weeklyActualPeriods === weeklyActualPeriods
+    ) {
+      return t;
+    }
+    return { ...t, dutyReductionPeriods, basePeriods, weeklyActualPeriods };
   });
 };

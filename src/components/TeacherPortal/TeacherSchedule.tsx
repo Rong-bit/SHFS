@@ -28,7 +28,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { displayTeacherTitle } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, weeklyOverloadPeriods } from '../../utils/schoolDepartments';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -73,9 +73,11 @@ export const TeacherSchedule: React.FC = () => {
 
   // Teacher sessions
   const teacherSessions = sessions.filter((s) => s.teacherId === currentTeacher.id);
-  const weeklyActual = teacherSessions.length;
+  const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
+  const weeklyActual = overloadBreakdown.counted;
   const basePeriods = currentTeacher.basePeriods;
-  const overloadPeriods = Math.max(0, weeklyActual - basePeriods);
+  const dutyReduction = currentTeacher.dutyReductionPeriods ?? 0;
+  const overloadPeriods = weeklyOverloadPeriods(weeklyActual, dutyReduction, basePeriods);
   const monthlyOverloadAmount = overloadPeriods * systemConfig.weeksInMonth * systemConfig.dayHourlyRate;
   const isOverNineHours = overloadPeriods >= systemConfig.maxWeeklyOverloadPeriods;
 
@@ -221,9 +223,23 @@ export const TeacherSchedule: React.FC = () => {
             </div>
             <div className="mt-2 text-xs text-slate-600 space-y-1">
               <div className="flex justify-between">
-                <span>任務減授：</span>
+                <span>課表總節數：</span>
+                <span className="font-semibold text-slate-800">{overloadBreakdown.scheduleTotal} 節</span>
+              </div>
+              <div className="flex justify-between">
+                <span>正課（不含 3 節團體活動）：</span>
+                <span className="font-semibold text-slate-800">{overloadBreakdown.regularTeaching} 節</span>
+              </div>
+              <div className="flex justify-between">
+                <span>團體活動（不計）：</span>
                 <span className="font-semibold text-slate-800">
-                  {currentTeacher.dutyReductionPeriods ?? 0} 節
+                  −{overloadBreakdown.groupActivityExcluded} 節
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>任務減授（加入超鐘點）：</span>
+                <span className="font-semibold text-slate-800">
+                  +{dutyReduction} 節
                 </span>
               </div>
               <div className="flex justify-between">
@@ -269,7 +285,7 @@ export const TeacherSchedule: React.FC = () => {
               <span className="text-xs text-slate-500 font-medium">元/月</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
-              計算公式：{overloadPeriods} 節 × {systemConfig.weeksInMonth} 週 × {systemConfig.dayHourlyRate} 元/節 (日間部標準)
+              超鐘點：{weeklyActual}＋{dutyReduction}−{basePeriods}＝{overloadPeriods} 節；月費 {overloadPeriods} × {systemConfig.weeksInMonth} × {systemConfig.dayHourlyRate}
             </p>
           </div>
 

@@ -10,7 +10,7 @@ import {
   Teacher 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
-import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload } from '../../utils/schoolDepartments';
 import { 
   UserCheck, 
   User, 
@@ -157,7 +157,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
         const isSameDept = t.department === selectedOriginalSession.department || t.department === applicantTeacher?.department;
 
         // 3. Current workload
-        const weeklyOverload = Math.max(0, t.weeklyActualPeriods - t.basePeriods);
+        const weeklyOverload = teacherWeeklyOverload(t);
         const isNearLimit = weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods;
 
         // 4. Recommendation score
