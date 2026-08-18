@@ -305,14 +305,7 @@ export const TeacherSchedule: React.FC = () => {
               <span className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></span>
               <span>一般學科課堂</span>
             </span>
-            <button
-              onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester)}
-              className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold border border-slate-200 transition"
-              title="匯出課表 Excel"
-            >
-              <Download className="w-3 h-3 text-slate-600" />
-              <span>匯出 Excel</span>
-            </button>
+            {/* Teacher portal: no Excel export (requested) */}
           </div>
         </div>
 
