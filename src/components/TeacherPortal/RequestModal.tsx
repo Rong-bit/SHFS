@@ -71,13 +71,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   // When teacherSessions is empty, allow selecting a time slot (day/period)
   // so teacher can still submit a substitute (leave) request.
-  const [leaveDay, setLeaveDay] = useState<DayOfWeek>(2);
-  const [leavePeriod, setLeavePeriod] = useState<number>(1);
+  const [leaveDay, setLeaveDay] = useState<DayOfWeek | ''>('');
+  const [leavePeriod, setLeavePeriod] = useState<number | ''>('');
 
   // Smart candidate recommendations for substitute
-  const effectiveOriginalSession: CourseSession | undefined =
-    selectedSession ||
-    (currentTeacher
+  const effectiveOriginalSession: CourseSession | undefined = selectedSession
+    ? selectedSession
+    : currentTeacher && leaveDay !== '' && leavePeriod !== ''
       ? {
           id: 's-placeholder',
           dayOfWeek: leaveDay,
@@ -91,7 +91,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           isPractical: false,
           notes: '由系統暫代課堂資訊（僅用於計算代課教師資格）',
         }
-      : undefined);
+      : undefined;
 
   const candidateSubstitutes = useMemo(() => {
     if (!effectiveOriginalSession || !currentTeacher) return [];
@@ -190,6 +190,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     if (teacherSessions.length === 0 && requestType !== 'substitute') {
       alert('目前找不到你的排課資料，僅支援請假派代。請切換到「請假派代」後再送出。');
       return;
+    }
+
+    if (teacherSessions.length === 0 && requestType === 'substitute') {
+      if (leaveDay === '' || leavePeriod === '') {
+        alert('請先選擇「請假星期」與「請假節次」。');
+        return;
+      }
     }
 
     if (requestType === 'swap' && (!swapTeacherId || !swapTargetSession)) {
@@ -297,9 +304,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">星期</label>
                       <select
                         value={leaveDay}
-                        onChange={(e) => setLeaveDay(Number(e.target.value) as DayOfWeek)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setLeaveDay(v === '' ? '' : (Number(v) as DayOfWeek));
+                        }}
                         className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
                       >
+                        <option value="">-- 請選擇 --</option>
                         {dayNames.slice(1).map((name, idx) => {
                           const day = (idx + 1) as DayOfWeek;
                           return (
@@ -315,9 +326,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">節次</label>
                       <select
                         value={leavePeriod}
-                        onChange={(e) => setLeavePeriod(Number(e.target.value))}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setLeavePeriod(v === '' ? '' : Number(v));
+                        }}
                         className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
                       >
+                        <option value="">-- 請選擇 --</option>
                         {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
                           <option key={p} value={p}>
                             第{p}節 ({PERIOD_DEFINITIONS.find((def) => def.period === p)?.timeRange})
@@ -738,7 +753,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             <button
               type="submit"
               id="btn-submit-substitution-request"
-              disabled={clashResult.hasClash}
+              disabled={
+                clashResult.hasClash ||
+                (teacherSessions.length === 0 && requestType === 'substitute' && !effectiveOriginalSession)
+              }
               className={`px-5 py-2.5 font-bold rounded-lg text-xs sm:text-sm shadow-sm transition flex items-center space-x-1.5 ${
                 clashResult.hasClash
                   ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
