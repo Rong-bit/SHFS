@@ -16,24 +16,18 @@ import {
   AlertTriangle,
   X
 } from 'lucide-react';
-import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 
 export const Header: React.FC = () => {
   const {
     currentRole,
-    setCurrentRole,
-    currentTeacherId,
-    setCurrentTeacherId,
+    currentTeacher,
     academicStaffList,
     currentAcademicStaffId,
-    setCurrentAcademicStaffId,
-    teachers,
     requests,
     systemConfig,
     setIsAiAdvisorOpen,
     resetToMockData,
     requestRoleSwitchWithAuth,
-    requestTeacherSwitchWithAuth,
   } = useApp();
 
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -200,19 +194,16 @@ export const Header: React.FC = () => {
             })}
           </div>
 
-          {/* Teacher Selector (shown when in teacher role) */}
-          {currentRole === 'teacher' && (
+          {/* Teacher identity (display only, no view switching) */}
+          {currentRole === 'teacher' && currentTeacher && (
             <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
               <span className="text-slate-400 flex items-center gap-1 shrink-0">
                 <User className="w-3.5 h-3.5 text-amber-400" />
                 當前登入身分：
               </span>
-              <TeacherSearchCombobox
-                teachers={teachers}
-                currentTeacherId={currentTeacherId}
-                onSelectTeacher={(tId) => requestTeacherSwitchWithAuth(tId)}
-                placeholder="輸入姓名快速切換..."
-              />
+              <span className="text-amber-300 font-medium">
+                {currentTeacher.name}（{currentTeacher.department} · {currentTeacher.title}）
+              </span>
             </div>
           )}
 
