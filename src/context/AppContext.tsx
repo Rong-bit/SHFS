@@ -302,7 +302,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateTeacherPassword = (teacherId: string, newPassword: string) => {
     setTeachers((prev) =>
-      prev.map((t) => (t.id === teacherId ? { ...t, password: newPassword } : t))
+      prev.map((t) => {
+        if (t.id !== teacherId) return t;
+        const next = newPassword.trim();
+        return { ...t, password: next || undefined };
+      })
     );
   };
 

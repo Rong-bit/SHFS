@@ -56,6 +56,7 @@ export const AdminSettings: React.FC = () => {
     addTeacher,
     updateTeacher,
     deleteTeacher,
+    updateTeacherPassword,
     academicStaffList,
     updateAcademicStaff,
     addAcademicStaff,
@@ -182,6 +183,9 @@ export const AdminSettings: React.FC = () => {
   const [venueDeptFilter, setVenueDeptFilter] = useState('ALL');
   const [teacherSearch, setTeacherSearch] = useState('');
   const [teacherDeptFilter, setTeacherDeptFilter] = useState('ALL');
+  const [passwordResetTeacher, setPasswordResetTeacher] = useState<Teacher | null>(null);
+  const [adminSetPassword, setAdminSetPassword] = useState('');
+  const [passwordResetNotice, setPasswordResetNotice] = useState('');
 
   const handleConfigSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -893,7 +897,7 @@ export const AdminSettings: React.FC = () => {
                   placeholder="如 1234"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  個別教師亦可於其課表上方點擊「設定密碼」自訂專屬密碼。
+                  老師可自行設定專屬密碼。若忘記密碼，管理員可到「師資名冊」重設為預設密碼或指定新密碼。
                 </p>
               </div>
 
@@ -1230,6 +1234,13 @@ export const AdminSettings: React.FC = () => {
                           <td className="p-3.5">
                             <div className="font-bold text-slate-900 text-sm">{t.name}</div>
                             <span className="text-[11px] text-slate-500 font-medium">{displayTeacherTitle(t)}</span>
+                            {t.password ? (
+                              <span className="ml-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                已自訂密碼
+                              </span>
+                            ) : (
+                              <span className="ml-1.5 text-[10px] text-slate-400">使用預設密碼</span>
+                            )}
                           </td>
                           <td className="p-3.5">
                             <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-semibold text-[11px]">
@@ -1266,6 +1277,17 @@ export const AdminSettings: React.FC = () => {
                           </td>
                           <td className="p-3.5 text-right">
                             <div className="flex items-center justify-end space-x-1.5">
+                              <button
+                                onClick={() => {
+                                  setPasswordResetTeacher(t);
+                                  setAdminSetPassword('');
+                                  setPasswordResetNotice('');
+                                }}
+                                className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg transition"
+                                title="重設此教師登入密碼"
+                              >
+                                <KeyRound className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={() => handleOpenEditTeacher(t)}
                                 className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition"
@@ -2007,6 +2029,85 @@ export const AdminSettings: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {passwordResetTeacher && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <KeyRound className="w-5 h-5 text-amber-400" />
+                <span className="font-bold text-sm">重設【{passwordResetTeacher.name}】登入密碼</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasswordResetTeacher(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-slate-600">
+                {passwordResetTeacher.password
+                  ? '此教師目前使用自訂密碼。重設後改回全校預設密碼，或在下方指定一組新密碼。'
+                  : '此教師目前使用全校預設密碼。可指定一組新密碼，或維持預設。'}
+              </p>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">指定新密碼</label>
+                <input
+                  type="text"
+                  value={adminSetPassword}
+                  onChange={(e) => {
+                    setAdminSetPassword(e.target.value);
+                    setPasswordResetNotice('');
+                  }}
+                  placeholder="至少 4 個字"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                />
+              </div>
+              {passwordResetNotice && (
+                <p className="text-emerald-700 font-semibold">{passwordResetNotice}</p>
+              )}
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setPasswordResetTeacher(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold"
+                >
+                  關閉
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateTeacherPassword(passwordResetTeacher.id, '');
+                    setPasswordResetNotice('已重設為全校教師預設密碼。');
+                    window.setTimeout(() => setPasswordResetTeacher(null), 700);
+                  }}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold"
+                >
+                  重設為預設密碼
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = adminSetPassword.trim();
+                    if (next.length < 4) {
+                      setPasswordResetNotice('新密碼至少 4 個字。');
+                      return;
+                    }
+                    updateTeacherPassword(passwordResetTeacher.id, next);
+                    setPasswordResetNotice('已儲存新密碼。');
+                    window.setTimeout(() => setPasswordResetTeacher(null), 700);
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold"
+                >
+                  儲存新密碼
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
