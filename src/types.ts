@@ -79,6 +79,7 @@ export interface CourseSession {
   venueName: string;
   isPractical: boolean; // 是否為實習/專業實作課
   isSplitGroup?: boolean; // 是否分組教學 (雙師協同)
+  isConcurrent?: boolean; // 課表「兼課」欄為 1
   notes?: string;
 }
 
@@ -150,7 +151,7 @@ export interface SystemConfig {
   standardBasePeriods: {
     head: number; // 科主任基本鐘點（可設定）
     homeroom: number; // 導師基本鐘點（可設定）
-    fulltime: number; // 專任固定 16
+    fulltime: number; // 專任基本鐘點（可設定，預設 16）
     sectionChief: number; // 組長基本鐘點（可設定）
     director: number; // 主任基本鐘點（可設定）
   };

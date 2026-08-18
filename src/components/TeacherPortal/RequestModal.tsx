@@ -348,7 +348,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       >
                         {teacherSessions.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
+                            {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》{s.isConcurrent ? '【兼課】' : ''}
                           </option>
                         ))}
                       </select>
@@ -414,7 +414,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   >
                     {teacherSessions.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find((p) => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》 @ {s.venueName}
+                        {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find((p) => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》{s.isConcurrent ? '【兼課】' : ''} @ {s.venueName}
                       </option>
                     ))}
                   </select>

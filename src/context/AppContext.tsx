@@ -1108,6 +1108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         venueId: venueObj.id,
         venueName: venueObj.name,
         isPractical: row.isPractical,
+        isConcurrent: Boolean(row.isConcurrent),
         notes: row.notes,
       };
     });

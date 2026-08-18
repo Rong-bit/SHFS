@@ -1061,15 +1061,22 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                                   {row.venueName}
                                 </td>
                                 <td className="p-2.5 text-center">
-                                  {row.isPractical ? (
-                                    <span className="px-1.5 py-0.5 bg-amber-500 text-white rounded font-bold text-[10px]">
-                                      實習
-                                    </span>
-                                  ) : (
-                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-[10px]">
-                                      學科
-                                    </span>
-                                  )}
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    {row.isConcurrent && (
+                                      <span className="px-1.5 py-0.5 bg-violet-600 text-white rounded font-bold text-[10px]">
+                                        兼課
+                                      </span>
+                                    )}
+                                    {row.isPractical ? (
+                                      <span className="px-1.5 py-0.5 bg-amber-500 text-white rounded font-bold text-[10px]">
+                                        實習
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-[10px]">
+                                        學科
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="p-2.5">
                                   {isError ? (

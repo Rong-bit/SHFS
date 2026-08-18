@@ -277,17 +277,26 @@ export const SchoolTimetableMatrix: React.FC = () => {
                                 className={`h-full p-2 rounded-xl border flex flex-col justify-between ${
                                   session.isPractical
                                     ? 'bg-amber-50 border-amber-300 text-amber-950 ring-1 ring-amber-400/20'
-                                    : 'bg-indigo-50/80 border-indigo-200 text-indigo-950'
+                                    : session.isConcurrent
+                                      ? 'bg-violet-50 border-violet-300 text-violet-950 ring-1 ring-violet-400/20'
+                                      : 'bg-indigo-50/80 border-indigo-200 text-indigo-950'
                                 }`}
                               >
                                 <div>
-                                  <div className="flex items-center justify-between font-bold text-xs">
+                                  <div className="flex items-center justify-between font-bold text-xs gap-1">
                                     <span>{session.className}</span>
-                                    {session.isPractical && (
-                                      <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.2 rounded font-semibold">
-                                        實習
-                                      </span>
-                                    )}
+                                    <span className="flex items-center gap-0.5 shrink-0">
+                                      {session.isConcurrent && (
+                                        <span className="text-[10px] bg-violet-600 text-white px-1.5 py-0.2 rounded font-semibold">
+                                          兼課
+                                        </span>
+                                      )}
+                                      {session.isPractical && (
+                                        <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.2 rounded font-semibold">
+                                          實習
+                                        </span>
+                                      )}
+                                    </span>
                                   </div>
                                   <div className="font-semibold text-xs mt-0.5 line-clamp-1">
                                     {session.subjectName}

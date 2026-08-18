@@ -128,7 +128,7 @@ export const teacherWeeklyOverload = (
     teacher.basePeriods
   );
 
-/** 專任基本固定 16；導師／組長／科主任／主任基本鐘點由系統設定。 */
+/** 各職稱基本鐘點由系統設定；未填時專任預設 16。 */
 export const HOMEROOM_DEFAULT_DUTY_REDUCTION = 1;
 export const HOMEROOM_BASE_PERIODS = 12;
 export const HEAD_DEFAULT_DUTY_REDUCTION = 2;
@@ -152,11 +152,11 @@ const asNonNegInt = (value: unknown, fallback: number) => {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
 };
 
-/** 專任固定 16；導師／組長／科主任／主任由系統設定（0 也算有效值）。 */
+/** 五種職稱基本鐘點皆可設定；未填時專任預設 16（0 也算有效值）。 */
 export const normalizeStandardBasePeriods = (
   raw?: Partial<StandardBasePeriodsConfig> | null
 ): StandardBasePeriodsConfig => ({
-  fulltime: FULLTIME_BASE_PERIODS,
+  fulltime: asNonNegInt(raw?.fulltime, FULLTIME_BASE_PERIODS),
   homeroom: asNonNegInt(raw?.homeroom, HOMEROOM_BASE_PERIODS),
   head: asNonNegInt(raw?.head, HEAD_BASE_PERIODS),
   sectionChief: asNonNegInt(raw?.sectionChief, CHIEF_BASE_PERIODS),
@@ -280,7 +280,7 @@ export const teacherBasePeriods = (
 const isLeftoverReduction = (value: number | undefined, leftovers: number[]) =>
   value == null || leftovers.includes(value);
 
-/** 專任基本固定 16；其餘職稱基本鐘點由系統設定。超鐘點＝正課＋減授−基本。 */
+/** 各職稱基本鐘點由系統設定。超鐘點＝正課＋減授−基本。 */
 export const resolveTeacherBasePeriods = (
   teacher: Pick<Teacher, 'dutyReductionPeriods' | 'basePeriods' | 'homeroomClass' | 'title'>,
   fulltimeStandard: number,
@@ -317,7 +317,7 @@ export const resolveTeacherBasePeriods = (
   const dutyReductionPeriods = resolveDutyReductionPeriods(fulltimeStandard, teacher);
   return {
     dutyReductionPeriods,
-    basePeriods: FULLTIME_BASE_PERIODS,
+    basePeriods: fulltimeStandard,
     title,
   };
 };

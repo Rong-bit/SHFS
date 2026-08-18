@@ -753,10 +753,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                             }`}
                           >
-                            <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center justify-between text-xs gap-1">
                               <span className="font-bold text-slate-900">
                                 {dayNames[s.dayOfWeek]} 第{s.period}節
                               </span>
+                              <span className="flex items-center gap-0.5 shrink-0">
+                              {s.isConcurrent && (
+                                <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 border border-violet-300 rounded text-[10px] font-bold">
+                                  兼課
+                                </span>
+                              )}
                               {s.isPractical ? (
                                 <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold">
                                   專業實習
@@ -766,6 +772,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   一般學科
                                 </span>
                               )}
+                              </span>
                             </div>
                             <div className="text-xs font-bold text-slate-800 mt-1">
                               {s.className} ｜ {s.subjectName}

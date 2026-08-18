@@ -165,6 +165,11 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 <div className="text-slate-600 mt-0.5">
                   時段：{dayNames[request.originalSession.dayOfWeek]} {getPeriodLabel(request.originalSession.period)} ｜ 
                   上課地點：<strong className="text-slate-800">{request.originalSession.venueName}</strong>
+                  {request.originalSession.isConcurrent && (
+                    <span className="ml-2 px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
+                      兼課
+                    </span>
+                  )}
                   {request.originalSession.isPractical && (
                     <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] rounded font-medium">
                       專業實習工場課程

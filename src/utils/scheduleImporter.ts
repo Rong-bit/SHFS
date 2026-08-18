@@ -12,6 +12,7 @@ export interface ParsedImportRow {
   department?: DepartmentType;
   venueName: string;
   isPractical: boolean;
+  isConcurrent?: boolean;
   notes?: string;
   errors: string[];
   warnings: string[];
@@ -94,6 +95,30 @@ export const inferIsPractical = (subjectName: string, venueName: string, explici
   const venue = venueName || '';
   if (/普通教室|原班/.test(venue) || /團體活動/.test(subjectName || '')) return false;
   return /工場|實習教室/.test(venue);
+};
+
+/** 課表「1.兼課2.」欄填 1（或是／兼課）即為兼課 */
+export const parseConcurrentFlag = (val: any): boolean => {
+  if (val === undefined || val === null || val === '') return false;
+  if (val === true || val === 1) return true;
+  const str = String(val).trim();
+  if (!str) return false;
+  return /^(1|1\.0|是|Y|YES|TRUE|兼課)$/i.test(str);
+};
+
+const CONCURRENT_HEADER_KEYS = ['兼課', '是否兼課', '兼課註記', '1.兼課'];
+
+const pickConcurrentValue = (raw: Record<string, any>, findField: (keys: string[]) => any) => {
+  const named = findField(CONCURRENT_HEADER_KEYS);
+  if (named !== '' && named !== undefined && named !== null) return named;
+  for (const k of Object.keys(raw)) {
+    const cleaned = k.trim().replace(/\s+/g, '');
+    if (cleaned.includes('兼課') && !cleaned.includes('輔導')) {
+      const v = raw[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+    }
+  }
+  return '';
 };
 
 // Clean teacher name from formats like "t0011.何雪玲", "*t0711.林昇蒼,*t0714.葉珈誠", "0116_林冠妙", "(t1216)何建延", "彭韶郁,t1509.李萱"
@@ -224,6 +249,7 @@ export const parseScheduleFile = async (
       practicalVal: any;
       notes: string;
       isPractical: boolean;
+      isConcurrent: boolean;
       department: DepartmentType;
     }>>();
 
@@ -268,6 +294,7 @@ export const parseScheduleFile = async (
       const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName', '教室名稱'])).trim();
       const deptVal = String(findField(['科別', '群科', '教師科別', 'Department', 'department'])).trim();
       const practicalVal = findField(['是否為實習', '實習課', '實習', '屬性', 'isPractical', '實作', '課程類別']);
+      const concurrentVal = pickConcurrentValue(raw, findField);
       const notesVal = String(findField(['備註', '說明', 'Notes', 'notes'])).trim();
 
       if (!classVal || !subjectVal) {
@@ -281,6 +308,7 @@ export const parseScheduleFile = async (
           department: '共同科目',
           venueName: venueVal || '原班教室',
           isPractical: false,
+          isConcurrent: false,
           errors: [!classVal ? '班級名稱未填寫' : '科目名稱未填寫'],
           warnings: [],
         });
@@ -298,6 +326,7 @@ export const parseScheduleFile = async (
       }
 
       const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
+      const isConcurrent = parseConcurrentFlag(concurrentVal);
       const department: DepartmentType =
         departmentFromClassName(classVal) ||
         (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal));
@@ -322,6 +351,7 @@ export const parseScheduleFile = async (
         practicalVal,
         notes: notesVal,
         isPractical,
+        isConcurrent,
         department,
       });
     });
@@ -397,6 +427,7 @@ export const parseScheduleFile = async (
                   department: item.department,
                   venueName: item.venueName,
                   isPractical: true,
+                  isConcurrent: item.isConcurrent,
                   notes: item.notes || `實習連堂 (${blockSize}節)`,
                   errors: [],
                   warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
@@ -430,6 +461,7 @@ export const parseScheduleFile = async (
                   department: item.department,
                   venueName: item.venueName,
                   isPractical: true,
+                  isConcurrent: item.isConcurrent,
                   notes: item.notes || `實習連堂 (${aftBlock}節)`,
                   errors: [],
                   warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
@@ -459,6 +491,7 @@ export const parseScheduleFile = async (
                 department: item.department,
                 venueName: item.venueName,
                 isPractical: item.isPractical,
+                isConcurrent: item.isConcurrent,
                 notes: item.notes,
                 errors: [],
                 warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
@@ -487,6 +520,7 @@ export const parseScheduleFile = async (
                   department: item.department,
                   venueName: item.venueName,
                   isPractical: item.isPractical,
+                isConcurrent: item.isConcurrent,
                   notes: item.notes,
                   errors: [],
                   warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
@@ -567,6 +601,7 @@ export const parseScheduleFile = async (
     const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName', '教室名稱'])).trim();
     const deptVal = String(findField(['科別', '群科', '教師科別', 'Department', 'department'])).trim();
     const practicalVal = findField(['是否為實習', '實習課', '實習', '屬性', 'isPractical', '實作', '課程類別']);
+    const concurrentVal = pickConcurrentValue(raw, findField);
     const notesVal = String(findField(['備註', '說明', 'Notes', 'notes'])).trim();
 
     const errors: string[] = [];
@@ -613,6 +648,7 @@ export const parseScheduleFile = async (
 
     const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
     if (isPractical) practicalCount++;
+    const isConcurrent = parseConcurrentFlag(concurrentVal);
 
     const department: DepartmentType =
       departmentFromClassName(classVal) ||
@@ -685,6 +721,7 @@ export const parseScheduleFile = async (
       department,
       venueName: finalVenue,
       isPractical,
+      isConcurrent,
       notes: notesVal || undefined,
       errors,
       warnings,
@@ -726,6 +763,7 @@ export const generateTemplateExcel = () => {
       '教師科別 (電機科/資訊科/機械科/餐飲管理科/廣告設計科/共同科目)': '電機科',
       '實習工場/教室名稱': '電機實習工場 A (室內配線)',
       '是否為實習實作課 (是/否)': '是',
+      '1.兼課2.': '',
       '備註說明 (選填)': '分組實習第1組',
     },
     {
@@ -781,6 +819,7 @@ export const generateTemplateExcel = () => {
       '教師科別 (電機科/資訊科/機械科/餐飲管理科/廣告設計科/共同科目)': '共同科目',
       '實習工場/教室名稱': '普通教學大樓 301 教室',
       '是否為實習實作課 (是/否)': '否',
+      '1.兼課2.': 1,
       '備註說明 (選填)': '一般部定必修學科',
     },
   ];
@@ -815,6 +854,7 @@ export const generateTemplateExcel = () => {
     ['教師科別', '選填', '電機科 / 資訊科 / 機械科 / 餐飲管理科 / 廣告設計科 / 共同科目'],
     ['實習工場/教室名稱', '選填', '填寫實習工場或教室。未填寫時預設為「班級普通教室」'],
     ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定實習工場課程'],
+    ['1.兼課2.', '選填', '填 1 代表此節為兼課，課表會顯示「兼課」標籤'],
     ['備註說明', '選填', '如：分組教學、協同教學、課輔節數等備註'],
     [''],
     ['法規提醒：'],
@@ -854,6 +894,7 @@ export const exportScheduleToExcel = (
       '教師職務': teacher?.title || '專任教師',
       '實習工場/上課教室': s.venueName,
       '課程性質': s.isPractical ? '專業實習/實作' : '專業/一般學科',
+      '兼課': s.isConcurrent ? '1' : '',
       '備註': s.notes || '',
     };
   });

@@ -375,19 +375,28 @@ export const TeacherSchedule: React.FC = () => {
                                 className={`h-full p-2.5 rounded-xl border flex flex-col justify-between transition-all group-hover:shadow-sm ${
                                   session.isPractical
                                     ? 'bg-amber-50/90 border-amber-300 text-amber-950 ring-1 ring-amber-400/30'
-                                    : 'bg-blue-50/70 border-blue-200 text-slate-900'
+                                    : session.isConcurrent
+                                      ? 'bg-violet-50/90 border-violet-300 text-violet-950 ring-1 ring-violet-400/30'
+                                      : 'bg-blue-50/70 border-blue-200 text-slate-900'
                                 }`}
                               >
                                 <div>
-                                  <div className="flex items-center justify-between font-bold text-xs">
+                                  <div className="flex items-center justify-between font-bold text-xs gap-1">
                                     <span className="text-slate-900">{session.className}</span>
-                                    {session.isPractical ? (
-                                      <span className="text-[10px] px-1.5 py-0.2 bg-amber-500 text-white rounded font-medium">
-                                        實習工場
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] text-slate-500 font-normal">正課</span>
-                                    )}
+                                    <span className="flex items-center gap-0.5 shrink-0">
+                                      {session.isConcurrent && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-violet-600 text-white rounded font-medium">
+                                          兼課
+                                        </span>
+                                      )}
+                                      {session.isPractical ? (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-amber-500 text-white rounded font-medium">
+                                          實習工場
+                                        </span>
+                                      ) : !session.isConcurrent ? (
+                                        <span className="text-[10px] text-slate-500 font-normal">正課</span>
+                                      ) : null}
+                                    </span>
                                   </div>
                                   <div className="font-semibold text-xs text-slate-800 mt-1 line-clamp-1">
                                     {session.subjectName}

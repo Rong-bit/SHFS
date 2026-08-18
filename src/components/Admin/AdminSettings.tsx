@@ -38,7 +38,7 @@ import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/schedu
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { FULLTIME_BASE_PERIODS, normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
+import { normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 
 export const AdminSettings: React.FC = () => {
@@ -237,7 +237,7 @@ export const AdminSettings: React.FC = () => {
       title: '專任教師',
       department: '電機科',
       dutyReductionPeriods: 0,
-      basePeriods: FULLTIME_BASE_PERIODS,
+      basePeriods: formConfig.standardBasePeriods.fulltime,
       email: '',
       phone: '',
       certifications: '專業專長檢定合格',
@@ -267,7 +267,7 @@ export const AdminSettings: React.FC = () => {
     if (title === '導師' || Boolean(editingTeacher?.homeroomClass && editingTeacher.title !== '科主任' && editingTeacher.title !== '組長' && editingTeacher.title !== '主任')) {
       return formConfig.standardBasePeriods.homeroom;
     }
-    return FULLTIME_BASE_PERIODS;
+    return formConfig.standardBasePeriods.fulltime;
   };
 
   const defaultDutyForTitle = (title: TeacherTitle) => {
@@ -743,27 +743,36 @@ export const AdminSettings: React.FC = () => {
                   <span>職務基本鐘點設定</span>
                 </h3>
                 <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-bold border border-indigo-200">
-                  專任固定 {FULLTIME_BASE_PERIODS} 節；其餘四種職稱可設定
+                  五種職稱基本鐘點皆可設定（專任預設 16）
                 </span>
               </div>
 
               <div className="space-y-4 text-xs sm:text-sm">
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
                   <strong>超鐘點＝正課（不含團體活動）＋任務減授 − 基本鐘點。</strong>
-                  專任教師基本鐘點固定 {FULLTIME_BASE_PERIODS} 節。導師、組長、科主任、主任請在下方填節數，按「儲存設定」後會套用到全校該職稱教師。3 節團體活動（班會／對開社團）都不計入正課。
+                  專任、導師、組長、科主任、主任都可在下方填節數，按「儲存系統參數設定」後會套用到全校該職稱教師。3 節團體活動（班會／對開社團）都不計入正課。
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-100 rounded-xl border border-slate-200">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       專任教師基本鐘點 (節/週)
                     </label>
                     <input
                       type="number"
-                      value={FULLTIME_BASE_PERIODS}
-                      readOnly
-                      className="w-full bg-slate-200 border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-700 text-base"
+                      min={0}
+                      value={formConfig.standardBasePeriods.fulltime}
+                      onChange={(e) =>
+                        setFormConfig({
+                          ...formConfig,
+                          standardBasePeriods: {
+                            ...formConfig.standardBasePeriods,
+                            fulltime: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
                     />
-                    <span className="text-[10px] text-slate-500 mt-1 block">原訂標準，固定 {FULLTIME_BASE_PERIODS} 節、不可改</span>
+                    <span className="text-[10px] text-slate-500 mt-1 block">可設定，預設 16 節；儲存後套用全體專任教師</span>
                   </div>
 
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
@@ -779,7 +788,6 @@ export const AdminSettings: React.FC = () => {
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            fulltime: FULLTIME_BASE_PERIODS,
                             homeroom: Math.max(0, Number(e.target.value) || 0),
                           },
                         })
@@ -802,7 +810,6 @@ export const AdminSettings: React.FC = () => {
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            fulltime: FULLTIME_BASE_PERIODS,
                             sectionChief: Math.max(0, Number(e.target.value) || 0),
                           },
                         })
@@ -825,7 +832,6 @@ export const AdminSettings: React.FC = () => {
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            fulltime: FULLTIME_BASE_PERIODS,
                             head: Math.max(0, Number(e.target.value) || 0),
                           },
                         })
@@ -848,7 +854,6 @@ export const AdminSettings: React.FC = () => {
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            fulltime: FULLTIME_BASE_PERIODS,
                             director: Math.max(0, Number(e.target.value) || 0),
                           },
                         })
@@ -865,7 +870,7 @@ export const AdminSettings: React.FC = () => {
                     目前套用中的基本鐘點
                   </div>
                   <p className="text-[11px] leading-relaxed text-indigo-800">
-                    專任 {FULLTIME_BASE_PERIODS} 節（固定）、導師 {formConfig.standardBasePeriods.homeroom} 節、組長 {formConfig.standardBasePeriods.sectionChief} 節、科主任 {formConfig.standardBasePeriods.head} 節、主任 {formConfig.standardBasePeriods.director} 節。任務減授仍依各人職稱預設或名冊填寫。
+                    專任 {formConfig.standardBasePeriods.fulltime} 節、導師 {formConfig.standardBasePeriods.homeroom} 節、組長 {formConfig.standardBasePeriods.sectionChief} 節、科主任 {formConfig.standardBasePeriods.head} 節、主任 {formConfig.standardBasePeriods.director} 節。任務減授仍依各人職稱預設或名冊填寫。
                   </p>
                 </div>
               </div>
@@ -1575,8 +1580,8 @@ export const AdminSettings: React.FC = () => {
               <span>課表批次匯入支援格式與欄位說明</span>
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
-              系統支援標準高職排課 Excel / CSV 格式，欄位包含：<strong>星期 (1~5)、節次 (1~8)、班級 (如電機二甲)、科目名稱、任課教師、上課教室/實習工場、是否為實習課 (是/否)</strong>。
-              匯入時系統會自動建立新教師與新場地，並自動重算每位教師之每週授課節數與超鐘點費。
+              系統支援標準高職排課 Excel / CSV 格式，欄位包含：<strong>星期 (1~5)、節次 (1~8)、班級、科目名稱、任課教師、上課教室/實習工場、是否為實習課、兼課（填 1 即兼課）</strong>。
+              匯入時系統會自動建立新教師與新場地，並自動重算每位教師之每週授課節數與超鐘點費。兼課課堂會在課表上標示「兼課」。
             </p>
           </div>
         </div>
