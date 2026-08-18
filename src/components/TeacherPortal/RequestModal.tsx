@@ -356,43 +356,42 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
               </button>
 
               {teacherSessions.length > 0 && (
-              {/* Swap Tab */}
-              <button
-                type="button"
-                id="tab-type-swap"
-                onClick={() => {
-                  setRequestType('swap');
-                }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
-                  requestType === 'swap'
-                    ? 'bg-indigo-50 border-indigo-500 text-indigo-900 ring-2 ring-indigo-500/20 font-semibold'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <ArrowLeftRight className={`w-5 h-5 mb-1 ${requestType === 'swap' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                <span className="text-xs sm:text-sm">🔄 相互調課</span>
-                <span className="text-[10px] text-slate-500 mt-0.5">雙方時段互換</span>
-              </button>
+                <button
+                  type="button"
+                  id="tab-type-swap"
+                  onClick={() => {
+                    setRequestType('swap');
+                  }}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
+                    requestType === 'swap'
+                      ? 'bg-indigo-50 border-indigo-500 text-indigo-900 ring-2 ring-indigo-500/20 font-semibold'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <ArrowLeftRight className={`w-5 h-5 mb-1 ${requestType === 'swap' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                  <span className="text-xs sm:text-sm">🔄 相互調課</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5">雙方時段互換</span>
+                </button>
               )}
 
               {/* Reschedule Tab */}
               {teacherSessions.length > 0 && (
-              <button
-                type="button"
-                id="tab-type-reschedule"
-                onClick={() => {
-                  setRequestType('reschedule');
-                }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
-                  requestType === 'reschedule'
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-500/20 font-semibold'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Clock className={`w-5 h-5 mb-1 ${requestType === 'reschedule' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span className="text-xs sm:text-sm">⏱️ 自行移課</span>
-                <span className="text-[10px] text-slate-500 mt-0.5">移至無課空堂</span>
-              </button>
+                <button
+                  type="button"
+                  id="tab-type-reschedule"
+                  onClick={() => {
+                    setRequestType('reschedule');
+                  }}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
+                    requestType === 'reschedule'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-500/20 font-semibold'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Clock className={`w-5 h-5 mb-1 ${requestType === 'reschedule' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                  <span className="text-xs sm:text-sm">⏱️ 自行移課</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5">移至無課空堂</span>
+                </button>
               )}
             </div>
           </div>
