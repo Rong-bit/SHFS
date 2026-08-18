@@ -68,6 +68,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // For Substitute (請假派代)
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
   const [showAllTeachers, setShowAllTeachers] = useState(false);
+  const [hasUserChosenSubstituteTeacher, setHasUserChosenSubstituteTeacher] = useState(false);
   const [manualTeacherQuery, setManualTeacherQuery] = useState('');
 
   // When teacherSessions is empty, allow selecting a time slot (day/period)
@@ -165,10 +166,35 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     if (defaultPartner && !swapTeacherId) {
       setSwapTeacherId(defaultPartner.id);
     }
-    if (defaultPartner && !substituteTeacherId) {
+    // Substitute (請假派代) 需要先選定請假節次才知道有沒有衝堂
+    if (requestType !== 'substitute' && defaultPartner && !substituteTeacherId) {
       setSubstituteTeacherId(defaultPartner.id);
     }
-  }, [currentTeacher, teachers]);
+  }, [currentTeacher, teachers, requestType]);
+
+  // When substitute mode + leave slot is ready, auto-pick a non-clashing substitute
+  useEffect(() => {
+    if (requestType !== 'substitute') return;
+    if (!effectiveOriginalSession || !currentTeacher) return;
+    if (hasUserChosenSubstituteTeacher) return;
+
+    const selected = substituteTeacherId
+      ? candidateSubstitutes.find((c) => c.teacher.id === substituteTeacherId)
+      : undefined;
+
+    // If empty, or current selection clashes, choose the first non-clash candidate.
+    if (!substituteTeacherId || selected?.hasClash) {
+      const best = candidateSubstitutes.find((c) => !c.hasClash);
+      if (best) setSubstituteTeacherId(best.teacher.id);
+    }
+  }, [
+    requestType,
+    effectiveOriginalSession,
+    currentTeacher,
+    substituteTeacherId,
+    candidateSubstitutes,
+    hasUserChosenSubstituteTeacher,
+  ]);
 
   // Set default swap session when swapTeacher changes
   useEffect(() => {
@@ -410,6 +436,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 id="tab-type-substitute"
                 onClick={() => {
                   setRequestType('substitute');
+                  setHasUserChosenSubstituteTeacher(false);
+                  setSubstituteTeacherId('');
                 }}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
                   requestType === 'substitute'
@@ -428,6 +456,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   id="tab-type-swap"
                   onClick={() => {
                     setRequestType('swap');
+                    setHasUserChosenSubstituteTeacher(false);
+                    setSubstituteTeacherId('');
                   }}
                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
                     requestType === 'swap'
@@ -448,6 +478,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   id="tab-type-reschedule"
                   onClick={() => {
                     setRequestType('reschedule');
+                    setHasUserChosenSubstituteTeacher(false);
+                    setSubstituteTeacherId('');
                   }}
                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
                     requestType === 'reschedule'
@@ -561,7 +593,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1 mb-2">
                     {/* "由教學組媒合" option */}
                     <div
-                      onClick={() => setSubstituteTeacherId('')}
+                      onClick={() => {
+                        setHasUserChosenSubstituteTeacher(false);
+                        setSubstituteTeacherId('');
+                      }}
                       className={`p-2.5 rounded-xl border transition cursor-pointer ${
                         !substituteTeacherId
                           ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-400/20'
@@ -580,7 +615,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                         return (
                           <div
                             key={cand.id}
-                            onClick={() => setSubstituteTeacherId(cand.id)}
+                            onClick={() => {
+                              setHasUserChosenSubstituteTeacher(true);
+                              setSubstituteTeacherId(cand.id);
+                            }}
                             className={`p-2.5 rounded-xl border transition cursor-pointer ${
                               isSelected
                                 ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
@@ -639,7 +677,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     <select
                       id="select-substitute-teacher"
                       value={substituteTeacherId}
-                      onChange={(e) => setSubstituteTeacherId(e.target.value)}
+                      onChange={(e) => {
+                        setHasUserChosenSubstituteTeacher(true);
+                        setSubstituteTeacherId(e.target.value);
+                      }}
                       className="w-full mt-1.5 bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
                     >
                       <option value="">-- 由教學組媒合 --</option>
