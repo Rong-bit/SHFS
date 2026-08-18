@@ -159,7 +159,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
         {/* Header */}
         <div className="bg-slate-800/80 px-6 py-4 flex items-center justify-between border-b border-slate-700/80">

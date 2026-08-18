@@ -229,8 +229,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Security Gate: Verification required ONLY when initiating an action (like + 新增調代課申請 / 課堂調課)
   const requestTeacherActionAuth = (teacherId: string, actionCallback: () => void, actionName?: string) => {
-    const targetTeacherId = teacherId || currentTeacherId || (teachers[0]?.id);
-    if (!targetTeacherId) {
+    const targetTeacherId = teacherId || currentTeacherId || teachers[0]?.id;
+    const requirePass = systemConfig.authConfig?.requirePassword !== false;
+
+    if (!targetTeacherId || !requirePass) {
       actionCallback();
       return;
     }
@@ -1171,8 +1173,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsLoginAuthOpen,
         loginAuthTarget,
         setLoginAuthTarget,
+        authenticatedTeacherIds,
         requestRoleSwitchWithAuth,
         requestTeacherSwitchWithAuth,
+        requestTeacherActionAuth,
         updateTeacherPassword,
       }}
     >
