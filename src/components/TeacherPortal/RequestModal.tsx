@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   CourseSession, 
@@ -68,6 +68,31 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   // For Substitute (請假派代)
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
+  const [showAllTeachers, setShowAllTeachers] = useState(false);
+
+  // Smart candidate recommendations for substitute
+  const candidateSubstitutes = useMemo(() => {
+    if (!selectedSession || !currentTeacher) return [];
+    const targetDay = selectedSession.dayOfWeek;
+    const targetP = selectedSession.period;
+
+    return teachers
+      .filter((t) => t.id !== currentTeacher.id)
+      .map((t) => {
+        const hasClash = sessions.some(
+          (s) => s.teacherId === t.id && s.dayOfWeek === targetDay && s.period === targetP
+        );
+        const isSameDept = t.department === currentTeacher.department;
+        const weeklyOverload = Math.max(0, t.weeklyActualPeriods - t.basePeriods);
+        const isNearLimit = weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods;
+        let score = 0;
+        if (!hasClash) score += 50;
+        if (isSameDept) score += 30;
+        if (!isNearLimit) score += 20;
+        return { teacher: t, hasClash, isSameDept, weeklyOverload, isNearLimit, score };
+      })
+      .sort((a, b) => b.score - a.score);
+  }, [teachers, currentTeacher, selectedSession, sessions, systemConfig]);
 
   // Candidate partner sessions for swap
   const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
@@ -361,7 +386,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-semibold text-slate-700">
-                      指派代課教師 (可由系統推薦或由教學組媒合)
+                      指派代課教師（系統推薦該時段空堂師資，或留空由教學組媒合）
                     </label>
                     <button
                       type="button"
@@ -369,24 +394,107 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      詢問 AI 推薦無課師資
+                      詢問 AI 推薦
                     </button>
                   </div>
-                  <select
-                    id="select-substitute-teacher"
-                    value={substituteTeacherId}
-                    onChange={(e) => setSubstituteTeacherId(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
-                  >
-                    <option value="">-- 由教務處教學組協助媒合派代 --</option>
-                    {teachers
-                      .filter((t) => t.id !== currentTeacher?.id)
-                      .map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.department} · {t.title} ｜ 專長：{t.certifications[0] || '專任'})
-                        </option>
-                      ))}
-                  </select>
+
+                  {/* Smart recommendation cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1 mb-2">
+                    {/* "由教學組媒合" option */}
+                    <div
+                      onClick={() => setSubstituteTeacherId('')}
+                      className={`p-2.5 rounded-xl border transition cursor-pointer ${
+                        !substituteTeacherId
+                          ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-400/20'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-slate-700">由教學組協助媒合</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">送出後由教務處教學組指派</div>
+                    </div>
+
+                    {candidateSubstitutes
+                      .filter((c) => !c.hasClash)
+                      .slice(0, showAllTeachers ? undefined : 5)
+                      .map(({ teacher: cand, isSameDept, weeklyOverload, isNearLimit }) => {
+                        const isSelected = substituteTeacherId === cand.id;
+                        return (
+                          <div
+                            key={cand.id}
+                            onClick={() => setSubstituteTeacherId(cand.id)}
+                            className={`p-2.5 rounded-xl border transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                                : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-slate-900">{cand.name}</span>
+                              <span className="text-[11px] text-slate-500">{cand.department}</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 mt-1 text-[10px]">
+                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
+                                ✓ 空堂
+                              </span>
+                              {isSameDept && (
+                                <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 font-bold rounded">
+                                  同科
+                                </span>
+                              )}
+                              {isNearLimit && (
+                                <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 font-bold rounded">
+                                  接近9節上限
+                                </span>
+                              )}
+                              <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded">
+                                超鐘點 {weeklyOverload}節
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {candidateSubstitutes.filter((c) => !c.hasClash).length > 5 && !showAllTeachers && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTeachers(true)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 mb-2"
+                    >
+                      顯示全部 {candidateSubstitutes.filter((c) => !c.hasClash).length} 位空堂教師 ▼
+                    </button>
+                  )}
+
+                  {/* Fallback: manual select for teachers with clashes too */}
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
+                      手動選取（含有課教師）
+                    </summary>
+                    <select
+                      id="select-substitute-teacher"
+                      value={substituteTeacherId}
+                      onChange={(e) => setSubstituteTeacherId(e.target.value)}
+                      className="w-full mt-1.5 bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
+                    >
+                      <option value="">-- 由教學組媒合 --</option>
+                      {teachers
+                        .filter((t) => t.id !== currentTeacher?.id)
+                        .map((t) => {
+                          const hasClash = sessions.some(
+                            (s) =>
+                              s.teacherId === t.id &&
+                              s.dayOfWeek === selectedSession?.dayOfWeek &&
+                              s.period === selectedSession?.period
+                          );
+                          return (
+                            <option key={t.id} value={t.id}>
+                              {hasClash ? '🚫 ' : '✓ '}
+                              {t.name} ({t.department} · {t.title})
+                            </option>
+                          );
+                        })}
+                    </select>
+                  </details>
                 </div>
               </>
             )}
