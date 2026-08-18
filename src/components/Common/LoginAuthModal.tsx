@@ -27,6 +27,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   const {
     teachers,
     academicStaffList,
+    currentAcademicStaffId,
     systemConfig,
     setCurrentTeacherId,
     setCurrentRole,
@@ -37,6 +38,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const auth = systemConfig.authConfig || {
@@ -52,9 +54,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       ? teachers.find((t) => t.id === target.teacherId)
       : null;
 
-  const targetStaff = target?.academicStaffId
-    ? academicStaffList.find((s) => s.id === target.academicStaffId)
-    : null;
+  const targetStaff = academicStaffList.find((s) => s.id === selectedStaffId) || null;
 
   useEffect(() => {
     if (isOpen) {
@@ -62,11 +62,17 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setErrorMsg('');
       setIsSuccess(false);
       setShowPassword(false);
+      const initialStaffId =
+        target?.academicStaffId ||
+        currentAcademicStaffId ||
+        academicStaffList[0]?.id ||
+        '';
+      setSelectedStaffId(initialStaffId);
       setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
     }
-  }, [isOpen, target]);
+  }, [isOpen, target, academicStaffList, currentAcademicStaffId]);
 
   if (!isOpen || !target) return null;
 
@@ -92,9 +98,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   } else if (target.type === 'role') {
     switch (target.targetRole) {
       case 'academic':
-        targetTitle = targetStaff ? `${targetStaff.name} (${targetStaff.title})` : '教務處教學組';
-        targetSubtitle = '調代課即時線上審核 · 課表矩陣 · 實習工場管制';
-        targetBadge = '教學組行政權限';
+        targetTitle = targetStaff ? targetStaff.name : '教務處教學組';
+        targetSubtitle = targetStaff
+          ? `${targetStaff.title} · ${targetStaff.responsibleScope}`
+          : '請先選擇組長或組員身分';
+        targetBadge = targetStaff?.title || '教學組行政權限';
         expectedPassword = auth.academicPassword || '1234';
         hint = `預設密碼為 ${auth.academicPassword || '1234'}`;
         break;
@@ -124,6 +132,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   }
 
   const handleVerify = (inputPassToTest?: string) => {
+    if (target.type === 'role' && target.targetRole === 'academic' && !selectedStaffId) {
+      setErrorMsg('請先選擇教學組組長或組員身分');
+      return;
+    }
+
     const passToTest = inputPassToTest !== undefined ? inputPassToTest : password;
     
     // Check password
@@ -138,7 +151,9 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           setCurrentRole('teacher');
         } else if (target.type === 'role' && target.targetRole) {
           setCurrentRole(target.targetRole);
-          if (target.academicStaffId) {
+          if (target.targetRole === 'academic' && selectedStaffId) {
+            setCurrentAcademicStaffId(selectedStaffId);
+          } else if (target.academicStaffId) {
             setCurrentAcademicStaffId(target.academicStaffId);
           }
         }
@@ -160,7 +175,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+      <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full border border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
         {/* Header */}
         <div className="bg-slate-800/80 px-6 py-4 flex items-center justify-between border-b border-slate-700/80">
           <div className="flex items-center space-x-2.5">
@@ -187,8 +202,12 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         <div className="p-6 space-y-5">
           {/* Target Profile Card */}
           <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700 flex items-center space-x-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0">
-              {targetTeacher ? targetTeacher.name.slice(0, 1) : <ShieldCheck className="w-6 h-6" />}
+            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${targetStaff?.avatarBg || 'from-amber-500 to-amber-700'} flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0`}>
+              {targetTeacher
+                ? targetTeacher.name.slice(0, 1)
+                : targetStaff
+                ? targetStaff.name.slice(0, 1)
+                : <ShieldCheck className="w-6 h-6" />}
             </div>
             <div className="truncate flex-1">
               <div className="flex items-center space-x-2">
@@ -200,6 +219,44 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
               <p className="text-xs text-slate-400 truncate mt-0.5">{targetSubtitle}</p>
             </div>
           </div>
+
+          {target.type === 'role' && target.targetRole === 'academic' && academicStaffList.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-amber-400" />
+                請選擇教學組登入身分（組長 / 組員）
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {academicStaffList.map((staff) => {
+                  const isSelected = staff.id === selectedStaffId;
+                  return (
+                    <button
+                      key={staff.id}
+                      type="button"
+                      onClick={() => setSelectedStaffId(staff.id)}
+                      className={`text-left p-3 rounded-xl border transition ${
+                        isSelected
+                          ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/40'
+                          : 'bg-slate-800/40 border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-white text-sm">{staff.name}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                          staff.title.includes('組長')
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30'
+                            : 'bg-slate-700 text-slate-300 border border-slate-600'
+                        }`}>
+                          {staff.title}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{staff.badge}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Form */}
           <form
