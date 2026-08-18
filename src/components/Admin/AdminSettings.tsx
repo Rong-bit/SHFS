@@ -32,10 +32,11 @@ import {
   BadgeCheck,
   Lock,
   KeyRound,
-  Key
+  Cloud,
 } from 'lucide-react';
 import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
+import { CloudSyncPanel } from './CloudSyncPanel';
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -58,7 +59,7 @@ export const AdminSettings: React.FC = () => {
     deleteAcademicStaff
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'config' | 'venues' | 'teachers' | 'staff' | 'schedules' | 'maintenance'>('config');
+  const [activeTab, setActiveTab] = useState<'config' | 'venues' | 'teachers' | 'staff' | 'schedules' | 'sync' | 'maintenance'>('config');
   const [saveSuccess, setSaveSuccess] = useState(false);
   
   // Safe form config state
@@ -535,6 +536,19 @@ export const AdminSettings: React.FC = () => {
           >
             <FileSpreadsheet className="w-4 h-4 text-sky-400" />
             <span>課表資料與批次中心</span>
+          </button>
+
+          <button
+            id="tab-admin-sync"
+            onClick={() => setActiveTab('sync')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+              activeTab === 'sync'
+                ? 'bg-sky-700 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Cloud className="w-4 h-4 text-sky-500" />
+            <span>跨電腦同步</span>
           </button>
 
           <button
@@ -1461,6 +1475,8 @@ export const AdminSettings: React.FC = () => {
       )}
 
       {/* TAB 5: 法規依據與系統日誌 */}
+      {activeTab === 'sync' && <CloudSyncPanel />}
+
       {activeTab === 'maintenance' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   UserRole,
   Teacher,
@@ -22,6 +22,16 @@ import {
   INITIAL_ACADEMIC_STAFF,
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
+import {
+  CloudSyncSettings,
+  loadCloudSyncSettings,
+  saveCloudSyncSettings,
+  isCloudSyncReady,
+  pullSharedSchoolData,
+  pushSharedSchoolData,
+  testCloudSyncConnection,
+  CLOUD_SYNC_UPDATED_AT_KEY,
+} from '../utils/cloudSync';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -114,6 +124,13 @@ interface AppContextType {
   requestTeacherSwitchWithAuth: (teacherId: string) => void;
   requestTeacherActionAuth: (teacherId: string, actionCallback: () => void, actionName?: string) => void;
   updateTeacherPassword: (teacherId: string, newPassword: string) => void;
+
+  cloudSyncSettings: CloudSyncSettings;
+  cloudSyncStatus: 'off' | 'connecting' | 'synced' | 'error';
+  cloudSyncMessage: string;
+  lastCloudSyncAt: number | null;
+  updateCloudSyncSettings: (settings: CloudSyncSettings) => void;
+  testCloudSync: () => Promise<string>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -192,6 +209,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAiAdvisorOpen, setIsAiAdvisorOpen] = useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [printModalRequest, setPrintModalRequest] = useState<SubstituteRequest | null>(null);
+
+  const [cloudSyncSettings, setCloudSyncSettings] = useState<CloudSyncSettings>(() => loadCloudSyncSettings());
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'off' | 'connecting' | 'synced' | 'error'>(
+    () => (isCloudSyncReady(loadCloudSyncSettings()) ? 'connecting' : 'off')
+  );
+  const [cloudSyncMessage, setCloudSyncMessage] = useState('');
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(() => {
+    const saved = localStorage.getItem(CLOUD_SYNC_UPDATED_AT_KEY);
+    return saved ? Number(saved) : null;
+  });
+  const skipCloudPushRef = useRef(false);
+  const cloudReadyRef = useRef(false);
+  const lastCloudSyncAtRef = useRef<number>(lastCloudSyncAt || 0);
 
   // Authentication & Password Check States
   const [isLoginAuthOpen, setIsLoginAuthOpen] = useState<boolean>(false);
@@ -296,6 +326,135 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(systemConfig));
   }, [systemConfig]);
+
+  const applySharedSchoolData = (remote: {
+    updatedAt: number;
+    teachers: Teacher[];
+    venues: WorkshopVenue[];
+    sessions: CourseSession[];
+    requests: SubstituteRequest[];
+    systemConfig: SystemConfig;
+    academicStaffList: AcademicStaff[];
+  }) => {
+    skipCloudPushRef.current = true;
+    setTeachers(remote.teachers || []);
+    setVenues(remote.venues || []);
+    setSessions(remote.sessions || []);
+    setRequests(remote.requests || []);
+    setSystemConfig({
+      ...INITIAL_SYSTEM_CONFIG,
+      ...(remote.systemConfig || {}),
+      standardBasePeriods: {
+        ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
+        ...(remote.systemConfig?.standardBasePeriods || {}),
+      },
+      authConfig: {
+        ...INITIAL_SYSTEM_CONFIG.authConfig,
+        ...(remote.systemConfig?.authConfig || {}),
+      },
+    });
+    if (remote.academicStaffList?.length) {
+      setAcademicStaffList(remote.academicStaffList);
+    }
+    lastCloudSyncAtRef.current = remote.updatedAt;
+    setLastCloudSyncAt(remote.updatedAt);
+    localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(remote.updatedAt));
+  };
+
+  const buildSharedSchoolData = (updatedAt: number) => ({
+    updatedAt,
+    teachers,
+    venues,
+    sessions,
+    requests,
+    systemConfig,
+    academicStaffList,
+  });
+
+  const updateCloudSyncSettings = (settings: CloudSyncSettings) => {
+    setCloudSyncSettings(settings);
+    saveCloudSyncSettings(settings);
+    if (!isCloudSyncReady(settings)) {
+      setCloudSyncStatus('off');
+      setCloudSyncMessage('尚未啟用跨電腦同步');
+      cloudReadyRef.current = false;
+    } else {
+      setCloudSyncStatus('connecting');
+      setCloudSyncMessage('正在連線同步...');
+    }
+  };
+
+  const testCloudSync = () => testCloudSyncConnection(cloudSyncSettings);
+
+  useEffect(() => {
+    if (!isCloudSyncReady(cloudSyncSettings)) {
+      cloudReadyRef.current = false;
+      setCloudSyncStatus('off');
+      return;
+    }
+
+    let stopped = false;
+    cloudReadyRef.current = false;
+    setCloudSyncStatus('connecting');
+    setCloudSyncMessage('正在連線同步...');
+
+    const pullOnce = async () => {
+      try {
+        const remote = await pullSharedSchoolData(cloudSyncSettings);
+        if (stopped) return;
+        if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
+          applySharedSchoolData(remote);
+          setCloudSyncMessage('已從雲端更新課表與設定');
+        } else if (!remote && lastCloudSyncAtRef.current === 0) {
+          const now = Date.now();
+          lastCloudSyncAtRef.current = now;
+          await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now));
+          setLastCloudSyncAt(now);
+          localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
+          setCloudSyncMessage('已建立雲端資料，其他電腦可用同一組設定讀取');
+        }
+        cloudReadyRef.current = true;
+        setCloudSyncStatus('synced');
+      } catch (err: any) {
+        if (stopped) return;
+        cloudReadyRef.current = true;
+        setCloudSyncStatus('error');
+        setCloudSyncMessage(err?.message || '同步失敗');
+      }
+    };
+
+    pullOnce();
+    const timer = window.setInterval(pullOnce, 5000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudSyncSettings.enabled, cloudSyncSettings.databaseUrl, cloudSyncSettings.schoolKey]);
+
+  useEffect(() => {
+    if (!isCloudSyncReady(cloudSyncSettings) || !cloudReadyRef.current) return;
+    if (skipCloudPushRef.current) {
+      skipCloudPushRef.current = false;
+      return;
+    }
+    const handle = window.setTimeout(async () => {
+      try {
+        const now = Date.now();
+        lastCloudSyncAtRef.current = now;
+        await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now));
+        setLastCloudSyncAt(now);
+        localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
+        setCloudSyncStatus('synced');
+        setCloudSyncMessage('已同步到其他電腦');
+      } catch (err: any) {
+        setCloudSyncStatus('error');
+        setCloudSyncMessage(err?.message || '同步寫入失敗');
+      }
+    }, 800);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teachers, venues, sessions, requests, systemConfig, academicStaffList]);
 
   const currentTeacher = teachers.find((t) => t.id === currentTeacherId) || teachers[0];
   const currentAcademicStaff = academicStaffList.find((s) => s.id === currentAcademicStaffId) || academicStaffList[0];
@@ -1178,6 +1337,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         requestTeacherSwitchWithAuth,
         requestTeacherActionAuth,
         updateTeacherPassword,
+        cloudSyncSettings,
+        cloudSyncStatus,
+        cloudSyncMessage,
+        lastCloudSyncAt,
+        updateCloudSyncSettings,
+        testCloudSync,
       }}
     >
       {children}

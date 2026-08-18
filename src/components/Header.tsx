@@ -14,7 +14,10 @@ import {
   BookOpen,
   AlertCircle,
   AlertTriangle,
-  X
+  X,
+  Cloud,
+  CloudOff,
+  Loader2
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { BackupTransferButtons } from './Common/BackupTransferButtons';
@@ -32,6 +35,7 @@ export const Header: React.FC = () => {
     resetToMockData,
     requestRoleSwitchWithAuth,
     requestTeacherSwitchWithAuth,
+    cloudSyncStatus,
   } = useApp();
 
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -89,6 +93,30 @@ export const Header: React.FC = () => {
 
           {/* Right Actions: AI Advisor & Reset */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+            {cloudSyncStatus !== 'off' && (
+              <span
+                className={`hidden md:flex items-center space-x-1 px-2 py-1.5 rounded-lg text-[11px] border ${
+                  cloudSyncStatus === 'synced'
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : cloudSyncStatus === 'error'
+                    ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                }`}
+                title="跨電腦同步狀態（於系統管理員 ➔ 跨電腦同步 設定）"
+              >
+                {cloudSyncStatus === 'synced' ? (
+                  <Cloud className="w-3.5 h-3.5" />
+                ) : cloudSyncStatus === 'error' ? (
+                  <CloudOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                )}
+                <span>
+                  {cloudSyncStatus === 'synced' ? '已跨電腦同步' : cloudSyncStatus === 'error' ? '同步失敗' : '同步中'}
+                </span>
+              </span>
+            )}
+
             {/* AI Advisor Button */}
             <button
               id="btn-open-ai-advisor"
