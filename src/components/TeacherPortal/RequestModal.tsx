@@ -50,9 +50,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   const [requestType, setRequestType] = useState<RequestType>('substitute');
   const [leaveType, setLeaveType] = useState<LeaveType>('official');
-  const [reason, setReason] = useState<string>(
-    '公差帶領本科學生參加全國高級中等學校專業群科專題競賽 (公費派代)'
-  );
+  // 申請事由：不預設內容，讓老師自行填寫
+  const [reason, setReason] = useState<string>('');
   const [paymentType, setPaymentType] = useState<PaymentType>('public');
 
   // For Reschedule (自行移課)
@@ -70,11 +69,34 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
   const [showAllTeachers, setShowAllTeachers] = useState(false);
 
+  // When teacherSessions is empty, allow selecting a time slot (day/period)
+  // so teacher can still submit a substitute (leave) request.
+  const [leaveDay, setLeaveDay] = useState<DayOfWeek>(2);
+  const [leavePeriod, setLeavePeriod] = useState<number>(1);
+
   // Smart candidate recommendations for substitute
+  const effectiveOriginalSession: CourseSession | undefined =
+    selectedSession ||
+    (currentTeacher
+      ? {
+          id: 's-placeholder',
+          dayOfWeek: leaveDay,
+          period: leavePeriod,
+          className: '未指派課堂',
+          subjectName: '請假派代',
+          teacherId: currentTeacher.id,
+          teacherName: currentTeacher.name,
+          venueId: '',
+          venueName: '原教室',
+          isPractical: false,
+          notes: '由系統暫代課堂資訊（僅用於計算代課教師資格）',
+        }
+      : undefined);
+
   const candidateSubstitutes = useMemo(() => {
-    if (!selectedSession || !currentTeacher) return [];
-    const targetDay = selectedSession.dayOfWeek;
-    const targetP = selectedSession.period;
+    if (!effectiveOriginalSession || !currentTeacher) return [];
+    const targetDay = effectiveOriginalSession.dayOfWeek;
+    const targetP = effectiveOriginalSession.period;
 
     return teachers
       .filter((t) => t.id !== currentTeacher.id)
@@ -92,7 +114,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         return { teacher: t, hasClash, isSameDept, weeklyOverload, isNearLimit, score };
       })
       .sort((a, b) => b.score - a.score);
-  }, [teachers, currentTeacher, selectedSession, sessions, systemConfig]);
+  }, [teachers, currentTeacher, effectiveOriginalSession, sessions, systemConfig]);
 
   // Candidate partner sessions for swap
   const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
@@ -142,11 +164,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const swapTargetSession = sessions.find((s) => s.id === swapSessionId);
   const targetVenueObj = venues.find((v) => v.id === targetVenueId);
 
-  const clashResult: ClashCheckResult = selectedSession
+  const clashResult: ClashCheckResult = effectiveOriginalSession
     ? checkClashes({
         requestType,
         applicantTeacherId: currentTeacher?.id || '',
-        originalSession: selectedSession,
+        originalSession: effectiveOriginalSession,
         targetReschedule:
           requestType === 'reschedule'
             ? {
@@ -163,7 +185,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSession || !currentTeacher) return;
+    if (!effectiveOriginalSession || !currentTeacher) return;
+
+    if (teacherSessions.length === 0 && requestType !== 'substitute') {
+      alert('目前找不到你的排課資料，僅支援請假派代。請切換到「請假派代」後再送出。');
+      return;
+    }
 
     if (requestType === 'swap' && (!swapTeacherId || !swapTargetSession)) {
       alert('請完整選擇對調教師與對調課堂');
@@ -181,7 +208,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       leaveType: requestType === 'substitute' ? leaveType : undefined,
       reason,
       paymentType,
-      originalSession: selectedSession,
+      originalSession: effectiveOriginalSession,
       targetReschedule:
         requestType === 'reschedule'
           ? {
@@ -229,43 +256,78 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         </div>
 
         {/* Content Body */}
-        {teacherSessions.length === 0 ? (
-          <div className="p-8 text-center space-y-3 text-slate-800">
-            <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
-            <h3 className="font-bold text-slate-800 text-base">目前【{currentTeacher?.name}】課表中尚無課堂資料</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-              此教師目前尚未有排定之授課節數，無法發起調代課或移課。請先由【系統管理員】匯入全校課表或新增課堂。
-            </p>
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition"
-              >
-                關閉視窗
-              </button>
-            </div>
-          </div>
-        ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-5 text-slate-800 text-sm">
             
             {/* Step 1: Select Original Session */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                1. 選擇要調整的課堂（原授課堂）
-              </label>
-              <select
-                id="select-original-session"
-                value={selectedSessionId}
-                onChange={(e) => setSelectedSessionId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
-              >
-                {teacherSessions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find(p => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》 @ {s.venueName}
-                  </option>
-                ))}
-              </select>
+              {teacherSessions.length > 0 ? (
+                <>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    1. 選擇要調整的課堂（原授課堂）
+                  </label>
+                  <select
+                    id="select-original-session"
+                    value={selectedSessionId}
+                    onChange={(e) => setSelectedSessionId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  >
+                    {teacherSessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find(p => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》 @ {s.venueName}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-start space-x-2 mb-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5" />
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        1. 選擇要請假的節次
+                      </label>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        目前找不到你的排課資料，所以改用「週幾第幾節」建立派代申請。
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">星期</label>
+                      <select
+                        value={leaveDay}
+                        onChange={(e) => setLeaveDay(Number(e.target.value) as DayOfWeek)}
+                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
+                      >
+                        {dayNames.slice(1).map((name, idx) => {
+                          const day = (idx + 1) as DayOfWeek;
+                          return (
+                            <option key={day} value={day}>
+                              {name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">節次</label>
+                      <select
+                        value={leavePeriod}
+                        onChange={(e) => setLeavePeriod(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                          <option key={p} value={p}>
+                            第{p}節 ({PERIOD_DEFINITIONS.find((def) => def.period === p)?.timeRange})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
           {/* Step 2: Request Type Switcher Tabs */}
@@ -273,7 +335,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
               2. 選擇調代課類型
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid ${teacherSessions.length > 0 ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
               
               {/* Substitute Tab */}
               <button
@@ -281,7 +343,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 id="tab-type-substitute"
                 onClick={() => {
                   setRequestType('substitute');
-                  setReason('公差帶領本科學生參加全國高級中等學校專業群科專題競賽 (公費派代)');
                 }}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
                   requestType === 'substitute'
@@ -294,13 +355,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 <span className="text-[10px] text-slate-500 mt-0.5">公假/事病假派代</span>
               </button>
 
+              {teacherSessions.length > 0 && (
               {/* Swap Tab */}
               <button
                 type="button"
                 id="tab-type-swap"
                 onClick={() => {
                   setRequestType('swap');
-                  setReason('因應科內教學進度與設備維護，與同科教師對調時段');
                 }}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
                   requestType === 'swap'
@@ -312,14 +373,15 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 <span className="text-xs sm:text-sm">🔄 相互調課</span>
                 <span className="text-[10px] text-slate-500 mt-0.5">雙方時段互換</span>
               </button>
+              )}
 
               {/* Reschedule Tab */}
+              {teacherSessions.length > 0 && (
               <button
                 type="button"
                 id="tab-type-reschedule"
                 onClick={() => {
                   setRequestType('reschedule');
-                  setReason('配合實習工場設備檢修，將課程自行移至空堂時段補課');
                 }}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
                   requestType === 'reschedule'
@@ -331,6 +393,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 <span className="text-xs sm:text-sm">⏱️ 自行移課</span>
                 <span className="text-[10px] text-slate-500 mt-0.5">移至無課空堂</span>
               </button>
+              )}
             </div>
           </div>
 
@@ -623,7 +686,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="請輸入具體請假或調課事由..."
                 className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs sm:text-sm focus:ring-1 focus:ring-amber-500 focus:outline-none"
-                required
               />
             </div>
           </div>
@@ -689,7 +751,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           </div>
 
         </form>
-        )}
       </div>
     </div>
   );
