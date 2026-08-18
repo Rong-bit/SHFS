@@ -73,7 +73,7 @@ export const Header: React.FC = () => {
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-base tracking-wide text-slate-100">
-                  國立高職調代課與課點費管理系統
+                  高職調代課與課點費管理系統
                 </span>
                 <span className="hidden md:inline-block px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full">
                   {systemConfig.academicYear}學年度 第{systemConfig.semester}學期

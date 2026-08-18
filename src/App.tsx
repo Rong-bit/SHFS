@@ -40,7 +40,7 @@ const AppContent: React.FC = () => {
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 text-xs py-4 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap justify-between items-center gap-2">
           <div>
-            國立技術型高級中等學校 調代課與課點費管理系統 © 2026
+            高職調代課與課點費管理系統 © 2026
           </div>
           <div className="flex items-center space-x-4 text-slate-500 text-[11px]">
             <span>教育部技術型高中部定授課標準</span>
