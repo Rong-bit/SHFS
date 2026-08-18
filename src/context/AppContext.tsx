@@ -20,6 +20,7 @@ import {
   INITIAL_REQUESTS,
   INITIAL_SYSTEM_CONFIG,
   INITIAL_ACADEMIC_STAFF,
+  withMigratedAuthConfig,
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
@@ -207,6 +208,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
           ...(parsed.standardBasePeriods || parsed.basePeriodsStandard || {}),
         },
+        authConfig: withMigratedAuthConfig(parsed.authConfig || INITIAL_SYSTEM_CONFIG.authConfig),
       };
     } catch {
       return INITIAL_SYSTEM_CONFIG;
@@ -360,10 +362,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
         ...(remote.systemConfig?.standardBasePeriods || {}),
       },
-      authConfig: {
+      authConfig: withMigratedAuthConfig({
         ...INITIAL_SYSTEM_CONFIG.authConfig,
         ...(remote.systemConfig?.authConfig || {}),
-      },
+      }),
     });
     if (remote.academicStaffList?.length) {
       setAcademicStaffList(

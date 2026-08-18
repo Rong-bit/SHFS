@@ -9,6 +9,23 @@ import {
 } from '../types';
 import { defaultSchoolEmail } from '../utils/schoolEmail';
 
+export const DEFAULT_ADMIN_PASSWORD = 'ccvs0511';
+
+export const withMigratedAuthConfig = (auth?: SystemConfig['authConfig']): NonNullable<SystemConfig['authConfig']> => {
+  const merged = {
+    requirePassword: true,
+    defaultTeacherPassword: '1234',
+    adminPassword: DEFAULT_ADMIN_PASSWORD,
+    academicPassword: '1234',
+    accountingPassword: '1234',
+    ...auth,
+  };
+  if (!merged.adminPassword || merged.adminPassword === 'admin') {
+    merged.adminPassword = DEFAULT_ADMIN_PASSWORD;
+  }
+  return merged;
+};
+
 export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
   {
     id: 'staff-01',
@@ -70,7 +87,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   authConfig: {
     requirePassword: true,
     defaultTeacherPassword: '1234',
-    adminPassword: 'admin',
+    adminPassword: DEFAULT_ADMIN_PASSWORD,
     academicPassword: '1234',
     accountingPassword: '1234',
   },

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Lock, KeyRound, Eye, EyeOff, ShieldCheck, User, X, AlertCircle, Sparkles, Check } from 'lucide-react';
 import { UserRole, Teacher, AcademicStaff } from '../../types';
+import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 
 export interface LoginTarget {
   type: 'teacher' | 'role' | 'teacher_action';
@@ -44,7 +45,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   const auth = systemConfig.authConfig || {
     requirePassword: true,
     defaultTeacherPassword: '1234',
-    adminPassword: 'admin',
+    adminPassword: DEFAULT_ADMIN_PASSWORD,
     academicPassword: '1234',
     accountingPassword: '1234',
   };
@@ -117,8 +118,8 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         targetTitle = '系統管理員';
         targetSubtitle = '全校課表匯入 · 師資場地維護 · 系統法規參數設定';
         targetBadge = '最高管理權限';
-        expectedPassword = auth.adminPassword || 'admin';
-        hint = `預設密碼為 ${auth.adminPassword || 'admin'}`;
+        expectedPassword = auth.adminPassword || DEFAULT_ADMIN_PASSWORD;
+        hint = '請輸入系統管理員密碼';
         break;
       case 'teacher':
       default:
@@ -140,7 +141,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     const passToTest = inputPassToTest !== undefined ? inputPassToTest : password;
     
     // Check password
-    if (passToTest === expectedPassword || passToTest === 'admin888' || passToTest === '8888') {
+    if (passToTest === expectedPassword) {
       setIsSuccess(true);
       setErrorMsg('');
 
@@ -272,15 +273,17 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   <KeyRound className="w-3.5 h-3.5 text-amber-400" />
                   請輸入身分登入密碼：
                 </span>
-                <span className="text-[11px] text-amber-400/80 font-normal">
-                  💡 {hint}
-                </span>
+                {!(target.type === 'role' && target.targetRole === 'admin') && (
+                  <span className="text-[11px] text-amber-400/80 font-normal">
+                    💡 {hint}
+                  </span>
+                )}
               </label>
 
               <div className="relative">
                 <input
                   ref={inputRef}
-                  type={showPassword ? 'text' : 'password'}
+                  type={target.type === 'role' && target.targetRole === 'admin' ? 'password' : showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -295,6 +298,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                       : 'border-slate-700 focus:ring-amber-500/50 focus:border-amber-500'
                   }`}
                 />
+                {!(target.type === 'role' && target.targetRole === 'admin') && (
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
@@ -302,6 +306,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
+                )}
               </div>
 
               {errorMsg && (
@@ -314,16 +319,19 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
             {/* Action Buttons */}
             <div className="pt-2 flex items-center justify-between gap-3">
-              {/* Quick Auto-Fill Demo Button */}
-              <button
-                type="button"
-                onClick={handleQuickDemoUnlock}
-                className="flex items-center space-x-1 text-xs text-slate-400 hover:text-amber-300 font-medium transition py-2"
-                title="快速帶入預設密碼登入"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>免打字快速登入</span>
-              </button>
+              {target.type === 'role' && target.targetRole === 'admin' ? (
+                <span className="text-[11px] text-slate-500">管理員密碼不會顯示於畫面</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleQuickDemoUnlock}
+                  className="flex items-center space-x-1 text-xs text-slate-400 hover:text-amber-300 font-medium transition py-2"
+                  title="快速帶入預設密碼登入"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>免打字快速登入</span>
+                </button>
+              )}
 
               <div className="flex items-center space-x-2">
                 <button

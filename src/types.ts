@@ -158,7 +158,7 @@ export interface SystemConfig {
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
     defaultTeacherPassword: string; // 預設教師密碼 (預設 "1234")
-    adminPassword: string; // 系統管理員密碼 (預設 "admin888")
+    adminPassword: string; // 系統管理員密碼 (預設不顯示於畫面)
     academicPassword: string; // 教務組經辦密碼 (預設 "academic123")
     accountingPassword: string; // 主計出納密碼 (預設 "account123")
   };

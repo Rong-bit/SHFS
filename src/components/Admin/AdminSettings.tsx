@@ -39,6 +39,7 @@ import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
 import { SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -82,7 +83,7 @@ export const AdminSettings: React.FC = () => {
     authConfig: {
       requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
       defaultTeacherPassword: systemConfig?.authConfig?.defaultTeacherPassword ?? '1234',
-      adminPassword: systemConfig?.authConfig?.adminPassword ?? 'admin',
+      adminPassword: systemConfig?.authConfig?.adminPassword ?? DEFAULT_ADMIN_PASSWORD,
       academicPassword: systemConfig?.authConfig?.academicPassword ?? '1234',
       accountingPassword: systemConfig?.authConfig?.accountingPassword ?? '1234',
     },
@@ -107,7 +108,7 @@ export const AdminSettings: React.FC = () => {
       authConfig: {
         requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
         defaultTeacherPassword: systemConfig?.authConfig?.defaultTeacherPassword ?? '1234',
-        adminPassword: systemConfig?.authConfig?.adminPassword ?? 'admin',
+        adminPassword: systemConfig?.authConfig?.adminPassword ?? DEFAULT_ADMIN_PASSWORD,
         academicPassword: systemConfig?.authConfig?.academicPassword ?? '1234',
         accountingPassword: systemConfig?.authConfig?.accountingPassword ?? '1234',
       },
@@ -849,7 +850,7 @@ export const AdminSettings: React.FC = () => {
                       authConfig: {
                         ...(formConfig.authConfig || {
                           defaultTeacherPassword: '1234',
-                          adminPassword: 'admin',
+                          adminPassword: DEFAULT_ADMIN_PASSWORD,
                           academicPassword: '1234',
                           accountingPassword: '1234',
                         }),
@@ -880,7 +881,7 @@ export const AdminSettings: React.FC = () => {
                       authConfig: {
                         ...(formConfig.authConfig || {
                           requirePassword: true,
-                          adminPassword: 'admin',
+                          adminPassword: DEFAULT_ADMIN_PASSWORD,
                           academicPassword: '1234',
                           accountingPassword: '1234',
                         }),
@@ -911,7 +912,7 @@ export const AdminSettings: React.FC = () => {
                         ...(formConfig.authConfig || {
                           requirePassword: true,
                           defaultTeacherPassword: '1234',
-                          adminPassword: 'admin',
+                          adminPassword: DEFAULT_ADMIN_PASSWORD,
                           accountingPassword: '1234',
                         }),
                         academicPassword: e.target.value,
@@ -941,7 +942,7 @@ export const AdminSettings: React.FC = () => {
                         ...(formConfig.authConfig || {
                           requirePassword: true,
                           defaultTeacherPassword: '1234',
-                          adminPassword: 'admin',
+                          adminPassword: DEFAULT_ADMIN_PASSWORD,
                           academicPassword: '1234',
                         }),
                         accountingPassword: e.target.value,
@@ -957,12 +958,12 @@ export const AdminSettings: React.FC = () => {
               </div>
 
               <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
-                  <span>系統管理員密碼</span>
-                  <span className="text-[10px] text-rose-600 font-mono">預設: admin</span>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  系統管理員密碼
                 </label>
                 <input
-                  type="text"
+                  type="password"
+                  autoComplete="new-password"
                   value={formConfig.authConfig?.adminPassword || ''}
                   onChange={(e) =>
                     setFormConfig({
@@ -979,7 +980,7 @@ export const AdminSettings: React.FC = () => {
                     })
                   }
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
-                  placeholder="如 admin"
+                  placeholder="請輸入管理員密碼"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   切換至【系統管理員】後台維護時所需的最高權限密碼。
