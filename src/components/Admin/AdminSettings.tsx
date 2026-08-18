@@ -35,6 +35,7 @@ import {
   Key
 } from 'lucide-react';
 import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/scheduleImporter';
+import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -441,6 +442,8 @@ export const AdminSettings: React.FC = () => {
             <Download className="w-3.5 h-3.5 text-slate-600" />
             <span className="hidden sm:inline">下載範本</span>
           </button>
+
+          <BackupTransferButtons variant="light" />
 
           {/* Reset Defaults */}
           <button

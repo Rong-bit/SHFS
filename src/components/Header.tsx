@@ -17,6 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
+import { BackupTransferButtons } from './Common/BackupTransferButtons';
 
 export const Header: React.FC = () => {
   const {
@@ -100,6 +101,8 @@ export const Header: React.FC = () => {
                 (法規與智慧排課)
               </span>
             </button>
+
+            <BackupTransferButtons variant="header" />
 
             {/* Reset Mock Data */}
             <button

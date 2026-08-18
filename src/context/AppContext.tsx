@@ -118,7 +118,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   TEACHERS: 'voc_teachers_v1',
   VENUES: 'voc_venues_v1',
   SESSIONS: 'voc_sessions_v1',

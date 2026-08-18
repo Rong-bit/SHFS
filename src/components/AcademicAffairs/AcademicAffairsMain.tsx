@@ -5,6 +5,7 @@ import { SchoolTimetableMatrix } from './SchoolTimetableMatrix';
 import { StaffDispatchWorkbench } from './StaffDispatchWorkbench';
 import { ClipboardCheck, Grid, Upload, Download, UserCheck, Zap, Plus } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
+import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 
 export const AcademicAffairsMain: React.FC = () => {
   const { requests, sessions, teachers, systemConfig, setIsImportModalOpen, currentAcademicStaff } = useApp();
@@ -74,6 +75,8 @@ export const AcademicAffairsMain: React.FC = () => {
             <Upload className="w-3.5 h-3.5 text-amber-400" />
             <span>📥 匯入課表 (Excel/CSV)</span>
           </button>
+
+          <BackupTransferButtons variant="light" />
 
           <button
             id="btn-academic-export-schedule"
