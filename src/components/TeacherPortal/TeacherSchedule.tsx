@@ -32,7 +32,6 @@ export const TeacherSchedule: React.FC = () => {
   const { 
     currentTeacher, 
     currentTeacherId, 
-    setCurrentTeacherId, 
     requestTeacherSwitchWithAuth,
     requestTeacherActionAuth,
     updateTeacherPassword,
@@ -156,18 +155,6 @@ export const TeacherSchedule: React.FC = () => {
                     聯絡分機：{currentTeacher.phone} ｜ {currentTeacher.email}
                   </p>
                 </div>
-              </div>
-
-              {/* Quick Teacher Switcher with Search & Input */}
-              <div className="flex items-center space-x-1.5 bg-slate-800/90 px-2.5 py-1.5 rounded-xl border border-slate-700">
-                <span className="text-[11px] text-slate-400 hidden sm:inline shrink-0">切換檢視：</span>
-                <TeacherSearchCombobox
-                  teachers={teachers}
-                  currentTeacherId={currentTeacherId}
-                  onSelectTeacher={(tId) => requestTeacherSwitchWithAuth(tId)}
-                  placeholder="輸入教師姓名搜尋..."
-                  compact
-                />
               </div>
             </div>
 
