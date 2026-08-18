@@ -38,7 +38,8 @@ export interface Teacher {
   title: TeacherTitle;
   department: DepartmentType;
   homeroomClass?: string; // 由星期三下午團體活動判斷，例如 電機三忠
-  basePeriods: number; // 每週基本授課節數 (如專任16、導師12、主任10、組長8)
+  dutyReductionPeriods?: number; // 任務減授節數（導師等任務每人不同，例如減 1 節或數節）
+  basePeriods: number; // 每週基本授課節數 = 專任標準 − 任務減授
   weeklyActualPeriods: number; // 本學期每週排定節數
   email: string;
   phone: string;
@@ -148,7 +149,7 @@ export interface SystemConfig {
   maxWeeklyOverloadPeriods: number; // 法定每週兼代課上限 (9)
   standardBasePeriods: {
     head: number; // 科主任 (10)
-    homeroom: number; // 導師 (12)
+    homeroom: number; // 導師參考基本節數（常見 12），實際以各師任務減授為準
     fulltime: number; // 專任 (16)
     sectionChief: number; // 組長 (8)
   };

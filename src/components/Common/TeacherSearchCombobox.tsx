@@ -197,7 +197,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400 truncate">
-                          {teacher.department} · 基本 {teacher.basePeriods} 節
+                          {teacher.department} · 減授 {teacher.dutyReductionPeriods ?? 0} · 基本 {teacher.basePeriods} 節
                         </div>
                       </div>
                     </div>

@@ -38,7 +38,7 @@ import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/schedu
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, SCHOOL_DEPARTMENTS, teacherBasePeriods } from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 
 export const AdminSettings: React.FC = () => {
@@ -135,6 +135,7 @@ export const AdminSettings: React.FC = () => {
     name: string;
     title: TeacherTitle;
     department: DepartmentType;
+    dutyReductionPeriods: number;
     basePeriods: number;
     email: string;
     phone: string;
@@ -143,6 +144,7 @@ export const AdminSettings: React.FC = () => {
     name: '',
     title: '專任教師',
     department: '電機科',
+    dutyReductionPeriods: 0,
     basePeriods: 16,
     email: '',
     phone: '',
@@ -239,6 +241,7 @@ export const AdminSettings: React.FC = () => {
       name: '',
       title: '專任教師',
       department: '電機科',
+      dutyReductionPeriods: 0,
       basePeriods: formConfig.standardBasePeriods.fulltime,
       email: '',
       phone: '',
@@ -253,6 +256,7 @@ export const AdminSettings: React.FC = () => {
       name: t.name,
       title: t.title,
       department: t.department,
+      dutyReductionPeriods: t.dutyReductionPeriods ?? 0,
       basePeriods: t.basePeriods,
       email: t.email,
       phone: t.phone,
@@ -273,7 +277,11 @@ export const AdminSettings: React.FC = () => {
         name: teacherFormData.name,
         title: teacherFormData.title,
         department: teacherFormData.department,
-        basePeriods: Number(teacherFormData.basePeriods),
+        dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
+        basePeriods: teacherBasePeriods(
+          formConfig.standardBasePeriods.fulltime,
+          Number(teacherFormData.dutyReductionPeriods) || 0
+        ),
         email: ensureSchoolEmail(teacherFormData.name, teacherFormData.email),
         phone: teacherFormData.phone,
         certifications: certArray,
@@ -283,7 +291,11 @@ export const AdminSettings: React.FC = () => {
         name: teacherFormData.name,
         title: teacherFormData.title,
         department: teacherFormData.department,
-        basePeriods: Number(teacherFormData.basePeriods),
+        dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
+        basePeriods: teacherBasePeriods(
+          formConfig.standardBasePeriods.fulltime,
+          Number(teacherFormData.dutyReductionPeriods) || 0
+        ),
         email: ensureSchoolEmail(teacherFormData.name, teacherFormData.email),
         phone: teacherFormData.phone || '分機 300',
         certifications: certArray,
@@ -720,18 +732,22 @@ export const AdminSettings: React.FC = () => {
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                 <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
                   <BookOpen className="w-4 h-4 text-indigo-500" />
-                  <span>各類職務基本每週授課節數標準</span>
+                  <span>專任標準與職務減授參考</span>
                 </h3>
                 <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-bold border border-indigo-200">
-                  部定每週基準
+                  基本節數＝專任標準−任務減授
                 </span>
               </div>
 
               <div className="space-y-4 text-xs sm:text-sm">
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
+                  <strong>任務減授每人不同</strong>：導師可能減 1 節或數節，科主任、組長亦同，系統不會因職稱自動改成 12 或 10。
+                  請至「全校師資名冊」逐人填寫任務減授；此處導師／科主任／組長欄位僅供部定對照，不會套用到全員。
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <label className="block text-xs font-bold text-slate-800 mb-1">
-                      專任教師 (節/週)
+                      專任教師標準 (節/週)
                     </label>
                     <input
                       type="number"
@@ -747,12 +763,12 @@ export const AdminSettings: React.FC = () => {
                       }
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
                     />
-                    <span className="text-[10px] text-slate-500 mt-1 block">專業群科標準 16 節</span>
+                    <span className="text-[10px] text-slate-500 mt-1 block">全員計算基準，預設 16 節</span>
                   </div>
 
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     <label className="block text-xs font-bold text-slate-800 mb-1">
-                      導師 (減授4節)
+                      導師參考基本節數
                     </label>
                     <input
                       type="number"
@@ -768,7 +784,7 @@ export const AdminSettings: React.FC = () => {
                       }
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
                     />
-                    <span className="text-[10px] text-slate-500 mt-1 block">部定標準 12 節</span>
+                    <span className="text-[10px] text-slate-500 mt-1 block">部定常見 12 節（減授 4），非全員預設</span>
                   </div>
 
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
@@ -820,7 +836,7 @@ export const AdminSettings: React.FC = () => {
                     教育部法規授課標準參照：
                   </div>
                   <p className="text-[11px] leading-relaxed text-indigo-800">
-                    依《高級中等學校教師每週授課節數標準》，技術型高中專業群科實習課程，依規定得實施分組教學與加權鐘點核計。系統於主計出納結算時將自動以此標準核計超鐘點費。
+                    依《高級中等學校教師每週授課節數標準》，專任教師每週 16 節為計算基準。導師、科主任、組長等任務減授節數因人而異，請於師資名冊逐人填寫；系統以「專任標準 − 該師任務減授」計算基本節數與超鐘點。
                   </p>
                 </div>
               </div>
@@ -1195,10 +1211,15 @@ export const AdminSettings: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Users className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-sm">全校專業群科教師師資與授課標準名冊</h3>
+            <div className="bg-slate-900 text-white px-6 py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <Users className="w-5 h-5 text-emerald-400" />
+                  <h3 className="font-bold text-sm">全校專業群科教師師資與授課標準名冊</h3>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  基本節數＝專任標準 {formConfig.standardBasePeriods.fulltime} 節 − 任務減授。導師減授因人而異，可直接在表格調整。
+                </p>
               </div>
               <span className="text-xs text-slate-400">
                 共 <strong className="text-emerald-400">{filteredTeachers.length}</strong> 位任課教師
@@ -1211,6 +1232,7 @@ export const AdminSettings: React.FC = () => {
                   <tr>
                     <th className="p-3.5">教師姓名 / 職稱</th>
                     <th className="p-3.5">群科科別</th>
+                    <th className="p-3.5 text-center">任務減授</th>
                     <th className="p-3.5 text-center">基本節數</th>
                     <th className="p-3.5 text-center">排定節數</th>
                     <th className="p-3.5 text-center">每週超額</th>
@@ -1222,7 +1244,7 @@ export const AdminSettings: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {filteredTeachers.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                      <td colSpan={9} className="p-8 text-center text-slate-400">
                         查無符合條件的教師資料
                       </td>
                     </tr>
@@ -1246,6 +1268,22 @@ export const AdminSettings: React.FC = () => {
                             <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-semibold text-[11px]">
                               {t.department}
                             </span>
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              max={formConfig.standardBasePeriods.fulltime}
+                              value={t.dutyReductionPeriods ?? 0}
+                              onChange={(e) =>
+                                updateTeacher(t.id, {
+                                  dutyReductionPeriods: Math.max(0, Number(e.target.value) || 0),
+                                })
+                              }
+                              className="w-16 text-center bg-white border border-slate-300 rounded-lg py-1 font-mono font-bold text-slate-900"
+                              title="任務減授節數（每人不同）"
+                            />
+                            <span className="block text-[10px] text-slate-400 mt-0.5">節</span>
                           </td>
                           <td className="p-3.5 text-center font-mono font-bold text-slate-800">
                             {t.basePeriods} 節
@@ -1511,7 +1549,7 @@ export const AdminSettings: React.FC = () => {
               <div className="space-y-3 text-xs text-slate-600">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="font-bold text-slate-900">1. 《高級中等學校教師每週授課節數標準》</div>
-                  <p>專任教師每週授課 16 節；兼任導師每週減授 4 節（基本 12 節）；兼任科主任每週減授 6 節（基本 10 節）；兼任組長每週減授 8 節（基本 8 節）。</p>
+                  <p>專任教師每週授課 16 節為基準。兼任導師、科主任、組長等任務減授節數因人而異（例如導師可能減 1 節或數節），本校以各師「任務減授」計算基本節數＝專任標準−減授，並非全員固定 12 節。</p>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
@@ -1739,11 +1777,7 @@ export const AdminSettings: React.FC = () => {
                     value={teacherFormData.title}
                     onChange={(e) => {
                       const newTitle = e.target.value as TeacherTitle;
-                      let autoBase = formConfig.standardBasePeriods.fulltime;
-                      if (newTitle === '導師') autoBase = formConfig.standardBasePeriods.homeroom;
-                      if (newTitle === '科主任') autoBase = formConfig.standardBasePeriods.head;
-                      if (newTitle === '教學組長') autoBase = formConfig.standardBasePeriods.sectionChief;
-                      setTeacherFormData({ ...teacherFormData, title: newTitle, basePeriods: autoBase });
+                      setTeacherFormData({ ...teacherFormData, title: newTitle });
                     }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
@@ -1770,18 +1804,46 @@ export const AdminSettings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">每週基本授課節數</label>
+                  <label className="block font-semibold text-slate-700 mb-1">任務減授（節）</label>
                   <input
                     type="number"
-                    value={teacherFormData.basePeriods}
-                    onChange={(e) => setTeacherFormData({ ...teacherFormData, basePeriods: Number(e.target.value) })}
+                    min={0}
+                    max={formConfig.standardBasePeriods.fulltime}
+                    value={teacherFormData.dutyReductionPeriods}
+                    onChange={(e) => {
+                      const dutyReductionPeriods = Math.max(0, Number(e.target.value) || 0);
+                      setTeacherFormData({
+                        ...teacherFormData,
+                        dutyReductionPeriods,
+                        basePeriods: teacherBasePeriods(
+                          formConfig.standardBasePeriods.fulltime,
+                          dutyReductionPeriods
+                        ),
+                      });
+                    }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold"
                     required
                   />
+                  <span className="text-[10px] text-slate-500 mt-1 block">導師、組長等任務每人不同，例如減 1 節或數節</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">每週基本授課節數</label>
+                  <input
+                    type="number"
+                    value={teacherBasePeriods(
+                      formConfig.standardBasePeriods.fulltime,
+                      teacherFormData.dutyReductionPeriods
+                    )}
+                    readOnly
+                    className="w-full bg-slate-100 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-700"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    {formConfig.standardBasePeriods.fulltime} − {teacherFormData.dutyReductionPeriods || 0}＝自動計算
+                  </span>
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">公務分機 / 電話</label>
                   <input
@@ -1792,17 +1854,17 @@ export const AdminSettings: React.FC = () => {
                     placeholder="如：分機 310"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">電子郵件</label>
-                  <input
-                    type="email"
-                    value={teacherFormData.email}
-                    onChange={(e) => setTeacherFormData({ ...teacherFormData, email: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
-                    placeholder={`如：王大明@${SCHOOL_EMAIL_DOMAIN}`}
-                  />
-                </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">電子郵件</label>
+                <input
+                  type="email"
+                  value={teacherFormData.email}
+                  onChange={(e) => setTeacherFormData({ ...teacherFormData, email: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
+                  placeholder={`如：王大明@${SCHOOL_EMAIL_DOMAIN}`}
+                />
               </div>
 
               <div>

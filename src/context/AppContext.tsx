@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows } from '../utils/schoolDepartments';
+import { departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, resolveDutyReductionPeriods, teacherBasePeriods } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -191,7 +191,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {
       /* keep defaults */
     }
-    return enrichTeachersFromSessions(withEmail, sessionList, basePeriods);
+    return enrichTeachersFromSessions(withEmail, sessionList, basePeriods.fulltime);
   });
 
   const [venues, setVenues] = useState<WorkshopVenue[]>(() => {
@@ -372,10 +372,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       enrichTeachersFromSessions(
         remoteTeachers,
         remoteSessions,
-        {
-          ...INITIAL_SYSTEM_CONFIG.standardBasePeriods,
-          ...(remote.systemConfig?.standardBasePeriods || {}),
-        }
+        remote.systemConfig?.standardBasePeriods?.fulltime || INITIAL_SYSTEM_CONFIG.standardBasePeriods.fulltime
       )
     );
     setVenues(remote.venues || []);
@@ -933,6 +930,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateSystemConfig = (newConfig: Partial<SystemConfig>) => {
     setSystemConfig((prev) => ({ ...prev, ...newConfig }));
+    const fulltime = newConfig.standardBasePeriods?.fulltime;
+    if (typeof fulltime === 'number') {
+      setTeachers((prev) =>
+        prev.map((t) => {
+          const reduction = resolveDutyReductionPeriods(fulltime, t);
+          return {
+            ...t,
+            dutyReductionPeriods: reduction,
+            basePeriods: teacherBasePeriods(fulltime, reduction),
+          };
+        })
+      );
+    }
   };
 
   const importSchedule = (params: {
@@ -983,6 +993,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               name,
               title: '專任教師',
               department: dept,
+              dutyReductionPeriods: 0,
               basePeriods: systemConfig.standardBasePeriods.fulltime,
               weeklyActualPeriods: 0,
               email: ensureSchoolEmail(name),
@@ -1013,6 +1024,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name,
             title: '專任教師',
             department: dept,
+            dutyReductionPeriods: 0,
             basePeriods: systemConfig.standardBasePeriods.fulltime,
             weeklyActualPeriods: 0,
             email: ensureSchoolEmail(name),
@@ -1150,7 +1162,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         weeklyActualPeriods: teacherPeriodCount.get(t.id) || 0,
       })),
       finalSessions,
-      systemConfig.standardBasePeriods
+      systemConfig.standardBasePeriods.fulltime
     );
 
     setTeachers(updatedTeachers);
@@ -1194,7 +1206,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateTeacher = (id: string, data: Partial<Teacher>) => {
-    setTeachers((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
+    setTeachers((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        const merged = { ...t, ...data };
+        if (data.dutyReductionPeriods !== undefined && data.basePeriods === undefined) {
+          merged.basePeriods = teacherBasePeriods(
+            systemConfig.standardBasePeriods.fulltime,
+            data.dutyReductionPeriods
+          );
+        }
+        return merged;
+      })
+    );
   };
 
   const deleteTeacher = (id: string) => {

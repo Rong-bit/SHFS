@@ -221,6 +221,12 @@ export const TeacherSchedule: React.FC = () => {
             </div>
             <div className="mt-2 text-xs text-slate-600 space-y-1">
               <div className="flex justify-between">
+                <span>任務減授：</span>
+                <span className="font-semibold text-slate-800">
+                  {currentTeacher.dutyReductionPeriods ?? 0} 節
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span>每週基本標準：</span>
                 <span className="font-semibold text-slate-800">{basePeriods} 節/週</span>
               </div>

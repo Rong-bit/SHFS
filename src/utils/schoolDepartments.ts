@@ -170,17 +170,28 @@ export const buildHomeroomClassByTeacher = (sessions: CourseSession[]) => {
   return teacherToClasses;
 };
 
+export const teacherBasePeriods = (fulltimeStandard: number, dutyReductionPeriods = 0) =>
+  Math.max(0, fulltimeStandard - Math.max(0, dutyReductionPeriods));
+
+/** 任務減授：已填寫則用填值；舊資料沒填時，由既有基本節數反推，避免導師一律被重設成 16。 */
+export const resolveDutyReductionPeriods = (
+  fulltimeStandard: number,
+  teacher: Pick<Teacher, 'dutyReductionPeriods' | 'basePeriods'>
+) => {
+  if (teacher.dutyReductionPeriods != null) return Math.max(0, teacher.dutyReductionPeriods);
+  return Math.max(0, fulltimeStandard - (teacher.basePeriods ?? fulltimeStandard));
+};
+
 export const displayTeacherTitle = (teacher: Pick<Teacher, 'title' | 'homeroomClass'>) => {
   if (teacher.homeroomClass) return `${teacher.homeroomClass}導師`;
   return teacher.title;
 };
 
 export const applyTeacherHomeroomFromSessions = <
-  T extends Pick<Teacher, 'id' | 'name' | 'title' | 'basePeriods' | 'homeroomClass'>
+  T extends Pick<Teacher, 'id' | 'name' | 'title' | 'homeroomClass'>
 >(
   teachers: T[],
-  sessions: CourseSession[],
-  basePeriods: { fulltime: number; homeroom: number }
+  sessions: CourseSession[]
 ): T[] => {
   if (!sessions.some((s) => isGroupActivity(s.subjectName))) return teachers;
   const homeroomByTeacher = buildHomeroomClassByTeacher(sessions);
@@ -197,27 +208,15 @@ export const applyTeacherHomeroomFromSessions = <
       if (keepAdminTitle) {
         return homeroomClass === t.homeroomClass ? t : { ...t, homeroomClass };
       }
-      if (t.title === '導師' && t.homeroomClass === homeroomClass && t.basePeriods === basePeriods.homeroom) {
-        return t;
-      }
-      return {
-        ...t,
-        title: '導師',
-        homeroomClass,
-        basePeriods: basePeriods.homeroom,
-      };
+      if (t.title === '導師' && t.homeroomClass === homeroomClass) return t;
+      return { ...t, title: '導師' as T['title'], homeroomClass };
     }
 
     if (keepAdminTitle) {
       return t.homeroomClass ? { ...t, homeroomClass: undefined } : t;
     }
     if (t.title === '導師' || t.homeroomClass) {
-      return {
-        ...t,
-        title: '專任教師',
-        homeroomClass: undefined,
-        basePeriods: basePeriods.fulltime,
-      };
+      return { ...t, title: '專任教師' as T['title'], homeroomClass: undefined };
     }
     return t;
   });
@@ -226,10 +225,16 @@ export const applyTeacherHomeroomFromSessions = <
 export const enrichTeachersFromSessions = (
   teachers: Teacher[],
   sessions: CourseSession[],
-  basePeriods: { fulltime: number; homeroom: number }
-) =>
-  applyTeacherHomeroomFromSessions(
+  fulltimeStandard = 16
+) => {
+  const next = applyTeacherHomeroomFromSessions(
     applyTeacherDepartmentsFromSessions(teachers, sessions),
-    sessions,
-    basePeriods
+    sessions
   );
+  return next.map((t) => {
+    const dutyReductionPeriods = resolveDutyReductionPeriods(fulltimeStandard, t);
+    const basePeriods = teacherBasePeriods(fulltimeStandard, dutyReductionPeriods);
+    if (t.dutyReductionPeriods === dutyReductionPeriods && t.basePeriods === basePeriods) return t;
+    return { ...t, dutyReductionPeriods, basePeriods };
+  });
+};
