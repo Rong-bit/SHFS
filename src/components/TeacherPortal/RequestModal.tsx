@@ -125,11 +125,19 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   useEffect(() => {
     if (requestType !== 'substitute') return;
     if (teacherSessions.length === 0) return;
+    // If user opened modal from timetable cell, prefer that slot.
+    if (initialSession && teacherSessions.some((s) => s.id === initialSession.id)) {
+      setLeaveSlotId(initialSession.id);
+      setLeaveDay(initialSession.dayOfWeek);
+      setLeavePeriod(initialSession.period);
+      return;
+    }
+
     const first = teacherSessions[0];
     setLeaveSlotId((prev) => (prev ? prev : first.id));
     setLeaveDay((prev) => (prev !== '' ? prev : first.dayOfWeek));
     setLeavePeriod((prev) => (prev !== '' ? prev : first.period));
-  }, [requestType, teacherSessions]);
+  }, [requestType, teacherSessions, initialSession]);
 
   // Candidate partner sessions for swap
   const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
