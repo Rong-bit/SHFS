@@ -68,6 +68,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // For Substitute (請假派代)
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
   const [showAllTeachers, setShowAllTeachers] = useState(false);
+  const [manualTeacherQuery, setManualTeacherQuery] = useState('');
 
   // When teacherSessions is empty, allow selecting a time slot (day/period)
   // so teacher can still submit a substitute (leave) request.
@@ -628,6 +629,13 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
                       手動選取（含有課教師）
                     </summary>
+                    <input
+                      type="text"
+                      value={manualTeacherQuery}
+                      onChange={(e) => setManualTeacherQuery(e.target.value)}
+                      placeholder="可輸入姓名 / 科別 / 職稱搜尋"
+                      className="w-full mt-1.5 bg-white border border-slate-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-amber-500"
+                    />
                     <select
                       id="select-substitute-teacher"
                       value={substituteTeacherId}
@@ -637,6 +645,15 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       <option value="">-- 由教學組媒合 --</option>
                       {teachers
                         .filter((t) => t.id !== currentTeacher?.id)
+                        .filter((t) => {
+                          if (!manualTeacherQuery.trim()) return true;
+                          const q = manualTeacherQuery.trim().toLowerCase();
+                          return (
+                            t.name.toLowerCase().includes(q) ||
+                            t.department.toLowerCase().includes(q) ||
+                            t.title.toLowerCase().includes(q)
+                          );
+                        })
                         .map((t) => {
                           const targetDay = effectiveOriginalSession?.dayOfWeek;
                           const targetP = effectiveOriginalSession?.period;
