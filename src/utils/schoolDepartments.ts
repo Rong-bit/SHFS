@@ -74,6 +74,15 @@ const teacherNameMatches = (rowTeacherName: string, teacherName: string) => {
   return rowParts.includes(name) || nameParts.some((p) => rowParts.includes(p));
 };
 
+const isGroupActivity = (subjectName: string) => /團體活動/.test(subjectName || '');
+
+/** 真正的實習／實作課；團體活動、普通教室學科不算 */
+export const isInternshipCourse = (subjectName: string) => {
+  const name = subjectName || '';
+  if (isGroupActivity(name)) return false;
+  return /實習|實作/.test(name);
+};
+
 /**
  * 用實習課判斷這位老師屬於哪一科：
  * 教「電機一忠」的實習課 → 電機科老師。
@@ -102,7 +111,7 @@ export const inferTeacherDepartmentFromSessions = (
   inferTeacherDepartmentFromPracticalRows(
     teacher.name,
     sessions
-      .filter((s) => s.isPractical && (s.teacherId === teacher.id || teacherNameMatches(s.teacherName, teacher.name)))
+      .filter((s) => isInternshipCourse(s.subjectName) && (s.teacherId === teacher.id || teacherNameMatches(s.teacherName, teacher.name)))
       .map((s) => ({ teacherName: teacher.name, className: s.className, isPractical: true }))
   );
 
@@ -110,14 +119,13 @@ export const applyTeacherDepartmentsFromSessions = <T extends Pick<Teacher, 'id'
   teachers: T[],
   sessions: CourseSession[]
 ): T[] => {
-  if (!sessions.some((s) => s.isPractical)) return teachers;
+  if (!sessions.some((s) => isInternshipCourse(s.subjectName))) return teachers;
   return teachers.map((t) => {
     const department = inferTeacherDepartmentFromSessions(t, sessions);
     return department === t.department ? t : { ...t, department };
   });
 };
 
-const isGroupActivity = (subjectName: string) => /團體活動/.test(subjectName || '');
 const isAfternoonPeriod = (period: number) => period >= 5;
 
 const sessionTeacherKeys = (session: CourseSession) => {

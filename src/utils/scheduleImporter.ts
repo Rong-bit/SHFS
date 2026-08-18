@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
-import { departmentFromClassName, departmentFromLabel } from './schoolDepartments';
+import { departmentFromClassName, departmentFromLabel, isInternshipCourse } from './schoolDepartments';
 
 export interface ParsedImportRow {
   rowNumber: number;
@@ -90,8 +90,10 @@ export const inferIsPractical = (subjectName: string, venueName: string, explici
     if (['是', 'y', 'yes', 'true', '1', '實習', '實作'].includes(str)) return true;
     if (['否', 'n', 'no', 'false', '0', '學科', '一般'].includes(str)) return false;
   }
-  const practicalKeywords = ['實習', '實作', '工場', '實驗', '專題', '製圖', '車床', '烘焙', '配線', '金工', '烹調', '程式設計', '單晶片'];
-  return practicalKeywords.some((kw) => subjectName.includes(kw) || venueName.includes(kw));
+  if (isInternshipCourse(subjectName)) return true;
+  const venue = venueName || '';
+  if (/普通教室|原班/.test(venue) || /團體活動/.test(subjectName || '')) return false;
+  return /工場|實習教室/.test(venue);
 };
 
 // Clean teacher name from formats like "t0011.何雪玲", "*t0711.林昇蒼,*t0714.葉珈誠", "0116_林冠妙", "(t1216)何建延", "彭韶郁,t1509.李萱"
