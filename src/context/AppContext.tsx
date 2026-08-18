@@ -761,20 +761,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return s;
         })
       );
-    } else if (targetReq.requestType === 'substitute' && targetReq.substituteTeacherId) {
-      setSessions((prev) =>
-        prev.map((s) => {
-          if (s.id === targetReq.originalSession.id) {
-            return {
-              ...s,
-              teacherId: targetReq.substituteTeacherId!,
-              teacherName: targetReq.substituteTeacherName!,
-              notes: `[派代] 原任: ${targetReq.applicantTeacherName} (${targetReq.paymentType === 'public' ? '公費派代' : '自費代課'})`,
-            };
-          }
-          return s;
-        })
-      );
     }
 
     setRequests((prev) =>
@@ -870,20 +856,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 dayOfWeek: newRequest.originalSession.dayOfWeek,
                 period: newRequest.originalSession.period,
                 notes: `[教學組互調] 與 ${newRequest.applicantTeacherName}`,
-              };
-            }
-            return s;
-          })
-        );
-      } else if (newRequest.requestType === 'substitute' && newRequest.substituteTeacherId) {
-        setSessions((prev) =>
-          prev.map((s) => {
-            if (s.id === newRequest.originalSession.id) {
-              return {
-                ...s,
-                teacherId: newRequest.substituteTeacherId!,
-                teacherName: newRequest.substituteTeacherName!,
-                notes: `[教學組派代] 原任: ${newRequest.applicantTeacherName} (${newRequest.paymentType === 'public' ? '公費派代' : '自費代課'})`,
               };
             }
             return s;
