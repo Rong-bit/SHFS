@@ -73,6 +73,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // so teacher can still submit a substitute (leave) request.
   const [leaveDay, setLeaveDay] = useState<DayOfWeek | ''>('');
   const [leavePeriod, setLeavePeriod] = useState<number | ''>('');
+  // When teacher has sessions, offer only "has-class" slots.
+  const [leaveSlotId, setLeaveSlotId] = useState<string>('');
 
   // Smart candidate recommendations / clash checking target:
   // - substitute：必用（請假星期/節次）建立暫代課堂
@@ -118,6 +120,16 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       })
       .sort((a, b) => b.score - a.score);
   }, [teachers, currentTeacher, effectiveOriginalSession, sessions, systemConfig]);
+
+  // If in substitute mode and teacher has sessions, initialize leave slot
+  useEffect(() => {
+    if (requestType !== 'substitute') return;
+    if (teacherSessions.length === 0) return;
+    const first = teacherSessions[0];
+    setLeaveSlotId((prev) => (prev ? prev : first.id));
+    setLeaveDay((prev) => (prev !== '' ? prev : first.dayOfWeek));
+    setLeavePeriod((prev) => (prev !== '' ? prev : first.period));
+  }, [requestType, teacherSessions]);
 
   // Candidate partner sessions for swap
   const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
@@ -284,48 +296,76 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {teacherSessions.length > 0 ? (
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">星期</label>
                       <select
-                        value={leaveDay}
+                        id="select-leave-slot"
+                        value={leaveSlotId}
                         onChange={(e) => {
-                          const v = e.target.value;
-                          setLeaveDay(v === '' ? '' : (Number(v) as DayOfWeek));
+                          const id = e.target.value;
+                          setLeaveSlotId(id);
+                          const slot = teacherSessions.find((s) => s.id === id);
+                          if (slot) {
+                            setLeaveDay(slot.dayOfWeek);
+                            setLeavePeriod(slot.period);
+                          }
                         }}
-                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
+                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
                       >
-                        <option value="">-- 請選擇 --</option>
-                        {dayNames.slice(1).map((name, idx) => {
-                          const day = (idx + 1) as DayOfWeek;
-                          return (
-                            <option key={day} value={day}>
-                              {name}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">節次</label>
-                      <select
-                        value={leavePeriod}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setLeavePeriod(v === '' ? '' : Number(v));
-                        }}
-                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
-                      >
-                        <option value="">-- 請選擇 --</option>
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
-                          <option key={p} value={p}>
-                            第{p}節 ({PERIOD_DEFINITIONS.find((def) => def.period === p)?.timeRange})
+                        {teacherSessions.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
                           </option>
                         ))}
                       </select>
+                      <p className="text-[11px] text-slate-500 mt-2">
+                        僅列出你名下「有課」的節次。
+                      </p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">星期</label>
+                        <select
+                          value={leaveDay}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setLeaveDay(v === '' ? '' : (Number(v) as DayOfWeek));
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
+                        >
+                          <option value="">-- 請選擇 --</option>
+                          {dayNames.slice(1).map((name, idx) => {
+                            const day = (idx + 1) as DayOfWeek;
+                            return (
+                              <option key={day} value={day}>
+                                {name}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">節次</label>
+                        <select
+                          value={leavePeriod}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setLeavePeriod(v === '' ? '' : Number(v));
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
+                        >
+                          <option value="">-- 請選擇 --</option>
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                            <option key={p} value={p}>
+                              第{p}節 ({PERIOD_DEFINITIONS.find((def) => def.period === p)?.timeRange})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
