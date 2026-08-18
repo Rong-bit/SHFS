@@ -460,6 +460,36 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             {/* SUBTITUTE: Leave Type & Auto Payment */}
             {requestType === 'substitute' && (
               <>
+                {/* When teacher has sessions, show "has-class" leave slot selector here
+                    so user can pick the leave time without scrolling to Step 1. */}
+                {teacherSessions.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      請假節次（僅列出你名下「有課」的節次）
+                    </label>
+                    <select
+                      id="select-leave-slot"
+                      value={leaveSlotId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setLeaveSlotId(id);
+                        const slot = teacherSessions.find((s) => s.id === id);
+                        if (slot) {
+                          setLeaveDay(slot.dayOfWeek);
+                          setLeavePeriod(slot.period);
+                        }
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
+                    >
+                      {teacherSessions.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
