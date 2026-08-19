@@ -59,7 +59,8 @@ interface AppContextType {
   
   // Actions
   addSubstituteRequest: (
-    data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>
+    data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>,
+    requestMonth?: number
   ) => SubstituteRequest;
   createStaffDirectDispatch: (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
@@ -693,12 +694,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addSubstituteRequest = (
-    data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>
+    data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>,
+    requestMonth?: number
   ): SubstituteRequest => {
     const newId = `req-${Date.now()}`;
     const nextSeq = (requests.length + 1).toString().padStart(3, '0');
-    const actualMonth = new Date().getMonth() + 1;
-    const requestNumber = `VOC-${systemConfig.academicYear}-${actualMonth}-${nextSeq}`;
+    const month = requestMonth ?? (new Date().getMonth() + 1);
+    const requestNumber = `VOC-${systemConfig.academicYear}-${month}-${nextSeq}`;
 
     const clashStatus = checkClashes({
       requestType: data.requestType,
