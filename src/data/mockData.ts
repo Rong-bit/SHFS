@@ -36,6 +36,7 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     phone: '分機 210',
     avatarBg: 'from-indigo-600 to-indigo-800',
     responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調',
+    group: 'academic',
   },
   {
     id: 'staff-02',
@@ -46,6 +47,7 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     phone: '分機 211',
     avatarBg: 'from-amber-600 to-amber-800',
     responsibleScope: '專業實習工場調代課經辦、突發病假與公假派代、實習檢定移課',
+    group: 'academic',
   },
   {
     id: 'staff-03',
@@ -56,6 +58,18 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     phone: '分機 212',
     avatarBg: 'from-emerald-600 to-emerald-800',
     responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合',
+    group: 'academic',
+  },
+  {
+    id: 'staff-acc-01',
+    name: '王淑芬',
+    title: '出納組長',
+    badge: '鐘點費核銷 · 出納結算',
+    email: defaultSchoolEmail('王淑芬'),
+    phone: '分機 310',
+    avatarBg: 'from-teal-600 to-teal-800',
+    responsibleScope: '每月超鐘點費結算核銷、調代課鐘點費撥付、教師薪資異動通知',
+    group: 'accounting',
   },
 ];
 

@@ -9,6 +9,7 @@ export interface AcademicStaff {
   phone: string;
   avatarBg?: string;
   responsibleScope: string;
+  group?: 'academic' | 'accounting';
 }
 
 export type DepartmentType =

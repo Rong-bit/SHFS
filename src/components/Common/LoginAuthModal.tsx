@@ -108,7 +108,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         hint = `預設密碼為 ${auth.academicPassword || '1234'}`;
         break;
       case 'accounting':
-        targetTitle = '主計出納處';
+        targetTitle = '出納組';
         targetSubtitle = '鐘點費結算 · 超額授課預警 · 匯出 Excel 清冊';
         targetBadge = '財務結算權限';
         expectedPassword = auth.accountingPassword || '1234';
@@ -204,7 +204,9 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           {/* Target Profile Card */}
           <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700 flex items-center space-x-3.5">
             <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${targetStaff?.avatarBg || 'from-amber-500 to-amber-700'} flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0`}>
-              {targetTeacher
+              {target.type === 'role' && (target.targetRole === 'admin' || target.targetRole === 'accounting')
+                ? <ShieldCheck className="w-6 h-6" />
+                : targetTeacher
                 ? targetTeacher.name.slice(0, 1)
                 : targetStaff
                 ? targetStaff.name.slice(0, 1)

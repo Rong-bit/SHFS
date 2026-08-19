@@ -48,7 +48,7 @@ export const Header: React.FC = () => {
     },
     {
       key: 'accounting',
-      label: '主計出納處',
+      label: '出納組',
       icon: <Calculator className="w-4 h-4" />,
     },
     {

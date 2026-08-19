@@ -152,6 +152,7 @@ export const AdminSettings: React.FC = () => {
     phone: '分機 211',
     avatarBg: 'from-amber-600 to-amber-800',
     responsibleScope: '全校各科專業實習工場調代課經辦、突發病假與公假派代',
+    group: 'academic',
   });
 
   // In-app Confirm & Alert Dialogs (100% reliable inside iFrames, avoiding window.confirm/alert)
@@ -324,6 +325,7 @@ export const AdminSettings: React.FC = () => {
       phone: '分機 211',
       avatarBg: 'from-amber-600 to-amber-800',
       responsibleScope: '全校各科專業實習工場調代課經辦、突發病假與公假派代',
+      group: 'academic',
     });
     setIsStaffModalOpen(true);
   };
@@ -338,6 +340,7 @@ export const AdminSettings: React.FC = () => {
       phone: staff.phone,
       avatarBg: staff.avatarBg || 'from-indigo-600 to-indigo-800',
       responsibleScope: staff.responsibleScope,
+      group: staff.group || 'academic',
     });
     setIsStaffModalOpen(true);
   };
@@ -355,6 +358,7 @@ export const AdminSettings: React.FC = () => {
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
+        group: staffFormData.group || 'academic',
       });
     } else {
       addAcademicStaff({
@@ -365,6 +369,7 @@ export const AdminSettings: React.FC = () => {
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
+        group: staffFormData.group || 'academic',
       });
     }
     setIsStaffModalOpen(false);
@@ -549,7 +554,7 @@ export const AdminSettings: React.FC = () => {
             }`}
           >
             <UserCheck className="w-4 h-4 text-amber-300" />
-            <span>教學組成員名冊維護 ({academicStaffList.length})</span>
+            <span>成員名冊維護 ({academicStaffList.length})</span>
           </button>
 
           <button
@@ -1007,7 +1012,7 @@ export const AdminSettings: React.FC = () => {
                   placeholder="如 1234"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  切換至【主計出納處】結算身分時所需的確認密碼。
+                  切換至【出納組】結算身分時所需的確認密碼。
                 </p>
               </div>
 
@@ -1408,14 +1413,14 @@ export const AdminSettings: React.FC = () => {
         </div>
       )}
 
-      {/* TAB: 教學組成員名冊維護 */}
+      {/* TAB: 成員名冊維護 */}
       {activeTab === 'staff' && (
         <div className="space-y-6">
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
             <div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-indigo-600" />
-                <span>教務處教學組行政經辦人員名冊維護</span>
+                <span>行政經辦人員名冊維護</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 此處設定之人員姓名與職稱，將即時同步連動至「頂部經辦切換選單」、「線上派代作業工作台」、「調代課線上簽章審核」及「代課通知單印發表頭」。
@@ -1428,70 +1433,82 @@ export const AdminSettings: React.FC = () => {
               className="flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>➕ 新增教學組成員</span>
+              <span>➕ 新增成員</span>
             </button>
           </div>
 
-          {/* Staff Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {academicStaffList.map((staff) => (
-              <div
-                key={staff.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between space-y-4 hover:border-indigo-300 transition"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${staff.avatarBg || 'from-indigo-600 to-indigo-800'} text-white flex items-center justify-center font-black text-xl shadow-xs`}>
-                        {staff.name.slice(0, 1) || '教'}
-                      </div>
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-bold text-base text-slate-900">{staff.name}</h4>
-                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-xs font-bold">
-                            {staff.title}
-                          </span>
+          {/* Staff Cards by Group */}
+          {(['academic', 'accounting'] as const).map((grp) => {
+            const groupLabel = grp === 'academic' ? '教學組' : '出納組';
+            const members = academicStaffList.filter((s) => (s.group || 'academic') === grp);
+            return (
+              <div key={grp} className="space-y-3">
+                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${grp === 'academic' ? 'bg-indigo-500' : 'bg-teal-500'}`} />
+                  {groupLabel}（{members.length} 人）
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {members.map((staff) => (
+                    <div
+                      key={staff.id}
+                      className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between space-y-4 hover:border-indigo-300 transition"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${staff.avatarBg || 'from-indigo-600 to-indigo-800'} text-white flex items-center justify-center font-black text-xl shadow-xs`}>
+                              {staff.name.slice(0, 1) || '員'}
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <h4 className="font-bold text-base text-slate-900">{staff.name}</h4>
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-xs font-bold">
+                                  {staff.title}
+                                </span>
+                              </div>
+                              <span className="inline-block mt-0.5 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                {staff.badge}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <span className="inline-block mt-0.5 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                          {staff.badge}
-                        </span>
+
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-1.5">
+                          <div>
+                            <span className="text-slate-400 font-medium">職責執掌：</span>
+                            <p className="text-slate-700 font-semibold mt-0.5 leading-relaxed">
+                              {staff.responsibleScope}
+                            </p>
+                          </div>
+                          <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+                            <span>📞 {staff.phone}</span>
+                            <span>✉️ {staff.email}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+                        <button
+                          onClick={() => handleOpenEditStaff(staff)}
+                          className="flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>修改組員姓名/資料</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteStaff(staff)}
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition"
+                          title="刪除此成員"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-1.5">
-                    <div>
-                      <span className="text-slate-400 font-medium">職責執掌：</span>
-                      <p className="text-slate-700 font-semibold mt-0.5 leading-relaxed">
-                        {staff.responsibleScope}
-                      </p>
-                    </div>
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
-                      <span>📞 {staff.phone}</span>
-                      <span>✉️ {staff.email}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={() => handleOpenEditStaff(staff)}
-                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition"
-                  >
-                    <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>修改組員姓名/資料</span>
-                  </button>
-                  <button
-                    onClick={() => handleDeleteStaff(staff)}
-                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition"
-                    title="刪除此成員"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
 
           {/* Information Tip Card */}
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 flex items-start space-x-3">
@@ -1499,7 +1516,7 @@ export const AdminSettings: React.FC = () => {
             <div className="space-y-1 leading-relaxed">
               <span className="font-bold text-amber-950">💡 提示與姓名修正連動說明：</span>
               <p>
-                點選上方「修改組員姓名/資料」按鈕即可直接更換教學組組長、組員、幹事或助理的姓名。修改後將即時同步於全校調代課經辦簽章與代課通知單中。
+                點選上方「修改組員姓名/資料」按鈕即可直接更換教學組或出納組組長、組員的姓名。修改後將即時同步於全校調代課經辦簽章與代課通知單中。
               </p>
             </div>
           </div>
@@ -1603,8 +1620,8 @@ export const AdminSettings: React.FC = () => {
 
               <div className="space-y-3 text-xs text-slate-600">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  <div className="font-bold text-slate-900">1. 《高級中等學校教師每週授課節數標準》</div>
-                  <p>專任基本 16 節。導師基本 12 節、減授 1 節。科主任基本 7 節、減授 2 節。組長與主任基本 0 節、減授 0 節。超鐘點＝正課（不含 3 節團體活動）＋任務減授 − 基本。</p>
+                  <div className="font-bold text-slate-900">1. 《國立高級中等學校教師每週教學節數標準》（111.07.04 修正）</div>
+                  <p>專任教師基本 16 節（國語文 14 節）。兼任導師之專任教師基本 12 節（國語文 10 節），團體活動之班級活動節數併入計算。兼任行政職務之專任教師依班級數及職務核定：處室主任 0～7 節、二級單位組長 0～9 節、科（學程）主任依全科班級數 6～8 節。超鐘點＝每週排定教學節數 − 每週基本教學節數。</p>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
@@ -2003,6 +2020,19 @@ export const AdminSettings: React.FC = () => {
                   />
                 </div>
 
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">所屬組別</label>
+                  <select
+                    value={staffFormData.group || 'academic'}
+                    onChange={(e) => setStaffFormData({ ...staffFormData, group: e.target.value as 'academic' | 'accounting' })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
+                  >
+                    <option value="academic">教學組</option>
+                    <option value="accounting">出納組</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">職稱</label>
                   <input
