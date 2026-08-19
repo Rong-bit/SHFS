@@ -204,8 +204,10 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           {/* Target Profile Card */}
           <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700 flex items-center space-x-3.5">
             <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${targetStaff?.avatarBg || 'from-amber-500 to-amber-700'} flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0`}>
-              {target.type === 'role' && (target.targetRole === 'admin' || target.targetRole === 'accounting')
+              {target.type === 'role' && target.targetRole === 'admin'
                 ? <ShieldCheck className="w-6 h-6" />
+                : target.type === 'role' && target.targetRole === 'accounting'
+                ? (academicStaffList.find((s) => s.group === 'accounting')?.name.slice(0, 1) || <ShieldCheck className="w-6 h-6" />)
                 : targetTeacher
                 ? targetTeacher.name.slice(0, 1)
                 : targetStaff
