@@ -63,11 +63,16 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setErrorMsg('');
       setIsSuccess(false);
       setShowPassword(false);
-      const initialStaffId =
-        target?.academicStaffId ||
-        currentAcademicStaffId ||
-        academicStaffList[0]?.id ||
-        '';
+      let initialStaffId = '';
+      if (target?.type === 'role' && target?.targetRole === 'accounting') {
+        initialStaffId = academicStaffList.find((s) => s.group === 'accounting')?.id || '';
+      } else {
+        initialStaffId =
+          target?.academicStaffId ||
+          currentAcademicStaffId ||
+          academicStaffList.find((s) => (s.group || 'academic') === 'academic')?.id ||
+          '';
+      }
       setSelectedStaffId(initialStaffId);
       setTimeout(() => {
         inputRef.current?.focus();
@@ -107,13 +112,17 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         expectedPassword = auth.academicPassword || '1234';
         hint = `預設密碼為 ${auth.academicPassword || '1234'}`;
         break;
-      case 'accounting':
-        targetTitle = '出納組';
-        targetSubtitle = '鐘點費結算 · 超額授課預警 · 匯出 Excel 清冊';
-        targetBadge = '財務結算權限';
+      case 'accounting': {
+        const accStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'accounting');
+        targetTitle = accStaff ? accStaff.name : '出納組';
+        targetSubtitle = accStaff
+          ? `${accStaff.title} · ${accStaff.responsibleScope}`
+          : '請先選擇出納組組長或組員身分';
+        targetBadge = accStaff?.title || '財務結算權限';
         expectedPassword = auth.accountingPassword || '1234';
         hint = `預設密碼為 ${auth.accountingPassword || '1234'}`;
         break;
+      }
       case 'admin':
         targetTitle = '系統管理員';
         targetSubtitle = '全校課表匯入 · 師資場地維護 · 系統法規參數設定';
@@ -136,6 +145,13 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     if (target.type === 'role' && target.targetRole === 'academic' && !selectedStaffId) {
       setErrorMsg('請先選擇教學組組長或組員身分');
       return;
+    }
+    if (target.type === 'role' && target.targetRole === 'accounting') {
+      const hasAccStaff = academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'accounting');
+      if (!hasAccStaff) {
+        setErrorMsg('請先選擇出納組組長或組員身分');
+        return;
+      }
     }
 
     const passToTest = inputPassToTest !== undefined ? inputPassToTest : password;
@@ -207,7 +223,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
               {target.type === 'role' && target.targetRole === 'admin'
                 ? <ShieldCheck className="w-6 h-6" />
                 : target.type === 'role' && target.targetRole === 'accounting'
-                ? (academicStaffList.find((s) => s.group === 'accounting')?.name.slice(0, 1) || <ShieldCheck className="w-6 h-6" />)
+                ? (academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'accounting')?.name.slice(0, 1) || <ShieldCheck className="w-6 h-6" />)
                 : targetTeacher
                 ? targetTeacher.name.slice(0, 1)
                 : targetStaff
@@ -225,43 +241,48 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
             </div>
           </div>
 
-          {target.type === 'role' && target.targetRole === 'academic' && academicStaffList.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-amber-400" />
-                請選擇教學組登入身分（組長 / 組員）
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {academicStaffList.map((staff) => {
-                  const isSelected = staff.id === selectedStaffId;
-                  return (
-                    <button
-                      key={staff.id}
-                      type="button"
-                      onClick={() => setSelectedStaffId(staff.id)}
-                      className={`text-left p-3 rounded-xl border transition ${
-                        isSelected
-                          ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/40'
-                          : 'bg-slate-800/40 border-slate-700 hover:border-slate-500'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-white text-sm">{staff.name}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                          staff.title.includes('組長')
-                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30'
-                            : 'bg-slate-700 text-slate-300 border border-slate-600'
-                        }`}>
-                          {staff.title}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{staff.badge}</p>
-                    </button>
-                  );
-                })}
+          {target.type === 'role' && (target.targetRole === 'academic' || target.targetRole === 'accounting') && (() => {
+            const isAcademic = target.targetRole === 'academic';
+            const groupMembers = academicStaffList.filter((s) => (s.group || 'academic') === (isAcademic ? 'academic' : 'accounting'));
+            if (groupMembers.length === 0) return null;
+            return (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-amber-400" />
+                  請選擇{isAcademic ? '教學組' : '出納組'}登入身分（組長 / 組員）
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {groupMembers.map((staff) => {
+                    const isSelected = staff.id === selectedStaffId;
+                    return (
+                      <button
+                        key={staff.id}
+                        type="button"
+                        onClick={() => setSelectedStaffId(staff.id)}
+                        className={`text-left p-3 rounded-xl border transition ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/40'
+                            : 'bg-slate-800/40 border-slate-700 hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-white text-sm">{staff.name}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                            staff.title.includes('組長')
+                              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30'
+                              : 'bg-slate-700 text-slate-300 border border-slate-600'
+                          }`}>
+                            {staff.title}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{staff.badge}</p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Form */}
           <form
