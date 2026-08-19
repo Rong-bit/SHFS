@@ -1284,10 +1284,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem(STORAGE_KEYS.STAFF_LIST);
   };
 
+  const requestBelongsToMonth = (requestNumber: string, createdAt: string, month: number) => {
+    const m = requestNumber.match(/VOC-\d+-(\d+)-/i);
+    if (m) return Number(m[1]) === month;
+    const parsed = new Date(createdAt.replace(/-/g, '/'));
+    if (!Number.isNaN(parsed.getTime())) return parsed.getMonth() + 1 === month;
+    return false;
+  };
+
   // Monthly settlement computation
-  const calculateMonthlySettlement = (_month?: number): MonthlyTeacherSettlement[] => {
+  const calculateMonthlySettlement = (month?: number): MonthlyTeacherSettlement[] => {
     const hourlyRate = systemConfig.dayHourlyRate;
     const weeks = systemConfig.weeksInMonth;
+    const settlementMonth = month ?? systemConfig.currentMonth ?? new Date().getMonth() + 1;
 
     return teachers.map((teacher) => {
       // 1. Weekly actual and overload
@@ -1300,13 +1309,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       const monthlyOverloadAmount = weeklyOverload * weeks * hourlyRate;
 
-      // 2. Tally approved substitution requests
+      // 2. Tally approved substitution requests for the selected month only
       let publicSubstitutePeriods = 0;
       let privateLeaveDeductionPeriods = 0;
       let privateSubstituteEarnPeriods = 0;
 
       requests
-        .filter((r) => r.status === 'approved')
+        .filter(
+          (r) =>
+            r.status === 'approved' &&
+            requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth)
+        )
         .forEach((r) => {
           if (r.requestType === 'substitute') {
             // If this teacher was the substitute teacher
