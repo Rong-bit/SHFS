@@ -239,7 +239,7 @@ export const TeacherSchedule: React.FC = () => {
                 </div>
               )}
               <div className="flex justify-between">
-                <span>團體活動／社團（不計）：</span>
+                <span>團體活動（不計）：</span>
                 <span className="font-semibold text-slate-800">
                   −{overloadBreakdown.groupActivityExcluded} 節
                 </span>
