@@ -73,8 +73,17 @@ const teacherNameMatches = (rowTeacherName: string, teacherName: string) => {
 /** 班會／班級活動：用來判斷導師，並計入正課（法規：班級活動節數併入計算） */
 export const isHomeroomActivity = (subjectName: string) => /班會|班級活動/.test(subjectName || '');
 
+/** 課表匯入常把三節都寫成「團體活動」；星期三第 7 節實際為班會 */
+export const isWednesdayHomeroomPeriod = (dayOfWeek?: number, period?: number) =>
+  dayOfWeek === 3 && period === 7;
+
 /** 對開社團／團體活動（非班會）：不計入每週授課節數，通常 2 節 */
-export const isExcludedGroupActivity = (subjectName: string) => {
+export const isExcludedGroupActivity = (
+  subjectName: string,
+  dayOfWeek?: number,
+  period?: number
+) => {
+  if (isWednesdayHomeroomPeriod(dayOfWeek, period)) return false;
   const name = subjectName || '';
   if (isHomeroomActivity(name) && !/社團/.test(name)) return false;
   return /團體活動|社團/.test(name);
@@ -82,7 +91,7 @@ export const isExcludedGroupActivity = (subjectName: string) => {
 
 /** 課表上的團體活動時間（含班會）：用來判斷導師 */
 export const isGroupActivity = (subjectName: string) =>
-  isHomeroomActivity(subjectName) || isExcludedGroupActivity(subjectName);
+  isHomeroomActivity(subjectName) || /團體活動|社團/.test(subjectName || '');
 
 const isAfternoonPeriod = (period: number) => period >= 5;
 
@@ -119,7 +128,7 @@ export const breakdownWeeklyOverloadPeriods = (
   const clubOnlySlots: Array<{ key: string; list: CourseSession[] }> = [];
 
   slotMap.forEach((list, key) => {
-    const teaching = list.filter((s) => !isExcludedGroupActivity(s.subjectName));
+    const teaching = list.filter((s) => !isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period));
     if (teaching.length === 0) {
       clubOnlySlots.push({ key, list });
       return;
@@ -205,7 +214,7 @@ export const monthlyTeachingPeriods = (
 ) => {
   const counts = weekdayOccurrencesInMonth(year, month);
   return sessions
-    .filter((s) => s.teacherId === teacherId && !isExcludedGroupActivity(s.subjectName))
+    .filter((s) => s.teacherId === teacherId && !isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period))
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
@@ -220,7 +229,7 @@ export const monthlyConcurrentPeriods = (
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
-    if (!s.isConcurrent || isExcludedGroupActivity(s.subjectName)) return;
+    if (!s.isConcurrent || isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period)) return;
     if (!isVisibleWeeklySlot(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });

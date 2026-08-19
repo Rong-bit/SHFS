@@ -27,7 +27,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -393,6 +393,11 @@ export const TeacherSchedule: React.FC = () => {
                                       {slotSessions.length > 1 && (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
                                           {slotSessions.length}堂
+                                        </span>
+                                      )}
+                                      {isWednesdayHomeroomPeriod(session.dayOfWeek, session.period) && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-emerald-600 text-white rounded font-medium">
+                                          班會
                                         </span>
                                       )}
                                       {session.isConcurrent && (
