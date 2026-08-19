@@ -1321,7 +1321,7 @@ export const AdminSettings: React.FC = () => {
                     <th className="p-3.5 text-center">任務減授</th>
                     <th className="p-3.5 text-center">基本節數</th>
                     <th className="p-3.5 text-center">排定節數（不含團體活動）</th>
-                    <th className="p-3.5 text-center">每週超額</th>
+                    <th className="p-3.5 text-center">每週超額（兼課）</th>
                     <th className="p-3.5">任教專長 / 專業證照</th>
                     <th className="p-3.5">聯絡資訊</th>
                     <th className="p-3.5 text-right">操作</th>

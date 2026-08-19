@@ -176,7 +176,7 @@ export interface MonthlyTeacherSettlement {
   homeroomClass?: string;
   basePeriods: number; // 基本節數
   weeklyActualPeriods: number; // 本職每週正課（不含團體活動）
-  weeklyOverloadPeriods: number; // 每週超鐘點＝正課（不含團體活動）＋任務減授 − 基本
+  weeklyOverloadPeriods: number; // 每週超額＝課表兼課節數
   monthlyOverloadAmount: number; // 超鐘點費 (每週超額 × 4週 × 420)
   
   // 公費代課 (學校公款加發)

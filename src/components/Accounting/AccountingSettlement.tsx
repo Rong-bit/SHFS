@@ -166,7 +166,7 @@ export const AccountingSettlement: React.FC = () => {
             ${totalOverloadAmount.toLocaleString()}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            專任、導師、主任基本節數超額合計
+            課表「兼課」節數依該月實際日數計費
           </p>
         </div>
 
