@@ -623,6 +623,23 @@ export const AdminSettings: React.FC = () => {
       {/* TAB 1: 鐘點費與授課節數標準 */}
       {activeTab === 'config' && (
         <form onSubmit={handleConfigSubmit} className="space-y-6">
+
+          {/* 學校名稱 — 獨立置頂 */}
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-200 shadow-xs">
+            <label className="block text-sm font-bold text-indigo-900 mb-2 flex items-center space-x-2">
+              <School className="w-4 h-4 text-indigo-600" />
+              <span>學校名稱（通知單抬頭 · 匯出課表標題）</span>
+            </label>
+            <input
+              type="text"
+              value={formConfig.schoolName || ''}
+              onChange={(e) => setFormConfig({ ...formConfig, schoolName: e.target.value })}
+              className="w-full bg-white border border-indigo-300 rounded-xl p-3 text-lg font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
+              placeholder="如：國立○○高級工業職業學校"
+            />
+            <p className="text-[11px] text-indigo-600 mt-1.5">修改後將套用於代課通知單抬頭及匯出 Excel 課表標題。</p>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Hourly Rates Card */}
@@ -714,17 +731,6 @@ export const AdminSettings: React.FC = () => {
                     />
                     <span className="text-[10px] text-slate-400">法規上限 9 節（兼4+代5）</span>
                   </div>
-                </div>
-
-                <div className="pt-2">
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">學校名稱（通知單抬頭）</label>
-                  <input
-                    type="text"
-                    value={formConfig.schoolName || ''}
-                    onChange={(e) => setFormConfig({ ...formConfig, schoolName: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
-                    placeholder="如：國立○○高級工業職業學校"
-                  />
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 pt-2">
