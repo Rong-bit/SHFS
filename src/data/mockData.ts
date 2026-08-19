@@ -9,7 +9,7 @@ import {
 } from '../types';
 import { defaultSchoolEmail } from '../utils/schoolEmail';
 
-export const DEFAULT_ADMIN_PASSWORD = 'ccvs0511';
+export const DEFAULT_ADMIN_PASSWORD = 'admin';
 
 export const withMigratedAuthConfig = (auth?: SystemConfig['authConfig']): NonNullable<SystemConfig['authConfig']> => {
   const merged = {
@@ -20,7 +20,7 @@ export const withMigratedAuthConfig = (auth?: SystemConfig['authConfig']): NonNu
     accountingPassword: '1234',
     ...auth,
   };
-  if (!merged.adminPassword || merged.adminPassword === 'admin') {
+  if (!merged.adminPassword) {
     merged.adminPassword = DEFAULT_ADMIN_PASSWORD;
   }
   return merged;
