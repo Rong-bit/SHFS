@@ -14,7 +14,12 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   
   // Resolve reviewer staff
   const reviewerStaff = currentAcademicStaff || academicStaffList[0];
-  const reviewerDisplay = request.reviewedBy || (reviewerStaff ? `${reviewerStaff.title} ${reviewerStaff.name}` : '教學組長');
+  const formatStampTitle = (title: string) => {
+    const m = title.match(/^(.+?組)\S*\s*\((.+?)\)$/);
+    if (m) return `${m[1]}${m[2]}`;
+    return title;
+  };
+  const reviewerDisplay = request.reviewedBy || (reviewerStaff ? `${reviewerStaff.name}(${formatStampTitle(reviewerStaff.title)})` : '教學組長');
 
   const getPeriodLabel = (periodNum: number) => {
     const p = PERIOD_DEFINITIONS.find((def) => def.period === periodNum);
