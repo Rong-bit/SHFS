@@ -175,6 +175,9 @@ export const breakdownWeeklyOverloadPeriods = (
 export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
 
+export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherId: string) =>
+  breakdownWeeklyOverloadPeriods(sessions, teacherId).concurrent;
+
 export const countWeeklyCounselingPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).counseling;
 
