@@ -697,7 +697,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): SubstituteRequest => {
     const newId = `req-${Date.now()}`;
     const nextSeq = (requests.length + 1).toString().padStart(3, '0');
-    const requestNumber = `VOC-${systemConfig.academicYear}-${systemConfig.currentMonth}-${nextSeq}`;
+    const actualMonth = new Date().getMonth() + 1;
+    const requestNumber = `VOC-${systemConfig.academicYear}-${actualMonth}-${nextSeq}`;
 
     const clashStatus = checkClashes({
       requestType: data.requestType,
@@ -801,7 +802,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): SubstituteRequest => {
     const newId = `req-${Date.now()}`;
     const nextSeq = (requests.length + 1).toString().padStart(3, '0');
-    const requestNumber = `VOC-${systemConfig.academicYear}-${systemConfig.currentMonth}-${nextSeq}`;
+    const actualMonth = new Date().getMonth() + 1;
+    const requestNumber = `VOC-${systemConfig.academicYear}-${actualMonth}-${nextSeq}`;
 
     const clashStatus = checkClashes({
       requestType: data.requestType,
