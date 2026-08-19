@@ -97,7 +97,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   },
   academicYear: '114',
   semester: '1',
-  currentMonth: 10,
+  currentMonth: new Date().getMonth() + 1,
   weeksInMonth: 4,
   authConfig: {
     requirePassword: true,

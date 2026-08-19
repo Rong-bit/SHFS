@@ -74,7 +74,7 @@ export const AdminSettings: React.FC = () => {
     standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
     academicYear: systemConfig?.academicYear ?? '114',
     semester: systemConfig?.semester ?? '1',
-    currentMonth: systemConfig?.currentMonth ?? 10,
+    currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
     weeksInMonth: systemConfig?.weeksInMonth ?? 4,
     authConfig: {
       requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
@@ -94,7 +94,7 @@ export const AdminSettings: React.FC = () => {
       standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
       academicYear: systemConfig?.academicYear ?? '114',
       semester: systemConfig?.semester ?? '1',
-      currentMonth: systemConfig?.currentMonth ?? 10,
+      currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
       authConfig: {
         requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
@@ -734,6 +734,7 @@ export const AdminSettings: React.FC = () => {
                         <option key={m} value={m}>{m} 月</option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-slate-400 mt-0.5">預設自動帶入系統當月，需補登過去月份時可手動調整</p>
                   </div>
                 </div>
 
