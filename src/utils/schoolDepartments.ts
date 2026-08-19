@@ -116,18 +116,59 @@ export const calendarYearForSettlementMonth = (month: number, now = new Date()) 
   return year;
 };
 
-/** 該月星期一出現次數（學校超鐘點月結常用週數） */
-export const countMondaysInMonth = (year: number, month: number) => {
+/** 該月各星期幾出現次數（JS：0 日、1 一 … 6 六） */
+export const weekdayOccurrencesInMonth = (year: number, month: number) => {
   const lastDay = new Date(year, month, 0).getDate();
-  let count = 0;
+  const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
   for (let day = 1; day <= lastDay; day += 1) {
-    if (new Date(year, month - 1, day).getDay() === 1) count += 1;
+    const jsDay = new Date(year, month - 1, day).getDay();
+    counts[jsDay] += 1;
   }
-  return count;
+  return counts;
 };
 
-export const settlementWeeksForMonth = (month: number, now = new Date()) =>
-  countMondaysInMonth(calendarYearForSettlementMonth(month, now), month);
+export const countMondaysInMonth = (year: number, month: number) =>
+  weekdayOccurrencesInMonth(year, month)[1];
+
+/** 週一至週五平均出現次數，用來折算每週基本鐘點／任務減授 */
+export const averageWeekdayWeeks = (year: number, month: number) => {
+  const c = weekdayOccurrencesInMonth(year, month);
+  return (c[1] + c[2] + c[3] + c[4] + c[5]) / 5;
+};
+
+export const settlementWeeksForMonth = (month: number, now = new Date()) => {
+  const year = calendarYearForSettlementMonth(month, now);
+  return averageWeekdayWeeks(year, month);
+};
+
+/** 該月實際正課節數：每堂課 × 該星期幾在當月出現次數 */
+export const monthlyTeachingPeriods = (
+  sessions: CourseSession[],
+  teacherId: string,
+  year: number,
+  month: number
+) => {
+  const counts = weekdayOccurrencesInMonth(year, month);
+  return sessions
+    .filter((s) => s.teacherId === teacherId && !isGroupActivity(s.subjectName))
+    .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
+};
+
+export const monthlyOverloadPeriods = (
+  sessions: CourseSession[],
+  teacher: Pick<Teacher, 'id' | 'dutyReductionPeriods' | 'basePeriods'>,
+  month: number,
+  now = new Date()
+) => {
+  const year = calendarYearForSettlementMonth(month, now);
+  const weeks = averageWeekdayWeeks(year, month);
+  const teaching = monthlyTeachingPeriods(sessions, teacher.id, year, month);
+  return weeklyOverloadPeriods(
+    teaching,
+    (teacher.dutyReductionPeriods ?? 0) * weeks,
+    teacher.basePeriods * weeks
+  );
+};
 
 /** 超鐘點 = 正課（不含團體活動）＋任務減授 − 基本鐘點 */
 export const weeklyOverloadPeriods = (

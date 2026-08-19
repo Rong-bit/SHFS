@@ -27,7 +27,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, settlementWeeksForMonth, weeklyOverloadPeriods } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, monthlyOverloadPeriods, weeklyOverloadPeriods } from '../../utils/schoolDepartments';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -77,8 +77,9 @@ export const TeacherSchedule: React.FC = () => {
   const basePeriods = currentTeacher.basePeriods;
   const dutyReduction = currentTeacher.dutyReductionPeriods ?? 0;
   const overloadPeriods = weeklyOverloadPeriods(weeklyActual, dutyReduction, basePeriods);
-  const settlementWeeks = settlementWeeksForMonth(new Date().getMonth() + 1);
-  const monthlyOverloadAmount = overloadPeriods * settlementWeeks * systemConfig.dayHourlyRate;
+  const thisMonth = new Date().getMonth() + 1;
+  const monthlyOverloadAmount =
+    monthlyOverloadPeriods(sessions, currentTeacher, thisMonth) * systemConfig.dayHourlyRate;
   const isOverNineHours = overloadPeriods >= systemConfig.maxWeeklyOverloadPeriods;
 
   const days: { day: DayOfWeek; name: string }[] = [
@@ -283,7 +284,7 @@ export const TeacherSchedule: React.FC = () => {
               <span className="text-xs text-slate-500 font-medium">元/月</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
-              超鐘點：{weeklyActual}＋{dutyReduction}−{basePeriods}＝{overloadPeriods} 節；月費 {overloadPeriods} × {settlementWeeks}週（本月星期一） × {systemConfig.dayHourlyRate}
+              超鐘點：{weeklyActual}＋{dutyReduction}−{basePeriods}＝{overloadPeriods} 節／週；月費依本月週一至週五實際日數 × {systemConfig.dayHourlyRate} 元
             </p>
           </div>
 

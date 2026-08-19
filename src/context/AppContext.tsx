@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
+import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -1307,7 +1307,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacher.dutyReductionPeriods ?? 0,
         base
       );
-      const monthlyOverloadAmount = weeklyOverload * weeks * hourlyRate;
+      const monthlyOverload = monthlyOverloadPeriods(sessions, teacher, settlementMonth);
+      const monthlyOverloadAmount = monthlyOverload * hourlyRate;
 
       // 2. Tally approved substitution requests for the selected month only
       let publicSubstitutePeriods = 0;

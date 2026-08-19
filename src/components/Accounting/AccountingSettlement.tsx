@@ -49,7 +49,7 @@ export const AccountingSettlement: React.FC = () => {
       '基本授課節數 (節/週)': s.basePeriods,
       '本學期排定節數不含團體活動 (節/週)': s.weeklyActualPeriods,
       '每週超鐘點節數': s.weeklyOverloadPeriods,
-      [`月超鐘點費 (${settlementWeeks}週×${systemConfig.dayHourlyRate}元)`]: s.monthlyOverloadAmount,
+      [`月超鐘點費 (依該月週一至週五實際日數×${systemConfig.dayHourlyRate}元)`]: s.monthlyOverloadAmount,
       '公費代課節數': s.publicSubstitutePeriods,
       '公費代課金額': s.publicSubstituteAmount,
       '自費代課(受領)金額': s.privateSubstituteEarnAmount,
@@ -68,7 +68,7 @@ export const AccountingSettlement: React.FC = () => {
       '基本授課節數 (節/週)': 0 as any,
       '本學期排定節數不含團體活動 (節/週)': 0 as any,
       '每週超鐘點節數': 0 as any,
-      [`月超鐘點費 (${settlementWeeks}週×${systemConfig.dayHourlyRate}元)`]: totalOverloadAmount,
+      [`月超鐘點費 (依該月週一至週五實際日數×${systemConfig.dayHourlyRate}元)`]: totalOverloadAmount,
       '公費代課節數': 0 as any,
       '公費代課金額': totalPublicSubAmount,
       '自費代課(受領)金額': totalPrivateSubAmount,
@@ -120,7 +120,7 @@ export const AccountingSettlement: React.FC = () => {
           </div>
           <p className="text-xs text-slate-500 mt-1">
             基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜ 
-            本月週數依 <strong>{selectedMonth} 月星期一 {settlementWeeks} 次</strong> 計 ｜ 
+            本月週數依 <strong>{selectedMonth} 月週一至週五實際日數（約 {settlementWeeks.toFixed(1)} 週）</strong> 計 ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
           </p>
         </div>
