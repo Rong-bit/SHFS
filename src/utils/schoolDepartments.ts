@@ -90,6 +90,7 @@ export type WeeklyOverloadBreakdown = {
   scheduleTotal: number;
   regularTeaching: number;
   groupActivityExcluded: number;
+  homeroomIncluded: number;
   concurrent: number;
   counted: number;
   sessionRows: number;
@@ -114,6 +115,7 @@ export const breakdownWeeklyOverloadPeriods = (
   });
 
   let groupActivityExcluded = 0;
+  let homeroomIncluded = 0;
   let counted = 0;
   let concurrent = 0;
   slotMap.forEach((list) => {
@@ -123,6 +125,7 @@ export const breakdownWeeklyOverloadPeriods = (
       return;
     }
     counted += 1;
+    if (teaching.every((s) => isHomeroomActivity(s.subjectName))) homeroomIncluded += 1;
     if (teaching.some((s) => s.isConcurrent)) concurrent += 1;
   });
 
@@ -130,15 +133,16 @@ export const breakdownWeeklyOverloadPeriods = (
     scheduleTotal: slotMap.size,
     regularTeaching: counted,
     groupActivityExcluded,
+    homeroomIncluded,
     concurrent,
-    counted,
+    counted: counted - homeroomIncluded,
     sessionRows: visible.length,
     hiddenRows: mine.length - visible.length,
   };
 };
 
 export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
-  breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
+  breakdownWeeklyOverloadPeriods(sessions, teacherId).regularTeaching;
 
 export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).concurrent;
