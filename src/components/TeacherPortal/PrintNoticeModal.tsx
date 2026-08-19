@@ -15,7 +15,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   // Resolve reviewer staff
   const reviewerStaff = currentAcademicStaff || academicStaffList[0];
   const formatStampTitle = (title: string) => {
-    const m = title.match(/^(.+?組)\S*\s*\((.+?)\)$/);
+    const m = title.match(/^(.+?組).*?\((.+?)\)$/);
     if (m) return `${m[1]}${m[2]}`;
     return title;
   };

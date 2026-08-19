@@ -820,7 +820,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
-    const staffName = currentAcademicStaff ? `${currentAcademicStaff.name} (${currentAcademicStaff.title})` : '教學組經辦';
+    const staffName = (() => {
+      if (!currentAcademicStaff) return '教學組經辦';
+      const t = currentAcademicStaff.title;
+      const m = t.match(/^(.+?組).*?\((.+?)\)$/);
+      const stamp = m ? `${m[1]}${m[2]}` : t;
+      return `${currentAcademicStaff.name}(${stamp})`;
+    })();
 
     const isAutoApproved = data.autoApprove !== false;
 

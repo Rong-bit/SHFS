@@ -1321,7 +1321,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                               {req.status === 'pending' && (
                                 <button
-                                  onClick={() => approveRequest(req.id, `${currentAcademicStaff?.name || '教學組'} (${currentAcademicStaff?.title || '經辦'})`)}
+                                  onClick={() => {
+                                    const title = currentAcademicStaff?.title || '經辦';
+                                    const m = title.match(/^(.+?組).*?\((.+?)\)$/);
+                                    const stampTitle = m ? `${m[1]}${m[2]}` : title;
+                                    approveRequest(req.id, `${currentAcademicStaff?.name || '教學組'}(${stampTitle})`);
+                                  }}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-xs transition"
                                 >
                                   <Check className="w-3 h-3" />

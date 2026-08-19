@@ -36,7 +36,13 @@ export const PendingApprovals: React.FC = () => {
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
 
   const activeStaff = currentAcademicStaff || academicStaffList[0];
-  const reviewerSignature = activeStaff ? `${activeStaff.name} ${activeStaff.title} (教學組)` : '教學組長';
+  const reviewerSignature = (() => {
+    if (!activeStaff) return '教學組長';
+    const t = activeStaff.title;
+    const m = t.match(/^(.+?組).*?\((.+?)\)$/);
+    const stamp = m ? `${m[1]}${m[2]}` : t;
+    return `${activeStaff.name}(${stamp})`;
+  })();
 
   const pendingRequests = requests.filter((r) => r.status === 'pending');
   
