@@ -46,6 +46,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   );
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) || teacherSessions[0];
+  const sessionHourlyRate =
+    selectedSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate;
+  const sessionRateKind = selectedSession?.period === 8 ? '第八節課輔' : '日間部';
 
   const [requestType, setRequestType] = useState<RequestType>('substitute');
   const [leaveType, setLeaveType] = useState<LeaveType>('official');
@@ -572,12 +575,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                         {paymentType === 'public' ? (
                           <span className="text-blue-700 flex items-center gap-1">
                             <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                            公費派代 (學校支付 {systemConfig.dayHourlyRate}元/節)
+                            公費派代 (學校支付 {sessionRateKind} {sessionHourlyRate}元/節)
                           </span>
                         ) : (
                           <span className="text-amber-800 flex items-center gap-1">
                             <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                            自費代課 (個人扣繳 {systemConfig.dayHourlyRate}元/節)
+                            自費代課 (個人扣繳 {sessionRateKind} {sessionHourlyRate}元/節)
                           </span>
                         )}
                       </span>

@@ -176,8 +176,10 @@ export interface MonthlyTeacherSettlement {
   homeroomClass?: string;
   basePeriods: number; // 基本節數
   weeklyActualPeriods: number; // 本職每週正課（不含團體活動）
-  weeklyOverloadPeriods: number; // 每週超額＝課表兼課節數
-  monthlyOverloadAmount: number; // 超鐘點費 (每週超額 × 4週 × 420)
+  weeklyOverloadPeriods: number; // 每週超額＝課表兼課節數（不含第八節課輔）
+  monthlyOverloadAmount: number; // 超鐘點費
+  weeklyCounselingPeriods: number; // 每週第八節課輔
+  monthlyCounselingAmount: number; // 第八節課輔費（系統管理員課輔費率）
   
   // 公費代課 (學校公款加發)
   publicSubstitutePeriods: number;
@@ -196,5 +198,5 @@ export interface MonthlyTeacherSettlement {
   isOverLimit: boolean; // 是否超過9節法定上限
   
   // 總應發/結算金額
-  netPayableAmount: number; // (超鐘點費 + 公費代課 + 受代領取 - 事病假代課扣款)
+  netPayableAmount: number; // 超鐘點費 + 第八節課輔費 + 公費代課 + 受代領取 - 事病假代課扣款
 }

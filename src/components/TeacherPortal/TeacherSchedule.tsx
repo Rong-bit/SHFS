@@ -27,7 +27,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyCounselingPeriods, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -78,6 +78,8 @@ export const TeacherSchedule: React.FC = () => {
   const thisMonth = new Date().getMonth() + 1;
   const monthlyOverloadAmount =
     monthlyOverloadPeriods(sessions, currentTeacher, thisMonth) * systemConfig.dayHourlyRate;
+  const monthlyCounselingAmount =
+    monthlyCounselingPeriods(sessions, currentTeacher.id, thisMonth) * systemConfig.nightHourlyRate;
   const isOverNineHours = overloadPeriods >= systemConfig.maxWeeklyOverloadPeriods;
 
   const days: { day: DayOfWeek; name: string }[] = [
@@ -223,6 +225,12 @@ export const TeacherSchedule: React.FC = () => {
                 <span>課表總節數：</span>
                 <span className="font-semibold text-slate-800">{overloadBreakdown.scheduleTotal} 節</span>
               </div>
+              {overloadBreakdown.counseling > 0 && (
+                <div className="flex justify-between text-indigo-700">
+                  <span>第八節課輔（不計入上列）：</span>
+                  <span className="font-semibold">{overloadBreakdown.counseling} 節</span>
+                </div>
+              )}
               {overloadBreakdown.sessionRows > overloadBreakdown.scheduleTotal && (
                 <div className="flex justify-between text-amber-700">
                   <span>同一時段重疊課堂：</span>
@@ -257,6 +265,12 @@ export const TeacherSchedule: React.FC = () => {
                   +{overloadPeriods} 節/週
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span>第八節課輔（另計）：</span>
+                <span className={`font-bold ${overloadBreakdown.counseling > 0 ? 'text-indigo-600' : 'text-slate-700'}`}>
+                  {overloadBreakdown.counseling} 節/週
+                </span>
+              </div>
             </div>
           </div>
 
@@ -285,18 +299,20 @@ export const TeacherSchedule: React.FC = () => {
             </div>
             <div className="flex items-baseline space-x-1 mt-2">
               <span className="text-3xl font-extrabold text-amber-600">
-                ${monthlyOverloadAmount.toLocaleString()}
+                ${(monthlyOverloadAmount + monthlyCounselingAmount).toLocaleString()}
               </span>
               <span className="text-xs text-slate-500 font-medium">元/月</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
-              超鐘點＝課表「兼課」節數 {overloadPeriods} 節／週；月費依本月週一至週五實際日數 × {systemConfig.dayHourlyRate} 元
+              超鐘點＝日間兼課 {overloadPeriods} 節／週 × {systemConfig.dayHourlyRate} 元；第八節課輔 {overloadBreakdown.counseling} 節／週 × {systemConfig.nightHourlyRate} 元。月費依本月該星期實際日數計。
             </p>
           </div>
 
           <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>標準費率：</span>
-            <span className="font-semibold text-slate-800">{systemConfig.dayHourlyRate} 元/節</span>
+            <span>日間／課輔費率：</span>
+            <span className="font-semibold text-slate-800">
+              {systemConfig.dayHourlyRate} / {systemConfig.nightHourlyRate} 元/節
+            </span>
           </div>
         </div>
 

@@ -202,7 +202,7 @@ export const Header: React.FC = () => {
           {currentRole === 'accounting' && (
             <div className="text-xs text-slate-400 flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-              <span>主計出納結算：標準費率 {systemConfig.dayHourlyRate}元/節 · 超額9節預警 · Excel 匯出</span>
+              <span>主計出納結算：日間 {systemConfig.dayHourlyRate}元／課輔 {systemConfig.nightHourlyRate}元 · 超額9節預警 · Excel 匯出</span>
             </div>
           )}
 

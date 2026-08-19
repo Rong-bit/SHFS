@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { countWeeklyConcurrentPeriods, countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
+import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -1295,21 +1295,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Monthly settlement computation
   const calculateMonthlySettlement = (month?: number): MonthlyTeacherSettlement[] => {
     const hourlyRate = systemConfig.dayHourlyRate;
+    const counselingRate = systemConfig.nightHourlyRate;
     const settlementMonth = month ?? systemConfig.currentMonth ?? new Date().getMonth() + 1;
     const weeks = settlementWeeksForMonth(settlementMonth);
 
     return teachers.map((teacher) => {
-      // 1. Weekly actual and overload
+      // 1. Weekly actual and overload（不含第八節課輔）
       const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id);
       const base = teacher.basePeriods;
       const weeklyOverload = countWeeklyConcurrentPeriods(sessions, teacher.id);
       const monthlyOverload = monthlyOverloadPeriods(sessions, teacher, settlementMonth);
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
+      const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id);
+      const monthlyCounseling = monthlyCounselingPeriods(sessions, teacher.id, settlementMonth);
+      const monthlyCounselingAmount = monthlyCounseling * counselingRate;
 
       // 2. Tally approved substitution requests for the selected month only
       let publicSubstitutePeriods = 0;
       let privateLeaveDeductionPeriods = 0;
       let privateSubstituteEarnPeriods = 0;
+      let publicSubstituteAmount = 0;
+      let privateLeaveDeductionAmount = 0;
+      let privateSubstituteEarnAmount = 0;
+
+      const rateForRequest = (r: SubstituteRequest) =>
+        r.originalSession?.period === 8 ? counselingRate : hourlyRate;
 
       requests
         .filter(
@@ -1319,29 +1329,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         )
         .forEach((r) => {
           if (r.requestType === 'substitute') {
-            // If this teacher was the substitute teacher
+            const rate = rateForRequest(r);
             if (r.substituteTeacherId === teacher.id) {
               if (r.paymentType === 'public') {
                 publicSubstitutePeriods += 1;
+                publicSubstituteAmount += rate;
               } else {
                 privateSubstituteEarnPeriods += 1;
+                privateSubstituteEarnAmount += rate;
               }
             }
-            // If this teacher was the applicant (leave taker)
             if (r.applicantTeacherId === teacher.id) {
               if (r.paymentType === 'private') {
                 privateLeaveDeductionPeriods += 1;
+                privateLeaveDeductionAmount += rate;
               }
             }
           }
         });
 
-      const publicSubstituteAmount = publicSubstitutePeriods * hourlyRate;
-      const privateLeaveDeductionAmount = privateLeaveDeductionPeriods * hourlyRate;
-      const privateSubstituteEarnAmount = privateSubstituteEarnPeriods * hourlyRate;
-
       const netPayableAmount =
         monthlyOverloadAmount +
+        monthlyCounselingAmount +
         publicSubstituteAmount +
         privateSubstituteEarnAmount -
         privateLeaveDeductionAmount;
@@ -1361,6 +1370,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         weeklyActualPeriods: weeklyActual,
         weeklyOverloadPeriods: weeklyOverload,
         monthlyOverloadAmount,
+        weeklyCounselingPeriods: weeklyCounseling,
+        monthlyCounselingAmount,
         publicSubstitutePeriods,
         publicSubstituteAmount,
         privateLeaveDeductionPeriods,

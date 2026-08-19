@@ -103,17 +103,23 @@ export type WeeklyOverloadBreakdown = {
   counted: number;
   sessionRows: number;
   hiddenRows: number;
+  counseling: number;
 };
 
-const isVisibleWeeklySlot = (s: CourseSession) =>
-  s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period >= 1 && s.period <= 8;
+const isDaytimeSlot = (s: CourseSession) =>
+  s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period >= 1 && s.period <= 7;
+
+export const isCounselingSlot = (s: Pick<CourseSession, 'dayOfWeek' | 'period'>) =>
+  s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8;
 
 export const breakdownWeeklyOverloadPeriods = (
   sessions: CourseSession[],
   teacherId: string
 ): WeeklyOverloadBreakdown => {
   const mine = sessions.filter((s) => s.teacherId === teacherId);
-  const visible = mine.filter(isVisibleWeeklySlot);
+  const visible = mine.filter(isDaytimeSlot);
+  const counselingMine = mine.filter(isCounselingSlot);
+  const counselingSlots = new Set(counselingMine.map((s) => `${s.dayOfWeek}-${s.period}`));
   const slotMap = new Map<string, CourseSession[]>();
   visible.forEach((s) => {
     const key = `${s.dayOfWeek}-${s.period}`;
@@ -161,15 +167,16 @@ export const breakdownWeeklyOverloadPeriods = (
     concurrent,
     counted,
     sessionRows: visible.length,
-    hiddenRows: mine.length - visible.length,
+    hiddenRows: mine.length - visible.length - counselingMine.length,
+    counseling: counselingSlots.size,
   };
 };
 
 export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
 
-export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherId: string) =>
-  breakdownWeeklyOverloadPeriods(sessions, teacherId).concurrent;
+export const countWeeklyCounselingPeriods = (sessions: CourseSession[], teacherId: string) =>
+  breakdownWeeklyOverloadPeriods(sessions, teacherId).counseling;
 
 /** 結算月份對應的西元年（跨年時：目前月份之後超過半年視為去年） */
 export const calendarYearForSettlementMonth = (month: number, now = new Date()) => {
@@ -214,7 +221,12 @@ export const monthlyTeachingPeriods = (
 ) => {
   const counts = weekdayOccurrencesInMonth(year, month);
   return sessions
-    .filter((s) => s.teacherId === teacherId && !isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period))
+    .filter(
+      (s) =>
+        s.teacherId === teacherId &&
+        isDaytimeSlot(s) &&
+        !isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period)
+    )
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
@@ -230,7 +242,28 @@ export const monthlyConcurrentPeriods = (
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
     if (!s.isConcurrent || isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period)) return;
-    if (!isVisibleWeeklySlot(s)) return;
+    if (!isDaytimeSlot(s)) return;
+    slots.add(`${s.dayOfWeek}-${s.period}`);
+  });
+  let total = 0;
+  slots.forEach((key) => {
+    const day = Number(key.split('-')[0]);
+    total += counts[day] || 0;
+  });
+  return total;
+};
+
+export const monthlyCounselingPeriods = (
+  sessions: CourseSession[],
+  teacherId: string,
+  month: number,
+  now = new Date()
+) => {
+  const year = calendarYearForSettlementMonth(month, now);
+  const counts = weekdayOccurrencesInMonth(year, month);
+  const slots = new Set<string>();
+  sessions.forEach((s) => {
+    if (s.teacherId !== teacherId || !isCounselingSlot(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });
   let total = 0;

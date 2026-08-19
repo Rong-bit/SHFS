@@ -619,7 +619,7 @@ export const AdminSettings: React.FC = () => {
         <div className="hidden lg:flex items-center space-x-3 text-xs text-slate-500">
           <span>學期：{formConfig.academicYear}-{formConfig.semester}</span>
           <span>•</span>
-          <span>公立鐘點費：{formConfig.dayHourlyRate} 元/節</span>
+          <span>公立鐘點費：日間 {formConfig.dayHourlyRate}／課輔 {formConfig.nightHourlyRate} 元/節</span>
         </div>
       </div>
 
@@ -697,6 +697,9 @@ export const AdminSettings: React.FC = () => {
                     />
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 節</span>
                   </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    第八節輔導課不計入日間超鐘點，改依此費率另計。
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2">

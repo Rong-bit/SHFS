@@ -31,6 +31,7 @@ export const AccountingSettlement: React.FC = () => {
 
   // Calculate totals
   const totalOverloadAmount = filteredSettlements.reduce((acc, curr) => acc + curr.monthlyOverloadAmount, 0);
+  const totalCounselingAmount = filteredSettlements.reduce((acc, curr) => acc + curr.monthlyCounselingAmount, 0);
   const totalPublicSubAmount = filteredSettlements.reduce((acc, curr) => acc + curr.publicSubstituteAmount, 0);
   const totalPrivateSubAmount = filteredSettlements.reduce((acc, curr) => acc + curr.privateSubstituteEarnAmount, 0);
   const totalNetPayable = filteredSettlements.reduce((acc, curr) => acc + curr.netPayableAmount, 0);
@@ -49,6 +50,8 @@ export const AccountingSettlement: React.FC = () => {
       '基本授課節數 (節/週)': s.basePeriods,
       '本學期排定節數不含團體活動 (節/週)': s.weeklyActualPeriods,
       '每週兼課（超鐘點）節數': s.weeklyOverloadPeriods,
+      '每週第八節課輔節數': s.weeklyCounselingPeriods,
+      [`月課輔費 (依該月實際日數×${systemConfig.nightHourlyRate}元)`]: s.monthlyCounselingAmount,
       [`月超鐘點費 (依該月週一至週五實際日數×${systemConfig.dayHourlyRate}元)`]: s.monthlyOverloadAmount,
       '公費代課節數': s.publicSubstitutePeriods,
       '公費代課金額': s.publicSubstituteAmount,
@@ -68,6 +71,8 @@ export const AccountingSettlement: React.FC = () => {
       '基本授課節數 (節/週)': 0 as any,
       '本學期排定節數不含團體活動 (節/週)': 0 as any,
       '每週兼課（超鐘點）節數': 0 as any,
+      '每週第八節課輔節數': 0 as any,
+      [`月課輔費 (依該月實際日數×${systemConfig.nightHourlyRate}元)`]: totalCounselingAmount,
       [`月超鐘點費 (依該月週一至週五實際日數×${systemConfig.dayHourlyRate}元)`]: totalOverloadAmount,
       '公費代課節數': 0 as any,
       '公費代課金額': totalPublicSubAmount,
@@ -90,6 +95,8 @@ export const AccountingSettlement: React.FC = () => {
       { wch: 16 }, // 排定節數
       { wch: 14 }, // 每週超鐘點
       { wch: 22 }, // 月超鐘點費
+      { wch: 16 }, // 課輔節數
+      { wch: 22 }, // 月課輔費
       { wch: 12 }, // 公費節數
       { wch: 12 }, // 公費金額
       { wch: 18 }, // 自費受領
@@ -119,7 +126,8 @@ export const AccountingSettlement: React.FC = () => {
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜ 
+            基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜
+            第八節課輔 <strong>{systemConfig.nightHourlyRate} 元/節</strong> ｜ 
             本月週數依 <strong>{selectedMonth} 月週一至週五實際日數（約 {settlementWeeks.toFixed(1)} 週）</strong> 計 ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
           </p>
@@ -166,7 +174,7 @@ export const AccountingSettlement: React.FC = () => {
             ${totalOverloadAmount.toLocaleString()}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            課表「兼課」節數依該月實際日數計費
+            課表「兼課」節數依該月實際日數計費（不含第八節課輔）
           </p>
         </div>
 
@@ -257,8 +265,10 @@ export const AccountingSettlement: React.FC = () => {
                 <th className="p-3">科別 / 職務</th>
                 <th className="p-3 text-center">基本節數</th>
                 <th className="p-3 text-center">每週排定（不含團體活動）</th>
-                <th className="p-3 text-center">每週超額</th>
-                <th className="p-3 text-right">月超鐘點費 (4週)</th>
+                <th className="p-3 text-center">每週超額（兼課）</th>
+                <th className="p-3 text-center">每週課輔（第8節）</th>
+                <th className="p-3 text-right">月課輔費</th>
+                <th className="p-3 text-right">月超鐘點費</th>
                 <th className="p-3 text-center">公費代課</th>
                 <th className="p-3 text-center">自費代課(領/扣)</th>
                 <th className="p-3 text-right bg-amber-50/50 text-amber-950 font-extrabold">應發總額</th>
@@ -298,6 +308,18 @@ export const AccountingSettlement: React.FC = () => {
                     ) : (
                       <span className="text-slate-400">0</span>
                     )}
+                  </td>
+
+                  <td className="p-3 text-center font-bold">
+                    {s.weeklyCounselingPeriods > 0 ? (
+                      <span className="text-indigo-600">{s.weeklyCounselingPeriods} 節</span>
+                    ) : (
+                      <span className="text-slate-400">0</span>
+                    )}
+                  </td>
+
+                  <td className="p-3 text-right font-mono font-bold text-indigo-800">
+                    ${s.monthlyCounselingAmount.toLocaleString()}
                   </td>
 
                   <td className="p-3 text-right font-mono font-bold text-slate-900">
@@ -355,6 +377,10 @@ export const AccountingSettlement: React.FC = () => {
               <tr className="bg-slate-900 text-white font-bold divide-x divide-slate-800">
                 <td colSpan={6} className="p-3 text-right">
                   總計結算金額 (共 {filteredSettlements.length} 位教師)
+                </td>
+                <td className="p-3 text-center text-indigo-300">—</td>
+                <td className="p-3 text-right font-mono text-indigo-300">
+                  ${totalCounselingAmount.toLocaleString()}
                 </td>
                 <td className="p-3 text-right font-mono text-amber-400">
                   ${totalOverloadAmount.toLocaleString()}
