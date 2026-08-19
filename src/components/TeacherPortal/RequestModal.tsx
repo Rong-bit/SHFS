@@ -123,7 +123,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           (s) => s.teacherId === t.id && s.dayOfWeek === targetDay && s.period === targetP
         );
         const isSameDept = t.department === currentTeacher.department;
-        const weeklyOverload = teacherWeeklyOverload(t);
+        const weeklyOverload = teacherWeeklyOverload(t, sessions);
         const isNearLimit = weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods;
         let score = 0;
         if (!hasClash) score += 50;

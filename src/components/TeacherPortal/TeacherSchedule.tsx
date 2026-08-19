@@ -27,7 +27,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, monthlyOverloadPeriods, weeklyOverloadPeriods } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -75,8 +75,7 @@ export const TeacherSchedule: React.FC = () => {
   const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
   const weeklyActual = overloadBreakdown.counted;
   const basePeriods = currentTeacher.basePeriods;
-  const dutyReduction = currentTeacher.dutyReductionPeriods ?? 0;
-  const overloadPeriods = weeklyOverloadPeriods(weeklyActual, dutyReduction, basePeriods);
+  const overloadPeriods = overloadBreakdown.concurrent;
   const thisMonth = new Date().getMonth() + 1;
   const monthlyOverloadAmount =
     monthlyOverloadPeriods(sessions, currentTeacher, thisMonth) * systemConfig.dayHourlyRate;
@@ -236,17 +235,11 @@ export const TeacherSchedule: React.FC = () => {
                 <span className="font-semibold text-slate-800">{overloadBreakdown.regularTeaching} 節</span>
               </div>
               <div className="flex justify-between">
-                <span>任務減授（加入超鐘點）：</span>
-                <span className="font-semibold text-slate-800">
-                  +{dutyReduction} 節
-                </span>
-              </div>
-              <div className="flex justify-between">
                 <span>每週基本標準：</span>
                 <span className="font-semibold text-slate-800">{basePeriods} 節/週</span>
               </div>
               <div className="flex justify-between">
-                <span>每週超鐘點：</span>
+                <span>兼課（超鐘點）：</span>
                 <span className={`font-bold ${overloadPeriods > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
                   +{overloadPeriods} 節/週
                 </span>
@@ -284,7 +277,7 @@ export const TeacherSchedule: React.FC = () => {
               <span className="text-xs text-slate-500 font-medium">元/月</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
-              超鐘點：{weeklyActual}＋{dutyReduction}−{basePeriods}＝{overloadPeriods} 節／週；月費依本月週一至週五實際日數 × {systemConfig.dayHourlyRate} 元
+              超鐘點＝課表「兼課」節數 {overloadPeriods} 節／週；月費依本月週一至週五實際日數 × {systemConfig.dayHourlyRate} 元
             </p>
           </div>
 

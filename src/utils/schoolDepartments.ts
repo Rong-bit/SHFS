@@ -79,6 +79,7 @@ export type WeeklyOverloadBreakdown = {
   scheduleTotal: number;
   regularTeaching: number;
   groupActivityExcluded: number;
+  concurrent: number;
   counted: number;
 };
 
@@ -89,23 +90,29 @@ export const breakdownWeeklyOverloadPeriods = (
   const mine = sessions.filter((s) => s.teacherId === teacherId);
   let groupActivityExcluded = 0;
   let counted = 0;
+  let concurrent = 0;
   mine.forEach((s) => {
     if (isGroupActivity(s.subjectName)) {
       groupActivityExcluded += 1;
       return;
     }
     counted += 1;
+    if (s.isConcurrent) concurrent += 1;
   });
   return {
     scheduleTotal: mine.length,
     regularTeaching: counted,
     groupActivityExcluded,
+    concurrent,
     counted,
   };
 };
 
 export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
+
+export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherId: string) =>
+  breakdownWeeklyOverloadPeriods(sessions, teacherId).concurrent;
 
 /** 結算月份對應的西元年（跨年時：目前月份之後超過半年視為去年） */
 export const calendarYearForSettlementMonth = (month: number, now = new Date()) => {
@@ -154,23 +161,35 @@ export const monthlyTeachingPeriods = (
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
+/** 該月兼課節數：每堂兼課 × 該星期幾在當月出現次數 */
+export const monthlyConcurrentPeriods = (
+  sessions: CourseSession[],
+  teacherId: string,
+  year: number,
+  month: number
+) => {
+  const counts = weekdayOccurrencesInMonth(year, month);
+  return sessions
+    .filter(
+      (s) =>
+        s.teacherId === teacherId &&
+        Boolean(s.isConcurrent) &&
+        !isGroupActivity(s.subjectName)
+    )
+    .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
+};
+
 export const monthlyOverloadPeriods = (
   sessions: CourseSession[],
-  teacher: Pick<Teacher, 'id' | 'dutyReductionPeriods' | 'basePeriods'>,
+  teacher: Pick<Teacher, 'id'>,
   month: number,
   now = new Date()
 ) => {
   const year = calendarYearForSettlementMonth(month, now);
-  const weeks = averageWeekdayWeeks(year, month);
-  const teaching = monthlyTeachingPeriods(sessions, teacher.id, year, month);
-  return weeklyOverloadPeriods(
-    teaching,
-    (teacher.dutyReductionPeriods ?? 0) * weeks,
-    teacher.basePeriods * weeks
-  );
+  return monthlyConcurrentPeriods(sessions, teacher.id, year, month);
 };
 
-/** 超鐘點 = 正課（不含團體活動）＋任務減授 − 基本鐘點 */
+/** 每週超鐘點 = 課表標示兼課的節數 */
 export const weeklyOverloadPeriods = (
   teachingPeriods: number,
   dutyReductionPeriods: number,
@@ -178,13 +197,16 @@ export const weeklyOverloadPeriods = (
 ) => Math.max(0, teachingPeriods + Math.max(0, dutyReductionPeriods) - basePeriods);
 
 export const teacherWeeklyOverload = (
-  teacher: Pick<Teacher, 'weeklyActualPeriods' | 'dutyReductionPeriods' | 'basePeriods'>
+  teacher: Pick<Teacher, 'id' | 'weeklyActualPeriods' | 'dutyReductionPeriods' | 'basePeriods'>,
+  sessions?: CourseSession[]
 ) =>
-  weeklyOverloadPeriods(
-    teacher.weeklyActualPeriods,
-    teacher.dutyReductionPeriods ?? 0,
-    teacher.basePeriods
-  );
+  sessions
+    ? countWeeklyConcurrentPeriods(sessions, teacher.id)
+    : weeklyOverloadPeriods(
+        teacher.weeklyActualPeriods,
+        teacher.dutyReductionPeriods ?? 0,
+        teacher.basePeriods
+      );
 
 /** 各職稱基本鐘點由系統設定；未填時專任預設 16。 */
 export const HOMEROOM_DEFAULT_DUTY_REDUCTION = 1;

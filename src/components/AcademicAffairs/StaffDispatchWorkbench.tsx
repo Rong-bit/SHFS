@@ -172,7 +172,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
         const isSameDept = t.department === selectedOriginalSession.department || t.department === applicantTeacher?.department;
 
         // 3. Current workload
-        const weeklyOverload = teacherWeeklyOverload(t);
+        const weeklyOverload = teacherWeeklyOverload(t, sessions);
         const isNearLimit = weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods;
 
         // 4. Recommendation score

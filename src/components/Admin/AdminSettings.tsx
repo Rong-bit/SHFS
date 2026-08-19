@@ -789,7 +789,7 @@ export const AdminSettings: React.FC = () => {
 
               <div className="space-y-4 text-xs sm:text-sm">
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
-                  <strong>超鐘點＝正課（不含團體活動）＋任務減授 − 基本鐘點。</strong>
+                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五實際日數計費）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
                   專任、導師、組長、科主任、主任都可在下方填節數，按「儲存系統參數設定」後會套用到全校該職稱教師。3 節團體活動（班會／對開社團）都不計入正課。
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1336,7 +1336,7 @@ export const AdminSettings: React.FC = () => {
                     </tr>
                   ) : (
                     filteredTeachers.map((t) => {
-                      const overload = teacherWeeklyOverload(t);
+                      const overload = teacherWeeklyOverload(t, sessions);
                       return (
                         <tr key={t.id} className="hover:bg-slate-50/80 transition">
                           <td className="p-3.5">

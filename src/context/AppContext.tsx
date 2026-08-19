@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
+import { countWeeklyConcurrentPeriods, countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -682,7 +682,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Overload check (9 periods limit)
       if (subTeacher) {
-        const weeklyOverload = teacherWeeklyOverload(subTeacher);
+        const weeklyOverload = teacherWeeklyOverload(subTeacher, sessions);
         if (weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods) {
           messages.push(`【法規防呆警示】${subTeacher.name} 本週兼任超鐘點已達 ${weeklyOverload} 節（法定上限為 ${systemConfig.maxWeeklyOverloadPeriods} 節），若再承擔代課將超過法規上限！`);
           if (severity !== 'danger') severity = 'warning';
@@ -1302,11 +1302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 1. Weekly actual and overload
       const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id);
       const base = teacher.basePeriods;
-      const weeklyOverload = weeklyOverloadPeriods(
-        weeklyActual,
-        teacher.dutyReductionPeriods ?? 0,
-        base
-      );
+      const weeklyOverload = countWeeklyConcurrentPeriods(sessions, teacher.id);
       const monthlyOverload = monthlyOverloadPeriods(sessions, teacher, settlementMonth);
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
 
