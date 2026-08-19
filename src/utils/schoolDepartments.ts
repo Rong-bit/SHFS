@@ -90,7 +90,6 @@ export type WeeklyOverloadBreakdown = {
   scheduleTotal: number;
   regularTeaching: number;
   groupActivityExcluded: number;
-  homeroomIncluded: number;
   concurrent: number;
   counted: number;
   sessionRows: number;
@@ -115,34 +114,50 @@ export const breakdownWeeklyOverloadPeriods = (
   });
 
   let groupActivityExcluded = 0;
-  let homeroomIncluded = 0;
   let counted = 0;
   let concurrent = 0;
-  slotMap.forEach((list) => {
+  const clubOnlySlots: Array<{ key: string; list: CourseSession[] }> = [];
+
+  slotMap.forEach((list, key) => {
     const teaching = list.filter((s) => !isExcludedGroupActivity(s.subjectName));
     if (teaching.length === 0) {
-      groupActivityExcluded += 1;
+      clubOnlySlots.push({ key, list });
       return;
     }
     counted += 1;
-    if (teaching.every((s) => isHomeroomActivity(s.subjectName))) homeroomIncluded += 1;
     if (teaching.some((s) => s.isConcurrent)) concurrent += 1;
+  });
+
+  // 團體活動 3 節＝班會 1 節計入＋對開社團最多 2 節不計
+  const MAX_EXCLUDED_CLUB_PERIODS = 2;
+  clubOnlySlots.sort((a, b) => {
+    const [aDay, aPeriod] = a.key.split('-').map(Number);
+    const [bDay, bPeriod] = b.key.split('-').map(Number);
+    return aDay - bDay || aPeriod - bPeriod;
+  });
+  const extraHomeroom = Math.max(0, clubOnlySlots.length - MAX_EXCLUDED_CLUB_PERIODS);
+  clubOnlySlots.forEach((slot, index) => {
+    if (index < extraHomeroom) {
+      counted += 1;
+      if (slot.list.some((s) => s.isConcurrent)) concurrent += 1;
+      return;
+    }
+    groupActivityExcluded += 1;
   });
 
   return {
     scheduleTotal: slotMap.size,
     regularTeaching: counted,
     groupActivityExcluded,
-    homeroomIncluded,
     concurrent,
-    counted: counted - homeroomIncluded,
+    counted,
     sessionRows: visible.length,
     hiddenRows: mine.length - visible.length,
   };
 };
 
 export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
-  breakdownWeeklyOverloadPeriods(sessions, teacherId).regularTeaching;
+  breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
 
 export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).concurrent;
