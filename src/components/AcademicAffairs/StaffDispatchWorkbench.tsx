@@ -10,7 +10,8 @@ import {
   Teacher 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
-import { displayTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS, teacherWeeklyOverload } from '../../utils/schoolDepartments';
+import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { 
   UserCheck, 
   User, 
@@ -305,14 +306,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
     setActiveSubView('list');
   };
 
+  const resolvedRequests = useMemo(
+    () => requests.map((r) => ({ ...r, originalSession: resolveOriginalSession(r, sessions) })),
+    [requests, sessions]
+  );
+
   // Filtered requests in list view
   const filteredRequests = useMemo(() => {
-    return requests.filter((r) => {
+    return resolvedRequests.filter((r) => {
       // Filter tab
       if (listFilter === 'pending' && r.status !== 'pending') return false;
       if (listFilter === 'public' && r.paymentType !== 'public') return false;
       if (listFilter === 'private' && r.paymentType !== 'private') return false;
-      if (listFilter === 'practical' && !r.originalSession.isPractical) return false;
+      if (listFilter === 'practical' && !isPracticalSession(r.originalSession)) return false;
 
       // Search term
       if (searchTerm) {
@@ -327,7 +333,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
       return true;
     });
-  }, [requests, listFilter, searchTerm]);
+  }, [resolvedRequests, listFilter, searchTerm]);
 
   // Handle batch approval
   const handleBatchApprove = () => {
@@ -787,7 +793,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   兼課
                                 </span>
                               )}
-                              {s.isPractical ? (
+                              {isPracticalSession(s) ? (
                                 <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold">
                                   專業實習
                                 </span>
@@ -1123,7 +1129,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 { key: 'pending', label: `⏳ 待簽核 (${requests.filter(r => r.status === 'pending').length})` },
                 { key: 'public', label: `🏛️ 公費派代 (${requests.filter(r => r.paymentType === 'public').length})` },
                 { key: 'private', label: `👤 自費代課 (${requests.filter(r => r.paymentType === 'private').length})` },
-                { key: 'practical', label: `🔧 實習工場課 (${requests.filter(r => r.originalSession.isPractical).length})` },
+                { key: 'practical', label: `🔧 實習工場課 (${resolvedRequests.filter(r => isPracticalSession(r.originalSession)).length})` },
               ].map((f) => (
                 <button
                   key={f.key}
@@ -1248,7 +1254,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               <span>{dayNames[req.originalSession.dayOfWeek]} 第{req.originalSession.period}節</span>
                               <span>·</span>
                               <span>{req.originalSession.venueName}</span>
-                              {req.originalSession.isPractical && (
+                              {isPracticalSession(req.originalSession) && (
                                 <span className="px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">實習</span>
                               )}
                             </div>
