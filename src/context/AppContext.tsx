@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, normalizeStandardBasePeriods, resolveTeacherBasePeriods, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
+import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -1295,8 +1295,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Monthly settlement computation
   const calculateMonthlySettlement = (month?: number): MonthlyTeacherSettlement[] => {
     const hourlyRate = systemConfig.dayHourlyRate;
-    const weeks = systemConfig.weeksInMonth;
     const settlementMonth = month ?? systemConfig.currentMonth ?? new Date().getMonth() + 1;
+    const weeks = settlementWeeksForMonth(settlementMonth);
 
     return teachers.map((teacher) => {
       // 1. Weekly actual and overload

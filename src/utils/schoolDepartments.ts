@@ -104,9 +104,30 @@ export const breakdownWeeklyOverloadPeriods = (
   };
 };
 
-/** 超鐘點用正課：不含 3 節團體活動（班會、團體活動、社團對開都不算） */
 export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
+
+/** 結算月份對應的西元年（跨年時：目前月份之後超過半年視為去年） */
+export const calendarYearForSettlementMonth = (month: number, now = new Date()) => {
+  const year = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  if (month > currentMonth && month - currentMonth > 6) return year - 1;
+  if (month < currentMonth && currentMonth - month > 6) return year + 1;
+  return year;
+};
+
+/** 該月星期一出現次數（學校超鐘點月結常用週數） */
+export const countMondaysInMonth = (year: number, month: number) => {
+  const lastDay = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let day = 1; day <= lastDay; day += 1) {
+    if (new Date(year, month - 1, day).getDay() === 1) count += 1;
+  }
+  return count;
+};
+
+export const settlementWeeksForMonth = (month: number, now = new Date()) =>
+  countMondaysInMonth(calendarYearForSettlementMonth(month, now), month);
 
 /** 超鐘點 = 正課（不含團體活動）＋任務減授 − 基本鐘點 */
 export const weeklyOverloadPeriods = (

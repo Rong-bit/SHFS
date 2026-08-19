@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, SCHOOL_DEPARTMENTS, settlementWeeksForMonth } from '../../utils/schoolDepartments';
 import * as XLSX from 'xlsx';
 import { 
   Calculator, 
@@ -20,6 +20,7 @@ export const AccountingSettlement: React.FC = () => {
   const calendarMonth = new Date().getMonth() + 1;
   const [selectedMonth, setSelectedMonth] = useState<number>(calendarMonth);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const settlementWeeks = settlementWeeksForMonth(selectedMonth);
 
   const settlements = calculateMonthlySettlement(selectedMonth);
 
@@ -48,7 +49,7 @@ export const AccountingSettlement: React.FC = () => {
       '基本授課節數 (節/週)': s.basePeriods,
       '本學期排定節數不含團體活動 (節/週)': s.weeklyActualPeriods,
       '每週超鐘點節數': s.weeklyOverloadPeriods,
-      [`月超鐘點費 (${systemConfig.weeksInMonth}週×${systemConfig.dayHourlyRate}元)`]: s.monthlyOverloadAmount,
+      [`月超鐘點費 (${settlementWeeks}週×${systemConfig.dayHourlyRate}元)`]: s.monthlyOverloadAmount,
       '公費代課節數': s.publicSubstitutePeriods,
       '公費代課金額': s.publicSubstituteAmount,
       '自費代課(受領)金額': s.privateSubstituteEarnAmount,
@@ -67,7 +68,7 @@ export const AccountingSettlement: React.FC = () => {
       '基本授課節數 (節/週)': 0 as any,
       '本學期排定節數不含團體活動 (節/週)': 0 as any,
       '每週超鐘點節數': 0 as any,
-      [`月超鐘點費 (${systemConfig.weeksInMonth}週×${systemConfig.dayHourlyRate}元)`]: totalOverloadAmount,
+      [`月超鐘點費 (${settlementWeeks}週×${systemConfig.dayHourlyRate}元)`]: totalOverloadAmount,
       '公費代課節數': 0 as any,
       '公費代課金額': totalPublicSubAmount,
       '自費代課(受領)金額': totalPrivateSubAmount,
@@ -119,7 +120,7 @@ export const AccountingSettlement: React.FC = () => {
           </div>
           <p className="text-xs text-slate-500 mt-1">
             基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜ 
-            全月以 <strong>{systemConfig.weeksInMonth} 週</strong> 計 ｜ 
+            本月週數依 <strong>{selectedMonth} 月星期一 {settlementWeeks} 次</strong> 計 ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
           </p>
         </div>

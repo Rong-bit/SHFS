@@ -713,7 +713,7 @@ export const AdminSettings: React.FC = () => {
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
                       required
                     />
-                    <span className="text-[10px] text-slate-400">預設以每月 4 週核計超鐘點</span>
+                    <span className="text-[10px] text-slate-400">結算改依該月星期一實際次數，不再固定 4 週</span>
                   </div>
 
                   <div>
