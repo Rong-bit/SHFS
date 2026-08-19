@@ -90,9 +90,9 @@ export const TeacherSchedule: React.FC = () => {
   ];
 
   // Helper to find session in specific day and period
-  const getSessionAt = (day: DayOfWeek, period: number) => {
-    return teacherSessions.find((s) => s.dayOfWeek === day && s.period === period);
-  };
+  const getSessionsAt = (day: DayOfWeek, period: number) =>
+    teacherSessions.filter((s) => s.dayOfWeek === day && s.period === period);
+  const getSessionAt = (day: DayOfWeek, period: number) => getSessionsAt(day, period)[0];
 
   const handleCellClick = (session?: CourseSession) => {
     if (!currentTeacher) return;
@@ -224,6 +224,20 @@ export const TeacherSchedule: React.FC = () => {
                 <span>課表總節數：</span>
                 <span className="font-semibold text-slate-800">{overloadBreakdown.scheduleTotal} 節</span>
               </div>
+              {overloadBreakdown.sessionRows > overloadBreakdown.scheduleTotal && (
+                <div className="flex justify-between text-amber-700">
+                  <span>同一時段重疊課堂：</span>
+                  <span className="font-semibold">
+                    {overloadBreakdown.sessionRows - overloadBreakdown.scheduleTotal} 筆（已合併計算）
+                  </span>
+                </div>
+              )}
+              {overloadBreakdown.hiddenRows > 0 && (
+                <div className="flex justify-between text-amber-700">
+                  <span>未顯示於週一至週五第1–8節：</span>
+                  <span className="font-semibold">{overloadBreakdown.hiddenRows} 筆（不計入）</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>團體活動（不計）：</span>
                 <span className="font-semibold text-slate-800">
@@ -355,7 +369,8 @@ export const TeacherSchedule: React.FC = () => {
 
                       {/* Day Columns 1 to 5 */}
                       {days.map((d) => {
-                        const session = getSessionAt(d.day, pDef.period);
+                        const slotSessions = getSessionsAt(d.day, pDef.period);
+                        const session = slotSessions[0];
                         return (
                           <td
                             key={d.day}
@@ -376,6 +391,11 @@ export const TeacherSchedule: React.FC = () => {
                                   <div className="flex items-center justify-between font-bold text-xs gap-1">
                                     <span className="text-slate-900">{session.className}</span>
                                     <span className="flex items-center gap-0.5 shrink-0">
+                                      {slotSessions.length > 1 && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
+                                          {slotSessions.length}堂
+                                        </span>
+                                      )}
                                       {session.isConcurrent && (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-violet-600 text-white rounded font-medium">
                                           兼課

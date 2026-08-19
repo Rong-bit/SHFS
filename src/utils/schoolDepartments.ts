@@ -81,30 +81,48 @@ export type WeeklyOverloadBreakdown = {
   groupActivityExcluded: number;
   concurrent: number;
   counted: number;
+  sessionRows: number;
+  hiddenRows: number;
 };
+
+const isVisibleWeeklySlot = (s: CourseSession) =>
+  s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period >= 1 && s.period <= 8;
 
 export const breakdownWeeklyOverloadPeriods = (
   sessions: CourseSession[],
   teacherId: string
 ): WeeklyOverloadBreakdown => {
   const mine = sessions.filter((s) => s.teacherId === teacherId);
+  const visible = mine.filter(isVisibleWeeklySlot);
+  const slotMap = new Map<string, CourseSession[]>();
+  visible.forEach((s) => {
+    const key = `${s.dayOfWeek}-${s.period}`;
+    const list = slotMap.get(key) || [];
+    list.push(s);
+    slotMap.set(key, list);
+  });
+
   let groupActivityExcluded = 0;
   let counted = 0;
   let concurrent = 0;
-  mine.forEach((s) => {
-    if (isGroupActivity(s.subjectName)) {
+  slotMap.forEach((list) => {
+    const teaching = list.filter((s) => !isGroupActivity(s.subjectName));
+    if (teaching.length === 0) {
       groupActivityExcluded += 1;
       return;
     }
     counted += 1;
-    if (s.isConcurrent) concurrent += 1;
+    if (teaching.some((s) => s.isConcurrent)) concurrent += 1;
   });
+
   return {
-    scheduleTotal: mine.length,
+    scheduleTotal: slotMap.size,
     regularTeaching: counted,
     groupActivityExcluded,
     concurrent,
     counted,
+    sessionRows: visible.length,
+    hiddenRows: mine.length - visible.length,
   };
 };
 
@@ -161,7 +179,7 @@ export const monthlyTeachingPeriods = (
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
-/** 該月兼課節數：每堂兼課 × 該星期幾在當月出現次數 */
+/** 該月兼課節數：每個有兼課的時段 × 該星期幾在當月出現次數 */
 export const monthlyConcurrentPeriods = (
   sessions: CourseSession[],
   teacherId: string,
@@ -169,14 +187,19 @@ export const monthlyConcurrentPeriods = (
   month: number
 ) => {
   const counts = weekdayOccurrencesInMonth(year, month);
-  return sessions
-    .filter(
-      (s) =>
-        s.teacherId === teacherId &&
-        Boolean(s.isConcurrent) &&
-        !isGroupActivity(s.subjectName)
-    )
-    .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
+  const slots = new Set<string>();
+  sessions.forEach((s) => {
+    if (s.teacherId !== teacherId) return;
+    if (!s.isConcurrent || isGroupActivity(s.subjectName)) return;
+    if (!isVisibleWeeklySlot(s)) return;
+    slots.add(`${s.dayOfWeek}-${s.period}`);
+  });
+  let total = 0;
+  slots.forEach((key) => {
+    const day = Number(key.split('-')[0]);
+    total += counts[day] || 0;
+  });
+  return total;
 };
 
 export const monthlyOverloadPeriods = (
