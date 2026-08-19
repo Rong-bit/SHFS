@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   CourseSession, 
@@ -104,15 +104,24 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [paymentType, setPaymentType] = useState<PaymentType>('public');
   const [reason, setReason] = useState<string>('奉派參加教育部技術型高中專業群科專題競賽指導研習 (公假公費派代)');
 
-  // 歸屬月份選擇（同老師端邏輯）
+  // 歸屬月份：本月、7 天內可選上月，以及系統管理員指定的補登月份
   const thisMonth = new Date().getMonth() + 1;
   const today = new Date();
   const lastDayOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
   const diffDays = Math.floor((today.getTime() - lastDayOfLastMonth.getTime()) / 86400000);
   const canSelectLastMonth = diffDays <= 7;
   const lastMonth = thisMonth === 1 ? 12 : thisMonth - 1;
-  const [dispatchMonth, setDispatchMonth] = useState<number>(thisMonth);
+  const adminMonth = systemConfig.currentMonth;
+  const canSelectAdminMonth =
+    Boolean(adminMonth) &&
+    adminMonth !== thisMonth &&
+    !(canSelectLastMonth && adminMonth === lastMonth);
+  const [dispatchMonth, setDispatchMonth] = useState<number>(adminMonth || thisMonth);
   const [autoApprove, setAutoApprove] = useState<boolean>(true);
+
+  useEffect(() => {
+    setDispatchMonth(adminMonth || thisMonth);
+  }, [adminMonth, thisMonth]);
 
   // Substitute specific
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
@@ -707,6 +716,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     <option value={thisMonth}>{thisMonth} 月（本月）</option>
                     {canSelectLastMonth && (
                       <option value={lastMonth}>{lastMonth} 月（補登上週跨月）</option>
+                    )}
+                    {canSelectAdminMonth && (
+                      <option value={adminMonth}>{adminMonth} 月（管理員指定補登）</option>
                     )}
                   </select>
                 </div>
