@@ -17,7 +17,8 @@ import {
 
 export const AccountingSettlement: React.FC = () => {
   const { systemConfig, calculateMonthlySettlement } = useApp();
-  const [selectedMonth, setSelectedMonth] = useState<number>(systemConfig.currentMonth);
+  const calendarMonth = new Date().getMonth() + 1;
+  const [selectedMonth, setSelectedMonth] = useState<number>(calendarMonth);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
 
   const settlements = calculateMonthlySettlement(selectedMonth);
@@ -133,11 +134,11 @@ export const AccountingSettlement: React.FC = () => {
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
               className="bg-transparent font-bold text-slate-900 focus:outline-none"
             >
-              <option value={9}>9 月份 (開學月)</option>
-              <option value={10}>10 月份 (現行月)</option>
-              <option value={11}>11 月份 (期中)</option>
-              <option value={12}>12 月份</option>
-              <option value={1}>1 月份 (期末)</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+                <option key={m} value={m}>
+                  {m} 月份{m === calendarMonth ? ' (現行月)' : ''}
+                </option>
+              ))}
             </select>
           </div>
 
