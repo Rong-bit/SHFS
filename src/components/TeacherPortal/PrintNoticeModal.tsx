@@ -290,14 +290,19 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             {/* Academic Affairs Section Chief */}
             <div className="p-3">
               <div className="text-slate-600 font-bold mb-6">教務處經辦 / 組長</div>
-              <div className="inline-flex flex-col items-center justify-center border-2 border-red-500 text-red-700 px-3 py-1.5 font-serif font-bold text-sm rounded leading-tight text-center">
+              <div className="inline-flex flex-col justify-center border-2 border-red-500 text-red-700 px-3 py-1.5 font-serif font-bold text-sm rounded leading-tight">
                 {(() => {
                   const m = reviewerDisplay.match(/^(.+?)\((.+)\)$/);
                   if (!m) return reviewerDisplay;
+                  const nameChars = Array.from(m[1]);
                   return (
                     <>
-                      <span>{m[1]}</span>
-                      <span>({m[2]})</span>
+                      <span className="flex w-full justify-between">
+                        {nameChars.map((ch, i) => (
+                          <span key={`${ch}-${i}`}>{ch}</span>
+                        ))}
+                      </span>
+                      <span className="whitespace-nowrap">({m[2]})</span>
                     </>
                   );
                 })()}
