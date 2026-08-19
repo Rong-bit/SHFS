@@ -2024,7 +2024,16 @@ export const AdminSettings: React.FC = () => {
                   <label className="block font-semibold text-slate-700 mb-1">所屬組別</label>
                   <select
                     value={staffFormData.group || 'academic'}
-                    onChange={(e) => setStaffFormData({ ...staffFormData, group: e.target.value as 'academic' | 'accounting' })}
+                    onChange={(e) => {
+                      const group = e.target.value as 'academic' | 'accounting';
+                      const defaultTitle = group === 'academic' ? '教學組長' : '出納組長';
+                      const defaults: Record<string, { badge: string; responsibleScope: string }> = {
+                        '教學組長': { badge: '全權審核 · 決行簽結', responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調' },
+                        '出納組長': { badge: '鐘點費核銷 · 出納結算', responsibleScope: '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理' },
+                      };
+                      const preset = defaults[defaultTitle];
+                      setStaffFormData({ ...staffFormData, group, title: defaultTitle, badge: preset.badge, responsibleScope: preset.responsibleScope });
+                    }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
                     <option value="academic">教學組</option>
@@ -2035,14 +2044,40 @@ export const AdminSettings: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">職稱</label>
-                  <input
-                    type="text"
+                  <select
                     value={staffFormData.title}
-                    onChange={(e) => setStaffFormData({ ...staffFormData, title: e.target.value })}
+                    onChange={(e) => {
+                      const title = e.target.value;
+                      const group = staffFormData.group || 'academic';
+                      const presets: Record<string, { badge: string; responsibleScope: string }> = {
+                        '教學組長': { badge: '全權審核 · 決行簽結', responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調' },
+                        '教學組組員': { badge: '經辦 · 專業實習與突發公差派代', responsibleScope: '專業實習工場調代課經辦、突發病假與公假派代、實習檢定移課' },
+                        '教學組助理': { badge: '協辦 · 課表登錄與代課通知單印發', responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合' },
+                        '出納組長': { badge: '鐘點費核銷 · 出納結算', responsibleScope: '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理' },
+                        '出納組組員': { badge: '經辦 · 鐘點費造冊與帳務', responsibleScope: '鐘點費清冊核對與造冊、代課費撥款簽收、零用金保管、各項收支傳票製作與帳務登錄' },
+                      };
+                      const preset = presets[title];
+                      setStaffFormData({
+                        ...staffFormData,
+                        title,
+                        ...(preset ? { badge: preset.badge, responsibleScope: preset.responsibleScope } : {}),
+                      });
+                    }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                    placeholder="如：教學組長、組員、幹事、助理"
-                    required
-                  />
+                  >
+                    {(staffFormData.group || 'academic') === 'academic' ? (
+                      <>
+                        <option value="教學組長">教學組長</option>
+                        <option value="教學組組員">教學組組員</option>
+                        <option value="教學組助理">教學組助理</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="出納組長">出納組長</option>
+                        <option value="出納組組員">出納組組員</option>
+                      </>
+                    )}
+                  </select>
                 </div>
               </div>
 
@@ -2056,56 +2091,13 @@ export const AdminSettings: React.FC = () => {
                   placeholder="如：全權審核 · 決行簽結、經辦 · 實習派代"
                   required
                 />
+                <p className="text-[10px] text-slate-400 mt-0.5">選擇職稱後自動帶入，也可自行修改</p>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-semibold text-slate-700">專責工作內容 / 職掌說明</label>
-                  <span className="text-[10px] text-indigo-600 font-medium">可完全自訂修改</span>
-                </div>
-                {/* Duty quick fill presets */}
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  <span className="text-[10px] text-slate-400 self-center">快速套用：</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStaffFormData({
-                        ...staffFormData,
-                        title: '教學組長 (一人兼辦)',
-                        badge: '一人全權統籌 · 調代課與公差派代',
-                        responsibleScope: '全權統籌全校專業實習調代課、突發病假與公差派代、課表維護與主計鐘點費核銷',
-                      });
-                    }}
-                    className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded border border-indigo-200 text-[10px] transition"
-                  >
-                    🌟 一人兼辦全組業務
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStaffFormData({
-                        ...staffFormData,
-                        badge: '經辦 · 專業實習調代課',
-                        responsibleScope: '全校各科專業群科工場實習調代課經辦、檢定移課與設備巡查',
-                      });
-                    }}
-                    className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded border border-amber-200 text-[10px] transition"
-                  >
-                    ⚡ 專業實習工場專責
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStaffFormData({
-                        ...staffFormData,
-                        badge: '經辦 · 公假公差派代',
-                        responsibleScope: '教師公假公差排代、公文簽擬、鐘點費造冊與主計室核銷勾稽',
-                      });
-                    }}
-                    className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded border border-emerald-200 text-[10px] transition"
-                  >
-                    📋 公差派代與鐘點核銷
-                  </button>
+                  <span className="text-[10px] text-indigo-600 font-medium">選擇職稱後自動帶入，可自訂修改</span>
                 </div>
                 <textarea
                   value={staffFormData.responsibleScope}

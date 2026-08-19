@@ -16,8 +16,6 @@ export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
   '電圖科',
   '服務科',
   '普通科',
-  '餐飲管理科',
-  '廣告設計科',
   '共同科目',
 ];
 
@@ -37,8 +35,6 @@ const CLASS_DEPT_PREFIXES: Array<[string, DepartmentType]> = [
   ['製圖', '製圖科'],
   ['資訊', '資訊科'],
   ['金工', '金工科'],
-  ['餐飲', '餐飲管理科'],
-  ['廣告', '廣告設計科'],
 ];
 
 const compactText = (text: string) => String(text || '').replace(/\s+/g, '');

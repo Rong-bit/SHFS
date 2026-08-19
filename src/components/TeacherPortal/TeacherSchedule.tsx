@@ -15,7 +15,6 @@ import {
   Coins,
   CheckCircle,
   Cpu,
-  ChefHat,
   Cog,
   Monitor,
   Building2,
@@ -118,8 +117,6 @@ export const TeacherSchedule: React.FC = () => {
         return <Monitor className="w-3.5 h-3.5 text-blue-500" />;
       case '機械科':
         return <Cog className="w-3.5 h-3.5 text-purple-500" />;
-      case '餐飲管理科':
-        return <ChefHat className="w-3.5 h-3.5 text-emerald-500" />;
       default:
         return <BookOpen className="w-3.5 h-3.5 text-indigo-500" />;
     }

@@ -27,8 +27,6 @@ export type DepartmentType =
   | '電圖科'
   | '服務科'
   | '普通科'
-  | '餐飲管理科'
-  | '廣告設計科'
   | '共同科目';
 
 export type TeacherTitle = '專任教師' | '導師' | '組長' | '科主任' | '主任';
