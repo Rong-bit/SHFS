@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   CourseSession, 
@@ -116,12 +116,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
     Boolean(adminMonth) &&
     adminMonth !== thisMonth &&
     !(canSelectLastMonth && adminMonth === lastMonth);
-  const [dispatchMonth, setDispatchMonth] = useState<number>(adminMonth || thisMonth);
+  const [dispatchMonth, setDispatchMonth] = useState<number>(thisMonth);
   const [autoApprove, setAutoApprove] = useState<boolean>(true);
-
-  useEffect(() => {
-    setDispatchMonth(adminMonth || thisMonth);
-  }, [adminMonth, thisMonth]);
 
   // Substitute specific
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
