@@ -33,6 +33,8 @@ import {
   Lock,
   KeyRound,
   Cloud,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
@@ -66,6 +68,7 @@ export const AdminSettings: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'config' | 'venues' | 'teachers' | 'staff' | 'schedules' | 'sync' | 'maintenance'>('config');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   
   // Safe form config state
   const [formConfig, setFormConfig] = useState<SystemConfig>(() => ({
@@ -1052,27 +1055,38 @@ export const AdminSettings: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-800 mb-1">
                   系統管理員密碼
                 </label>
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={formConfig.authConfig?.adminPassword || ''}
-                  onChange={(e) =>
-                    setFormConfig({
-                      ...formConfig,
-                      authConfig: {
-                        ...(formConfig.authConfig || {
-                          requirePassword: true,
-                          defaultTeacherPassword: '1234',
-                          academicPassword: '1234',
-                          accountingPassword: '1234',
-                        }),
-                        adminPassword: e.target.value,
-                      },
-                    })
-                  }
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
-                  placeholder="請輸入管理員密碼"
-                />
+                <div className="relative">
+                  <input
+                    type={showAdminPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={formConfig.authConfig?.adminPassword || ''}
+                    onChange={(e) =>
+                      setFormConfig({
+                        ...formConfig,
+                        authConfig: {
+                          ...(formConfig.authConfig || {
+                            requirePassword: true,
+                            defaultTeacherPassword: '1234',
+                            academicPassword: '1234',
+                            accountingPassword: '1234',
+                          }),
+                          adminPassword: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 pr-9 font-mono font-bold text-slate-900 text-sm"
+                    placeholder="請輸入管理員密碼"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700"
+                    title={showAdminPassword ? '隱藏密碼' : '顯示密碼'}
+                    aria-label={showAdminPassword ? '隱藏密碼' : '顯示密碼'}
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 <p className="text-[10px] text-slate-500 mt-1">
                   切換至【系統管理員】後台維護時所需的最高權限密碼。
                 </p>
