@@ -19,7 +19,15 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     if (m) return `${m[1]}${m[2]}`;
     return title;
   };
-  const reviewerDisplay = request.reviewedBy || (reviewerStaff ? `${reviewerStaff.name}(${formatStampTitle(reviewerStaff.title)})` : '教學組長');
+  const formatReviewedByStamp = (raw?: string) => {
+    if (!raw) return reviewerStaff ? `${reviewerStaff.name}(${formatStampTitle(reviewerStaff.title)})` : '教學組長';
+    const nested = raw.match(/^(.+?)\s*\((.+?組).*?\((.+?)\)\)\s*$/);
+    if (nested) return `${nested[1].trim()}(${nested[2]}${nested[3]})`;
+    const titled = raw.match(/^(.+?)\s*\((.+?)\)$/);
+    if (titled) return `${titled[1].replace(/\s+/g, '')}(${formatStampTitle(titled[2])})`;
+    return raw.replace(/\s+/g, '');
+  };
+  const reviewerDisplay = formatReviewedByStamp(request.reviewedBy);
 
   const getPeriodLabel = (periodNum: number) => {
     const p = PERIOD_DEFINITIONS.find((def) => def.period === periodNum);
