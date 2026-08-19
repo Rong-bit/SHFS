@@ -65,7 +65,8 @@ interface AppContextType {
   createStaffDirectDispatch: (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
       autoApprove?: boolean;
-    }
+    },
+    requestMonth?: number
   ) => SubstituteRequest;
   approveRequest: (requestId: string, reviewerName?: string) => void;
   batchApproveRequests: (requestIds: string[], reviewerName?: string) => number;
@@ -800,11 +801,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createStaffDirectDispatch = (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
       autoApprove?: boolean;
-    }
+    },
+    requestMonth?: number
   ): SubstituteRequest => {
     const newId = `req-${Date.now()}`;
     const nextSeq = (requests.length + 1).toString().padStart(3, '0');
-    const requestNumber = `VOC-${systemConfig.academicYear}-${systemConfig.currentMonth}-${nextSeq}`;
+    const month = requestMonth ?? systemConfig.currentMonth;
+    const requestNumber = `VOC-${systemConfig.academicYear}-${month}-${nextSeq}`;
 
     const clashStatus = checkClashes({
       requestType: data.requestType,

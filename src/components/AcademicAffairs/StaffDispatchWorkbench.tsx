@@ -102,6 +102,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [leaveType, setLeaveType] = useState<LeaveType>('official');
   const [paymentType, setPaymentType] = useState<PaymentType>('public');
   const [reason, setReason] = useState<string>('奉派參加教育部技術型高中專業群科專題競賽指導研習 (公假公費派代)');
+
+  // 歸屬月份選擇（同老師端邏輯）
+  const thisMonth = new Date().getMonth() + 1;
+  const today = new Date();
+  const lastDayOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+  const diffDays = Math.floor((today.getTime() - lastDayOfLastMonth.getTime()) / 86400000);
+  const canSelectLastMonth = diffDays <= 7;
+  const lastMonth = thisMonth === 1 ? 12 : thisMonth - 1;
+  const [dispatchMonth, setDispatchMonth] = useState<number>(thisMonth);
   const [autoApprove, setAutoApprove] = useState<boolean>(true);
 
   // Substitute specific
@@ -287,7 +296,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
       swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
       swapTargetSession: requestType === 'swap' ? swapSession : undefined,
       autoApprove,
-    });
+    }, dispatchMonth);
 
     setSuccessToast(`【${newReq.requestNumber}】調代課已成功由教學組登錄${autoApprove ? '並立即核定生效' : '並進入簽核清冊'}！`);
     setTimeout(() => setSuccessToast(null), 4000);
@@ -679,6 +688,21 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     placeholder="請輸入事由（例：代表學校參加全國技能競賽指導研習，公文號 114-08992）"
                     className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                   />
+                </div>
+
+                {/* 歸屬結算月份 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">歸屬結算月份：</label>
+                  <select
+                    value={dispatchMonth}
+                    onChange={(e) => setDispatchMonth(Number(e.target.value))}
+                    className="bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    <option value={thisMonth}>{thisMonth} 月（本月）</option>
+                    {canSelectLastMonth && (
+                      <option value={lastMonth}>{lastMonth} 月（補登上週跨月）</option>
+                    )}
+                  </select>
                 </div>
               </div>
 
