@@ -73,7 +73,6 @@ export const TeacherSchedule: React.FC = () => {
   // Teacher sessions
   const teacherSessions = sessions.filter((s) => s.teacherId === currentTeacher.id);
   const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
-  const weeklyActual = overloadBreakdown.counted;
   const basePeriods = currentTeacher.basePeriods;
   const overloadPeriods = overloadBreakdown.concurrent;
   const thisMonth = new Date().getMonth() + 1;
@@ -216,7 +215,7 @@ export const TeacherSchedule: React.FC = () => {
               本學期每週授課節數
             </div>
             <div className="flex items-baseline space-x-2 mt-2">
-              <span className="text-3xl font-extrabold text-slate-900">{weeklyActual}</span>
+              <span className="text-3xl font-extrabold text-slate-900">{overloadBreakdown.scheduleTotal}</span>
               <span className="text-sm font-semibold text-slate-500">/ 基本 {basePeriods} 節</span>
             </div>
             <div className="mt-2 text-xs text-slate-600 space-y-1">
