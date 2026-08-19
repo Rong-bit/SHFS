@@ -27,7 +27,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, weeklyOverloadPeriods } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, weeklyOverloadPeriods } from '../../utils/schoolDepartments';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -370,7 +370,7 @@ export const TeacherSchedule: React.FC = () => {
                             {session ? (
                               <div
                                 className={`h-full p-2.5 rounded-xl border flex flex-col justify-between transition-all group-hover:shadow-sm ${
-                                  session.isPractical
+                                  isPracticalSession(session)
                                     ? 'bg-amber-50/90 border-amber-300 text-amber-950 ring-1 ring-amber-400/30'
                                     : session.isConcurrent
                                       ? 'bg-violet-50/90 border-violet-300 text-violet-950 ring-1 ring-violet-400/30'
@@ -386,7 +386,7 @@ export const TeacherSchedule: React.FC = () => {
                                           兼課
                                         </span>
                                       )}
-                                      {session.isPractical ? (
+                                      {isPracticalSession(session) ? (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-amber-500 text-white rounded font-medium">
                                           實習工場
                                         </span>

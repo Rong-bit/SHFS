@@ -22,7 +22,7 @@ import {
   INITIAL_ACADEMIC_STAFF,
   withMigratedAuthConfig,
 } from '../data/mockData';
-import { ParsedImportRow } from '../utils/scheduleImporter';
+import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
 import { countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, normalizeStandardBasePeriods, resolveTeacherBasePeriods, teacherWeeklyOverload, weeklyOverloadPeriods } from '../utils/schoolDepartments';
 import {
@@ -210,7 +210,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [sessions, setSessions] = useState<CourseSession[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-    return saved ? JSON.parse(saved) : INITIAL_SESSIONS;
+    const list: CourseSession[] = saved ? JSON.parse(saved) : INITIAL_SESSIONS;
+    return list.map((s) => ({
+      ...s,
+      isPractical: inferIsPractical(s.subjectName, s.venueName),
+    }));
   });
 
   const [requests, setRequests] = useState<SubstituteRequest[]>(() => {
@@ -375,7 +379,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...t,
       email: ensureSchoolEmail(t.name, t.email),
     }));
-    const remoteSessions = remote.sessions || [];
+    const remoteSessions = (remote.sessions || []).map((s) => ({
+      ...s,
+      isPractical: inferIsPractical(s.subjectName, s.venueName),
+    }));
     const remoteStd = normalizeStandardBasePeriods(remote.systemConfig?.standardBasePeriods);
     setTeachers(
       enrichTeachersFromSessions(
@@ -389,7 +396,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
     setVenues(remote.venues || []);
-    setSessions(remote.sessions || []);
+    setSessions(remoteSessions);
     setRequests(remote.requests || []);
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,

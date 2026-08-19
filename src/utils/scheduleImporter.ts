@@ -89,12 +89,12 @@ export const inferIsPractical = (subjectName: string, venueName: string, explici
   if (explicitVal !== undefined && explicitVal !== null && String(explicitVal).trim() !== '') {
     const str = String(explicitVal).trim().toLowerCase();
     if (['是', 'y', 'yes', 'true', '1', '實習', '實作'].includes(str)) return true;
-    if (['否', 'n', 'no', 'false', '0', '學科', '一般'].includes(str)) return false;
+    if (['否', 'n', 'no', 'false', '學科', '一般'].includes(str)) return false;
   }
   if (isInternshipCourse(subjectName)) return true;
   const venue = venueName || '';
   if (/普通教室|原班/.test(venue) || /團體活動/.test(subjectName || '')) return false;
-  return /工場|實習教室/.test(venue);
+  return /工場|實習教室|實習室/.test(venue);
 };
 
 /** 課表「1.兼課2.」欄填 1（或是／兼課）即為兼課 */
@@ -293,7 +293,7 @@ export const parseScheduleFile = async (
       const hoursVal = findField(['時數', '每週時數', '節數', '學分', '時數/週', 'Hours', 'hours', 'credit']);
       const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName', '教室名稱'])).trim();
       const deptVal = String(findField(['科別', '群科', '教師科別', 'Department', 'department'])).trim();
-      const practicalVal = findField(['是否為實習', '實習課', '實習', '屬性', 'isPractical', '實作', '課程類別']);
+      const practicalVal = findField(['是否為實習', '是否為實習實作課', '實習課', 'isPractical', '課程類別']);
       const concurrentVal = pickConcurrentValue(raw, findField);
       const notesVal = String(findField(['備註', '說明', 'Notes', 'notes'])).trim();
 
@@ -600,7 +600,7 @@ export const parseScheduleFile = async (
     const teacherVal = cleanTeacherName(teacherNameRaw || teacherCodeRaw) || '未指派教師';
     const venueVal = String(findField(['實習工場', '教學場地', '上課地點', '教室', '工場', 'Venue', 'venueName', '教室名稱'])).trim();
     const deptVal = String(findField(['科別', '群科', '教師科別', 'Department', 'department'])).trim();
-    const practicalVal = findField(['是否為實習', '實習課', '實習', '屬性', 'isPractical', '實作', '課程類別']);
+    const practicalVal = findField(['是否為實習', '是否為實習實作課', '實習課', 'isPractical', '課程類別']);
     const concurrentVal = pickConcurrentValue(raw, findField);
     const notesVal = String(findField(['備註', '說明', 'Notes', 'notes'])).trim();
 

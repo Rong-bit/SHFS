@@ -179,6 +179,17 @@ export const isInternshipCourse = (subjectName: string) => {
   return /實習|實作/.test(name);
 };
 
+export const isPracticalSession = (session: {
+  isPractical?: boolean;
+  subjectName?: string;
+  venueName?: string;
+}) => {
+  if (isInternshipCourse(session.subjectName || '')) return true;
+  const venue = session.venueName || '';
+  if (/普通教室|原班/.test(venue)) return Boolean(session.isPractical);
+  return Boolean(session.isPractical) || /工場|實習教室|實習室/.test(venue);
+};
+
 /**
  * 用實習課判斷這位老師屬於哪一科：
  * 教「電機一忠」的實習課 → 電機科老師。

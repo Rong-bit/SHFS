@@ -19,7 +19,7 @@ import {
   Download
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
-import { displayTeacherTitle, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 
 export const SchoolTimetableMatrix: React.FC = () => {
   const { sessions, teachers, venues, systemConfig, setIsImportModalOpen } = useApp();
@@ -275,7 +275,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
                             {session ? (
                               <div
                                 className={`h-full p-2 rounded-xl border flex flex-col justify-between ${
-                                  session.isPractical
+                                  isPracticalSession(session)
                                     ? 'bg-amber-50 border-amber-300 text-amber-950 ring-1 ring-amber-400/20'
                                     : session.isConcurrent
                                       ? 'bg-violet-50 border-violet-300 text-violet-950 ring-1 ring-violet-400/20'
@@ -291,7 +291,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
                                           兼課
                                         </span>
                                       )}
-                                      {session.isPractical && (
+                                      {isPracticalSession(session) && (
                                         <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.2 rounded font-semibold">
                                           實習
                                         </span>
