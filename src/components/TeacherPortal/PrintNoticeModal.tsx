@@ -1,6 +1,7 @@
 import React from 'react';
 import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
+import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
 import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
 
@@ -42,26 +43,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     return '請假派代';
   };
 
-  const originalSession = (() => {
-    const orig = request.originalSession;
-    const isPlaceholder = orig.className === '未指派課堂' || orig.id === 's-placeholder';
-    if (!isPlaceholder) return orig;
-    const found = sessions.find(
-      (s) =>
-        s.dayOfWeek === orig.dayOfWeek &&
-        s.period === orig.period &&
-        (s.teacherId === request.applicantTeacherId || s.teacherId === request.substituteTeacherId)
-    );
-    return found
-      ? {
-          ...orig,
-          className: found.className,
-          subjectName: found.subjectName,
-          venueName: found.venueName || orig.venueName,
-          isPractical: found.isPractical,
-        }
-      : orig;
-  })();
+  const originalSession = resolveOriginalSession(request, sessions);
 
   const getLeaveTypeName = (leave?: string) => {
     switch (leave) {
