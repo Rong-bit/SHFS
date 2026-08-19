@@ -77,7 +77,7 @@ export const AcademicAffairsMain: React.FC = () => {
 
           <button
             id="btn-academic-export-schedule"
-            onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester)}
+            onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester, systemConfig.schoolName)}
             className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold shadow-xs transition"
             title="匯出目前全校課表為 Excel"
           >

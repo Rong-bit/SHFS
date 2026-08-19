@@ -421,7 +421,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
 
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester)}
+              onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester, systemConfig.schoolName)}
               className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition"
               title="匯出目前已排定的全校課表為 Excel"
             >

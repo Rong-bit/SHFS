@@ -95,6 +95,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
     sectionChief: 0,
     director: 0,
   },
+  schoolName: '國立技術型高級中等學校',
   academicYear: '114',
   semester: '1',
   currentMonth: new Date().getMonth() + 1,

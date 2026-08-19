@@ -154,6 +154,7 @@ export interface SystemConfig {
     sectionChief: number; // 組長基本鐘點（可設定）
     director: number; // 主任基本鐘點（可設定）
   };
+  schoolName: string; // 學校名稱（通知單抬頭）
   academicYear: string; // 114
   semester: string; // 1
   currentMonth: number; // 10

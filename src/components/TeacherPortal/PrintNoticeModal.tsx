@@ -10,7 +10,7 @@ interface PrintNoticeModalProps {
 }
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { currentAcademicStaff, academicStaffList } = useApp();
+  const { currentAcademicStaff, academicStaffList, systemConfig } = useApp();
   
   // Resolve reviewer staff
   const reviewerStaff = currentAcademicStaff || academicStaffList[0];
@@ -92,7 +92,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           {/* Header */}
           <div className="text-center border-b-2 border-slate-800 pb-3 mb-4">
             <h1 className="text-xl sm:text-2xl font-bold tracking-wider text-slate-900">
-              國立技術型高級中等學校
+              {systemConfig.schoolName || '國立技術型高級中等學校'}
             </h1>
             <h2 className="text-lg font-semibold text-slate-700 tracking-wide mt-0.5">
               教師調課 · 代課 · 補課聯絡通知單

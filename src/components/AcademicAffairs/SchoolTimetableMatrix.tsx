@@ -224,7 +224,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
               <span>匯入新課表</span>
             </button>
             <button
-              onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester)}
+              onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester, systemConfig.schoolName)}
               className="flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold text-xs border border-slate-700 transition"
               title="匯出目前總課表為 Excel"
             >

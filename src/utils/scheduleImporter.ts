@@ -864,7 +864,8 @@ export const exportScheduleToExcel = (
   sessions: CourseSession[],
   teachers: Teacher[],
   academicYear: string = '114',
-  semester: string = '1'
+  semester: string = '1',
+  schoolName: string = '國立技術型高級中等學校'
 ) => {
   const wb = XLSX.utils.book_new();
 
@@ -912,7 +913,7 @@ export const exportScheduleToExcel = (
   const involvedTeachers = Array.from(new Set(sessions.map((s) => s.teacherName)));
 
   const summaryData = [
-    [`國立技術型高級中等學校 ${academicYear} 學年度第 ${semester} 學期 全校課表總覽`],
+    [`${schoolName} ${academicYear} 學年度第 ${semester} 學期 全校課表總覽`],
     ['匯出時間', new Date().toLocaleString()],
     [''],
     ['統計項目', '數值', '備註'],
@@ -927,5 +928,5 @@ export const exportScheduleToExcel = (
   wsSummary['!cols'] = [{ wch: 24 }, { wch: 20 }, { wch: 50 }];
   XLSX.utils.book_append_sheet(wb, wsSummary, '課表統計摘要');
 
-  XLSX.writeFile(wb, `國立高職全校總課表_${academicYear}學年度第${semester}學期.xlsx`);
+  XLSX.writeFile(wb, `${schoolName}全校總課表_${academicYear}學年度第${semester}學期.xlsx`);
 };
