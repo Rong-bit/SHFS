@@ -70,8 +70,19 @@ const teacherNameMatches = (rowTeacherName: string, teacherName: string) => {
   return rowParts.includes(name) || nameParts.some((p) => rowParts.includes(p));
 };
 
-/** 課表上的「團體活動時間」：含班會、團體活動；用來判斷導師，但不計入超鐘點正課 */
-export const isGroupActivity = (subjectName: string) => /團體活動|班會/.test(subjectName || '');
+/** 班會／班級活動：用來判斷導師，並計入正課（法規：班級活動節數併入計算） */
+export const isHomeroomActivity = (subjectName: string) => /班會|班級活動/.test(subjectName || '');
+
+/** 對開社團／團體活動（非班會）：不計入每週授課節數，通常 2 節 */
+export const isExcludedGroupActivity = (subjectName: string) => {
+  const name = subjectName || '';
+  if (isHomeroomActivity(name) && !/社團/.test(name)) return false;
+  return /團體活動|社團/.test(name);
+};
+
+/** 課表上的團體活動時間（含班會）：用來判斷導師 */
+export const isGroupActivity = (subjectName: string) =>
+  isHomeroomActivity(subjectName) || isExcludedGroupActivity(subjectName);
 
 const isAfternoonPeriod = (period: number) => period >= 5;
 
@@ -106,7 +117,7 @@ export const breakdownWeeklyOverloadPeriods = (
   let counted = 0;
   let concurrent = 0;
   slotMap.forEach((list) => {
-    const teaching = list.filter((s) => !isGroupActivity(s.subjectName));
+    const teaching = list.filter((s) => !isExcludedGroupActivity(s.subjectName));
     if (teaching.length === 0) {
       groupActivityExcluded += 1;
       return;
@@ -175,7 +186,7 @@ export const monthlyTeachingPeriods = (
 ) => {
   const counts = weekdayOccurrencesInMonth(year, month);
   return sessions
-    .filter((s) => s.teacherId === teacherId && !isGroupActivity(s.subjectName))
+    .filter((s) => s.teacherId === teacherId && !isExcludedGroupActivity(s.subjectName))
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
@@ -190,7 +201,7 @@ export const monthlyConcurrentPeriods = (
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
-    if (!s.isConcurrent || isGroupActivity(s.subjectName)) return;
+    if (!s.isConcurrent || isExcludedGroupActivity(s.subjectName)) return;
     if (!isVisibleWeeklySlot(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });
