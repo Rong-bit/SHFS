@@ -10,7 +10,7 @@ interface PrintNoticeModalProps {
 }
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { currentAcademicStaff, academicStaffList, systemConfig } = useApp();
+  const { currentAcademicStaff, academicStaffList, systemConfig, sessions } = useApp();
   
   // Resolve reviewer staff
   const reviewerStaff = currentAcademicStaff || academicStaffList[0];
@@ -37,10 +37,31 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
 
   const getTypeName = (type: string) => {
-    if (type === 'swap') return '相互調課 (Swap)';
-    if (type === 'reschedule') return '自行移課 (Reschedule)';
-    return '請假派代 (Substitute)';
+    if (type === 'swap') return '相互調課';
+    if (type === 'reschedule') return '自行移課';
+    return '請假派代';
   };
+
+  const originalSession = (() => {
+    const orig = request.originalSession;
+    const isPlaceholder = orig.className === '未指派課堂' || orig.id === 's-placeholder';
+    if (!isPlaceholder) return orig;
+    const found = sessions.find(
+      (s) =>
+        s.dayOfWeek === orig.dayOfWeek &&
+        s.period === orig.period &&
+        (s.teacherId === request.applicantTeacherId || s.teacherId === request.substituteTeacherId)
+    );
+    return found
+      ? {
+          ...orig,
+          className: found.className,
+          subjectName: found.subjectName,
+          venueName: found.venueName || orig.venueName,
+          isPractical: found.isPractical,
+        }
+      : orig;
+  })();
 
   const getLeaveTypeName = (leave?: string) => {
     switch (leave) {
@@ -173,17 +194,17 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
               </div>
               <div className="p-2 col-span-3 text-slate-900">
                 <div className="font-medium">
-                  班級：<strong>{request.originalSession.className}</strong> ｜ 科目：<strong>{request.originalSession.subjectName}</strong>
+                  班級：<strong>{originalSession.className}</strong> ｜ 科目：<strong>{originalSession.subjectName}</strong>
                 </div>
                 <div className="text-slate-600 mt-0.5">
-                  時段：{dayNames[request.originalSession.dayOfWeek]} {getPeriodLabel(request.originalSession.period)} ｜ 
-                  上課地點：<strong className="text-slate-800">{request.originalSession.venueName}</strong>
-                  {request.originalSession.isConcurrent && (
+                  時段：{dayNames[originalSession.dayOfWeek]} {getPeriodLabel(originalSession.period)} ｜ 
+                  上課地點：<strong className="text-slate-800">{originalSession.venueName}</strong>
+                  {originalSession.isConcurrent && (
                     <span className="ml-2 px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
                       兼課
                     </span>
                   )}
-                  {request.originalSession.isPractical && (
+                  {originalSession.isPractical && (
                     <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] rounded font-medium">
                       專業實習工場課程
                     </span>

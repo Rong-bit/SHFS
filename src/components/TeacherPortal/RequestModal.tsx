@@ -88,10 +88,14 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // Smart candidate recommendations / clash checking target:
   // - substitute：必用（請假星期/節次）建立暫代課堂
   // - swap/reschedule：使用原課堂 selectedSession
+  const matchedLeaveSession =
+    teacherSessions.find((s) => s.id === leaveSlotId) ||
+    teacherSessions.find((s) => s.dayOfWeek === leaveDay && s.period === leavePeriod);
+
   const effectiveOriginalSession: CourseSession | undefined =
     requestType === 'substitute'
       ? currentTeacher && leaveDay !== '' && leavePeriod !== ''
-        ? {
+        ? matchedLeaveSession || {
             id: 's-placeholder',
             dayOfWeek: leaveDay,
             period: leavePeriod,
