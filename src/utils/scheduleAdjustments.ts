@@ -95,6 +95,47 @@ export function applyRequestToSessions(
   return sessions;
 }
 
+function findLiveSessionForSubstitute(
+  sessions: CourseSession[],
+  req: SubstituteRequest
+): CourseSession | undefined {
+  const resolved = resolveOriginalSession(req, sessions);
+  const byResolvedId = sessions.find((s) => s.id === resolved.id);
+  if (byResolvedId) return byResolvedId;
+
+  const bySnapId = sessions.find((s) => s.id === req.originalSession.id);
+  if (bySnapId) return bySnapId;
+
+  const day = resolved.dayOfWeek;
+  const period = resolved.period;
+  const className = resolved.className;
+
+  // 現行已是本單代課覆蓋
+  if (req.substituteTeacherId) {
+    const byCover = sessions.find(
+      (s) =>
+        s.dayOfWeek === day &&
+        s.period === period &&
+        s.teacherId === req.substituteTeacherId &&
+        (!className || s.className === className) &&
+        Boolean(s.notes?.includes(SUBSTITUTE_NOTE)) &&
+        Boolean(
+          !req.applicantTeacherName || s.notes?.includes(req.applicantTeacherName)
+        )
+    );
+    if (byCover) return byCover;
+  }
+
+  // 已回滾回申請人（或從未套用成功）
+  return sessions.find(
+    (s) =>
+      s.dayOfWeek === day &&
+      s.period === period &&
+      s.teacherId === req.applicantTeacherId &&
+      (!className || s.className === className)
+  );
+}
+
 /**
  * 若課表現況已不是本申請核准後的預期狀態（後續又有異動），回傳阻擋原因；可安全回滾則回傳 null。
  */
@@ -135,11 +176,18 @@ export function getRollbackBlockReason(
   }
 
   if (req.requestType === 'substitute' && req.substituteTeacherId) {
-    const live = sessions.find((s) => s.id === req.originalSession.id);
+    const live = findLiveSessionForSubstitute(sessions, req);
     if (!live) return '找不到原課堂，無法回滾代課';
-    if (live.teacherId !== req.substituteTeacherId) {
-      return '該課堂任課已變更（可能另有派代），略過回滾';
-    }
+    // 仍為本單代課教師：可回滾
+    if (live.teacherId === req.substituteTeacherId) return null;
+    // 已是申請人（先前已回滾／套用未生效）：視為可安全刪除，無需再改課表
+    if (live.teacherId === req.applicantTeacherId) return null;
+    // 仍掛著代課註記但任課已換成其他人：才擋下
+    return '該課堂任課已變更（可能另有派代），略過回滾';
+  }
+
+  // 請假派代未指定代課教師：無課表覆蓋可回滾
+  if (req.requestType === 'substitute' && !req.substituteTeacherId) {
     return null;
   }
 
@@ -220,9 +268,31 @@ export function rollbackRequestFromSessionsDetailed(
   }
 
   if (req.requestType === 'substitute' && req.substituteTeacherId) {
+    const live = findLiveSessionForSubstitute(sessions, req);
+    if (!live) {
+      return { sessions, rolledBack: false, blockedReason: '找不到原課堂，無法回滾代課' };
+    }
+    // 已是申請人：視為已回滾成功（冪等），可刪單
+    if (live.teacherId === req.applicantTeacherId) {
+      return {
+        sessions: sessions.map((s) =>
+          s.id === live.id && s.notes?.includes(SUBSTITUTE_NOTE)
+            ? { ...s, notes: undefined }
+            : s
+        ),
+        rolledBack: true,
+      };
+    }
+    if (live.teacherId !== req.substituteTeacherId) {
+      return {
+        sessions,
+        rolledBack: false,
+        blockedReason: '該課堂任課已變更（可能另有派代），略過回滾',
+      };
+    }
     return {
       sessions: sessions.map((s) => {
-        if (s.id !== req.originalSession.id) return s;
+        if (s.id !== live.id) return s;
         return {
           ...s,
           teacherId: req.applicantTeacherId,
@@ -232,6 +302,11 @@ export function rollbackRequestFromSessionsDetailed(
       }),
       rolledBack: true,
     };
+  }
+
+  // 未指定代課教師的已核准請假單：無課表覆蓋
+  if (req.requestType === 'substitute' && !req.substituteTeacherId) {
+    return { sessions, rolledBack: true };
   }
 
   return { sessions, rolledBack: false };

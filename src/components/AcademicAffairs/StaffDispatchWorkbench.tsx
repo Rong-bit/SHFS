@@ -1974,9 +1974,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
             <p className="text-xs text-slate-600 mt-2 leading-relaxed">
               即將刪除{' '}
               <strong className="text-slate-900">
-                {requests.find((r) => r.id === deletingRequestId)?.requestNumber || '此單'}
+                {(() => {
+                  const t = requests.find((r) => r.id === deletingRequestId);
+                  if (!t) return '此單';
+                  if (!t.batchGroupId) return t.requestNumber || '此單';
+                  const n = requests.filter((r) => r.batchGroupId === t.batchGroupId).length;
+                  return `${t.requestNumber || '此單'}（含同批連續節次共 ${n} 筆）`;
+                })()}
               </strong>
-              。刪除後無法復原，也不再計入鐘點費結算。若只是填錯，刪除後可重新登錄。
+              。刪除後無法復原，也不再計入鐘點費結算；已核准者會一併回滾課表代課覆蓋。若只是填錯，刪除後可重新登錄。
             </p>
             <div className="flex justify-end space-x-2 mt-5">
               <button

@@ -1338,20 +1338,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     return created;
   };
-  const rejectRequest = (requestId: string, reason: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
+  const collectRelatedRequests = (requestId: string): SubstituteRequest[] => {
     const target = requests.find((r) => r.id === requestId);
-    if (target?.status === 'approved') {
-      const result = rollbackRequestFromSessionsDetailed(sessions, target);
+    if (!target) return [];
+    if (!target.batchGroupId) return [target];
+    return requests
+      .filter((r) => r.batchGroupId === target.batchGroupId)
+      .slice()
+      .sort((a, b) => {
+        // 連續節次：節次高的先回滾（較新登錄常在後面，但以節次由大到小較穩）
+        const pa = a.originalSession?.period ?? 0;
+        const pb = b.originalSession?.period ?? 0;
+        if (pb !== pa) return pb - pa;
+        const ta = a.reviewedAt || a.createdAt || '';
+        const tb = b.reviewedAt || b.createdAt || '';
+        return tb.localeCompare(ta);
+      });
+  };
+
+  const rollbackApprovedGroup = (
+    group: SubstituteRequest[]
+  ): { ok: true; sessions: CourseSession[] } | { ok: false; reason: string } => {
+    const approved = group.filter((r) => r.status === 'approved');
+    let next = sessions;
+    for (const r of approved) {
+      const result = rollbackRequestFromSessionsDetailed(next, r);
       if (!result.rolledBack && result.blockedReason) {
-        window.alert(`無法駁回：${result.blockedReason}\n請先處理後續課表異動，再駁回此單。`);
-        return;
+        return {
+          ok: false,
+          reason: `${r.requestNumber || r.id}：${result.blockedReason}`,
+        };
       }
-      setSessions(result.sessions);
+      next = result.sessions;
     }
+    return { ok: true, sessions: next };
+  };
+
+  const rejectRequest = (requestId: string, reason: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
+    const group = collectRelatedRequests(requestId);
+    if (group.length === 0) return;
+    const rolled = rollbackApprovedGroup(group);
+    if (rolled.ok === false) {
+      window.alert(`無法駁回：${rolled.reason}\n請先處理後續課表異動，再駁回此單。`);
+      return;
+    }
+    setSessions(rolled.sessions);
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const ids = new Set(group.map((r) => r.id));
     setRequests((prev) =>
       prev.map((r) =>
-        r.id === requestId
+        ids.has(r.id)
           ? {
               ...r,
               status: 'rejected',
@@ -1365,31 +1401,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const cancelRequest = (requestId: string) => {
-    const target = requests.find((r) => r.id === requestId);
-    if (target?.status === 'approved') {
-      const result = rollbackRequestFromSessionsDetailed(sessions, target);
-      if (!result.rolledBack && result.blockedReason) {
-        window.alert(`無法取消：${result.blockedReason}\n請先處理後續課表異動，再取消此單。`);
-        return;
-      }
-      setSessions(result.sessions);
+    const group = collectRelatedRequests(requestId);
+    if (group.length === 0) return;
+    const rolled = rollbackApprovedGroup(group);
+    if (rolled.ok === false) {
+      window.alert(`無法取消：${rolled.reason}\n請先處理後續課表異動，再取消此單。`);
+      return;
     }
+    setSessions(rolled.sessions);
+    const ids = new Set(group.map((r) => r.id));
     setRequests((prev) =>
-      prev.map((r) => (r.id === requestId ? { ...r, status: 'cancelled' } : r))
+      prev.map((r) => (ids.has(r.id) ? { ...r, status: 'cancelled' } : r))
     );
   };
 
   const deleteRequest = (requestId: string) => {
-    const target = requests.find((r) => r.id === requestId);
-    if (target?.status === 'approved') {
-      const result = rollbackRequestFromSessionsDetailed(sessions, target);
-      if (!result.rolledBack && result.blockedReason) {
-        window.alert(`無法刪除：${result.blockedReason}\n請先處理後續課表異動，再刪除此單。`);
-        return;
-      }
-      setSessions(result.sessions);
+    const group = collectRelatedRequests(requestId);
+    if (group.length === 0) return;
+    const rolled = rollbackApprovedGroup(group);
+    if (rolled.ok === false) {
+      window.alert(`無法刪除：${rolled.reason}\n請先處理後續課表異動，再刪除此單。`);
+      return;
     }
-    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    setSessions(rolled.sessions);
+    const ids = new Set(group.map((r) => r.id));
+    setRequests((prev) => prev.filter((r) => !ids.has(r.id)));
   };
 
   const clearAllRequests = () => {
