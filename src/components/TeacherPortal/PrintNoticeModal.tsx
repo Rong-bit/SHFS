@@ -20,15 +20,42 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     if (m) return `${m[1]}${m[2]}`;
     return title;
   };
-  const formatReviewedByStamp = (raw?: string) => {
-    if (!raw) return reviewerStaff ? `${reviewerStaff.name}(${formatStampTitle(reviewerStaff.title)})` : '教學組長';
-    const nested = raw.match(/^(.+?)\s*\((.+?組).*?\((.+?)\)\)\s*$/);
-    if (nested) return `${nested[1].trim()}(${nested[2]}${nested[3]})`;
-    const titled = raw.match(/^(.+?)\s*\((.+?)\)$/);
-    if (titled) return `${titled[1].replace(/\s+/g, '')}(${formatStampTitle(titled[2])})`;
-    return raw.replace(/\s+/g, '');
+  const parseReviewerStamp = (raw?: string): { name: string; title?: string; note?: string } => {
+    const autoNote = '[教務處逕行派代]';
+    let rest = (raw || '').trim();
+    let note: string | undefined;
+
+    if (rest.endsWith(autoNote)) {
+      note = autoNote;
+      rest = rest.slice(0, -autoNote.length).trim();
+    }
+
+    if (!rest) {
+      if (!reviewerStaff) return { name: '教學組長', note };
+      return {
+        name: reviewerStaff.name,
+        title: `(${formatStampTitle(reviewerStaff.title)})`,
+        note,
+      };
+    }
+
+    const nested = rest.match(/^(.+?)\s*\((.+?組).*?\((.+?)\)\)\s*$/);
+    if (nested) {
+      return { name: nested[1].trim(), title: `(${nested[2]}${nested[3]})`, note };
+    }
+
+    const titled = rest.match(/^(.+?)\s*\((.+?)\)$/);
+    if (titled) {
+      return {
+        name: titled[1].replace(/\s+/g, ''),
+        title: `(${formatStampTitle(titled[2])})`,
+        note,
+      };
+    }
+
+    return { name: rest.replace(/\s+/g, ''), note };
   };
-  const reviewerDisplay = formatReviewedByStamp(request.reviewedBy);
+  const reviewerStamp = parseReviewerStamp(request.reviewedBy);
 
   const getPeriodLabel = (periodNum: number) => {
     const p = PERIOD_DEFINITIONS.find((def) => def.period === periodNum);
@@ -271,23 +298,27 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
 
             {/* Academic Affairs Section Chief */}
             <div className="p-3">
-              <div className="text-slate-600 font-bold mb-6">教務處經辦 / 組長</div>
-              <div className="inline-flex flex-col justify-center border-2 border-red-500 text-red-700 px-3 py-1.5 font-serif font-bold text-sm rounded leading-tight">
-                {(() => {
-                  const m = reviewerDisplay.match(/^(.+?)\((.+)\)$/);
-                  if (!m) return reviewerDisplay;
-                  const nameChars = Array.from(m[1]);
-                  return (
-                    <>
-                      <span className="flex w-full justify-between">
-                        {nameChars.map((ch, i) => (
-                          <span key={`${ch}-${i}`}>{ch}</span>
-                        ))}
-                      </span>
-                      <span className="whitespace-nowrap">({m[2]})</span>
-                    </>
-                  );
-                })()}
+              <div className="text-slate-600 font-bold mb-4">教務處經辦 / 組長</div>
+              <div className="inline-flex flex-col items-center">
+                <div className="w-[5.75rem] border-2 border-red-500 text-red-700 px-2 py-1.5 font-serif font-bold text-sm rounded leading-tight space-y-0.5">
+                  <span className="flex w-full justify-between">
+                    {Array.from(reviewerStamp.name).map((ch, i) => (
+                      <span key={`n-${ch}-${i}`}>{ch}</span>
+                    ))}
+                  </span>
+                  {reviewerStamp.title && (
+                    <span className="flex w-full justify-between text-[11px] font-semibold">
+                      {Array.from(reviewerStamp.title).map((ch, i) => (
+                        <span key={`t-${ch}-${i}`}>{ch}</span>
+                      ))}
+                    </span>
+                  )}
+                </div>
+                {reviewerStamp.note && (
+                  <div className="mt-1 text-[10px] text-red-700 font-bold text-center tracking-tight">
+                    {reviewerStamp.note}
+                  </div>
+                )}
               </div>
               <div className="text-[10px] text-emerald-700 font-semibold mt-2">
                 {request.reviewedAt || '2026-10-15'} 核准
