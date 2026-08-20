@@ -175,17 +175,19 @@ export const CloudSyncPanel: React.FC = () => {
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
               <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-              學校同步密碼（至少 4 字，A、B 電腦相同）
+              學校同步密碼（至少 4 字；全校各電腦必須完全相同）
             </label>
             <input
               type="text"
               value={form.schoolKey}
               onChange={(e) => setForm({ ...form, schoolKey: e.target.value })}
               placeholder="例如：SHFS-本校-2026"
+              autoComplete="off"
+              spellCheck={false}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs"
             />
             <p className="text-[11px] text-slate-500 mt-1">
-              資料會加密後才上傳。沒有這組密碼，其他人即使找到資料庫也讀不懂。
+              這不是教學組登入密碼。密碼差一個字會連到另一個空的雲端位置，看起來像「無法同步」。請把同一組密碼完整提供給助理與教師。
             </p>
           </div>
 

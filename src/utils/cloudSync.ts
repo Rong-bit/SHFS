@@ -239,10 +239,53 @@ export const pushSharedSchoolData = async (
 };
 
 export const testCloudSyncConnection = async (settings: CloudSyncSettings): Promise<string> => {
+  const probe = await probeCloudSync(settings);
+  return probe.message;
+};
+
+export type CloudSyncProbeResult = {
+  ok: true;
+  hasRemoteData: boolean;
+  message: string;
+};
+
+/**
+ * 探測同步連線。
+ * 注意：同步密碼會決定雲端路徑，密碼差一個字就連到另一個空位置（看起來像「無法同步」）。
+ */
+export const probeCloudSync = async (settings: CloudSyncSettings): Promise<CloudSyncProbeResult> => {
   if (!settings.databaseUrl.trim()) throw new Error('請先填寫 Firebase 資料庫網址');
-  if (settings.schoolKey.trim().length < 4) throw new Error('同步密碼至少 4 個字');
-  const endpoint = await buildEndpoint({ ...settings, enabled: true });
+  const key = settings.schoolKey.trim();
+  if (key.length < 4) throw new Error('同步密碼至少 4 個字');
+
+  const endpoint = await buildEndpoint({ ...settings, schoolKey: key, enabled: true });
   const res = await fetch(endpoint);
-  if (!res.ok) throw new Error(`連線失敗（HTTP ${res.status}）`);
-  return '連線成功，可以啟用跨電腦同步';
+  if (!res.ok) throw new Error(`連線失敗（HTTP ${res.status}）。請確認網路或資料庫網址。`);
+
+  const json = await res.json();
+  if (!json) {
+    return {
+      ok: true,
+      hasRemoteData: false,
+      message:
+        '連線成功，但此密碼對應的雲端尚無資料。若其他電腦已在同步，代表密碼可能不一致（大小寫、符號、空白都要相同）；若這是全校第一台啟用，可繼續。',
+    };
+  }
+
+  if (json.v === 1 && json.ct && json.iv) {
+    try {
+      await decryptPayload(key, json as EncryptedEnvelope);
+    } catch {
+      throw new Error(
+        '同步密碼無法解密雲端資料。請確認是「學校同步密碼」，不是教學組／管理員登入密碼。'
+      );
+    }
+    return {
+      ok: true,
+      hasRemoteData: true,
+      message: '連線成功，已讀到學校雲端資料，可以加入同步。',
+    };
+  }
+
+  throw new Error('雲端資料格式不符。');
 };
