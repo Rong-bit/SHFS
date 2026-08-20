@@ -49,6 +49,7 @@ import {
 import {
   applyRequestToSessions,
   applyRequestToSessionsDetailed,
+  healLegacySubstituteOwnership,
   reapplyApprovedRequestsOldestFirst,
   remapRequestSessions,
   rollbackApprovedRequestsNewestFirstDetailed,
@@ -505,6 +506,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
   }, [requests]);
+
+  // 一次性：還原舊版請假把任課改走的課堂（申請人課表不應少節）
+  const didHealSubstituteRef = useRef(false);
+  useEffect(() => {
+    if (didHealSubstituteRef.current) return;
+    didHealSubstituteRef.current = true;
+    setSessions((prev) => healLegacySubstituteOwnership(prev, requests));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(systemConfig));

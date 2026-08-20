@@ -6,8 +6,18 @@ import {
 } from './resolveOriginalSession';
 
 const SUBSTITUTE_NOTE = '[代課]';
+const LEAVE_COVER_NOTE = '[請假派代]';
 const RESCHEDULE_NOTE = '[已移課]';
 const SWAP_NOTE = '[相互調課]';
+
+function isLeaveCoverNote(notes?: string): boolean {
+  return Boolean(notes?.includes(SUBSTITUTE_NOTE) || notes?.includes(LEAVE_COVER_NOTE));
+}
+
+function leaveCoverNote(req: SubstituteRequest): string {
+  const subName = req.substituteTeacherName || '（未填姓名）';
+  return `${LEAVE_COVER_NOTE} 代課教師：${subName}`;
+}
 
 function matchesOriginalSession(s: CourseSession, req: SubstituteRequest, orig: CourseSession): boolean {
   if (!isPlaceholderSession(orig) && s.id === orig.id) return true;
@@ -144,31 +154,46 @@ export function applyRequestToSessionsDetailed(
     const targets = sessions.filter((s) =>
       matchesOriginalSession(s, reqResolved, resolvedOrig)
     );
-    if (targets.length === 0) {
+    // 舊版曾把任課改成代課老師：改以「申請人原課堂 id／時段」找回
+    const legacyCovered =
+      targets.length === 0
+        ? sessions.filter(
+            (s) =>
+              s.id === resolvedOrig.id ||
+              (s.dayOfWeek === resolvedOrig.dayOfWeek &&
+                s.period === resolvedOrig.period &&
+                s.teacherId === reqResolved.substituteTeacherId &&
+                isLeaveCoverNote(s.notes))
+          )
+        : [];
+    const toFix = targets.length > 0 ? targets : legacyCovered;
+    if (toFix.length === 0) {
       return {
         sessions,
         applied: false,
         reason: '找不到欲派代的課堂於現行課表',
       };
     }
-    const alreadyCovered = targets.every(
-      (s) =>
-        s.teacherId === reqResolved.substituteTeacherId &&
-        Boolean(s.notes?.includes(SUBSTITUTE_NOTE))
-    );
-    if (alreadyCovered) return { sessions, applied: true };
 
+    const note = leaveCoverNote(reqResolved);
+    // 請假只標註，不改週課表任課（否則申請人課表會「消失該節」）
+    const alreadyOk = toFix.every(
+      (s) =>
+        s.teacherId === reqResolved.applicantTeacherId &&
+        isLeaveCoverNote(s.notes) &&
+        Boolean(s.notes?.includes(reqResolved.substituteTeacherName || ''))
+    );
+    if (alreadyOk) return { sessions, applied: true };
+
+    const fixIds = new Set(toFix.map((s) => s.id));
     return {
       sessions: sessions.map((s) => {
-        if (!matchesOriginalSession(s, reqResolved, resolvedOrig)) return s;
-        if (s.teacherId === reqResolved.substituteTeacherId && s.notes?.includes(SUBSTITUTE_NOTE)) {
-          return s;
-        }
+        if (!fixIds.has(s.id)) return s;
         return {
           ...s,
-          teacherId: reqResolved.substituteTeacherId!,
-          teacherName: reqResolved.substituteTeacherName || s.teacherName,
-          notes: `${SUBSTITUTE_NOTE} 原任課 ${reqResolved.applicantTeacherName}`,
+          teacherId: reqResolved.applicantTeacherId,
+          teacherName: reqResolved.applicantTeacherName || s.teacherName,
+          notes: note,
         };
       }),
       applied: true,
@@ -194,15 +219,25 @@ function findLiveSessionForSubstitute(
   const period = resolved.period;
   const className = resolved.className;
 
-  // 現行已是本單代課覆蓋
+  // 現行已是本單代課覆蓋（新：仍掛申請人；舊：任課曾改成代課老師）
   if (req.substituteTeacherId) {
+    const byApplicantCover = sessions.find(
+      (s) =>
+        s.dayOfWeek === day &&
+        s.period === period &&
+        s.teacherId === req.applicantTeacherId &&
+        (!className || s.className === className) &&
+        isLeaveCoverNote(s.notes)
+    );
+    if (byApplicantCover) return byApplicantCover;
+
     const byCover = sessions.find(
       (s) =>
         s.dayOfWeek === day &&
         s.period === period &&
         s.teacherId === req.substituteTeacherId &&
         (!className || s.className === className) &&
-        Boolean(s.notes?.includes(SUBSTITUTE_NOTE)) &&
+        isLeaveCoverNote(s.notes) &&
         Boolean(
           !req.applicantTeacherName || s.notes?.includes(req.applicantTeacherName)
         )
@@ -262,11 +297,10 @@ export function getRollbackBlockReason(
   if (req.requestType === 'substitute' && req.substituteTeacherId) {
     const live = findLiveSessionForSubstitute(sessions, req);
     if (!live) return '找不到原課堂，無法回滾代課';
-    // 仍為本單代課教師：可回滾
-    if (live.teacherId === req.substituteTeacherId) return null;
-    // 已是申請人（先前已回滾／套用未生效）：視為可安全刪除，無需再改課表
+    // 仍為申請人（含僅標註請假派代）：可回滾清註記
     if (live.teacherId === req.applicantTeacherId) return null;
-    // 仍掛著代課註記但任課已換成其他人：才擋下
+    // 舊版：任課曾改成代課教師，可還原
+    if (live.teacherId === req.substituteTeacherId) return null;
     return '該課堂任課已變更（可能另有派代），略過回滾';
   }
 
@@ -356,13 +390,11 @@ export function rollbackRequestFromSessionsDetailed(
     if (!live) {
       return { sessions, rolledBack: false, blockedReason: '找不到原課堂，無法回滾代課' };
     }
-    // 已是申請人：視為已回滾成功（冪等），可刪單
+    // 已是申請人：清請假註記即可（新邏輯／已回滾）
     if (live.teacherId === req.applicantTeacherId) {
       return {
         sessions: sessions.map((s) =>
-          s.id === live.id && s.notes?.includes(SUBSTITUTE_NOTE)
-            ? { ...s, notes: undefined }
-            : s
+          s.id === live.id && isLeaveCoverNote(s.notes) ? { ...s, notes: undefined } : s
         ),
         rolledBack: true,
       };
@@ -374,6 +406,7 @@ export function rollbackRequestFromSessionsDetailed(
         blockedReason: '該課堂任課已變更（可能另有派代），略過回滾',
       };
     }
+    // 舊版：任課在代課老師身上 → 還原申請人
     return {
       sessions: sessions.map((s) => {
         if (s.id !== live.id) return s;
@@ -524,4 +557,27 @@ function pickLiveFields(live: CourseSession, snap: CourseSession) {
     isPractical: live.isPractical,
     isConcurrent: live.isConcurrent,
   };
+}
+
+/**
+ * 修正舊版「請假核准後把任課改成代課老師」：還原申請人並改為請假標註。
+ * 請假不應刪除／移走週課表該節。
+ */
+export function healLegacySubstituteOwnership(
+  sessions: CourseSession[],
+  requests: SubstituteRequest[]
+): CourseSession[] {
+  let next = sessions;
+  let changed = false;
+  for (const r of requests) {
+    if (r.status !== 'approved' || r.requestType !== 'substitute' || !r.substituteTeacherId) {
+      continue;
+    }
+    const result = applyRequestToSessionsDetailed(next, r);
+    if (result.applied && result.sessions !== next) {
+      next = result.sessions;
+      changed = true;
+    }
+  }
+  return changed ? next : sessions;
 }

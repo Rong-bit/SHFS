@@ -72,8 +72,20 @@ export const TeacherSchedule: React.FC = () => {
     );
   }
 
-  // Teacher sessions
-  const teacherSessions = sessions.filter((s) => s.teacherId === currentTeacher.id);
+  // Teacher sessions（含舊版誤改到代課老師、註記仍寫原任課者）
+  const teacherSessions = sessions.filter(
+    (s) =>
+      s.teacherId === currentTeacher.id ||
+      (Boolean(s.notes?.includes('[代課]')) &&
+        Boolean(s.notes?.includes(`原任課 ${currentTeacher.name}`)))
+  );
+  /** 我當代課老師的已核准單（週課表仍掛原任課，另以標註顯示代課任務） */
+  const mySubstituteDuties = requests.filter(
+    (r) =>
+      r.status === 'approved' &&
+      r.requestType === 'substitute' &&
+      r.substituteTeacherId === currentTeacher.id
+  );
   const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
   const basePeriods = currentTeacher.basePeriods;
   const overloadPeriods = overloadBreakdown.concurrent;
@@ -111,6 +123,28 @@ export const TeacherSchedule: React.FC = () => {
   const getSessionsAt = (day: DayOfWeek, period: number) =>
     teacherSessions.filter((s) => s.dayOfWeek === day && s.period === period);
   const getSessionAt = (day: DayOfWeek, period: number) => getSessionsAt(day, period)[0];
+  const getLeaveCoverLabel = (session: CourseSession) => {
+    if (session.notes?.includes('[請假派代]') || session.notes?.includes('[代課]')) {
+      return session.notes;
+    }
+    const hit = requests.find(
+      (r) =>
+        r.status === 'approved' &&
+        r.requestType === 'substitute' &&
+        r.applicantTeacherId === currentTeacher.id &&
+        (r.originalSession.id === session.id ||
+          (r.originalSession.dayOfWeek === session.dayOfWeek &&
+            r.originalSession.period === session.period))
+    );
+    return hit
+      ? `[請假派代] 代課教師：${hit.substituteTeacherName || '已派代'}`
+      : null;
+  };
+  const getSubDutyAt = (day: DayOfWeek, period: number) =>
+    mySubstituteDuties.find(
+      (r) =>
+        r.originalSession.dayOfWeek === day && r.originalSession.period === period
+    );
 
   const handleCellClick = (session?: CourseSession) => {
     if (!currentTeacher) return;
@@ -359,6 +393,10 @@ export const TeacherSchedule: React.FC = () => {
               <span className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></span>
               <span>一般學科課堂</span>
             </span>
+            <span className="flex items-center space-x-1 text-slate-600">
+              <span className="w-3 h-3 rounded bg-rose-50 border border-rose-300"></span>
+              <span>請假派代（課仍屬原任課，僅標註代課）</span>
+            </span>
             {/* Teacher portal: no Excel export (requested) */}
           </div>
         </div>
@@ -403,6 +441,8 @@ export const TeacherSchedule: React.FC = () => {
                       {days.map((d) => {
                         const slotSessions = getSessionsAt(d.day, pDef.period);
                         const session = slotSessions[0];
+                        const leaveLabel = session ? getLeaveCoverLabel(session) : null;
+                        const subDuty = !session ? getSubDutyAt(d.day, pDef.period) : null;
                         return (
                           <td
                             key={d.day}
@@ -412,7 +452,9 @@ export const TeacherSchedule: React.FC = () => {
                             {session ? (
                               <div
                                 className={`h-full p-2.5 rounded-xl border flex flex-col justify-between transition-all group-hover:shadow-sm ${
-                                  isPracticalSession(session)
+                                  leaveLabel
+                                    ? 'bg-rose-50/90 border-rose-300 text-rose-950 ring-1 ring-rose-400/30'
+                                    : isPracticalSession(session)
                                     ? 'bg-amber-50/90 border-amber-300 text-amber-950 ring-1 ring-amber-400/30'
                                     : session.isConcurrent
                                       ? 'bg-violet-50/90 border-violet-300 text-violet-950 ring-1 ring-violet-400/30'
@@ -423,6 +465,11 @@ export const TeacherSchedule: React.FC = () => {
                                   <div className="flex items-center justify-between font-bold text-xs gap-1">
                                     <span className="text-slate-900">{session.className}</span>
                                     <span className="flex items-center gap-0.5 shrink-0">
+                                      {leaveLabel && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
+                                          請假派代
+                                        </span>
+                                      )}
                                       {slotSessions.length > 1 && (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
                                           {slotSessions.length}堂
@@ -438,11 +485,11 @@ export const TeacherSchedule: React.FC = () => {
                                           兼課
                                         </span>
                                       )}
-                                      {isPracticalSession(session) ? (
+                                      {!leaveLabel && isPracticalSession(session) ? (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-amber-500 text-white rounded font-medium">
                                           實習工場
                                         </span>
-                                      ) : !session.isConcurrent ? (
+                                      ) : !leaveLabel && !session.isConcurrent ? (
                                         <span className="text-[10px] text-slate-500 font-normal">正課</span>
                                       ) : null}
                                     </span>
@@ -450,6 +497,11 @@ export const TeacherSchedule: React.FC = () => {
                                   <div className="font-semibold text-xs text-slate-800 mt-1 line-clamp-1">
                                     {session.subjectName}
                                   </div>
+                                  {leaveLabel && (
+                                    <div className="text-[10px] text-rose-700 mt-0.5 line-clamp-2">
+                                      {leaveLabel.replace(/^\[請假派代\]\s*/, '').replace(/^\[代課\]\s*/, '')}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="mt-1.5 pt-1 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600">
@@ -460,6 +512,28 @@ export const TeacherSchedule: React.FC = () => {
                                   <span className="text-amber-700 opacity-0 group-hover:opacity-100 font-bold text-[10px] transition shrink-0">
                                     調課 ➔
                                   </span>
+                                </div>
+                              </div>
+                            ) : subDuty ? (
+                              <div className="h-full p-2.5 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/80 text-indigo-950 flex flex-col justify-between">
+                                <div>
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-bold text-xs">
+                                      {subDuty.originalSession.className}
+                                    </span>
+                                    <span className="text-[10px] px-1.5 py-0.2 bg-indigo-600 text-white rounded font-medium">
+                                      代課任務
+                                    </span>
+                                  </div>
+                                  <div className="font-semibold text-xs mt-1 line-clamp-1">
+                                    {subDuty.originalSession.subjectName}
+                                  </div>
+                                  <div className="text-[10px] text-indigo-700 mt-0.5">
+                                    原任課 {subDuty.applicantTeacherName}
+                                  </div>
+                                </div>
+                                <div className="text-[10px] text-indigo-600/80">
+                                  週課表仍屬原任課；此為請假期間代課標註
                                 </div>
                               </div>
                             ) : (
