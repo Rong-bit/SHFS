@@ -149,9 +149,9 @@ export function countMatchingWeekdaysInMonth(
 }
 
 /**
- * 結算用：有請假日期則只計「落在結算月（與西元年）」的相符星期；
- * 無日期舊案回傳 null（由呼叫端依單號月份決定是否計入，再以整月放假檢查）。
- * 行事曆放假日不計節。
+ * 結算用：有請假日期則只計「落在結算月」且星期相符的天數。
+ * 西元年優先用結算年；若結算年對不到（學年未換導致年偏）但請假區間確有該月，改以請假日期內之西元年計。
+ * 無日期舊案回傳 null。
  */
 export function countLeaveSubstitutePeriodsInMonth(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
@@ -163,14 +163,28 @@ export function countLeaveSubstitutePeriodsInMonth(
   const end =
     resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) ||
     request.leaveDateStart;
-  return countMatchingWeekdaysInMonth(
+  const dayOfWeek = request.originalSession.dayOfWeek;
+
+  const withSettlementYear = countMatchingWeekdaysInMonth(
     request.leaveDateStart,
     end,
-    request.originalSession.dayOfWeek,
+    dayOfWeek,
     settlementMonth,
     settlementYear,
     excludeDates
   );
+  if (withSettlementYear > 0 || settlementYear == null) return withSettlementYear;
+
+  // 結算西元年與請假日期年不一致時：改以請假區間內「該月」實際出現的年份計節
+  const fromLeaveYear = countMatchingWeekdaysInMonth(
+    request.leaveDateStart,
+    end,
+    dayOfWeek,
+    settlementMonth,
+    undefined, // 不限年，只要落在該月
+    excludeDates
+  );
+  return fromLeaveYear;
 }
 
 /** 從單號或建立時間推估申請月份（1–12） */

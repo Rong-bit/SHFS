@@ -155,6 +155,10 @@ export const AccountingSettlement: React.FC = () => {
             )}
             計，並已扣除系統設定之放假日 ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
+            <span className="block mt-1 text-slate-600">
+              扣款規則：僅<strong>事假／病假（自費代課）</strong>且<strong>已核准並已指定代課</strong>才會在請假人欄顯示「-扣」；
+              公假／公差／研習為<strong>公費派代</strong>，由公款支應代課費，請假人不會被扣款。
+            </span>
           </p>
         </div>
 

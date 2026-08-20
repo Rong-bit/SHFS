@@ -68,7 +68,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const sessionRateKind = selectedSession?.period === 8 ? '第八節課輔' : '日間部';
 
   const [requestType, setRequestType] = useState<RequestType>('substitute');
-  const [leaveType, setLeaveType] = useState<LeaveType>('official');
+  const [leaveType, setLeaveType] = useState<LeaveType>('personal');
   // 申請事由：不預設內容，讓老師自行填寫
   const [reason, setReason] = useState<string>('');
 
@@ -79,7 +79,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const canSelectLastMonth = sevenDaysAgo.getMonth() !== now.getMonth();
   const lastMonth = sevenDaysAgo.getMonth() + 1;
   const [requestMonth, setRequestMonth] = useState<number>(thisMonth);
-  const [paymentType, setPaymentType] = useState<PaymentType>('public');
+  const [paymentType, setPaymentType] = useState<PaymentType>('private');
 
   // For Reschedule (自行移課)
   const [targetDay, setTargetDay] = useState<DayOfWeek>(2);
