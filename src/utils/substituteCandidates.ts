@@ -43,14 +43,15 @@ export function teacherTeachesSubject(
  * 1. 相同科目優先
  * 2. 其次同科別
  * 3. 再以該時段沒課（空堂）優先
+ * 連續節次時：任一節有課即視為衝堂；任教科目與任一目標科目相符即視為同科目
  */
 export function rankSubstituteCandidates(params: {
   teachers: Teacher[];
   sessions: CourseSession[];
   excludeTeacherId: string;
   targetDayOfWeek: DayOfWeek;
-  targetPeriod: number;
-  subjectName: string;
+  targetPeriod: number | number[];
+  subjectName: string | string[];
   sessionDepartment?: string;
   applicantDepartment?: string;
   maxWeeklyOverloadPeriods: number;
@@ -67,16 +68,23 @@ export function rankSubstituteCandidates(params: {
     maxWeeklyOverloadPeriods,
   } = params;
 
+  const periods = Array.isArray(targetPeriod) ? targetPeriod : [targetPeriod];
+  const subjects = Array.isArray(subjectName) ? subjectName : [subjectName];
+
   return teachers
     .filter((t) => t.id !== excludeTeacherId)
     .map((t) => {
-      const hasClash = sessions.some(
-        (s) =>
-          s.teacherId === t.id &&
-          s.dayOfWeek === targetDayOfWeek &&
-          s.period === targetPeriod
+      const hasClash = periods.some((p) =>
+        sessions.some(
+          (s) =>
+            s.teacherId === t.id &&
+            s.dayOfWeek === targetDayOfWeek &&
+            s.period === p
+        )
       );
-      const isSameSubject = teacherTeachesSubject(t.id, subjectName, sessions);
+      const isSameSubject = subjects.some((subj) =>
+        teacherTeachesSubject(t.id, subj, sessions)
+      );
       const isSameDept =
         Boolean(sessionDepartment && t.department === sessionDepartment) ||
         Boolean(applicantDepartment && t.department === applicantDepartment);

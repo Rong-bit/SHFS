@@ -133,6 +133,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [leaveDateMode, setLeaveDateMode] = useState<'single' | 'range'>('single');
   const [leaveDateStart, setLeaveDateStart] = useState<string>('');
   const [leaveDateEnd, setLeaveDateEnd] = useState<string>('');
+  /** 單節｜同日連續節次（如第2～7節實習） */
+  const [sessionPickMode, setSessionPickMode] = useState<'single' | 'periodRange'>('single');
+  const [rangeDayOfWeek, setRangeDayOfWeek] = useState<DayOfWeek>(1);
+  const [rangePeriodStart, setRangePeriodStart] = useState<number>(2);
+  const [rangePeriodEnd, setRangePeriodEnd] = useState<number>(7);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
 
   // Reschedule specific
   const [targetDay, setTargetDay] = useState<DayOfWeek>(1);
@@ -171,24 +177,61 @@ export const StaffDispatchWorkbench: React.FC = () => {
     return all.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
   }, [sessions, applicantTeacher, leaveFilterDays]);
 
-  // Selected original session
-  const selectedOriginalSession = applicantSessions.find((s) => s.id === selectedSessionId) || applicantSessions[0];
+  // 連續節次：同日、節次介於起迄之間的課堂
+  const periodRangeSessions = useMemo(() => {
+    const lo = Math.min(rangePeriodStart, rangePeriodEnd);
+    const hi = Math.max(rangePeriodStart, rangePeriodEnd);
+    return applicantSessions
+      .filter((s) => s.dayOfWeek === rangeDayOfWeek && s.period >= lo && s.period <= hi)
+      .sort((a, b) => a.period - b.period);
+  }, [applicantSessions, rangeDayOfWeek, rangePeriodStart, rangePeriodEnd]);
+
+  const batchSelectedSessions = useMemo(() => {
+    if (sessionPickMode !== 'periodRange' || requestType !== 'substitute') return [];
+    return periodRangeSessions.filter((s) => selectedSessionIds.includes(s.id));
+  }, [sessionPickMode, requestType, periodRangeSessions, selectedSessionIds]);
+
+  // Selected original session（單節模式；連續模式以第一筆為代表）
+  const selectedOriginalSession =
+    sessionPickMode === 'periodRange' && requestType === 'substitute'
+      ? batchSelectedSessions[0] || periodRangeSessions[0]
+      : applicantSessions.find((s) => s.id === selectedSessionId) || applicantSessions[0];
+
+  const availableRangeDays = useMemo(() => {
+    const days = Array.from(
+      new Set(applicantSessions.map((s) => s.dayOfWeek))
+    ).sort((a, b) => Number(a) - Number(b)) as DayOfWeek[];
+    return days.length > 0 ? days : ([1, 2, 3, 4, 5] as DayOfWeek[]);
+  }, [applicantSessions]);
 
   // Smart matching candidate teachers when appointing a substitute
   const candidateSubstitutes = useMemo(() => {
     if (!selectedOriginalSession || !applicantTeacher) return [];
 
+    const targetSessions =
+      sessionPickMode === 'periodRange' && batchSelectedSessions.length > 0
+        ? batchSelectedSessions
+        : [selectedOriginalSession];
+
     return rankSubstituteCandidates({
       teachers,
       sessions,
       excludeTeacherId: applicantTeacher.id,
-      targetDayOfWeek: selectedOriginalSession.dayOfWeek,
-      targetPeriod: selectedOriginalSession.period,
-      subjectName: selectedOriginalSession.subjectName,
+      targetDayOfWeek: targetSessions[0].dayOfWeek,
+      targetPeriod: targetSessions.map((s) => s.period),
+      subjectName: targetSessions.map((s) => s.subjectName),
       applicantDepartment: applicantTeacher.department,
       maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
     });
-  }, [teachers, applicantTeacher, selectedOriginalSession, sessions, systemConfig]);
+  }, [
+    teachers,
+    applicantTeacher,
+    selectedOriginalSession,
+    sessions,
+    systemConfig,
+    sessionPickMode,
+    batchSelectedSessions,
+  ]);
 
   // 點選課堂變更後，自動改選「同科目／同科／空堂」最佳人選
   React.useEffect(() => {
@@ -198,7 +241,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
       candidateSubstitutes.find((c) => !c.hasClash && c.isSameDept) ||
       candidateSubstitutes.find((c) => !c.hasClash);
     if (best) setSubstituteTeacherId(best.teacher.id);
-  }, [selectedOriginalSession?.id, candidateSubstitutes]);
+  }, [
+    selectedOriginalSession?.id,
+    selectedSessionIds.join(','),
+    sessionPickMode,
+    candidateSubstitutes,
+  ]);
 
   // Auto-select first session if not set
   React.useEffect(() => {
@@ -206,6 +254,27 @@ export const StaffDispatchWorkbench: React.FC = () => {
       setSelectedSessionId(applicantSessions[0].id);
     }
   }, [applicantSessions, selectedSessionId]);
+
+  // 請假日／篩選變更時，連續節次的「星期」自動對齊
+  React.useEffect(() => {
+    if (availableRangeDays.length === 0) return;
+    if (!availableRangeDays.includes(rangeDayOfWeek)) {
+      setRangeDayOfWeek(availableRangeDays[0]);
+    }
+  }, [availableRangeDays, rangeDayOfWeek]);
+
+  // 連續節次範圍變更時，自動勾選該範圍內全部課堂
+  React.useEffect(() => {
+    if (sessionPickMode !== 'periodRange') return;
+    setSelectedSessionIds(periodRangeSessions.map((s) => s.id));
+  }, [sessionPickMode, periodRangeSessions]);
+
+  // 切換回單節／非派代時清掉多選
+  React.useEffect(() => {
+    if (requestType !== 'substitute') {
+      setSessionPickMode('single');
+    }
+  }, [requestType]);
 
   // Auto-switch payment type default when leave type changes
   const handleLeaveTypeChange = (type: LeaveType) => {
@@ -270,8 +339,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const handleSubmitDispatch = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedOriginalSession) {
-      alert('請先選擇欲辦理調代課之原課堂！');
+    const sessionsToDispatch =
+      requestType === 'substitute' && sessionPickMode === 'periodRange'
+        ? batchSelectedSessions
+        : selectedOriginalSession
+        ? [selectedOriginalSession]
+        : [];
+
+    if (sessionsToDispatch.length === 0) {
+      alert(
+        requestType === 'substitute' && sessionPickMode === 'periodRange'
+          ? '請先設定連續節次範圍，並確認該範圍內有可派代課堂！'
+          : '請先選擇欲辦理調代課之原課堂！'
+      );
       return;
     }
 
@@ -299,9 +379,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
         leaveDateStart,
         leaveDateMode === 'range' ? leaveDateEnd : leaveDateStart
       );
-      if (!allowedDays.includes(selectedOriginalSession.dayOfWeek)) {
+      const bad = sessionsToDispatch.find((s) => !allowedDays.includes(s.dayOfWeek));
+      if (bad) {
         alert(
-          `所選課堂（${dayNames[selectedOriginalSession.dayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(allowedDays, dayNames)}）內，請改日期或改課堂。`
+          `所選課堂（${dayNames[bad.dayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(allowedDays, dayNames)}）內，請改日期或改課堂。`
         );
         return;
       }
@@ -318,32 +399,53 @@ export const StaffDispatchWorkbench: React.FC = () => {
           : leaveDateStart
         : undefined;
 
-    const newReq = createStaffDirectDispatch({
-      requestType,
-      applicantTeacherId: applicantTeacher.id,
-      applicantTeacherName: applicantTeacher.name,
-      applicantDepartment: applicantTeacher.department,
-      leaveType,
-      leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
-      leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
-      paymentType,
-      reason,
-      originalSession: selectedOriginalSession,
-      substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
-      substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
-      targetReschedule: requestType === 'reschedule' && targetVenue ? {
-        dayOfWeek: targetDay,
-        period: targetPeriod,
-        venueId: targetVenue.id,
-        venueName: targetVenue.name,
-      } : undefined,
-      swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
-      swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
-      swapTargetSession: requestType === 'swap' ? swapSession : undefined,
-      autoApprove,
-    }, dispatchMonth);
+    const created = sessionsToDispatch.map((originalSession, index) =>
+      createStaffDirectDispatch(
+        {
+          requestType,
+          applicantTeacherId: applicantTeacher.id,
+          applicantTeacherName: applicantTeacher.name,
+          applicantDepartment: applicantTeacher.department,
+          leaveType,
+          leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
+          leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
+          paymentType,
+          reason:
+            requestType === 'substitute' && sessionsToDispatch.length > 1
+              ? `${reason}【連續節次批次 ${dayNames[originalSession.dayOfWeek]}第${originalSession.period}節】`
+              : reason,
+          originalSession,
+          substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+          substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
+          targetReschedule:
+            requestType === 'reschedule' && targetVenue
+              ? {
+                  dayOfWeek: targetDay,
+                  period: targetPeriod,
+                  venueId: targetVenue.id,
+                  venueName: targetVenue.name,
+                }
+              : undefined,
+          swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
+          swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
+          swapTargetSession: requestType === 'swap' ? swapSession : undefined,
+          autoApprove,
+        },
+        dispatchMonth,
+        { sequenceOffset: index, idNonce: `${Date.now()}-${index}` }
+      )
+    );
 
-    setSuccessToast(`【${newReq.requestNumber}】調代課已成功由教學組登錄${autoApprove ? '並立即核定生效' : '並進入簽核清冊'}！`);
+    const first = created[0];
+    setSuccessToast(
+      created.length > 1
+        ? `已批次登錄 ${created.length} 筆連續節次派代（${first.requestNumber} 起）${
+            autoApprove ? '並立即核定生效' : '並進入簽核清冊'
+          }！`
+        : `【${first.requestNumber}】調代課已成功由教學組登錄${
+            autoApprove ? '並立即核定生效' : '並進入簽核清冊'
+          }！`
+    );
     setTimeout(() => setSuccessToast(null), 4000);
 
     // Switch to list view to see result
@@ -890,11 +992,101 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                 {/* Sessions Grid */}
                 <div>
+                  {requestType === 'substitute' && (
+                    <div className="mb-3">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        課堂選取方式：
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSessionPickMode('single')}
+                          className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                            sessionPickMode === 'single'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          單節派代
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSessionPickMode('periodRange')}
+                          className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                            sessionPickMode === 'periodRange'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          連續節次（如第2～7節實習）
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {requestType === 'substitute' && sessionPickMode === 'periodRange' && (
+                    <div className="mb-3 p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">星期</label>
+                          <select
+                            value={rangeDayOfWeek}
+                            onChange={(e) => setRangeDayOfWeek(Number(e.target.value) as DayOfWeek)}
+                            className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg"
+                          >
+                            {availableRangeDays.map((d) => (
+                              <option key={d} value={d}>
+                                {dayNames[d]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">起節</label>
+                          <select
+                            value={rangePeriodStart}
+                            onChange={(e) => setRangePeriodStart(Number(e.target.value))}
+                            className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg"
+                          >
+                            {PERIOD_DEFINITIONS.map((p) => (
+                              <option key={p.period} value={p.period}>
+                                第{p.period}節
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">迄節</label>
+                          <select
+                            value={rangePeriodEnd}
+                            onChange={(e) => setRangePeriodEnd(Number(e.target.value))}
+                            className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg"
+                          >
+                            {PERIOD_DEFINITIONS.map((p) => (
+                              <option key={p.period} value={p.period}>
+                                第{p.period}節
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-indigo-800 leading-relaxed">
+                        將一次派代「{dayNames[rangeDayOfWeek]} 第
+                        {Math.min(rangePeriodStart, rangePeriodEnd)}～
+                        {Math.max(rangePeriodStart, rangePeriodEnd)}節」內有課的節次（目前{' '}
+                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。同一位代課教師須在這些節次皆空堂。
+                      </p>
+                    </div>
+                  )}
+
                   <label className="block text-xs font-bold text-slate-700 mb-2">
-                    請點選欲辦理調代之課堂 ({applicantSessions.length} 節)
-                    {leaveFilterDays.length > 0
-                      ? ` · 僅顯示${formatWeekdayList(leaveFilterDays, dayNames)}`
-                      : ''}
+                    {requestType === 'substitute' && sessionPickMode === 'periodRange'
+                      ? `連續節次課堂（可取消勾選個別節次 · ${batchSelectedSessions.length}/${periodRangeSessions.length}）`
+                      : `請點選欲辦理調代之課堂 (${applicantSessions.length} 節)${
+                          leaveFilterDays.length > 0
+                            ? ` · 僅顯示${formatWeekdayList(leaveFilterDays, dayNames)}`
+                            : ''
+                        }`}
                     ：
                   </label>
 
@@ -904,7 +1096,66 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     </p>
                   )}
 
-                  {applicantSessions.length === 0 ? (
+                  {requestType === 'substitute' && sessionPickMode === 'periodRange' ? (
+                    periodRangeSessions.length === 0 ? (
+                      <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                        該範圍內沒有排定課堂。請調整星期或起迄節次（實習課常見為第2～7節）。
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                        {periodRangeSessions.map((s) => {
+                          const isSelected = selectedSessionIds.includes(s.id);
+                          return (
+                            <div
+                              key={s.id}
+                              onClick={() => {
+                                setSelectedSessionIds((prev) =>
+                                  prev.includes(s.id)
+                                    ? prev.filter((id) => id !== s.id)
+                                    : [...prev, s.id]
+                                );
+                              }}
+                              className={`p-3 rounded-xl border cursor-pointer transition ${
+                                isSelected
+                                  ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-xs gap-1">
+                                <span className="font-bold text-slate-900">
+                                  {isSelected ? '✓ ' : ''}
+                                  {dayNames[s.dayOfWeek]} 第{s.period}節
+                                </span>
+                                <span className="flex items-center gap-0.5 shrink-0">
+                                  {s.isConcurrent && (
+                                    <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 border border-violet-300 rounded text-[10px] font-bold">
+                                      兼課
+                                    </span>
+                                  )}
+                                  {isPracticalSession(s) ? (
+                                    <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold">
+                                      專業實習
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.2 bg-blue-50 text-blue-800 rounded text-[10px]">
+                                      一般學科
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              <div className="text-xs font-bold text-slate-800 mt-1">
+                                {s.className} ｜ {s.subjectName}
+                              </div>
+                              <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+                                <Building2 className="w-3 h-3 text-slate-400" />
+                                <span>{s.venueName}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  ) : applicantSessions.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
                       {leaveFilterDays.length > 0
                         ? `該教師在「${formatWeekdayList(leaveFilterDays, dayNames)}」沒有排定課堂，請改請假起迄或確認課表。`
@@ -1167,7 +1418,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       )}
                     </strong>
                     <div className="text-amber-400 mt-0.5">
-                      {selectedOriginalSession && `${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節 (${selectedOriginalSession.venueName})`}
+                      {selectedOriginalSession &&
+                        (requestType === 'substitute' &&
+                        sessionPickMode === 'periodRange' &&
+                        batchSelectedSessions.length > 1
+                          ? `${dayNames[selectedOriginalSession.dayOfWeek]} 第${Math.min(
+                              ...batchSelectedSessions.map((s) => s.period)
+                            )}～${Math.max(...batchSelectedSessions.map((s) => s.period))}節（共 ${
+                              batchSelectedSessions.length
+                            } 節）`
+                          : `${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節 (${selectedOriginalSession.venueName})`)}
                     </div>
                   </div>
 
@@ -1251,7 +1511,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   }`}
                 >
                   <Send className="w-4 h-4" />
-                  <span>確定登記並執行派代</span>
+                  <span>
+                    {requestType === 'substitute' &&
+                    sessionPickMode === 'periodRange' &&
+                    batchSelectedSessions.length > 1
+                      ? `確定批次派代 ${batchSelectedSessions.length} 節`
+                      : '確定登記並執行派代'}
+                  </span>
                 </button>
               </div>
 

@@ -67,7 +67,8 @@ interface AppContextType {
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
       autoApprove?: boolean;
     },
-    requestMonth?: number
+    requestMonth?: number,
+    batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ) => SubstituteRequest;
   approveRequest: (requestId: string, reviewerName?: string) => void;
   batchApproveRequests: (requestIds: string[], reviewerName?: string) => number;
@@ -810,10 +811,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
       autoApprove?: boolean;
     },
-    requestMonth?: number
+    requestMonth?: number,
+    batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ): SubstituteRequest => {
-    const newId = `req-${Date.now()}`;
-    const nextSeq = (requests.length + 1).toString().padStart(3, '0');
+    const seqOffset = batchOptions?.sequenceOffset ?? 0;
+    const idNonce = batchOptions?.idNonce ?? seqOffset;
+    const newId = `req-${Date.now()}-${idNonce}`;
+    const nextSeq = (requests.length + 1 + seqOffset).toString().padStart(3, '0');
     const month = requestMonth ?? systemConfig.currentMonth;
     const requestNumber = `VOC-${systemConfig.academicYear}-${month}-${nextSeq}`;
 
