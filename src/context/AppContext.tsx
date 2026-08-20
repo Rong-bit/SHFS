@@ -45,10 +45,22 @@ import {
   isPasswordHash,
   resolveAuthConfigForSave,
 } from '../utils/passwordCrypto';
+import {
+  applyRequestToSessions,
+  remapRequestSessions,
+  rollbackRequestFromSessions,
+} from '../utils/scheduleAdjustments';
 
 interface AppContextType {
   currentRole: UserRole;
+  /** @deprecated 請用 requestRoleSwitchWithAuth；僅允許切回教師端 */
   setCurrentRole: (role: UserRole) => void;
+  /** 密碼驗證成功後寫入角色（僅供登入視窗使用） */
+  completeAuthenticatedLogin: (payload: {
+    role: UserRole;
+    academicStaffId?: string;
+    teacherId?: string;
+  }) => void;
   currentTeacherId: string;
   setCurrentTeacherId: (id: string) => void;
   currentTeacher: Teacher | undefined;
@@ -277,6 +289,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoginAuthOpen, setIsLoginAuthOpen] = useState<boolean>(false);
   const [loginAuthTarget, setLoginAuthTarget] = useState<any>(null);
   const [authenticatedTeacherIds, setAuthenticatedTeacherIds] = useState<string[]>([]);
+
+  const completeAuthenticatedLogin = (payload: {
+    role: UserRole;
+    academicStaffId?: string;
+    teacherId?: string;
+  }) => {
+    setCurrentRole(payload.role);
+    if (payload.teacherId) setCurrentTeacherId(payload.teacherId);
+    if (payload.academicStaffId) setCurrentAcademicStaffId(payload.academicStaffId);
+  };
+
+  /** 對外僅允許切回教師；其他角色必須走密碼驗證 */
+  const setCurrentRolePublic = (role: UserRole) => {
+    if (role === 'teacher') {
+      setCurrentRole('teacher');
+      return;
+    }
+    requestRoleSwitchWithAuth(role);
+  };
 
   const requestRoleSwitchWithAuth = (targetRole: UserRole, academicStaffId?: string) => {
     if (targetRole === 'teacher') {
@@ -835,49 +866,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const approveRequest = (requestId: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
     const targetReq = requests.find((r) => r.id === requestId);
     if (!targetReq) return;
+    // 已核准不可再核准（避免 swap／移課重複套用）
+    if (targetReq.status === 'approved') return;
 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
 
-    // Apply timetable adjustments if approved
-    if (targetReq.requestType === 'reschedule' && targetReq.targetReschedule) {
-      setSessions((prev) =>
-        prev.map((s) => {
-          if (s.id === targetReq.originalSession.id) {
-            return {
-              ...s,
-              dayOfWeek: targetReq.targetReschedule!.dayOfWeek,
-              period: targetReq.targetReschedule!.period,
-              venueId: targetReq.targetReschedule!.venueId,
-              venueName: targetReq.targetReschedule!.venueName,
-              notes: `[已移課] 原週${targetReq.originalSession.dayOfWeek}第${targetReq.originalSession.period}節`,
-            };
-          }
-          return s;
-        })
-      );
-    } else if (targetReq.requestType === 'swap' && targetReq.swapTargetSession) {
-      setSessions((prev) =>
-        prev.map((s) => {
-          if (s.id === targetReq.originalSession.id) {
-            return {
-              ...s,
-              dayOfWeek: targetReq.swapTargetSession!.dayOfWeek,
-              period: targetReq.swapTargetSession!.period,
-              notes: `[相互調課] 與 ${targetReq.swapTargetTeacherName} 對調`,
-            };
-          }
-          if (s.id === targetReq.swapTargetSession!.id) {
-            return {
-              ...s,
-              dayOfWeek: targetReq.originalSession.dayOfWeek,
-              period: targetReq.originalSession.period,
-              notes: `[相互調課] 與 ${targetReq.applicantTeacherName} 對調`,
-            };
-          }
-          return s;
-        })
-      );
-    }
+    setSessions((prev) => applyRequestToSessions(prev, { ...targetReq, status: 'approved' }));
 
     setRequests((prev) =>
       prev.map((r) =>
@@ -896,6 +890,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const batchApproveRequests = (requestIds: string[], reviewerName: string = '陳雅筑 組長 (教學組)'): number => {
     let count = 0;
     requestIds.forEach((id) => {
+      const r = requests.find((x) => x.id === id);
+      if (!r || r.status === 'approved') return;
       approveRequest(id, reviewerName);
       count++;
     });
@@ -963,46 +959,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     if (isAutoApproved) {
-      // Apply session modifications immediately
-      if (newRequest.requestType === 'reschedule' && newRequest.targetReschedule) {
-        setSessions((prev) =>
-          prev.map((s) => {
-            if (s.id === newRequest.originalSession.id) {
-              return {
-                ...s,
-                dayOfWeek: newRequest.targetReschedule!.dayOfWeek,
-                period: newRequest.targetReschedule!.period,
-                venueId: newRequest.targetReschedule!.venueId,
-                venueName: newRequest.targetReschedule!.venueName,
-                notes: `[教學組移課] 原週${newRequest.originalSession.dayOfWeek}第${newRequest.originalSession.period}節`,
-              };
-            }
-            return s;
-          })
-        );
-      } else if (newRequest.requestType === 'swap' && newRequest.swapTargetSession) {
-        setSessions((prev) =>
-          prev.map((s) => {
-            if (s.id === newRequest.originalSession.id) {
-              return {
-                ...s,
-                dayOfWeek: newRequest.swapTargetSession!.dayOfWeek,
-                period: newRequest.swapTargetSession!.period,
-                notes: `[教學組互調] 與 ${newRequest.swapTargetTeacherName}`,
-              };
-            }
-            if (s.id === newRequest.swapTargetSession!.id) {
-              return {
-                ...s,
-                dayOfWeek: newRequest.originalSession.dayOfWeek,
-                period: newRequest.originalSession.period,
-                notes: `[教學組互調] 與 ${newRequest.applicantTeacherName}`,
-              };
-            }
-            return s;
-          })
-        );
-      }
+      setSessions((prev) => applyRequestToSessions(prev, newRequest));
     }
 
     setRequests((prev) => [newRequest, ...prev]);
@@ -1010,6 +967,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const rejectRequest = (requestId: string, reason: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
+    const target = requests.find((r) => r.id === requestId);
+    if (target?.status === 'approved') {
+      setSessions((prev) => rollbackRequestFromSessions(prev, target));
+    }
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
     setRequests((prev) =>
       prev.map((r) =>
@@ -1027,12 +988,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const cancelRequest = (requestId: string) => {
+    const target = requests.find((r) => r.id === requestId);
+    if (target?.status === 'approved') {
+      setSessions((prev) => rollbackRequestFromSessions(prev, target));
+    }
     setRequests((prev) =>
       prev.map((r) => (r.id === requestId ? { ...r, status: 'cancelled' } : r))
     );
   };
 
   const deleteRequest = (requestId: string) => {
+    const target = requests.find((r) => r.id === requestId);
+    if (target?.status === 'approved') {
+      setSessions((prev) => rollbackRequestFromSessions(prev, target));
+    }
     setRequests((prev) => prev.filter((r) => r.id !== requestId));
   };
 
@@ -1269,7 +1238,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRequests([]);
       localStorage.removeItem(STORAGE_KEYS.REQUESTS);
     } else {
-      // Append / Merge mode: overwrite existing session if same class at same day/period, else add
+      // Append / Merge：同班同時段保留原 session id，避免舊申請失效
       const existingMap = new Map<string, CourseSession>();
       sessions.forEach((s) => {
         existingMap.set(`${s.dayOfWeek}-${s.period}-${s.className}`, s);
@@ -1277,8 +1246,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       newSessionsList.forEach((s) => {
         const key = `${s.dayOfWeek}-${s.period}-${s.className}`;
-        if (existingMap.has(key)) {
-          existingMap.set(key, s);
+        const existing = existingMap.get(key);
+        if (existing) {
+          existingMap.set(key, { ...s, id: existing.id });
           updatedCount++;
         } else {
           existingMap.set(key, s);
@@ -1303,6 +1273,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTeachers(updatedTeachers);
     setVenues(updatedVenues);
     setSessions(finalSessions);
+    if (mode === 'append') {
+      setRequests((prev) => remapRequestSessions(prev, finalSessions));
+    }
 
     return {
       success: true,
@@ -1519,7 +1492,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         currentRole,
-        setCurrentRole,
+        setCurrentRole: setCurrentRolePublic,
+        completeAuthenticatedLogin,
         currentTeacherId,
         setCurrentTeacherId,
         currentTeacher,

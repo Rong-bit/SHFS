@@ -4,6 +4,7 @@ import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 interface PrintNoticeModalProps {
@@ -141,7 +142,9 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const originalSession = groupedSessions[0] || resolveOriginalSession(request, sessions);
   const courseBlocks = collapseConsecutiveSessions(groupedSessions);
   const periodRangeLabel = isMergedBatch
-    ? `${dayNames[originalSession.dayOfWeek]}（共 ${groupedSessions.length} 節）`
+    ? `${dayNames[originalSession.dayOfWeek]} ${formatPeriodsLabel(
+        groupedSessions.map((s) => s.period)
+      )}（共 ${groupedSessions.length} 節）`
     : `${dayNames[originalSession.dayOfWeek]} ${getPeriodLabel(originalSession.period)}`;
   const requestNumberLabel = isMergedBatch
     ? `${groupedRequests[0].requestNumber}～${groupedRequests[groupedRequests.length - 1].requestNumber}（合併 ${groupedRequests.length} 節）`

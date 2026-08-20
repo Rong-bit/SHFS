@@ -31,9 +31,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     academicStaffList,
     currentAcademicStaffId,
     systemConfig,
-    setCurrentTeacherId,
-    setCurrentRole,
-    setCurrentAcademicStaffId,
+    completeAuthenticatedLogin,
   } = useApp();
 
   const [password, setPassword] = useState('');
@@ -169,15 +167,16 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setIsSuccess(true);
       setTimeout(() => {
         if (target.type === 'teacher' && target.teacherId) {
-          setCurrentTeacherId(target.teacherId);
-          setCurrentRole('teacher');
+          completeAuthenticatedLogin({ role: 'teacher', teacherId: target.teacherId });
         } else if (target.type === 'role' && target.targetRole) {
-          setCurrentRole(target.targetRole);
-          if ((target.targetRole === 'academic' || target.targetRole === 'accounting') && selectedStaffId) {
-            setCurrentAcademicStaffId(selectedStaffId);
-          } else if (target.academicStaffId) {
-            setCurrentAcademicStaffId(target.academicStaffId);
-          }
+          const staffId =
+            (target.targetRole === 'academic' || target.targetRole === 'accounting') && selectedStaffId
+              ? selectedStaffId
+              : target.academicStaffId;
+          completeAuthenticatedLogin({
+            role: target.targetRole,
+            academicStaffId: staffId,
+          });
         }
 
         if (target.onSuccess) {

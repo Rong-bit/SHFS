@@ -23,6 +23,7 @@ import {
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
+import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { 
   UserCheck, 
   User, 
@@ -265,13 +266,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
   }, [availableRangeDays, rangeDayOfWeek]);
 
-  // 連續節次範圍變更：保留仍在範圍內的勾選；若皆失效則全選（首次／清空後）
+  // 連續節次：僅首次進入全選；之後只保留與範圍的交集（不整表覆寫）
+  const prevSessionPickModeRef = React.useRef(sessionPickMode);
   React.useEffect(() => {
-    if (sessionPickMode !== 'periodRange') return;
+    if (sessionPickMode !== 'periodRange') {
+      prevSessionPickModeRef.current = sessionPickMode;
+      return;
+    }
     const ids = periodRangeSessions.map((s) => s.id);
+    const entering = prevSessionPickModeRef.current !== 'periodRange';
+    prevSessionPickModeRef.current = sessionPickMode;
     setSelectedSessionIds((prev) => {
-      const retained = prev.filter((id) => ids.includes(id));
-      return retained.length > 0 ? retained : ids;
+      if (entering) return ids;
+      return prev.filter((id) => ids.includes(id));
     });
   }, [sessionPickMode, periodRangeSessions]);
 
@@ -1514,11 +1521,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         (requestType === 'substitute' &&
                         sessionPickMode === 'periodRange' &&
                         batchSelectedSessions.length > 1
-                          ? `${dayNames[selectedOriginalSession.dayOfWeek]} 第${Math.min(
-                              ...batchSelectedSessions.map((s) => s.period)
-                            )}～${Math.max(...batchSelectedSessions.map((s) => s.period))}節（共 ${
-                              batchSelectedSessions.length
-                            } 節）`
+                          ? `${dayNames[selectedOriginalSession.dayOfWeek]} ${formatPeriodsLabel(
+                              batchSelectedSessions.map((s) => s.period)
+                            )}（共 ${batchSelectedSessions.length} 節）`
                           : `${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節 (${selectedOriginalSession.venueName})`)}
                     </div>
                   </div>
