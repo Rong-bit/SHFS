@@ -17,6 +17,7 @@ import {
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
+import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { 
   X, 
   ArrowLeftRight, 
@@ -103,6 +104,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const [leavePeriod, setLeavePeriod] = useState<number | ''>('');
   // When teacher has sessions, offer only "has-class" slots.
   const [leaveSlotId, setLeaveSlotId] = useState<string>('');
+  /** 單節｜同日連續多節（如第2～7節實習） */
+  const [leavePickMode, setLeavePickMode] = useState<'single' | 'multi'>('single');
+  const [selectedLeaveSlotIds, setSelectedLeaveSlotIds] = useState<string[]>([]);
+  const [multiLeaveDay, setMultiLeaveDay] = useState<DayOfWeek | ''>('');
 
   const leaveFilterDays = useMemo(() => {
     if (requestType !== 'substitute' || !leaveDateStart) return [] as DayOfWeek[];
@@ -122,6 +127,21 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     );
   }, [teacherSessions, leaveFilterDays]);
 
+  const leaveDaysAvailable = useMemo(() => {
+    const days = Array.from(new Set(leaveSelectableSessions.map((s) => s.dayOfWeek))) as DayOfWeek[];
+    return days.sort((a, b) => a - b);
+  }, [leaveSelectableSessions]);
+
+  const multiDaySessions = useMemo(() => {
+    if (multiLeaveDay === '') return [];
+    return leaveSelectableSessions.filter((s) => s.dayOfWeek === multiLeaveDay);
+  }, [leaveSelectableSessions, multiLeaveDay]);
+
+  const batchLeaveSessions = useMemo(() => {
+    if (requestType !== 'substitute' || leavePickMode !== 'multi') return [];
+    return multiDaySessions.filter((s) => selectedLeaveSlotIds.includes(s.id));
+  }, [requestType, leavePickMode, multiDaySessions, selectedLeaveSlotIds]);
+
   // Smart candidate recommendations / clash checking target:
   // - substitute：必用（請假星期/節次）建立暫代課堂
   // - swap/reschedule：使用原課堂 selectedSession
@@ -129,40 +149,71 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     teacherSessions.find((s) => s.id === leaveSlotId) ||
     teacherSessions.find((s) => s.dayOfWeek === leaveDay && s.period === leavePeriod);
 
+  const placeholderSession: CourseSession | undefined =
+    currentTeacher && leaveDay !== '' && leavePeriod !== ''
+      ? {
+          id: `s-placeholder-${currentTeacher.id}-${leaveDay}-${leavePeriod}`,
+          dayOfWeek: leaveDay,
+          period: leavePeriod,
+          className: '未指派課堂',
+          subjectName: '請假派代',
+          teacherId: currentTeacher.id,
+          teacherName: currentTeacher.name,
+          venueId: '',
+          venueName: '原教室',
+          isPractical: false,
+          notes: '由系統暫代課堂資訊（僅用於計算代課教師資格）',
+        }
+      : undefined;
+
+  const leaveSessionsForSubmit = useMemo((): CourseSession[] => {
+    if (requestType !== 'substitute') return [];
+    if (leavePickMode === 'multi' && teacherSessions.length > 0) return batchLeaveSessions;
+    if (matchedLeaveSession) return [matchedLeaveSession];
+    if (placeholderSession) return [placeholderSession];
+    return [];
+  }, [
+    requestType,
+    leavePickMode,
+    teacherSessions.length,
+    batchLeaveSessions,
+    matchedLeaveSession,
+    placeholderSession,
+  ]);
+
   const effectiveOriginalSession: CourseSession | undefined =
     requestType === 'substitute'
-      ? currentTeacher && leaveDay !== '' && leavePeriod !== ''
-        ? matchedLeaveSession || {
-            id: `s-placeholder-${currentTeacher.id}-${leaveDay}-${leavePeriod}`,
-            dayOfWeek: leaveDay,
-            period: leavePeriod,
-            className: '未指派課堂',
-            subjectName: '請假派代',
-            teacherId: currentTeacher.id,
-            teacherName: currentTeacher.name,
-            venueId: '',
-            venueName: '原教室',
-            isPractical: false,
-            notes: '由系統暫代課堂資訊（僅用於計算代課教師資格）',
-          }
-        : undefined
+      ? leaveSessionsForSubmit[0]
       : selectedSession;
 
   const candidateSubstitutes = useMemo(() => {
     if (!effectiveOriginalSession || !currentTeacher) return [];
+    const targets =
+      leavePickMode === 'multi' && leaveSessionsForSubmit.length > 0
+        ? leaveSessionsForSubmit
+        : [effectiveOriginalSession];
 
     return rankSubstituteCandidates({
       teachers,
       sessions,
       requests,
       excludeTeacherId: currentTeacher.id,
-      targetDayOfWeek: effectiveOriginalSession.dayOfWeek,
-      targetPeriod: effectiveOriginalSession.period,
-      subjectName: effectiveOriginalSession.subjectName,
+      targetDayOfWeek: targets[0].dayOfWeek,
+      targetPeriod: targets.map((s) => s.period),
+      subjectName: targets.map((s) => s.subjectName),
       applicantDepartment: currentTeacher.department,
       maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
     });
-  }, [teachers, currentTeacher, effectiveOriginalSession, sessions, requests, systemConfig]);
+  }, [
+    teachers,
+    currentTeacher,
+    effectiveOriginalSession,
+    sessions,
+    requests,
+    systemConfig,
+    leavePickMode,
+    leaveSessionsForSubmit,
+  ]);
 
   // If in substitute mode and teacher has sessions, initialize leave slot
   useEffect(() => {
@@ -204,6 +255,31 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       return first.id;
     });
   }, [requestType, teacherSessions, initialSession, leaveFilterDays]);
+
+  // 同日多節：星期對齊可選日；進入多節時預設全選該日課堂
+  useEffect(() => {
+    if (requestType !== 'substitute' || leavePickMode !== 'multi') return;
+    if (leaveDaysAvailable.length === 0) {
+      setMultiLeaveDay('');
+      setSelectedLeaveSlotIds([]);
+      return;
+    }
+    const day =
+      multiLeaveDay !== '' && leaveDaysAvailable.includes(multiLeaveDay)
+        ? multiLeaveDay
+        : leaveDaysAvailable[0];
+    if (day !== multiLeaveDay) setMultiLeaveDay(day);
+    const daySessions = leaveSelectableSessions.filter((s) => s.dayOfWeek === day);
+    setSelectedLeaveSlotIds((prev) => {
+      const retained = prev.filter((id) => daySessions.some((s) => s.id === id));
+      return retained.length > 0 ? retained : daySessions.map((s) => s.id);
+    });
+    if (daySessions[0]) {
+      setLeaveDay(day);
+      setLeavePeriod(daySessions[0].period);
+      setLeaveSlotId(daySessions[0].id);
+    }
+  }, [requestType, leavePickMode, leaveDaysAvailable, leaveSelectableSessions, multiLeaveDay]);
 
   // Candidate partner sessions for swap
   const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
@@ -281,24 +357,54 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const swapTargetSession = sessions.find((s) => s.id === swapSessionId);
   const targetVenueObj = venues.find((v) => v.id === targetVenueId);
 
-  const clashResult: ClashCheckResult = effectiveOriginalSession
-    ? checkClashes({
-        requestType,
-        applicantTeacherId: currentTeacher?.id || '',
-        originalSession: effectiveOriginalSession,
-        targetReschedule:
-          requestType === 'reschedule'
-            ? {
-                dayOfWeek: targetDay,
-                period: targetPeriod,
-                venueId: targetVenueId,
-              }
-            : undefined,
-        swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,
-        swapTargetSession: requestType === 'swap' ? swapTargetSession : undefined,
-        substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
-      })
-    : { hasClash: false, severity: 'none', messages: [] };
+  const clashResult: ClashCheckResult = (() => {
+    if (requestType === 'substitute') {
+      const targets = leaveSessionsForSubmit;
+      if (targets.length === 0 || !currentTeacher) {
+        return { hasClash: false, severity: 'none', messages: [] };
+      }
+      const results = targets.map((originalSession) => {
+        const result = checkClashes({
+          requestType,
+          applicantTeacherId: currentTeacher.id,
+          originalSession,
+          substituteTeacherId: substituteTeacherId || undefined,
+        });
+        const prefix = targets.length > 1 ? `第${originalSession.period}節：` : '';
+        return {
+          ...result,
+          messages: result.messages.map((m) => `${prefix}${m}`),
+        };
+      });
+      const messages = results.flatMap((r) => r.messages);
+      const hasClash = results.some((r) => r.hasClash);
+      const severity = results.some((r) => r.severity === 'danger')
+        ? ('danger' as const)
+        : results.some((r) => r.severity === 'warning')
+        ? ('warning' as const)
+        : ('none' as const);
+      return { hasClash, severity, messages };
+    }
+    if (!effectiveOriginalSession) {
+      return { hasClash: false, severity: 'none', messages: [] };
+    }
+    return checkClashes({
+      requestType,
+      applicantTeacherId: currentTeacher?.id || '',
+      originalSession: effectiveOriginalSession,
+      targetReschedule:
+        requestType === 'reschedule'
+          ? {
+              dayOfWeek: targetDay,
+              period: targetPeriod,
+              venueId: targetVenueId,
+            }
+          : undefined,
+      swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,
+      swapTargetSession: requestType === 'swap' ? swapTargetSession : undefined,
+      substituteTeacherId: undefined,
+    });
+  })();
 
   const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
 
@@ -314,7 +420,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!effectiveOriginalSession || !currentTeacher) return;
+    if (!currentTeacher) return;
 
     if (teacherSessions.length === 0 && requestType !== 'substitute') {
       alert('目前找不到你的排課資料，僅支援請假派代。請切換到「請假派代」後再送出。');
@@ -322,15 +428,27 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     }
 
     if (requestType === 'substitute') {
-      if (leaveDay === '' || leavePeriod === '') {
-        alert('請先選擇「請假星期」與「請假節次」。');
+      const sessionsToLeave = leaveSessionsForSubmit;
+      if (sessionsToLeave.length === 0) {
+        alert(
+          leavePickMode === 'multi'
+            ? '請勾選至少一節同日請假節次。'
+            : '請先選擇「請假星期」與「請假節次」。'
+        );
         return;
+      }
+      if (leavePickMode === 'multi') {
+        const days = new Set(sessionsToLeave.map((s) => s.dayOfWeek));
+        if (days.size > 1) {
+          alert('連續節次請假須為同一星期，請勿跨日勾選。');
+          return;
+        }
       }
       const leaveCheck = validateSubstituteLeaveInput({
         leaveDateMode,
         leaveDateStart,
         leaveDateEnd,
-        sessions: [effectiveOriginalSession],
+        sessions: sessionsToLeave,
         existing: requests,
         applicantTeacherId: currentTeacher.id,
         dayNames,
@@ -339,7 +457,45 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         alert(leaveCheck.message);
         return;
       }
+      if (clashResult.hasClash) {
+        alert('存在衝堂衝突，請改選代課教師或節次後再送出。');
+        return;
+      }
+
+      const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
+      const resolvedLeaveEnd =
+        leaveDateMode === 'range'
+          ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+          : leaveDateStart;
+      const batchGroupId =
+        sessionsToLeave.length > 1 ? `batch-${Date.now()}` : undefined;
+
+      sessionsToLeave.forEach((originalSession, index) => {
+        addSubstituteRequest(
+          {
+            requestType: 'substitute',
+            applicantTeacherId: currentTeacher.id,
+            applicantTeacherName: currentTeacher.name,
+            applicantDepartment: currentTeacher.department,
+            leaveType,
+            leaveDateStart,
+            leaveDateEnd: resolvedLeaveEnd,
+            reason,
+            paymentType,
+            originalSession,
+            batchGroupId,
+            substituteTeacherId: substituteTeacherId || undefined,
+            substituteTeacherName: subTeacher?.name,
+          },
+          requestMonth,
+          { sequenceOffset: index, idNonce: `${Date.now()}-${index}` }
+        );
+      });
+      onClose();
+      return;
     }
+
+    if (!effectiveOriginalSession) return;
 
     if (requestType === 'swap' && (!swapTeacherId || !swapTargetSession)) {
       alert('請完整選擇對調教師與對調課堂');
@@ -348,21 +504,15 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     const swapPartner = teachers.find((t) => t.id === swapTeacherId);
     const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
-    const resolvedLeaveEnd =
-      requestType === 'substitute'
-        ? leaveDateMode === 'range'
-          ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
-          : leaveDateStart
-        : undefined;
 
     addSubstituteRequest({
       requestType,
       applicantTeacherId: currentTeacher.id,
       applicantTeacherName: currentTeacher.name,
       applicantDepartment: currentTeacher.department,
-      leaveType: requestType === 'substitute' ? leaveType : undefined,
-      leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
-      leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
+      leaveType: undefined,
+      leaveDateStart: undefined,
+      leaveDateEnd: undefined,
       reason,
       paymentType,
       originalSession: effectiveOriginalSession,
@@ -378,8 +528,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,
       swapTargetTeacherName: requestType === 'swap' ? swapPartner?.name : undefined,
       swapTargetSession: requestType === 'swap' ? swapTargetSession : undefined,
-      substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
-      substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
+      substituteTeacherId: undefined,
+      substituteTeacherName: undefined,
     }, requestMonth);
 
     onClose();
@@ -674,20 +824,46 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
                 {/* When teacher has sessions, show filtered leave slot selector */}
                 {teacherSessions.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      請假節次
-                      {leaveFilterDays.length > 0
-                        ? `（僅 ${formatWeekdayList(leaveFilterDays, dayNames)} · ${leaveSelectableSessions.length} 節）`
-                        : '（請先選請假日期，或暫列全部有課節次）'}
-                    </label>
+                  <div className="space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        請假節次
+                        {leaveFilterDays.length > 0
+                          ? `（僅 ${formatWeekdayList(leaveFilterDays, dayNames)} · ${leaveSelectableSessions.length} 節）`
+                          : '（請先選請假日期，或暫列全部有課節次）'}
+                      </label>
+                      <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden text-[11px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setLeavePickMode('single')}
+                          className={`px-2.5 py-1 ${
+                            leavePickMode === 'single'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-white text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          單節
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLeavePickMode('multi')}
+                          className={`px-2.5 py-1 border-l border-slate-200 ${
+                            leavePickMode === 'multi'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-white text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          同日連續多節
+                        </button>
+                      </div>
+                    </div>
                     {leaveSelectableSessions.length === 0 ? (
                       <div className="p-2.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg">
                         {leaveFilterDays.length > 0
                           ? `你在「${formatWeekdayList(leaveFilterDays, dayNames)}」沒有排定課堂，請改請假起迄。`
                           : '目前沒有可選節次。'}
                       </div>
-                    ) : (
+                    ) : leavePickMode === 'single' ? (
                       <select
                         id="select-leave-slot"
                         value={leaveSlotId}
@@ -708,6 +884,94 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                           </option>
                         ))}
                       </select>
+                    ) : (
+                      <div className="space-y-2 p-3 rounded-xl border border-indigo-100 bg-indigo-50/40">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-bold text-slate-600">星期</span>
+                          <select
+                            value={multiLeaveDay === '' ? '' : String(multiLeaveDay)}
+                            onChange={(e) => {
+                              const d = Number(e.target.value) as DayOfWeek;
+                              setMultiLeaveDay(d);
+                              const daySessions = leaveSelectableSessions.filter(
+                                (s) => s.dayOfWeek === d
+                              );
+                              setSelectedLeaveSlotIds(daySessions.map((s) => s.id));
+                              if (daySessions[0]) {
+                                setLeaveDay(d);
+                                setLeavePeriod(daySessions[0].period);
+                                setLeaveSlotId(daySessions[0].id);
+                              }
+                            }}
+                            className="bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-medium"
+                          >
+                            {leaveDaysAvailable.map((d) => (
+                              <option key={d} value={d}>
+                                {dayNames[d]}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-[11px] text-indigo-800 font-medium">
+                            已選 {batchLeaveSessions.length} 節
+                            {batchLeaveSessions.length > 0
+                              ? `（${formatPeriodsLabel(batchLeaveSessions.map((s) => s.period))}）`
+                              : ''}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          勾選同一天要請假的節次（例如實習第2～7節）。送出後會產生多筆申請並合併通知單。
+                        </p>
+                        <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                          {multiDaySessions.length === 0 ? (
+                            <p className="text-[11px] text-amber-800">此日沒有排定課堂。</p>
+                          ) : (
+                            multiDaySessions.map((s) => {
+                              const checked = selectedLeaveSlotIds.includes(s.id);
+                              return (
+                                <label
+                                  key={s.id}
+                                  className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer text-xs ${
+                                    checked
+                                      ? 'bg-white border-indigo-300'
+                                      : 'bg-white/70 border-slate-200'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5"
+                                    checked={checked}
+                                    onChange={() => {
+                                      setSelectedLeaveSlotIds((prev) => {
+                                        const next = checked
+                                          ? prev.filter((id) => id !== s.id)
+                                          : [...prev, s.id];
+                                        const still = multiDaySessions.filter((x) =>
+                                          next.includes(x.id)
+                                        );
+                                        if (still[0]) {
+                                          setLeaveDay(still[0].dayOfWeek);
+                                          setLeavePeriod(still[0].period);
+                                          setLeaveSlotId(still[0].id);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  <span>
+                                    <span className="font-bold text-slate-800">
+                                      第{s.period}節
+                                    </span>{' '}
+                                    《{s.subjectName}》 {s.className}
+                                    {s.isPractical ? (
+                                      <span className="ml-1 text-amber-700">實習</span>
+                                    ) : null}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1102,14 +1366,21 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             <button
               type="submit"
               id="btn-submit-substitution-request"
-              disabled={clashResult.hasClash || (requestType === 'substitute' && !effectiveOriginalSession)}
+              disabled={
+                clashResult.hasClash ||
+                (requestType === 'substitute' && leaveSessionsForSubmit.length === 0)
+              }
               className={`px-5 py-2.5 font-bold rounded-lg text-xs sm:text-sm shadow-sm transition flex items-center space-x-1.5 ${
                 clashResult.hasClash
                   ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                   : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 active:scale-95'
               }`}
             >
-              <span>送出調代課申請單</span>
+              <span>
+                {requestType === 'substitute' && leaveSessionsForSubmit.length > 1
+                  ? `送出連續 ${leaveSessionsForSubmit.length} 節請假申請`
+                  : '送出調代課申請單'}
+              </span>
             </button>
           </div>
 

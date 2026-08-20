@@ -86,7 +86,8 @@ interface AppContextType {
   // Actions
   addSubstituteRequest: (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>,
-    requestMonth?: number
+    requestMonth?: number,
+    batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ) => SubstituteRequest;
   createStaffDirectDispatch: (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
@@ -847,11 +848,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addSubstituteRequest = (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>,
-    requestMonth?: number
+    requestMonth?: number,
+    batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ): SubstituteRequest => {
-    const newId = `req-${Date.now()}`;
+    const seqOffset = batchOptions?.sequenceOffset ?? 0;
+    const idNonce = batchOptions?.idNonce ?? seqOffset;
+    const newId = `req-${Date.now()}-${idNonce}`;
     const month = requestMonth ?? (new Date().getMonth() + 1);
-    const seq = nextRequestSequence(requests, systemConfig.academicYear, month);
+    const seq =
+      nextRequestSequence(requests, systemConfig.academicYear, month) + seqOffset;
     const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
 
     const clashStatus = checkClashes({
