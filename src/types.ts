@@ -137,6 +137,9 @@ export interface SubstituteRequest {
   // 請假派代指定的代課教師
   substituteTeacherId?: string;
   substituteTeacherName?: string;
+
+  /** 連續節次批次派代共用群組 ID；有值時通知單合併列印 */
+  batchGroupId?: string;
   
   status: RequestStatus;
   rejectReason?: string;

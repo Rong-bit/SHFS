@@ -12,7 +12,7 @@ interface PrintNoticeModalProps {
 }
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { currentAcademicStaff, academicStaffList, systemConfig, sessions } = useApp();
+  const { currentAcademicStaff, academicStaffList, systemConfig, sessions, requests } = useApp();
   
   // Resolve reviewer staff
   const reviewerStaff = currentAcademicStaff || academicStaffList[0];
@@ -71,7 +71,29 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     return '請假派代';
   };
 
-  const originalSession = resolveOriginalSession(request, sessions);
+  /** 連續節次批次：同一 batchGroupId 合併為一張通知單 */
+  const groupedRequests =
+    request.batchGroupId
+      ? requests
+          .filter((r) => r.batchGroupId === request.batchGroupId)
+          .sort(
+            (a, b) =>
+              a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
+              a.originalSession.period - b.originalSession.period
+          )
+      : [request];
+  const isMergedBatch = groupedRequests.length > 1;
+  const groupedSessions = groupedRequests.map((r) => resolveOriginalSession(r, sessions));
+  const originalSession = groupedSessions[0] || resolveOriginalSession(request, sessions);
+  const periodNums = groupedSessions.map((s) => s.period);
+  const periodRangeLabel = isMergedBatch
+    ? `${dayNames[originalSession.dayOfWeek]} 第${Math.min(...periodNums)}～${Math.max(
+        ...periodNums
+      )}節（共 ${groupedSessions.length} 節）`
+    : `${dayNames[originalSession.dayOfWeek]} ${getPeriodLabel(originalSession.period)}`;
+  const requestNumberLabel = isMergedBatch
+    ? `${groupedRequests[0].requestNumber}～${groupedRequests[groupedRequests.length - 1].requestNumber}（合併 ${groupedRequests.length} 節）`
+    : request.requestNumber;
 
   const getLeaveTypeName = (leave?: string) => {
     switch (leave) {
@@ -104,7 +126,10 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
         <div className="print:hidden bg-slate-800 text-white px-5 py-3.5 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Printer className="w-5 h-5 text-amber-400" />
-            <span className="font-semibold text-sm">正式調代課通知單列印預覽 (高職標準格式)</span>
+            <span className="font-semibold text-sm">
+              正式調代課通知單列印預覽
+              {isMergedBatch ? `（連續 ${groupedSessions.length} 節合併）` : ' (高職標準格式)'}
+            </span>
           </div>
           <div className="flex items-center space-x-2">
             <button
@@ -137,7 +162,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
               教師調課 · 代課 · 補課聯絡通知單
             </h2>
             <div className="flex justify-between items-center text-xs text-slate-500 mt-2">
-              <span>單據編號：<strong className="text-slate-800">{request.requestNumber}</strong></span>
+              <span>單據編號：<strong className="text-slate-800">{requestNumberLabel}</strong></span>
               <span>申請日期：{request.createdAt}</span>
               <span>核定狀態：<strong className="text-emerald-700 font-bold">【已核准生效】</strong></span>
             </div>
@@ -169,15 +194,22 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
               </div>
               <div className="p-2 font-medium text-slate-900">
                 {getTypeName(request.requestType)}
+                {isMergedBatch ? '（連續節次合併）' : ''}
               </div>
               <div className="p-2 font-bold text-slate-700 bg-slate-100 flex items-center justify-center">
                 課點鐘點費支給
               </div>
               <div className="p-2 font-medium">
                 {request.paymentType === 'public' ? (
-                  <span className="text-blue-700 font-bold">公費派代 (學校公款支領 420元/節)</span>
+                  <span className="text-blue-700 font-bold">
+                    公費派代 (學校公款支領 420元/節
+                    {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
+                  </span>
                 ) : (
-                  <span className="text-amber-800 font-bold">自費代課 (申請教師自付 420元/節)</span>
+                  <span className="text-amber-800 font-bold">
+                    自費代課 (申請教師自付 420元/節
+                    {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
+                  </span>
                 )}
               </div>
             </div>
@@ -203,30 +235,77 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 原排定授課堂
               </div>
               <div className="p-2 col-span-3 text-slate-900">
-                <div className="font-medium">
-                  班級：<strong>{originalSession.className}</strong> ｜ 科目：<strong>{originalSession.subjectName}</strong>
-                </div>
-                <div className="text-slate-600 mt-0.5">
-                  時段：{dayNames[originalSession.dayOfWeek]} {getPeriodLabel(originalSession.period)} ｜ 
-                  上課地點：<strong className="text-slate-800">{originalSession.venueName}</strong>
-                  {originalSession.isConcurrent && (
-                    <span className="ml-2 px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
-                      兼課
-                    </span>
-                  )}
-                  {originalSession.isPractical && (
-                    <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] rounded font-medium">
-                      專業實習工場課程
-                    </span>
-                  )}
-                </div>
-                {request.requestType === 'substitute' && (
-                  <div className="text-slate-800 mt-1 font-medium">
-                    請假日期：
-                    <strong className="ml-1">
-                      {formatLeaveDateLabel(request.leaveDateStart, request.leaveDateEnd)}
-                    </strong>
-                  </div>
+                {isMergedBatch ? (
+                  <>
+                    <div className="font-medium text-slate-800 mb-1.5">
+                      時段：<strong>{periodRangeLabel}</strong>
+                      {request.requestType === 'substitute' && (
+                        <span className="ml-3">
+                          請假日期：
+                          <strong>
+                            {formatLeaveDateLabel(request.leaveDateStart, request.leaveDateEnd)}
+                          </strong>
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-1.5 border border-slate-200 rounded-lg overflow-hidden">
+                      {groupedSessions.map((s, idx) => (
+                        <div
+                          key={`${s.id}-${idx}`}
+                          className={`px-2.5 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 ${
+                            idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                          }`}
+                        >
+                          <span className="font-bold text-indigo-900 w-24 shrink-0">
+                            第{s.period}節
+                          </span>
+                          <span>
+                            {s.className} ｜ 《{s.subjectName}》
+                          </span>
+                          <span className="text-slate-600">@ {s.venueName}</span>
+                          {s.isPractical && (
+                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] rounded font-medium">
+                              專業實習
+                            </span>
+                          )}
+                          {s.isConcurrent && (
+                            <span className="px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
+                              兼課
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-medium">
+                      班級：<strong>{originalSession.className}</strong> ｜ 科目：
+                      <strong>{originalSession.subjectName}</strong>
+                    </div>
+                    <div className="text-slate-600 mt-0.5">
+                      時段：{periodRangeLabel} ｜ 上課地點：
+                      <strong className="text-slate-800">{originalSession.venueName}</strong>
+                      {originalSession.isConcurrent && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
+                          兼課
+                        </span>
+                      )}
+                      {originalSession.isPractical && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] rounded font-medium">
+                          專業實習工場課程
+                        </span>
+                      )}
+                    </div>
+                    {request.requestType === 'substitute' && (
+                      <div className="text-slate-800 mt-1 font-medium">
+                        請假日期：
+                        <strong className="ml-1">
+                          {formatLeaveDateLabel(request.leaveDateStart, request.leaveDateEnd)}
+                        </strong>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -244,7 +323,8 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                       {request.substituteTeacherName || '由教學組指派'}
                     </strong>
                     <span className="text-xs text-slate-500 ml-2">
-                      (具高職同科合格教師證或實習工場操作資格)
+                      (具高職同科合格教師證或實習工場操作資格
+                      {isMergedBatch ? `；連續 ${groupedSessions.length} 節同一代課` : ''})
                     </span>
                   </div>
                 )}

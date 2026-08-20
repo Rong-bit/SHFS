@@ -399,6 +399,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
           : leaveDateStart
         : undefined;
 
+    const batchGroupId =
+      requestType === 'substitute' && sessionsToDispatch.length > 1
+        ? `batch-${Date.now()}`
+        : undefined;
+
     const created = sessionsToDispatch.map((originalSession, index) =>
       createStaffDirectDispatch(
         {
@@ -410,13 +415,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
           leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
           leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
           paymentType,
-          reason:
-            requestType === 'substitute' && sessionsToDispatch.length > 1
-              ? `${reason}【連續節次批次 ${dayNames[originalSession.dayOfWeek]}第${originalSession.period}節】`
-              : reason,
+          reason,
           originalSession,
           substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
           substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
+          batchGroupId,
           targetReschedule:
             requestType === 'reschedule' && targetVenue
               ? {
@@ -1674,6 +1677,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             {req.requestType === 'substitute' && (
                               <div className="text-[11px] text-amber-800 font-semibold mt-0.5">
                                 請假：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
+                                {req.batchGroupId ? ' · 連續節次合併通知單' : ''}
                               </div>
                             )}
                           </td>
