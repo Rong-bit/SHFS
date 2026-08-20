@@ -406,7 +406,7 @@ export const PendingApprovals: React.FC = () => {
               <span>確認清空所有調代課申請單據？</span>
             </div>
             <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-              這將移除目前教務處清單中的所有示範單據（共 {requests.length} 筆）。後續您可由教師端發起真實調代課申請，或由教學組逕行指派。
+              將清空目前清單共 {requests.length} 筆申請。已核准的移課／互調／代課會先由新到舊嘗試還原課表；若課堂之後又有異動則略過該筆回滾，以免覆寫較新狀態。
             </p>
             <div className="flex justify-end space-x-2 mt-5">
               <button
