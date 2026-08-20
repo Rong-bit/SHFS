@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
+import { ModalShell } from '../Common/ModalShell';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
 import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyCounselingPeriods, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
 
@@ -477,8 +478,10 @@ export const TeacherSchedule: React.FC = () => {
 
       {/* Change Password Modal */}
       {isChangePasswordOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+        <ModalShell
+          scroll="panel"
+          panelClassName="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 animate-in fade-in zoom-in-95 duration-150 text-left"
+        >
             <div className="bg-slate-800 px-6 py-4 flex items-center justify-between border-b border-slate-700">
               <div className="flex items-center space-x-2">
                 <KeyRound className="w-4 h-4 text-amber-400" />
@@ -547,13 +550,14 @@ export const TeacherSchedule: React.FC = () => {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {isEditContactOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden text-left">
+        <ModalShell
+          scroll="panel"
+          panelClassName="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 text-left"
+        >
             <div className="bg-slate-800 px-6 py-4 flex items-center justify-between border-b border-slate-700">
               <span className="font-bold text-white text-sm">填寫【{currentTeacher.name}】分機與信箱</span>
               <button
@@ -618,8 +622,7 @@ export const TeacherSchedule: React.FC = () => {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
     </div>

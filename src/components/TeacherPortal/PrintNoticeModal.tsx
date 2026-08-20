@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { ModalShell } from '../Common/ModalShell';
 
 interface PrintNoticeModalProps {
   request: SubstituteRequest;
@@ -174,8 +175,11 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full border border-slate-200 overflow-hidden my-8">
+    <ModalShell
+      scroll="none"
+      panelClassName="bg-white rounded-xl shadow-2xl max-w-3xl w-full border border-slate-200 overflow-hidden my-2"
+      backdropClassName="bg-slate-900/70 backdrop-blur-xs"
+    >
         
         {/* Top bar (Hidden when printing) */}
         <div className="print:hidden bg-slate-800 text-white px-5 py-3.5 flex items-center justify-between">
@@ -502,7 +506,6 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           </button>
         </div>
 
-      </div>
-    </div>
+    </ModalShell>
   );
 };

@@ -35,6 +35,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { ModalShell } from '../Common/ModalShell';
 
 interface ScheduleImportModalProps {
   isOpen?: boolean;
@@ -397,11 +398,14 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
   const filteredPreviewRows = getFilteredRows();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+    <ModalShell
+      scroll="body"
+      panelClassName="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200"
+      backdropClassName="bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
+    >
         
         {/* Modal Top Header */}
-        <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+        <div className="shrink-0 bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md">
               <FileSpreadsheet className="w-5 h-5" />
@@ -439,7 +443,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="p-6 overflow-y-auto flex-1 min-h-0 space-y-6">
 
           {/* Success Screen */}
           {isSuccess && successReport ? (
@@ -1138,7 +1142,6 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
 
         </div>
 
-      </div>
-    </div>
+    </ModalShell>
   );
 };

@@ -4,6 +4,7 @@ import { Lock, KeyRound, Eye, EyeOff, ShieldCheck, User, X, AlertCircle, Check }
 import { UserRole } from '../../types';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { isPasswordHash, verifyPassword } from '../../utils/passwordCrypto';
+import { ModalShell } from './ModalShell';
 
 export interface LoginTarget {
   type: 'teacher' | 'role' | 'teacher_action';
@@ -191,8 +192,12 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full border border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+    <ModalShell
+      zClassName="z-[80]"
+      scroll="panel"
+      panelClassName="bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full border border-slate-700 animate-in fade-in zoom-in-95 duration-150 text-left"
+      maxHeightClassName="max-h-[min(92dvh,880px)]"
+    >
         {/* Header */}
         <div className="bg-slate-800/80 px-6 py-4 flex items-center justify-between border-b border-slate-700/80">
           <div className="flex items-center space-x-2.5">
@@ -387,7 +392,6 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         <div className="bg-slate-950/60 px-6 py-2.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
           <span>🔒 密碼可於【系統管理員 ➔ 系統參數設定】中自訂或開關</span>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

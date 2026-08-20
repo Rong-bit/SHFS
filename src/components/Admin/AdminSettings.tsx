@@ -44,6 +44,7 @@ import { normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadSystemManual } from '../../utils/generateManual';
 import { isPasswordHash } from '../../utils/passwordCrypto';
+import { ModalShell } from '../Common/ModalShell';
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -1741,8 +1742,12 @@ export const AdminSettings: React.FC = () => {
 
       {/* VENUE MODAL */}
       {isVenueModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200"
+        >
+          <div className="p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-amber-500" />
@@ -1851,13 +1856,17 @@ export const AdminSettings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* TEACHER MODAL */}
       {isTeacherModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200"
+        >
+          <div className="p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
                 <Users className="w-5 h-5 text-emerald-500" />
@@ -2027,13 +2036,17 @@ export const AdminSettings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* ACADEMIC STAFF MODAL */}
       {isStaffModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200"
+        >
+          <div className="p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-indigo-600" />
@@ -2229,12 +2242,15 @@ export const AdminSettings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {passwordResetTeacher && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200"
+        >
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <KeyRound className="w-5 h-5 text-amber-400" />
@@ -2307,14 +2323,16 @@ export const AdminSettings: React.FC = () => {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* In-App Confirmation Dialog Modal (100% iframe safe, zero window.confirm dependency) */}
       {confirmDialog.isOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+        >
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <AlertTriangle className="w-5 h-5 text-amber-400" />
@@ -2354,14 +2372,16 @@ export const AdminSettings: React.FC = () => {
                 <span>確認刪除</span>
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* In-App Alert Notice Dialog Modal (100% iframe safe, zero alert() dependency) */}
       {alertNotice && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+        >
             <div className="bg-amber-600 text-white p-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <AlertCircle className="w-5 h-5 text-white" />
@@ -2388,8 +2408,7 @@ export const AdminSettings: React.FC = () => {
                 我知道了
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
     </div>

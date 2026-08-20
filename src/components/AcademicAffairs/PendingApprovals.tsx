@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { ModalShell } from '../Common/ModalShell';
 import { 
   ClipboardCheck, 
   CheckCircle, 
@@ -361,8 +362,12 @@ export const PendingApprovals: React.FC = () => {
       )}
 
       {deletingRequestId && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200"
+        >
+          <div className="p-6">
             <div className="flex items-center space-x-2 text-rose-600 font-bold text-base">
               <AlertTriangle className="w-5 h-5" />
               <span>確認刪除此調代課申請單？</span>
@@ -394,13 +399,17 @@ export const PendingApprovals: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* Clear All Confirmation Modal */}
       {isClearAllConfirmOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+        >
+          <div className="p-6">
             <div className="flex items-center space-x-2 text-rose-600 font-bold text-base">
               <AlertTriangle className="w-5 h-5" />
               <span>確認清空所有調代課申請單據？</span>
@@ -428,13 +437,17 @@ export const PendingApprovals: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* Reject Reason Modal */}
       {rejectingId && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200"
+        >
+          <div className="p-6">
             <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
               <XCircle className="w-5 h-5 text-rose-600" />
               <span>請填寫駁回原因</span>
@@ -464,7 +477,7 @@ export const PendingApprovals: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
     </div>

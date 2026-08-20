@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Download, Upload, AlertTriangle, X } from 'lucide-react';
 import { exportSystemBackup, importSystemBackup } from '../../utils/dataBackup';
+import { ModalShell } from './ModalShell';
 
 interface BackupTransferButtonsProps {
   variant?: 'header' | 'light';
@@ -69,8 +70,11 @@ export const BackupTransferButtons: React.FC<BackupTransferButtonsProps> = ({
       />
 
       {isConfirmOpen && (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden text-left">
+        <ModalShell
+          zClassName="z-[90]"
+          scroll="panel"
+          panelClassName="bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 text-left"
+        >
             <div className="bg-slate-800 text-white p-4 flex items-center justify-between border-b border-slate-700">
               <div className="flex items-center space-x-2">
                 <AlertTriangle className="w-5 h-5 text-amber-400" />
@@ -119,8 +123,7 @@ export const BackupTransferButtons: React.FC<BackupTransferButtonsProps> = ({
                 確認匯入並重新整理
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   );

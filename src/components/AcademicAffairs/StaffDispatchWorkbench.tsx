@@ -22,6 +22,7 @@ import {
 } from '../../utils/leaveDates';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
+import { ModalShell } from '../Common/ModalShell';
 import { 
   UserCheck, 
   User, 
@@ -663,8 +664,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
         {/* Quick Edit Current Academic Staff Modal */}
         {isQuickEditOpen && currentAcademicStaff && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+          <ModalShell
+            scroll="panel"
+            backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+            panelClassName="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200"
+          >
+            <div className="p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center space-x-2">
                   <UserCheck className="w-5 h-5 text-indigo-600" />
@@ -781,7 +786,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </ModalShell>
         )}
 
         {/* Sub Navigation Switcher */}
@@ -1877,8 +1882,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
       )}
 
       {deletingRequestId && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200">
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200"
+        >
+          <div className="p-6">
             <div className="flex items-center space-x-2 text-rose-600 font-bold text-base">
               <AlertTriangle className="w-5 h-5" />
               <span>確認刪除此調代課申請單？</span>
@@ -1911,7 +1920,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
     </div>
