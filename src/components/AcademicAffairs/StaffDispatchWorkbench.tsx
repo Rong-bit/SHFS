@@ -12,6 +12,12 @@ import {
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS, teacherWeeklyOverload } from '../../utils/schoolDepartments';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
+import {
+  countMatchingWeekdays,
+  dateToDayOfWeek,
+  formatLeaveDateLabel,
+  resolveLeaveDateEnd,
+} from '../../utils/leaveDates';
 import { 
   UserCheck, 
   User, 
@@ -121,6 +127,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Substitute specific
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
+  const [leaveDateMode, setLeaveDateMode] = useState<'single' | 'range'>('single');
+  const [leaveDateStart, setLeaveDateStart] = useState<string>('');
+  const [leaveDateEnd, setLeaveDateEnd] = useState<string>('');
 
   // Reschedule specific
   const [targetDay, setTargetDay] = useState<DayOfWeek>(1);
@@ -276,10 +285,44 @@ export const StaffDispatchWorkbench: React.FC = () => {
       return;
     }
 
+    if (requestType === 'substitute') {
+      if (!leaveDateStart) {
+        alert('請填寫請假日期。');
+        return;
+      }
+      const startDow = dateToDayOfWeek(leaveDateStart);
+      if (startDow === null) {
+        alert('請假日期須為週一至週五。');
+        return;
+      }
+      if (startDow !== selectedOriginalSession.dayOfWeek) {
+        alert(
+          `請假日期的星期（${dayNames[startDow]}）與原課堂（${dayNames[selectedOriginalSession.dayOfWeek]}）不符，請改日期或改課堂。`
+        );
+        return;
+      }
+      if (leaveDateMode === 'range') {
+        if (!leaveDateEnd) {
+          alert('起迄請假請填寫結束日期。');
+          return;
+        }
+        if (leaveDateEnd < leaveDateStart) {
+          alert('結束日期不可早於開始日期。');
+          return;
+        }
+      }
+    }
+
     const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
     const swapTeacher = teachers.find((t) => t.id === swapTargetTeacherId);
     const swapSession = sessions.find((s) => s.id === swapTargetSessionId);
     const targetVenue = venues.find((v) => v.id === targetVenueId);
+    const resolvedLeaveEnd =
+      requestType === 'substitute'
+        ? leaveDateMode === 'range'
+          ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+          : leaveDateStart
+        : undefined;
 
     const newReq = createStaffDirectDispatch({
       requestType,
@@ -287,6 +330,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
       applicantTeacherName: applicantTeacher.name,
       applicantDepartment: applicantTeacher.department,
       leaveType,
+      leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
+      leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
       paymentType,
       reason,
       originalSession: selectedOriginalSession,
@@ -634,54 +679,127 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                 {/* If substitute: Leave Type & Payment Type */}
                 {requestType === 'substitute' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        差假類型 (系統自動判定公/自費)：
-                      </label>
-                      <select
-                        value={leaveType}
-                        onChange={(e) => handleLeaveTypeChange(e.target.value as LeaveType)}
-                        className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value="official">🏛️ 公假 / 公差 (公費派代 · 420元/節)</option>
-                        <option value="training">📚 專題競賽 / 專業研習 / 監評 (公費派代 · 420元/節)</option>
-                        <option value="sick">🏥 病假 / 住院 / 緊急就醫 (自費代課)</option>
-                        <option value="personal">💼 個人事假 (自費代課)</option>
-                        <option value="bereavement">🕊️ 喪假 (公費派代)</option>
-                        <option value="maternity">👶 產假 / 陪產假 (公費派代)</option>
-                        <option value="other">📌 其他專案指派</option>
-                      </select>
+                  <div className="space-y-4 pt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          差假類型 (系統自動判定公/自費)：
+                        </label>
+                        <select
+                          value={leaveType}
+                          onChange={(e) => handleLeaveTypeChange(e.target.value as LeaveType)}
+                          className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="official">🏛️ 公假 / 公差 (公費派代 · 420元/節)</option>
+                          <option value="training">📚 專題競賽 / 專業研習 / 監評 (公費派代 · 420元/節)</option>
+                          <option value="sick">🏥 病假 / 住院 / 緊急就醫 (自費代課)</option>
+                          <option value="personal">💼 個人事假 (自費代課)</option>
+                          <option value="bereavement">🕊️ 喪假 (公費派代)</option>
+                          <option value="maternity">👶 產假 / 陪產假 (公費派代)</option>
+                          <option value="other">📌 其他專案指派</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          鐘點費支給來源 (主計出納結算依據)：
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPaymentType('public')}
+                            className={`p-2.5 rounded-xl text-xs font-bold text-center border transition ${
+                              paymentType === 'public'
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-300'
+                            }`}
+                          >
+                            🏛️ 公費派代 (學校預算)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentType('private')}
+                            className={`p-2.5 rounded-xl text-xs font-bold text-center border transition ${
+                              paymentType === 'private'
+                                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-300'
+                            }`}
+                          >
+                            👤 自費代課 (教師自理)
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        鐘點費支給來源 (主計出納結算依據)：
+                        請假日期：
                       </label>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="flex gap-2 mb-2">
                         <button
                           type="button"
-                          onClick={() => setPaymentType('public')}
-                          className={`p-2.5 rounded-xl text-xs font-bold text-center border transition ${
-                            paymentType === 'public'
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-300'
+                          onClick={() => {
+                            setLeaveDateMode('single');
+                            setLeaveDateEnd('');
+                          }}
+                          className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                            leaveDateMode === 'single'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-600 border-slate-300'
                           }`}
                         >
-                          🏛️ 公費派代 (學校預算)
+                          單日
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPaymentType('private')}
-                          className={`p-2.5 rounded-xl text-xs font-bold text-center border transition ${
-                            paymentType === 'private'
-                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-300'
+                          onClick={() => setLeaveDateMode('range')}
+                          className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                            leaveDateMode === 'range'
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-600 border-slate-300'
                           }`}
                         >
-                          👤 自費代課 (教師自理)
+                          起迄
                         </button>
                       </div>
+                      <div className={`grid gap-3 ${leaveDateMode === 'range' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">
+                            {leaveDateMode === 'range' ? '開始日' : '請假日'}
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={leaveDateStart}
+                            onChange={(e) => setLeaveDateStart(e.target.value)}
+                            className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                        {leaveDateMode === 'range' && (
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-0.5">結束日</label>
+                            <input
+                              type="date"
+                              required
+                              value={leaveDateEnd}
+                              min={leaveDateStart || undefined}
+                              onChange={(e) => setLeaveDateEnd(e.target.value)}
+                              className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {selectedOriginalSession && (
+                        <p className="mt-1.5 text-[11px] text-slate-500">
+                          {leaveDateMode === 'single'
+                            ? `請假日須為「${dayNames[selectedOriginalSession.dayOfWeek]}」，對應所選課堂。`
+                            : `將涵蓋區間內所有「${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節」${
+                                leaveDateStart && leaveDateEnd && leaveDateEnd >= leaveDateStart
+                                  ? `（約 ${countMatchingWeekdays(leaveDateStart, leaveDateEnd, selectedOriginalSession.dayOfWeek)} 次）`
+                                  : ''
+                              }。`}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1266,6 +1384,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 <span className="px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">實習</span>
                               )}
                             </div>
+                            {req.requestType === 'substitute' && (
+                              <div className="text-[11px] text-amber-800 font-semibold mt-0.5">
+                                請假：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
+                              </div>
+                            )}
                           </td>
 
                           <td className="p-3">

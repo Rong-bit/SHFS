@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
+import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { 
   Printer, 
   Trash2, 
@@ -159,6 +160,11 @@ export const TeacherRequestsList: React.FC = () => {
                   <div className="text-xs text-slate-600 mt-1">
                     {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)} ｜ {req.originalSession.venueName}
                   </div>
+                  {req.requestType === 'substitute' && (
+                    <div className="text-xs text-amber-800 font-semibold mt-1">
+                      請假日期：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Arrow / Destination Slot */}

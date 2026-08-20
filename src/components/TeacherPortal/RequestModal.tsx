@@ -10,6 +10,11 @@ import {
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { teacherWeeklyOverload } from '../../utils/schoolDepartments';
+import {
+  countMatchingWeekdays,
+  dateToDayOfWeek,
+  resolveLeaveDateEnd,
+} from '../../utils/leaveDates';
 import { 
   X, 
   ArrowLeftRight, 
@@ -80,6 +85,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const [showAllTeachers, setShowAllTeachers] = useState(false);
   const [hasUserChosenSubstituteTeacher, setHasUserChosenSubstituteTeacher] = useState(false);
   const [manualTeacherQuery, setManualTeacherQuery] = useState('');
+  const [leaveDateMode, setLeaveDateMode] = useState<'single' | 'range'>('single');
+  const [leaveDateStart, setLeaveDateStart] = useState<string>('');
+  const [leaveDateEnd, setLeaveDateEnd] = useState<string>('');
 
   // When teacherSessions is empty, allow selecting a time slot (day/period)
   // so teacher can still submit a substitute (leave) request.
@@ -247,6 +255,18 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       })
     : { hasClash: false, severity: 'none', messages: [] };
 
+  const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
+
+  const leaveRangeHint =
+    requestType === 'substitute' &&
+    leaveDateMode === 'range' &&
+    leaveDateStart &&
+    leaveDateEnd &&
+    leaveDateEnd >= leaveDateStart &&
+    leaveDay !== ''
+      ? countMatchingWeekdays(leaveDateStart, leaveDateEnd, leaveDay)
+      : 0;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!effectiveOriginalSession || !currentTeacher) return;
@@ -261,6 +281,31 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         alert('請先選擇「請假星期」與「請假節次」。');
         return;
       }
+      if (!leaveDateStart) {
+        alert('請填寫請假日期。');
+        return;
+      }
+      const startDow = dateToDayOfWeek(leaveDateStart);
+      if (startDow === null) {
+        alert('請假日期須為週一至週五。');
+        return;
+      }
+      if (startDow !== leaveDay) {
+        alert(
+          `請假日期的星期（${dayNames[startDow]}）與所選課堂（${dayNames[leaveDay as DayOfWeek]}）不符，請改日期或改節次。`
+        );
+        return;
+      }
+      if (leaveDateMode === 'range') {
+        if (!leaveDateEnd) {
+          alert('起迄請假請填寫結束日期。');
+          return;
+        }
+        if (leaveDateEnd < leaveDateStart) {
+          alert('結束日期不可早於開始日期。');
+          return;
+        }
+      }
     }
 
     if (requestType === 'swap' && (!swapTeacherId || !swapTargetSession)) {
@@ -270,6 +315,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     const swapPartner = teachers.find((t) => t.id === swapTeacherId);
     const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
+    const resolvedLeaveEnd =
+      requestType === 'substitute'
+        ? leaveDateMode === 'range'
+          ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+          : leaveDateStart
+        : undefined;
 
     addSubstituteRequest({
       requestType,
@@ -277,6 +328,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       applicantTeacherName: currentTeacher.name,
       applicantDepartment: currentTeacher.department,
       leaveType: requestType === 'substitute' ? leaveType : undefined,
+      leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
+      leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
       reason,
       paymentType,
       originalSession: effectiveOriginalSession,
@@ -298,8 +351,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     onClose();
   };
-
-  const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
@@ -544,6 +595,75 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     </select>
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    請假日期
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLeaveDateMode('single');
+                        setLeaveDateEnd('');
+                      }}
+                      className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        leaveDateMode === 'single'
+                          ? 'bg-amber-500 text-slate-950 border-amber-500'
+                          : 'bg-white text-slate-600 border-slate-300'
+                      }`}
+                    >
+                      單日
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLeaveDateMode('range')}
+                      className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        leaveDateMode === 'range'
+                          ? 'bg-amber-500 text-slate-950 border-amber-500'
+                          : 'bg-white text-slate-600 border-slate-300'
+                      }`}
+                    >
+                      起迄
+                    </button>
+                  </div>
+                  <div className={`grid gap-2 ${leaveDateMode === 'range' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-0.5">
+                        {leaveDateMode === 'range' ? '開始日' : '請假日'}
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={leaveDateStart}
+                        onChange={(e) => setLeaveDateStart(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                    {leaveDateMode === 'range' && (
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-0.5">結束日</label>
+                        <input
+                          type="date"
+                          required
+                          value={leaveDateEnd}
+                          min={leaveDateStart || undefined}
+                          onChange={(e) => setLeaveDateEnd(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {leaveDay !== '' && (
+                    <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
+                      {leaveDateMode === 'single'
+                        ? `請假日須為「${dayNames[leaveDay]}」，對應該堂課。`
+                        : `將涵蓋區間內所有「${dayNames[leaveDay]} 第${leavePeriod || 'N'}節」${
+                            leaveRangeHint > 0 ? `（目前約 ${leaveRangeHint} 次）` : ''
+                          }。`}
+                    </p>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>

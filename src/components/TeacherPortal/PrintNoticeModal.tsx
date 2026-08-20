@@ -3,6 +3,7 @@ import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
+import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 interface PrintNoticeModalProps {
@@ -219,6 +220,14 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                     </span>
                   )}
                 </div>
+                {request.requestType === 'substitute' && (
+                  <div className="text-slate-800 mt-1 font-medium">
+                    請假日期：
+                    <strong className="ml-1">
+                      {formatLeaveDateLabel(request.leaveDateStart, request.leaveDateEnd)}
+                    </strong>
+                  </div>
+                )}
               </div>
             </div>
 

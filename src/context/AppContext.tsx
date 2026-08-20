@@ -35,6 +35,7 @@ import {
   testCloudSyncConnection,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
+import { countLeaveSubstitutePeriods } from '../utils/leaveDates';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -1330,19 +1331,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .forEach((r) => {
           if (r.requestType === 'substitute') {
             const rate = rateForRequest(r);
+            const periods = countLeaveSubstitutePeriods(r);
             if (r.substituteTeacherId === teacher.id) {
               if (r.paymentType === 'public') {
-                publicSubstitutePeriods += 1;
-                publicSubstituteAmount += rate;
+                publicSubstitutePeriods += periods;
+                publicSubstituteAmount += rate * periods;
               } else {
-                privateSubstituteEarnPeriods += 1;
-                privateSubstituteEarnAmount += rate;
+                privateSubstituteEarnPeriods += periods;
+                privateSubstituteEarnAmount += rate * periods;
               }
             }
             if (r.applicantTeacherId === teacher.id) {
               if (r.paymentType === 'private') {
-                privateLeaveDeductionPeriods += 1;
-                privateLeaveDeductionAmount += rate;
+                privateLeaveDeductionPeriods += periods;
+                privateLeaveDeductionAmount += rate * periods;
               }
             }
           }

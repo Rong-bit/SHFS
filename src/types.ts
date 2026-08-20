@@ -111,6 +111,10 @@ export interface SubstituteRequest {
   applicantTeacherName: string;
   applicantDepartment: DepartmentType;
   leaveType?: LeaveType;
+  /** 請假起始日 YYYY-MM-DD（請假派代必填） */
+  leaveDateStart?: string;
+  /** 請假結束日 YYYY-MM-DD；未填或同日＝單日 */
+  leaveDateEnd?: string;
   reason: string;
   paymentType: PaymentType;
   

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
+import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { 
   ClipboardCheck, 
   CheckCircle, 
@@ -205,6 +206,11 @@ export const PendingApprovals: React.FC = () => {
                     <div className="text-slate-600 mt-1">
                       {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)}
                     </div>
+                    {req.requestType === 'substitute' && (
+                      <div className="text-amber-800 font-semibold mt-1">
+                        請假日期：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
+                      </div>
+                    )}
                     <div className="text-slate-500 flex items-center gap-1 mt-1 font-mono text-xs">
                       <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       {req.originalSession.venueName}
