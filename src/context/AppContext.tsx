@@ -50,6 +50,10 @@ import {
   remapRequestSessions,
   rollbackRequestFromSessions,
 } from '../utils/scheduleAdjustments';
+import {
+  collectSubstituteOccupancies,
+  teacherHasSubstituteOccupancy,
+} from '../utils/substituteCandidates';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -805,6 +809,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       if (subClash) {
         messages.push(`【代課教師衝堂】${subTeacher?.name} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有正課「${subClash.className} ${subClash.subjectName}」`);
+        severity = 'danger';
+      } else if (
+        teacherHasSubstituteOccupancy(
+          substituteTeacherId,
+          originalSession.dayOfWeek,
+          originalSession.period,
+          collectSubstituteOccupancies(requests)
+        )
+      ) {
+        messages.push(
+          `【代課教師衝堂】${subTeacher?.name} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有其他已派代／待簽核代課`
+        );
         severity = 'danger';
       }
 

@@ -11,11 +11,9 @@ import {
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import {
   countMatchingWeekdays,
-  dateToDayOfWeek,
-  findDuplicateLeaveConflicts,
-  formatDuplicateLeaveAlert,
   formatWeekdayList,
   resolveLeaveDateEnd,
+  validateSubstituteLeaveInput,
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
@@ -145,6 +143,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     return rankSubstituteCandidates({
       teachers,
       sessions,
+      requests,
       excludeTeacherId: currentTeacher.id,
       targetDayOfWeek: effectiveOriginalSession.dayOfWeek,
       targetPeriod: effectiveOriginalSession.period,
@@ -152,7 +151,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       applicantDepartment: currentTeacher.department,
       maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
     });
-  }, [teachers, currentTeacher, effectiveOriginalSession, sessions, systemConfig]);
+  }, [teachers, currentTeacher, effectiveOriginalSession, sessions, requests, systemConfig]);
 
   // If in substitute mode and teacher has sessions, initialize leave slot
   useEffect(() => {
@@ -316,48 +315,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         alert('請先選擇「請假星期」與「請假節次」。');
         return;
       }
-      if (!leaveDateStart) {
-        alert('請填寫請假日期。');
-        return;
-      }
-      const startDow = dateToDayOfWeek(leaveDateStart);
-      if (startDow === null) {
-        alert('請假開始日須為週一至週五。');
-        return;
-      }
-      if (leaveDateMode === 'range') {
-        if (!leaveDateEnd) {
-          alert('起迄請假請填寫結束日期。');
-          return;
-        }
-        if (leaveDateEnd < leaveDateStart) {
-          alert('結束日期不可早於開始日期。');
-          return;
-        }
-      }
-      const allowedDays = weekdaysInDateRange(
+      const leaveCheck = validateSubstituteLeaveInput({
+        leaveDateMode,
         leaveDateStart,
-        leaveDateMode === 'range' ? leaveDateEnd : leaveDateStart
-      );
-      if (!allowedDays.includes(leaveDay as DayOfWeek)) {
-        alert(
-          `所選課堂（${dayNames[leaveDay as DayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(allowedDays, dayNames)}）內，請改日期或改節次。`
-        );
-        return;
-      }
-      const resolvedEndForDup =
-        leaveDateMode === 'range'
-          ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
-          : leaveDateStart;
-      const duplicates = findDuplicateLeaveConflicts({
+        leaveDateEnd,
+        sessions: [effectiveOriginalSession],
         existing: requests,
         applicantTeacherId: currentTeacher.id,
-        leaveDateStart,
-        leaveDateEnd: resolvedEndForDup,
-        sessions: [effectiveOriginalSession],
+        dayNames,
       });
-      if (duplicates.length > 0) {
-        alert(formatDuplicateLeaveAlert(duplicates, dayNames));
+      if (leaveCheck.ok === false) {
+        alert(leaveCheck.message);
         return;
       }
     }

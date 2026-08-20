@@ -1,4 +1,4 @@
-import { CourseSession, DayOfWeek, Teacher } from '../types';
+import { CourseSession, DayOfWeek, SubstituteRequest, Teacher } from '../types';
 import { teacherWeeklyOverload } from './schoolDepartments';
 
 export interface SubstituteCandidate {
@@ -10,6 +10,12 @@ export interface SubstituteCandidate {
   isNearLimit: boolean;
   score: number;
 }
+
+export type SubstituteOccupancy = {
+  teacherId: string;
+  dayOfWeek: DayOfWeek;
+  period: number;
+};
 
 /** 科目名稱正規化：略過「補強-」等前綴以便比對 */
 export function normalizeSubjectName(name: string): string {
@@ -39,10 +45,44 @@ export function teacherTeachesSubject(
 }
 
 /**
+ * 已派代／待簽核代課佔用的時段（代課教師在該星期＋節次視為非空堂）
+ */
+export function collectSubstituteOccupancies(
+  requests: SubstituteRequest[],
+  options?: { excludeRequestIds?: string[] }
+): SubstituteOccupancy[] {
+  const exclude = new Set(options?.excludeRequestIds || []);
+  const out: SubstituteOccupancy[] = [];
+  for (const r of requests) {
+    if (r.requestType !== 'substitute') continue;
+    if (r.status !== 'approved' && r.status !== 'pending') continue;
+    if (!r.substituteTeacherId) continue;
+    if (exclude.has(r.id)) continue;
+    out.push({
+      teacherId: r.substituteTeacherId,
+      dayOfWeek: r.originalSession.dayOfWeek,
+      period: r.originalSession.period,
+    });
+  }
+  return out;
+}
+
+export function teacherHasSubstituteOccupancy(
+  teacherId: string,
+  dayOfWeek: DayOfWeek,
+  period: number,
+  occupancies: SubstituteOccupancy[]
+): boolean {
+  return occupancies.some(
+    (o) => o.teacherId === teacherId && o.dayOfWeek === dayOfWeek && o.period === period
+  );
+}
+
+/**
  * 智慧派代排序：
  * 1. 相同科目優先
  * 2. 其次同科別
- * 3. 再以該時段沒課（空堂）優先
+ * 3. 再以該時段沒課（空堂）優先——含已核准／待簽核代課佔用
  * 連續節次時：任一節有課即視為衝堂；任教科目與任一目標科目相符即視為同科目
  */
 export function rankSubstituteCandidates(params: {
@@ -55,6 +95,9 @@ export function rankSubstituteCandidates(params: {
   sessionDepartment?: string;
   applicantDepartment?: string;
   maxWeeklyOverloadPeriods: number;
+  /** 已派代佔用（不傳則只看課表） */
+  substituteOccupancies?: SubstituteOccupancy[];
+  requests?: SubstituteRequest[];
 }): SubstituteCandidate[] {
   const {
     teachers,
@@ -70,17 +113,21 @@ export function rankSubstituteCandidates(params: {
 
   const periods = Array.isArray(targetPeriod) ? targetPeriod : [targetPeriod];
   const subjects = Array.isArray(subjectName) ? subjectName : [subjectName];
+  const occupancies =
+    params.substituteOccupancies ||
+    (params.requests ? collectSubstituteOccupancies(params.requests) : []);
 
   return teachers
     .filter((t) => t.id !== excludeTeacherId)
     .map((t) => {
-      const hasClash = periods.some((p) =>
-        sessions.some(
-          (s) =>
-            s.teacherId === t.id &&
-            s.dayOfWeek === targetDayOfWeek &&
-            s.period === p
-        )
+      const hasClash = periods.some(
+        (p) =>
+          sessions.some(
+            (s) =>
+              s.teacherId === t.id &&
+              s.dayOfWeek === targetDayOfWeek &&
+              s.period === p
+          ) || teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies)
       );
       const isSameSubject = subjects.some((subj) =>
         teacherTeachesSubject(t.id, subj, sessions)

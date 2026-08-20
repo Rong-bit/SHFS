@@ -148,8 +148,8 @@ function isPlaceholderSessionId(id?: string): boolean {
 }
 
 function isSameLeaveSlot(
-  a: { id: string; dayOfWeek: DayOfWeek; period: number; className: string },
-  b: { id: string; dayOfWeek: DayOfWeek; period: number; className: string }
+  a: { id?: string; dayOfWeek: DayOfWeek; period: number; className: string },
+  b: { id?: string; dayOfWeek: DayOfWeek; period: number; className: string }
 ): boolean {
   // 佔位課堂固定／共用 id，不可只靠 id 判定同一節
   if (
@@ -182,7 +182,7 @@ export function findDuplicateLeaveConflicts(params: {
   applicantTeacherId: string;
   leaveDateStart: string;
   leaveDateEnd?: string;
-  sessions: Array<{ id: string; dayOfWeek: DayOfWeek; period: number; className: string }>;
+  sessions: Array<{ id?: string; dayOfWeek: DayOfWeek; period: number; className: string }>;
   excludeRequestIds?: string[];
 }): DuplicateLeaveConflict[] {
   const {
@@ -253,4 +253,82 @@ export function formatDuplicateLeaveAlert(
   const more =
     conflicts.length > 6 ? `\n…另有 ${conflicts.length - 6} 筆重複` : '';
   return `偵測到同一天／同節次重複請假，請勿重覆派代：\n${lines.join('\n')}${more}`;
+}
+
+export type ValidateSubstituteLeaveResult =
+  | { ok: true; resolvedLeaveEnd: string }
+  | { ok: false; message: string };
+
+/**
+ * 請假派代共用驗證（教學組派代／教師申請）。
+ * 不含「是否指定代課教師」（教務必填、教師端可媒合）。
+ */
+export function validateSubstituteLeaveInput(params: {
+  leaveDateMode: 'single' | 'range';
+  leaveDateStart: string;
+  leaveDateEnd?: string;
+  /** 欲請假的課堂（一或多節） */
+  sessions: Array<{ id?: string; dayOfWeek: DayOfWeek; period: number; className: string }>;
+  existing: SubstituteRequest[];
+  applicantTeacherId: string;
+  dayNames: string[];
+  excludeRequestIds?: string[];
+}): ValidateSubstituteLeaveResult {
+  const {
+    leaveDateMode,
+    leaveDateStart,
+    leaveDateEnd,
+    sessions: targetSessions,
+    existing,
+    applicantTeacherId,
+    dayNames,
+    excludeRequestIds,
+  } = params;
+
+  if (!leaveDateStart) {
+    return { ok: false, message: '請填寫請假日期。' };
+  }
+  const startDow = dateToDayOfWeek(leaveDateStart);
+  if (startDow === null) {
+    return { ok: false, message: '請假開始日須為週一至週五。' };
+  }
+  if (leaveDateMode === 'range') {
+    if (!leaveDateEnd) {
+      return { ok: false, message: '起迄請假請填寫結束日期。' };
+    }
+    if (leaveDateEnd < leaveDateStart) {
+      return { ok: false, message: '結束日期不可早於開始日期。' };
+    }
+  }
+
+  const resolvedLeaveEnd =
+    leaveDateMode === 'range'
+      ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd) || leaveDateStart
+      : leaveDateStart;
+
+  const allowedDays = weekdaysInDateRange(leaveDateStart, resolvedLeaveEnd);
+  const bad = targetSessions.find((s) => !allowedDays.includes(s.dayOfWeek));
+  if (bad) {
+    return {
+      ok: false,
+      message: `所選課堂（${dayNames[bad.dayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(
+        allowedDays,
+        dayNames
+      )}）內，請改日期或改課堂。`,
+    };
+  }
+
+  const duplicates = findDuplicateLeaveConflicts({
+    existing,
+    applicantTeacherId,
+    leaveDateStart,
+    leaveDateEnd: resolvedLeaveEnd,
+    sessions: targetSessions,
+    excludeRequestIds,
+  });
+  if (duplicates.length > 0) {
+    return { ok: false, message: formatDuplicateLeaveAlert(duplicates, dayNames) };
+  }
+
+  return { ok: true, resolvedLeaveEnd };
 }
