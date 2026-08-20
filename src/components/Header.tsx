@@ -190,11 +190,13 @@ export const Header: React.FC = () => {
                 onChange={(e) => requestRoleSwitchWithAuth('academic', e.target.value)}
                 className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
               >
-                {academicStaffList.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.title})
-                  </option>
-                ))}
+                {academicStaffList
+                  .filter((s) => (s.group || 'academic') === 'academic')
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.title})
+                    </option>
+                  ))}
               </select>
             </div>
           )}

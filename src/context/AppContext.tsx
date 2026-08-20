@@ -713,6 +713,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const currentTeacher = teachers.find((t) => t.id === currentTeacherId) || teachers[0];
   const currentAcademicStaff = academicStaffList.find((s) => s.id === currentAcademicStaffId) || academicStaffList[0];
 
+  // 教學組作業時簽章身分不可殘留出納組人員（共用 currentAcademicStaffId）
+  useEffect(() => {
+    if (currentRole !== 'academic') return;
+    const current = academicStaffList.find((s) => s.id === currentAcademicStaffId);
+    if (current && (current.group || 'academic') === 'academic') return;
+    const firstAcademic = academicStaffList.find((s) => (s.group || 'academic') === 'academic');
+    if (firstAcademic && firstAcademic.id !== currentAcademicStaffId) {
+      setCurrentAcademicStaffId(firstAcademic.id);
+    }
+  }, [currentRole, currentAcademicStaffId, academicStaffList]);
+
+  // 出納組作業時同樣對齊出納組人員
+  useEffect(() => {
+    if (currentRole !== 'accounting') return;
+    const current = academicStaffList.find((s) => s.id === currentAcademicStaffId);
+    if (current && current.group === 'accounting') return;
+    const firstAcc = academicStaffList.find((s) => s.group === 'accounting');
+    if (firstAcc && firstAcc.id !== currentAcademicStaffId) {
+      setCurrentAcademicStaffId(firstAcc.id);
+    }
+  }, [currentRole, currentAcademicStaffId, academicStaffList]);
+
   // Clash checking algorithm
   const checkClashes = (params: {
     requestType: RequestType;
@@ -1234,11 +1256,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const staffName = (() => {
-      if (!currentAcademicStaff) return '教學組經辦';
-      const t = currentAcademicStaff.title;
+      const staff =
+        (currentAcademicStaff && (currentAcademicStaff.group || 'academic') === 'academic'
+          ? currentAcademicStaff
+          : undefined) ||
+        academicStaffList.find((s) => (s.group || 'academic') === 'academic');
+      if (!staff) return '教學組經辦';
+      const t = staff.title;
       const m = t.match(/^(.+?組).*?\((.+?)\)$/);
       const stamp = m ? `${m[1]}${m[2]}` : t;
-      return `${currentAcademicStaff.name}(${stamp})`;
+      return `${staff.name}(${stamp})`;
     })();
 
     // 全數預檢（累進課表／申請佔用）：任一步失敗則不寫入任何單據／課表

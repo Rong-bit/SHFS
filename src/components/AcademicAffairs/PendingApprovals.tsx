@@ -37,9 +37,15 @@ export const PendingApprovals: React.FC = () => {
   const [isClearAllConfirmOpen, setIsClearAllConfirmOpen] = useState(false);
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
 
-  const activeStaff = currentAcademicStaff || academicStaffList[0];
+  const activeStaff =
+    (currentAcademicStaff && (currentAcademicStaff.group || 'academic') === 'academic'
+      ? currentAcademicStaff
+      : undefined) ||
+    academicStaffList.find((s) => (s.group || 'academic') === 'academic') ||
+    academicStaffList[0];
   const reviewerSignature = (() => {
     if (!activeStaff) return '教學組長';
+    if ((activeStaff.group || 'academic') !== 'academic') return '教學組長';
     const t = activeStaff.title;
     const m = t.match(/^(.+?組).*?\((.+?)\)$/);
     const stamp = m ? `${m[1]}${m[2]}` : t;

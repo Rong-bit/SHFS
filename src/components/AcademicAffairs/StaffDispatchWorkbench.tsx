@@ -633,7 +633,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // Handle batch approval
   const handleBatchApprove = () => {
     if (selectedRequestIds.length === 0) return;
-    const reviewer = `${currentAcademicStaff?.name || '陳雅筑'} (${currentAcademicStaff?.title || '教學組'})`;
+    const academicStaff =
+      (currentAcademicStaff && (currentAcademicStaff.group || 'academic') === 'academic'
+        ? currentAcademicStaff
+        : undefined) ||
+      academicStaffList.find((s) => (s.group || 'academic') === 'academic');
+    const reviewer = `${academicStaff?.name || '陳雅筑'} (${academicStaff?.title || '教學組'})`;
     const count = batchApproveRequests(selectedRequestIds, reviewer);
     setSelectedRequestIds([]);
     setSuccessToast(`已成功批次核准 ${count} 筆調代課案件！`);
@@ -707,11 +712,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
               onChange={(e) => setCurrentAcademicStaffId(e.target.value)}
               className="bg-white text-slate-800 font-bold px-3 py-1 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             >
-              {academicStaffList.map((staff) => (
-                <option key={staff.id} value={staff.id}>
-                  {staff.name} ({staff.title} · {staff.phone})
-                </option>
-              ))}
+              {academicStaffList
+                .filter((staff) => (staff.group || 'academic') === 'academic')
+                .map((staff) => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.name} ({staff.title} · {staff.phone})
+                  </option>
+                ))}
             </select>
             <button
               onClick={handleOpenQuickEdit}
@@ -1925,10 +1932,18 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               {req.status === 'pending' && (
                                 <button
                                   onClick={() => {
-                                    const title = currentAcademicStaff?.title || '經辦';
+                                    const academicOnly = academicStaffList.filter(
+                                      (s) => (s.group || 'academic') === 'academic'
+                                    );
+                                    const staff =
+                                      (currentAcademicStaff &&
+                                      (currentAcademicStaff.group || 'academic') === 'academic'
+                                        ? currentAcademicStaff
+                                        : undefined) || academicOnly[0];
+                                    const title = staff?.title || '教學組';
                                     const m = title.match(/^(.+?組).*?\((.+?)\)$/);
                                     const stampTitle = m ? `${m[1]}${m[2]}` : title;
-                                    approveRequest(req.id, `${currentAcademicStaff?.name || '教學組'}(${stampTitle})`);
+                                    approveRequest(req.id, `${staff?.name || '教學組'}(${stampTitle})`);
                                   }}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-xs transition"
                                 >
