@@ -495,6 +495,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
         existing: requests,
         applicantTeacherId: applicantTeacher.id,
         dayNames,
+        nonTeachingDates: nonTeachingDateSet(systemConfig.nonTeachingDays),
       });
       if (leaveCheck.ok === false) {
         alert(leaveCheck.message);

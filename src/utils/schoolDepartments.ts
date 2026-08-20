@@ -188,13 +188,29 @@ export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherI
 export const countWeeklyCounselingPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).counseling;
 
-/** 結算月份對應的西元年（跨年時：目前月份之後超過半年視為去年） */
-export const calendarYearForSettlementMonth = (month: number, now = new Date()) => {
-  const year = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  if (month > currentMonth && month - currentMonth > 6) return year - 1;
-  if (month < currentMonth && currentMonth - month > 6) return year + 1;
-  return year;
+/** 結算月份對應的西元年。
+ * 優先依學年度：學年 N 的 8–12 月 → N+1911；1–7 月 → N+1912。
+ * 無學年度時以 8 月為界，避免「現在 8 月選 1 月卻變成明年」。
+ */
+export const calendarYearForSettlementMonth = (
+  month: number,
+  now = new Date(),
+  academicYear?: string | number
+) => {
+  if (academicYear != null && String(academicYear).trim() !== '') {
+    const roc = Number(academicYear);
+    if (!Number.isNaN(roc) && roc > 90) {
+      return month >= 8 ? roc + 1911 : roc + 1912;
+    }
+  }
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  if (month >= 8) {
+    // 8–12 月：若目前在上半年，代表上一學年的秋季
+    return m >= 8 ? y : y - 1;
+  }
+  // 1–7 月：取「本西元年」的該月（現在 8 月選 1 月 → 今年 1 月，不是明年）
+  return y;
 };
 
 /** 該月各星期幾出現次數（JS：0 日、1 一 … 6 六）；excludeDates 為 YYYY-MM-DD 放假日 */
@@ -239,9 +255,10 @@ export const averageWeekdayWeeks = (
 export const settlementWeeksForMonth = (
   month: number,
   now = new Date(),
-  excludeDates?: Iterable<string> | Set<string> | null
+  excludeDates?: Iterable<string> | Set<string> | null,
+  academicYear?: string | number
 ) => {
-  const year = calendarYearForSettlementMonth(month, now);
+  const year = calendarYearForSettlementMonth(month, now, academicYear);
   return averageWeekdayWeeks(year, month, excludeDates);
 };
 
@@ -294,9 +311,10 @@ export const monthlyCounselingPeriods = (
   teacherId: string,
   month: number,
   now = new Date(),
-  excludeDates?: Iterable<string> | Set<string> | null
+  excludeDates?: Iterable<string> | Set<string> | null,
+  academicYear?: string | number
 ) => {
-  const year = calendarYearForSettlementMonth(month, now);
+  const year = calendarYearForSettlementMonth(month, now, academicYear);
   const counts = weekdayOccurrencesInMonth(year, month, excludeDates);
   const slots = new Set<string>();
   sessions.forEach((s) => {
@@ -316,9 +334,10 @@ export const monthlyOverloadPeriods = (
   teacher: Pick<Teacher, 'id'>,
   month: number,
   now = new Date(),
-  excludeDates?: Iterable<string> | Set<string> | null
+  excludeDates?: Iterable<string> | Set<string> | null,
+  academicYear?: string | number
 ) => {
-  const year = calendarYearForSettlementMonth(month, now);
+  const year = calendarYearForSettlementMonth(month, now, academicYear);
   return monthlyConcurrentPeriods(sessions, teacher.id, year, month, excludeDates);
 };
 

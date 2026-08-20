@@ -36,7 +36,7 @@ import {
   mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
-import { countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
+import { countLeaveSubstitutePeriodsInMonth, countMatchingWeekdays, resolveLeaveDateEnd } from '../utils/leaveDates';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -193,6 +193,10 @@ interface AppContextType {
   lastCloudSyncAt: number | null;
   updateCloudSyncSettings: (settings: CloudSyncSettings) => void;
   testCloudSync: () => Promise<string>;
+  /** 衝突時：採用雲端（覆蓋本機） */
+  pullCloudOverwriteLocal: () => Promise<void>;
+  /** 衝突時：強制推送本機（覆蓋雲端） */
+  forcePushLocalToCloud: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -582,6 +586,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const testCloudSync = () => testCloudSyncConnection(cloudSyncSettings);
 
+  const pullCloudOverwriteLocal = async () => {
+    if (!isCloudSyncReady(cloudSyncSettings)) {
+      setCloudSyncMessage('尚未啟用跨電腦同步');
+      return;
+    }
+    setCloudSyncStatus('connecting');
+    setCloudSyncMessage('正在拉取雲端資料…');
+    try {
+      const remote = await pullSharedSchoolData(cloudSyncSettings);
+      if (!remote) {
+        setCloudSyncStatus('error');
+        setCloudSyncMessage('雲端尚無資料可拉取');
+        return;
+      }
+      cloudDirtyRef.current = false;
+      applySharedSchoolData(remote);
+      setCloudSyncStatus('synced');
+      setCloudSyncMessage('已採用雲端資料（本機未推送變更已放棄）');
+    } catch (err: any) {
+      setCloudSyncStatus('error');
+      setCloudSyncMessage(err?.message || '拉取雲端失敗');
+    }
+  };
+
+  const forcePushLocalToCloud = async () => {
+    if (!isCloudSyncReady(cloudSyncSettings)) {
+      setCloudSyncMessage('尚未啟用跨電腦同步');
+      return;
+    }
+    setCloudSyncStatus('connecting');
+    setCloudSyncMessage('正在強制推送本機…');
+    try {
+      const remote = await pullSharedSchoolData(cloudSyncSettings);
+      const remoteAt = remote?.updatedAt ?? lastCloudSyncAtRef.current;
+      // 對齊遠端時間戳後寫入，刻意覆寫對方
+      lastCloudSyncAtRef.current = remoteAt;
+      const now = Date.now();
+      const result = await pushSharedSchoolData(
+        cloudSyncSettings,
+        buildSharedSchoolData(now),
+        { ifMatchUpdatedAt: remoteAt }
+      );
+      if (result === 'conflict') {
+        // 極短時間內又變新：再對齊一次
+        const again = await pullSharedSchoolData(cloudSyncSettings);
+        const at2 = again?.updatedAt ?? Date.now();
+        const now2 = Date.now();
+        await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now2), {
+          ifMatchUpdatedAt: at2,
+        });
+        lastCloudSyncAtRef.current = now2;
+        setLastCloudSyncAt(now2);
+        localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now2));
+      } else {
+        lastCloudSyncAtRef.current = now;
+        setLastCloudSyncAt(now);
+        localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
+      }
+      cloudDirtyRef.current = false;
+      setCloudSyncStatus('synced');
+      setCloudSyncMessage('已強制推送本機（雲端已改為本機內容）');
+    } catch (err: any) {
+      setCloudSyncStatus('error');
+      setCloudSyncMessage(err?.message || '強制推送失敗');
+    }
+  };
+
   useEffect(() => {
     if (!isCloudSyncReady(cloudSyncSettings)) {
       cloudReadyRef.current = false;
@@ -677,18 +748,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           buildSharedSchoolData(now),
           { ifMatchUpdatedAt: baseUpdatedAt }
         );
-        if (result === 'conflict') {
-          // 保留本機未推送變更：對齊遠端時間戳後重試覆寫，避免套用遠端導致本機異動遺失
-          const remote = await pullSharedSchoolData(cloudSyncSettings);
-          const remoteAt = remote?.updatedAt ?? baseUpdatedAt;
-          lastCloudSyncAtRef.current = remoteAt;
-          setLastCloudSyncAt(remoteAt);
-          localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(remoteAt));
-          cloudDirtyRef.current = true;
-          setCloudSyncStatus('synced');
-          setCloudSyncMessage('偵測到其他電腦較新資料，已保留本機變更並將重新推送');
-          return;
-        }
+    if (result === 'conflict') {
+      // 暫停自動覆寫，避免蓋掉其他電腦已同步資料；請使用者明確選擇拉取或強制推送
+      setCloudSyncStatus('error');
+      setCloudSyncMessage(
+        '其他電腦有較新資料，已暫停自動覆寫以免覆蓋對方變更。請至「雲端同步」選擇「拉取遠端（採用對方）」或「強制推送本機」。'
+      );
+      cloudDirtyRef.current = false;
+      return;
+    }
         // 寫入成功後才更新本機時間戳
         lastCloudSyncAtRef.current = now;
         setLastCloudSyncAt(now);
@@ -1102,6 +1170,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 已核准不可再核准（避免 swap／移課重複套用）
     if (targetReq.status === 'approved') return false;
 
+    if (targetReq.requestType === 'substitute' && !targetReq.substituteTeacherId) {
+      window.alert('無法核准：尚未指定代課教師。請先指定代課人選，或改由教學組逕行派代。');
+      return false;
+    }
+
     const resolvedOrig = resolveOriginalSession(targetReq, sessions);
     const resolvedSwap =
       targetReq.requestType === 'swap'
@@ -1116,6 +1189,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq.requestType === 'swap') {
       if (!resolvedSwap || !sessions.some((s) => s.id === resolvedSwap.id)) {
         window.alert('無法核准：找不到對調課堂於現行課表，請確認後再核准。');
+        return false;
+      }
+    }
+
+    // 請假區間若皆為放假日：不可核准（避免改週課表卻結算 0 節）
+    if (targetReq.requestType === 'substitute' && targetReq.leaveDateStart) {
+      const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+      const leaveEnd =
+        resolveLeaveDateEnd(targetReq.leaveDateStart, targetReq.leaveDateEnd) ||
+        targetReq.leaveDateStart;
+      const billable = countMatchingWeekdays(
+        targetReq.leaveDateStart,
+        leaveEnd,
+        targetReq.originalSession.dayOfWeek,
+        holidaySet
+      );
+      if (billable <= 0) {
+        window.alert(
+          '無法核准：請假區間內無實際上課日（可能皆為放假日）。請改請假日期或調整行事曆放假日。'
+        );
         return false;
       }
     }
@@ -1181,6 +1274,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         targetReq.requestType === 'swap'
           ? resolveSwapTargetSession(targetReq, workingSessions)
           : targetReq.swapTargetSession;
+      if (targetReq.requestType === 'substitute' && !targetReq.substituteTeacherId) {
+        skipped.push(`${targetReq.requestNumber || id}：尚未指定代課教師`);
+        continue;
+      }
       if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
         skipped.push(`${targetReq.requestNumber || id}：找不到對應課表`);
         continue;
@@ -1191,6 +1288,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ) {
         skipped.push(`${targetReq.requestNumber || id}：找不到對調課堂`);
         continue;
+      }
+      if (targetReq.requestType === 'substitute' && targetReq.leaveDateStart) {
+        const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+        const leaveEnd =
+          resolveLeaveDateEnd(targetReq.leaveDateStart, targetReq.leaveDateEnd) ||
+          targetReq.leaveDateStart;
+        const billable = countMatchingWeekdays(
+          targetReq.leaveDateStart,
+          leaveEnd,
+          targetReq.originalSession.dayOfWeek,
+          holidaySet
+        );
+        if (billable <= 0) {
+          skipped.push(`${targetReq.requestNumber || id}：請假區間皆為放假日`);
+          continue;
+        }
       }
 
       const clashStatus = checkClashes({
@@ -1297,6 +1410,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isPlaceholderSession(resolvedOrig)
       ) {
         throw new Error('找不到對應課表課堂，無法逕行核定（請確認該時段已有課堂）');
+      }
+
+      if (
+        data.requestType === 'substitute' &&
+        data.autoApprove !== false &&
+        data.leaveDateStart
+      ) {
+        const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+        const leaveEnd =
+          resolveLeaveDateEnd(data.leaveDateStart, data.leaveDateEnd) || data.leaveDateStart;
+        const billable = countMatchingWeekdays(
+          data.leaveDateStart,
+          leaveEnd,
+          data.originalSession.dayOfWeek,
+          holidaySet
+        );
+        if (billable <= 0) {
+          throw new Error(
+            `第${data.originalSession.period}節：請假區間皆為放假日，無法逕行核定`
+          );
+        }
       }
 
       const clashStatus = checkClashes({
@@ -1878,9 +2012,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const hourlyRate = systemConfig.dayHourlyRate;
     const counselingRate = systemConfig.nightHourlyRate;
     const settlementMonth = month ?? systemConfig.currentMonth ?? new Date().getMonth() + 1;
-    const settlementYear = calendarYearForSettlementMonth(settlementMonth);
+    const settlementYear = calendarYearForSettlementMonth(
+      settlementMonth,
+      new Date(),
+      systemConfig.academicYear
+    );
     const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-    const weeks = settlementWeeksForMonth(settlementMonth, new Date(), holidaySet);
+    const weeks = settlementWeeksForMonth(
+      settlementMonth,
+      new Date(),
+      holidaySet,
+      systemConfig.academicYear
+    );
 
     return teachers.map((teacher) => {
       // 1. Weekly actual and overload（不含第八節課輔）
@@ -1892,7 +2035,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacher,
         settlementMonth,
         new Date(),
-        holidaySet
+        holidaySet,
+        systemConfig.academicYear
       );
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
       const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id);
@@ -1901,7 +2045,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacher.id,
         settlementMonth,
         new Date(),
-        holidaySet
+        holidaySet,
+        systemConfig.academicYear
       );
       const monthlyCounselingAmount = monthlyCounseling * counselingRate;
 
@@ -1935,6 +2080,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (periods <= 0) return;
 
           const rate = rateForRequest(r);
+          // 未指定代課教師：不發代課費、也不自費扣款（避免只扣錢沒人代）
+          if (!r.substituteTeacherId) return;
+
           if (r.substituteTeacherId === teacher.id) {
             if (r.paymentType === 'public') {
               publicSubstitutePeriods += periods;
@@ -2052,6 +2200,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         lastCloudSyncAt,
         updateCloudSyncSettings,
         testCloudSync,
+        pullCloudOverwriteLocal,
+        forcePushLocalToCloud,
       }}
     >
       {children}

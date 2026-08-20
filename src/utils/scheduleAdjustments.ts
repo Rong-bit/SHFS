@@ -23,6 +23,10 @@ export function applyRequestToSessions(
   sessions: CourseSession[],
   req: SubstituteRequest
 ): CourseSession[] {
+  // 保留申請當下快照（互調／移課冪等判斷用），勿被 resolve 成現行時段後再對調一次
+  const snapOrig = { ...req.originalSession };
+  const snapPartner = req.swapTargetSession ? { ...req.swapTargetSession } : undefined;
+
   const resolvedOrig = resolveOriginalSession(req, sessions);
   const resolvedSwap = resolveSwapTargetSession(req, sessions);
   const reqResolved: SubstituteRequest = {
@@ -32,45 +36,64 @@ export function applyRequestToSessions(
   };
 
   if (reqResolved.requestType === 'reschedule' && reqResolved.targetReschedule) {
+    const t = reqResolved.targetReschedule;
     return sessions.map((s) => {
       if (s.id !== resolvedOrig.id) return s;
+      // 已在目標時段：冪等略過（避免 notes 被改寫）
+      if (
+        s.dayOfWeek === t.dayOfWeek &&
+        s.period === t.period &&
+        (!t.venueId || s.venueId === t.venueId)
+      ) {
+        return s;
+      }
       return {
         ...s,
-        dayOfWeek: reqResolved.targetReschedule!.dayOfWeek,
-        period: reqResolved.targetReschedule!.period,
-        venueId: reqResolved.targetReschedule!.venueId,
-        venueName: reqResolved.targetReschedule!.venueName,
-        notes: `${RESCHEDULE_NOTE} 原週${resolvedOrig.dayOfWeek}第${resolvedOrig.period}節`,
+        dayOfWeek: t.dayOfWeek,
+        period: t.period,
+        venueId: t.venueId,
+        venueName: t.venueName,
+        notes: `${RESCHEDULE_NOTE} 原週${snapOrig.dayOfWeek}第${snapOrig.period}節`,
       };
     });
   }
 
-  if (reqResolved.requestType === 'swap' && reqResolved.swapTargetSession) {
-    const partner = reqResolved.swapTargetSession;
+  if (reqResolved.requestType === 'swap' && snapPartner) {
+    const partnerId = (resolvedSwap || snapPartner).id;
     const liveA = sessions.find((s) => s.id === resolvedOrig.id);
-    const liveB = sessions.find((s) => s.id === partner.id);
-    // 缺任一方則不套用，避免單邊改日時
+    const liveB = sessions.find((s) => s.id === partnerId);
     if (!liveA || !liveB) return sessions;
 
-    const aDay = liveA.dayOfWeek;
-    const aPeriod = liveA.period;
-    const bDay = liveB.dayOfWeek;
-    const bPeriod = liveB.period;
+    // 目標態：A 在對方原時段、B 在申請人原時段（依申請快照）
+    const alreadySwapped =
+      liveA.dayOfWeek === snapPartner.dayOfWeek &&
+      liveA.period === snapPartner.period &&
+      liveB.dayOfWeek === snapOrig.dayOfWeek &&
+      liveB.period === snapOrig.period;
+    if (alreadySwapped) return sessions;
+
+    // 僅在「仍為申請當下原時段」時才對調，避免中間態誤翻
+    const atOriginalSlots =
+      liveA.dayOfWeek === snapOrig.dayOfWeek &&
+      liveA.period === snapOrig.period &&
+      liveB.dayOfWeek === snapPartner.dayOfWeek &&
+      liveB.period === snapPartner.period;
+    if (!atOriginalSlots) return sessions;
 
     return sessions.map((s) => {
       if (s.id === resolvedOrig.id) {
         return {
           ...s,
-          dayOfWeek: bDay,
-          period: bPeriod,
+          dayOfWeek: snapPartner.dayOfWeek,
+          period: snapPartner.period,
           notes: `${SWAP_NOTE} 與 ${reqResolved.swapTargetTeacherName} 對調`,
         };
       }
-      if (s.id === partner.id) {
+      if (s.id === partnerId) {
         return {
           ...s,
-          dayOfWeek: aDay,
-          period: aPeriod,
+          dayOfWeek: snapOrig.dayOfWeek,
+          period: snapOrig.period,
           notes: `${SWAP_NOTE} 與 ${reqResolved.applicantTeacherName} 對調`,
         };
       }

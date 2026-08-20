@@ -80,11 +80,23 @@ export const TeacherSchedule: React.FC = () => {
   const thisMonth = new Date().getMonth() + 1;
   const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
   const monthlyOverloadAmount =
-    monthlyOverloadPeriods(sessions, currentTeacher, thisMonth, new Date(), holidaySet) *
-    systemConfig.dayHourlyRate;
+    monthlyOverloadPeriods(
+      sessions,
+      currentTeacher,
+      thisMonth,
+      new Date(),
+      holidaySet,
+      systemConfig.academicYear
+    ) * systemConfig.dayHourlyRate;
   const monthlyCounselingAmount =
-    monthlyCounselingPeriods(sessions, currentTeacher.id, thisMonth, new Date(), holidaySet) *
-    systemConfig.nightHourlyRate;
+    monthlyCounselingPeriods(
+      sessions,
+      currentTeacher.id,
+      thisMonth,
+      new Date(),
+      holidaySet,
+      systemConfig.academicYear
+    ) * systemConfig.nightHourlyRate;
   const isOverNineHours = overloadPeriods >= systemConfig.maxWeeklyOverloadPeriods;
 
   const days: { day: DayOfWeek; name: string }[] = [

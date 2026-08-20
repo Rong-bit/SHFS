@@ -10,11 +10,14 @@ export const CloudSyncPanel: React.FC = () => {
     cloudSyncMessage,
     lastCloudSyncAt,
     updateCloudSyncSettings,
+    pullCloudOverwriteLocal,
+    forcePushLocalToCloud,
   } = useApp();
 
   const [form, setForm] = useState<CloudSyncSettings>(cloudSyncSettings);
   const [testMsg, setTestMsg] = useState('');
   const [testing, setTesting] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   const statusLabel =
     cloudSyncStatus === 'synced'
@@ -85,6 +88,54 @@ export const CloudSyncPanel: React.FC = () => {
         </div>
         {cloudSyncMessage && (
           <p className="text-xs text-slate-600 mt-3">{cloudSyncMessage}</p>
+        )}
+        {cloudSyncMessage.includes('暫停自動覆寫') && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={resolving}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    '將以雲端資料覆蓋本機（本機尚未推送的變更會消失）。確定採用對方資料？'
+                  )
+                ) {
+                  return;
+                }
+                setResolving(true);
+                try {
+                  await pullCloudOverwriteLocal();
+                } finally {
+                  setResolving(false);
+                }
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50"
+            >
+              拉取遠端（採用對方）
+            </button>
+            <button
+              type="button"
+              disabled={resolving}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    '將以本機資料強制覆寫雲端（其他電腦未同步變更可能被蓋掉）。確定推送本機？'
+                  )
+                ) {
+                  return;
+                }
+                setResolving(true);
+                try {
+                  await forcePushLocalToCloud();
+                } finally {
+                  setResolving(false);
+                }
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50"
+            >
+              強制推送本機
+            </button>
+          </div>
         )}
         {lastCloudSyncAt && (
           <p className="text-[11px] text-slate-400 mt-1">

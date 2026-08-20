@@ -104,7 +104,7 @@ export function countLeaveSubstitutePeriods(
     request.originalSession.dayOfWeek,
     excludeDates
   );
-  return Math.max(1, n);
+  return Math.max(0, n);
 }
 
 /** 區間內、落在指定曆月（1–12）且相符星期的天數；可選西元年避免跨年重計；放假日不計 */
@@ -299,6 +299,8 @@ export function validateSubstituteLeaveInput(params: {
   applicantTeacherId: string;
   dayNames: string[];
   excludeRequestIds?: string[];
+  /** 行事曆放假日（YYYY-MM-DD），放假日不可請假派代 */
+  nonTeachingDates?: ExcludeDates;
 }): ValidateSubstituteLeaveResult {
   const {
     leaveDateMode,
@@ -309,6 +311,7 @@ export function validateSubstituteLeaveInput(params: {
     applicantTeacherId,
     dayNames,
     excludeRequestIds,
+    nonTeachingDates,
   } = params;
 
   if (!leaveDateStart) {
@@ -331,6 +334,30 @@ export function validateSubstituteLeaveInput(params: {
     leaveDateMode === 'range'
       ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd) || leaveDateStart
       : leaveDateStart;
+
+  const holidaySet = asExcludeSet(nonTeachingDates);
+  if (holidaySet.size > 0) {
+    if (isNonTeachingDate(leaveDateStart, holidaySet) && leaveDateMode === 'single') {
+      return {
+        ok: false,
+        message: `請假日 ${leaveDateStart} 為行事曆放假日，不計鐘點且不可派代。請改選上課日，或至系統參數調整放假日。`,
+      };
+    }
+    for (const s of targetSessions) {
+      const billable = countMatchingWeekdays(
+        leaveDateStart,
+        resolvedLeaveEnd,
+        s.dayOfWeek,
+        holidaySet
+      );
+      if (billable <= 0) {
+        return {
+          ok: false,
+          message: `請假區間內「${dayNames[s.dayOfWeek]}」皆為放假日（或不含可計節上課日），無法派代。請改日期或調整行事曆放假日。`,
+        };
+      }
+    }
+  }
 
   const allowedDays = weekdaysInDateRange(leaveDateStart, resolvedLeaveEnd);
   const bad = targetSessions.find((s) => !allowedDays.includes(s.dayOfWeek));

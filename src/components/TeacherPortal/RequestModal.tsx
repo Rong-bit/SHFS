@@ -493,6 +493,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         existing: requests,
         applicantTeacherId: currentTeacher.id,
         dayNames,
+        nonTeachingDates: nonTeachingDateSet(systemConfig.nonTeachingDays),
       });
       if (leaveCheck.ok === false) {
         alert(leaveCheck.message);

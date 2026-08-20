@@ -24,7 +24,8 @@ export const AccountingSettlement: React.FC = () => {
   const settlementWeeks = settlementWeeksForMonth(
     selectedMonth,
     new Date(),
-    nonTeachingDateSet(systemConfig.nonTeachingDays)
+    nonTeachingDateSet(systemConfig.nonTeachingDays),
+    systemConfig.academicYear
   );
 
   const settlements = calculateMonthlySettlement(selectedMonth);
