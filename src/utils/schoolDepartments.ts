@@ -112,9 +112,11 @@ const isDaytimeSlot = (s: CourseSession) =>
 export const isCounselingSlot = (s: Pick<CourseSession, 'dayOfWeek' | 'period'>) =>
   s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8;
 
-/** 代課覆蓋的課堂：鐘點已由代課申請計費，不可再計入課輔／兼課月結 */
+/** 代課覆蓋／請假派代標註：鐘點改由代課申請計費，不可再計入課輔／兼課月結 */
 export const isSubstituteCoverSession = (s: Pick<CourseSession, 'notes' | 'teacherId'>) =>
-  Boolean(s.notes && s.notes.includes('[代課]'));
+  Boolean(
+    s.notes && (s.notes.includes('[代課]') || s.notes.includes('[請假派代]'))
+  );
 
 export const breakdownWeeklyOverloadPeriods = (
   sessions: CourseSession[],
@@ -209,7 +211,8 @@ const calendarYearFromWallClock = (month: number, now: Date) => {
 
 /** 結算月份對應的西元年。
  * 優先依學年度：學年 N 的 8–12 月 → N+1911；1–7 月 → N+1912。
- * 若設定的學年度已落後於目前應有學年（忘記換學年），改以西曆推估，避免 8 月結算落到上一年。
+ * 若設定的學年度已落後於目前應有學年（忘記換學年），改以西曆推估。
+ * 若依學年映射會落到「未來的同月」（例如 8 月已換 115 卻補結 6 月變成 2027），改採西曆，避免補結舊學期偏到明年。
  */
 export const calendarYearForSettlementMonth = (
   month: number,
@@ -223,7 +226,11 @@ export const calendarYearForSettlementMonth = (
       if (roc < expected) {
         return calendarYearFromWallClock(month, now);
       }
-      return month >= 8 ? roc + 1911 : roc + 1912;
+      const mapped = month >= 8 ? roc + 1911 : roc + 1912;
+      const wall = calendarYearFromWallClock(month, now);
+      // 映射年若已超過「目前可合理結算的該月西元年」，改用西曆（補結剛結束的學期）
+      if (mapped > wall) return wall;
+      return mapped;
     }
   }
   return calendarYearFromWallClock(month, now);

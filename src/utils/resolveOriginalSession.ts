@@ -10,9 +10,14 @@ export const isPlaceholderSession = (session: CourseSession | undefined | null):
   );
 };
 
+function isLeaveCoverNote(notes?: string): boolean {
+  return Boolean(notes?.includes('[代課]') || notes?.includes('[請假派代]'));
+}
+
 /**
  * 將佔位／暫代 originalSession 對應到現行課表課堂（含真實 id）。
- * 僅以「申請教師 + 星期 + 節次」比對；找不到則維持佔位（由核准流程擋下）。
+ * 非佔位：保留申請快照的星期／節次／場地（通知單「原排定」、核准套用 snap），
+ * 僅合併現行 id 與任課等欄位，避免核准／列印把原時段蓋成異動後時段。
  */
 export const resolveOriginalSession = (
   request: SubstituteRequest,
@@ -21,7 +26,19 @@ export const resolveOriginalSession = (
   const orig = request.originalSession;
   if (!isPlaceholderSession(orig)) {
     const byId = sessions.find((s) => s.id === orig.id);
-    return byId ? { ...orig, ...byId, id: byId.id } : orig;
+    if (!byId) return orig;
+    return {
+      ...orig,
+      ...byId,
+      id: byId.id,
+      // 申請當下之時段／場地不可被現行課表覆寫
+      dayOfWeek: orig.dayOfWeek,
+      period: orig.period,
+      venueId: orig.venueId || byId.venueId,
+      venueName: orig.venueName || byId.venueName,
+      className: orig.className || byId.className,
+      subjectName: orig.subjectName || byId.subjectName,
+    };
   }
 
   const sameSlot = (s: CourseSession) =>
@@ -34,17 +51,32 @@ export const resolveOriginalSession = (
     return { ...orig, ...byApplicant, id: byApplicant.id };
   }
 
-  // 申請人該格已是此單的代課覆蓋（任課已改為代課教師）時，仍可對回該課堂
-  if (request.substituteTeacherId && request.applicantTeacherName) {
+  // 舊版曾把任課改成代課老師：仍可對回該課堂
+  if (request.substituteTeacherId) {
     const byCover = sessions.find(
       (s) =>
         sameSlot(s) &&
         s.teacherId === request.substituteTeacherId &&
-        Boolean(s.notes?.includes('[代課]')) &&
-        Boolean(s.notes?.includes(request.applicantTeacherName))
+        isLeaveCoverNote(s.notes) &&
+        Boolean(
+          !request.applicantTeacherName || s.notes?.includes(request.applicantTeacherName)
+        )
     );
     if (byCover) {
       return { ...orig, ...byCover, id: byCover.id };
+    }
+  }
+
+  // 新版：仍掛申請人＋請假標註
+  if (request.applicantTeacherId) {
+    const byLeaveNote = sessions.find(
+      (s) =>
+        sameSlot(s) &&
+        s.teacherId === request.applicantTeacherId &&
+        isLeaveCoverNote(s.notes)
+    );
+    if (byLeaveNote) {
+      return { ...orig, ...byLeaveNote, id: byLeaveNote.id };
     }
   }
 
@@ -53,7 +85,7 @@ export const resolveOriginalSession = (
 
 /**
  * 將互調對調課堂對應到現行課表（以 id 優先；否則對調教師＋時段）。
- * 找不到現行課表時回傳快照，由核准／套用流程再判斷。
+ * 同樣保留申請快照的星期／節次／場地。
  */
 export const resolveSwapTargetSession = (
   request: SubstituteRequest,
@@ -63,7 +95,19 @@ export const resolveSwapTargetSession = (
   if (!snap) return undefined;
 
   const byId = sessions.find((s) => s.id === snap.id);
-  if (byId) return { ...snap, ...byId, id: byId.id };
+  if (byId) {
+    return {
+      ...snap,
+      ...byId,
+      id: byId.id,
+      dayOfWeek: snap.dayOfWeek,
+      period: snap.period,
+      venueId: snap.venueId || byId.venueId,
+      venueName: snap.venueName || byId.venueName,
+      className: snap.className || byId.className,
+      subjectName: snap.subjectName || byId.subjectName,
+    };
+  }
 
   if (request.swapTargetTeacherId) {
     const bySlot = sessions.find(
@@ -72,7 +116,17 @@ export const resolveSwapTargetSession = (
         s.dayOfWeek === snap.dayOfWeek &&
         s.period === snap.period
     );
-    if (bySlot) return { ...snap, ...bySlot, id: bySlot.id };
+    if (bySlot) {
+      return {
+        ...snap,
+        ...bySlot,
+        id: bySlot.id,
+        dayOfWeek: snap.dayOfWeek,
+        period: snap.period,
+        venueId: snap.venueId || bySlot.venueId,
+        venueName: snap.venueName || bySlot.venueName,
+      };
+    }
   }
 
   return snap;

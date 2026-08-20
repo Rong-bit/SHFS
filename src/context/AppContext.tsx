@@ -720,7 +720,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
         cloudReadyRef.current = true;
-        setCloudSyncStatus('synced');
+        // 衝突待處理：不可改回 synced，否則 UI 以為已同步
+        if (cloudConflictRef.current) {
+          setCloudSyncStatus('error');
+        } else {
+          setCloudSyncStatus('synced');
+        }
       } catch (err: any) {
         if (stopped) return;
         cloudReadyRef.current = true;
@@ -1265,10 +1270,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    // 保留申請快照之時段；resolve 僅用於衝堂／找現行 id，不可寫回單據蓋掉原時段
     const approvedReq: SubstituteRequest = {
       ...targetReq,
-      originalSession: resolvedOrig,
-      swapTargetSession: resolvedSwap ?? targetReq.swapTargetSession,
+      originalSession: isPlaceholderSession(targetReq.originalSession)
+        ? resolvedOrig
+        : {
+            ...targetReq.originalSession,
+            id: resolvedOrig.id,
+          },
+      swapTargetSession:
+        targetReq.requestType === 'swap' && targetReq.swapTargetSession
+          ? {
+              ...targetReq.swapTargetSession,
+              id: (resolvedSwap || targetReq.swapTargetSession).id,
+            }
+          : targetReq.swapTargetSession,
       status: 'approved',
       reviewedAt: nowStr,
       reviewedBy: reviewerName,
@@ -1521,7 +1538,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const newRequest = {
         ...data,
-        originalSession: resolvedOrig,
+        // 保留申請／逕行派代當下之時段快照（佔位才用 resolve 實課堂）
+        originalSession: isPlaceholderSession(data.originalSession)
+          ? resolvedOrig
+          : { ...data.originalSession, id: resolvedOrig.id },
         id: `req-${stampPrefix}-${index}`,
         requestNumber,
         createdAt: nowStr,
