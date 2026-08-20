@@ -10,7 +10,7 @@ import {
   Teacher 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
-import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS, teacherWeeklyOverload } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import {
   countMatchingWeekdays,
@@ -20,6 +20,7 @@ import {
   resolveLeaveDateEnd,
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
+import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { 
   UserCheck, 
   User, 
@@ -175,51 +176,29 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Smart matching candidate teachers when appointing a substitute
   const candidateSubstitutes = useMemo(() => {
-    if (!selectedOriginalSession) return [];
+    if (!selectedOriginalSession || !applicantTeacher) return [];
 
-    const targetDayOfWeek = selectedOriginalSession.dayOfWeek;
-    const targetP = selectedOriginalSession.period;
-
-    return teachers
-      .filter((t) => t.id !== applicantTeacher?.id)
-      .map((t) => {
-        // 1. Check if teacher has class at that day & period
-        const hasClash = sessions.some(
-          (s) => s.teacherId === t.id && s.dayOfWeek === targetDayOfWeek && s.period === targetP
-        );
-
-        // 2. Department match
-        const isSameDept = t.department === selectedOriginalSession.department || t.department === applicantTeacher?.department;
-
-        // 3. Current workload
-        const weeklyOverload = teacherWeeklyOverload(t, sessions);
-        const isNearLimit = weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods;
-
-        // 4. Recommendation score
-        let score = 0;
-        if (!hasClash) score += 50;
-        if (isSameDept) score += 30;
-        if (!isNearLimit) score += 20;
-
-        return {
-          teacher: t,
-          hasClash,
-          isSameDept,
-          weeklyOverload,
-          isNearLimit,
-          score,
-        };
-      })
-      .sort((a, b) => b.score - a.score);
+    return rankSubstituteCandidates({
+      teachers,
+      sessions,
+      excludeTeacherId: applicantTeacher.id,
+      targetDayOfWeek: selectedOriginalSession.dayOfWeek,
+      targetPeriod: selectedOriginalSession.period,
+      subjectName: selectedOriginalSession.subjectName,
+      applicantDepartment: applicantTeacher.department,
+      maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+    });
   }, [teachers, applicantTeacher, selectedOriginalSession, sessions, systemConfig]);
 
-  // Auto-select first candidate if not set
+  // 點選課堂變更後，自動改選「同科目／同科／空堂」最佳人選
   React.useEffect(() => {
-    if (candidateSubstitutes.length > 0 && !substituteTeacherId) {
-      const best = candidateSubstitutes.find((c) => !c.hasClash);
-      if (best) setSubstituteTeacherId(best.teacher.id);
-    }
-  }, [candidateSubstitutes, substituteTeacherId]);
+    if (candidateSubstitutes.length === 0) return;
+    const best =
+      candidateSubstitutes.find((c) => !c.hasClash && c.isSameSubject) ||
+      candidateSubstitutes.find((c) => !c.hasClash && c.isSameDept) ||
+      candidateSubstitutes.find((c) => !c.hasClash);
+    if (best) setSubstituteTeacherId(best.teacher.id);
+  }, [selectedOriginalSession?.id, candidateSubstitutes]);
 
   // Auto-select first session if not set
   React.useEffect(() => {
@@ -990,7 +969,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       <span>教學組智慧媒合 · 代課教師推薦與指定</span>
                     </h3>
                     <span className="text-xs text-slate-500">
-                      優先推薦同科別、時段空堂且每週未逾9節者
+                      優先：相同科目 → 同科別 → 該時段空堂
                     </span>
                   </div>
 
@@ -1001,7 +980,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     </label>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                      {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameDept, weeklyOverload, isNearLimit, score }) => {
+                      {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameSubject, isSameDept, weeklyOverload }) => {
                         const isSelected = substituteTeacherId === cand.id;
 
                         return (
@@ -1032,7 +1011,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 </span>
                               )}
 
-                              {isSameDept && (
+                              {isSameSubject && (
+                                <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 font-bold rounded">
+                                  同科目
+                                </span>
+                              )}
+
+                              {!isSameSubject && isSameDept && (
                                 <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 font-bold rounded">
                                   同專業科系
                                 </span>

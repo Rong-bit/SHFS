@@ -9,7 +9,6 @@ import {
   ClashCheckResult 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
-import { teacherWeeklyOverload } from '../../utils/schoolDepartments';
 import {
   countMatchingWeekdays,
   dateToDayOfWeek,
@@ -17,6 +16,7 @@ import {
   resolveLeaveDateEnd,
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
+import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { 
   X, 
   ArrowLeftRight, 
@@ -138,25 +138,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   const candidateSubstitutes = useMemo(() => {
     if (!effectiveOriginalSession || !currentTeacher) return [];
-    const targetDay = effectiveOriginalSession.dayOfWeek;
-    const targetP = effectiveOriginalSession.period;
 
-    return teachers
-      .filter((t) => t.id !== currentTeacher.id)
-      .map((t) => {
-        const hasClash = sessions.some(
-          (s) => s.teacherId === t.id && s.dayOfWeek === targetDay && s.period === targetP
-        );
-        const isSameDept = t.department === currentTeacher.department;
-        const weeklyOverload = teacherWeeklyOverload(t, sessions);
-        const isNearLimit = weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods;
-        let score = 0;
-        if (!hasClash) score += 50;
-        if (isSameDept) score += 30;
-        if (!isNearLimit) score += 20;
-        return { teacher: t, hasClash, isSameDept, weeklyOverload, isNearLimit, score };
-      })
-      .sort((a, b) => b.score - a.score);
+    return rankSubstituteCandidates({
+      teachers,
+      sessions,
+      excludeTeacherId: currentTeacher.id,
+      targetDayOfWeek: effectiveOriginalSession.dayOfWeek,
+      targetPeriod: effectiveOriginalSession.period,
+      subjectName: effectiveOriginalSession.subjectName,
+      applicantDepartment: currentTeacher.department,
+      maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+    });
   }, [teachers, currentTeacher, effectiveOriginalSession, sessions, systemConfig]);
 
   // If in substitute mode and teacher has sessions, initialize leave slot
@@ -243,7 +235,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     // If empty, or current selection clashes, choose the first non-clash candidate.
     if (!substituteTeacherId || selected?.hasClash) {
-      const best = candidateSubstitutes.find((c) => !c.hasClash);
+      const best =
+        candidateSubstitutes.find((c) => !c.hasClash && c.isSameSubject) ||
+        candidateSubstitutes.find((c) => !c.hasClash && c.isSameDept) ||
+        candidateSubstitutes.find((c) => !c.hasClash);
       if (best) setSubstituteTeacherId(best.teacher.id);
     }
   }, [
@@ -791,7 +786,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     {candidateSubstitutes
                       .filter((c) => !c.hasClash)
                       .slice(0, showAllTeachers ? undefined : 5)
-                      .map(({ teacher: cand, isSameDept, weeklyOverload, isNearLimit }) => {
+                      .map(({ teacher: cand, isSameSubject, isSameDept, weeklyOverload, isNearLimit }) => {
                         const isSelected = substituteTeacherId === cand.id;
                         return (
                           <div
@@ -814,7 +809,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                               <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
                                 ✓ 空堂
                               </span>
-                              {isSameDept && (
+                              {isSameSubject && (
+                                <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 font-bold rounded">
+                                  同科目
+                                </span>
+                              )}
+                              {!isSameSubject && isSameDept && (
                                 <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 font-bold rounded">
                                   同科
                                 </span>
