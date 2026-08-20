@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { displayTeacherTitle, SCHOOL_DEPARTMENTS, settlementWeeksForMonth } from '../../utils/schoolDepartments';
+import { nonTeachingDateSet } from '../../utils/holidays';
 import * as XLSX from 'xlsx';
 import { 
   Calculator, 
@@ -20,7 +21,11 @@ export const AccountingSettlement: React.FC = () => {
   const calendarMonth = new Date().getMonth() + 1;
   const [selectedMonth, setSelectedMonth] = useState<number>(calendarMonth);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
-  const settlementWeeks = settlementWeeksForMonth(selectedMonth);
+  const settlementWeeks = settlementWeeksForMonth(
+    selectedMonth,
+    new Date(),
+    nonTeachingDateSet(systemConfig.nonTeachingDays)
+  );
 
   const settlements = calculateMonthlySettlement(selectedMonth);
 
@@ -132,7 +137,8 @@ export const AccountingSettlement: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">
             基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜
             第八節課輔 <strong>{systemConfig.nightHourlyRate} 元/節</strong> ｜ 
-            本月週數依 <strong>{selectedMonth} 月週一至週五實際日數（約 {settlementWeeks.toFixed(1)} 週）</strong> 計 ｜ 
+            本月週數依 <strong>{selectedMonth} 月週一至週五實際日數（約 {settlementWeeks.toFixed(1)} 週）</strong>
+            計，並已扣除系統設定之放假日 ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
           </p>
         </div>

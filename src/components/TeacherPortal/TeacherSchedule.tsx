@@ -29,6 +29,7 @@ import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { ModalShell } from '../Common/ModalShell';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
 import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyCounselingPeriods, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
+import { nonTeachingDateSet } from '../../utils/holidays';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -77,10 +78,13 @@ export const TeacherSchedule: React.FC = () => {
   const basePeriods = currentTeacher.basePeriods;
   const overloadPeriods = overloadBreakdown.concurrent;
   const thisMonth = new Date().getMonth() + 1;
+  const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
   const monthlyOverloadAmount =
-    monthlyOverloadPeriods(sessions, currentTeacher, thisMonth) * systemConfig.dayHourlyRate;
+    monthlyOverloadPeriods(sessions, currentTeacher, thisMonth, new Date(), holidaySet) *
+    systemConfig.dayHourlyRate;
   const monthlyCounselingAmount =
-    monthlyCounselingPeriods(sessions, currentTeacher.id, thisMonth) * systemConfig.nightHourlyRate;
+    monthlyCounselingPeriods(sessions, currentTeacher.id, thisMonth, new Date(), holidaySet) *
+    systemConfig.nightHourlyRate;
   const isOverNineHours = overloadPeriods >= systemConfig.maxWeeklyOverloadPeriods;
 
   const days: { day: DayOfWeek; name: string }[] = [

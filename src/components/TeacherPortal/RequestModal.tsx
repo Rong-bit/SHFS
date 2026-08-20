@@ -16,6 +16,7 @@ import {
   validateSubstituteLeaveInput,
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
+import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { ModalShell } from '../Common/ModalShell';
@@ -450,7 +451,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     leaveDateEnd &&
     leaveDateEnd >= leaveDateStart &&
     leaveDay !== ''
-      ? countMatchingWeekdays(leaveDateStart, leaveDateEnd, leaveDay)
+      ? countMatchingWeekdays(
+          leaveDateStart,
+          leaveDateEnd,
+          leaveDay,
+          nonTeachingDateSet(systemConfig.nonTeachingDays)
+        )
       : 0;
 
   const handleSubmit = (e: React.FormEvent) => {

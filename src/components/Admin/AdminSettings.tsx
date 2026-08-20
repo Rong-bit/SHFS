@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff } from '../../types';
+import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, NonTeachingDay } from '../../types';
+import {
+  mergeNonTeachingDays,
+  suggestNationalHolidays,
+} from '../../utils/holidays';
 import { 
   Settings, 
   Coins, 
@@ -23,6 +27,7 @@ import {
   AlertTriangle,
   AlertCircle,
   HelpCircle,
+  Calendar,
   FileText,
   School,
   X,
@@ -83,6 +88,7 @@ export const AdminSettings: React.FC = () => {
     semester: systemConfig?.semester ?? '1',
     currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
     weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+    nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
     authConfig: {
       requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
       // 表單不回填雜湊／明文，留空表示沿用既有密碼
@@ -92,6 +98,9 @@ export const AdminSettings: React.FC = () => {
       accountingPassword: '',
     },
   }));
+
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayLabel, setNewHolidayLabel] = useState('放假');
 
   // Sync if systemConfig changes
   useEffect(() => {
@@ -105,6 +114,7 @@ export const AdminSettings: React.FC = () => {
       semester: systemConfig?.semester ?? '1',
       currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+      nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
       authConfig: {
         requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
         defaultTeacherPassword: '',
@@ -719,7 +729,7 @@ export const AdminSettings: React.FC = () => {
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
                       required
                     />
-                    <span className="text-[10px] text-slate-400">結算依該月週一至週五實際日數，不再固定 4 週</span>
+                    <span className="text-[10px] text-slate-400">結算依該月週一至週五實際日數（並扣除下方放假日）</span>
                   </div>
 
                   <div>
@@ -781,6 +791,122 @@ export const AdminSettings: React.FC = () => {
               </div>
             </div>
 
+            {/* 放假日行事曆 */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-rose-500" />
+                  <span>放假日行事曆（不計鐘點）</span>
+                </h3>
+                <span className="text-[11px] px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full font-bold border border-rose-200">
+                  國定假日／校慶／彈性放假
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                列入此處的日期（週一至週五）在超鐘點、課輔月結與代課費／自費扣款計算時一律不計節。週末本來就不計，無需登錄。請依人事行政總處與校曆公告維護。
+              </p>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
+                  <input
+                    type="date"
+                    value={newHolidayDate}
+                    onChange={(e) => setNewHolidayDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex-1 min-w-[8rem]">
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                  <input
+                    type="text"
+                    value={newHolidayLabel}
+                    onChange={(e) => setNewHolidayLabel(e.target.value)}
+                    placeholder="例：國慶日、校慶"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newHolidayDate) {
+                      alert('請選擇日期');
+                      return;
+                    }
+                    const js = new Date(newHolidayDate.replace(/-/g, '/') + ' 12:00:00').getDay();
+                    if (js === 0 || js === 6) {
+                      alert('週末本來就不計鐘點，無需登錄放假日。');
+                      return;
+                    }
+                    const next: NonTeachingDay = {
+                      date: newHolidayDate,
+                      label: newHolidayLabel.trim() || '放假',
+                    };
+                    setFormConfig({
+                      ...formConfig,
+                      nonTeachingDays: mergeNonTeachingDays(formConfig.nonTeachingDays, [next]),
+                    });
+                    setNewHolidayDate('');
+                    setNewHolidayLabel('放假');
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-500"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  新增
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const y = new Date().getFullYear();
+                    const suggested = suggestNationalHolidays(y);
+                    if (suggested.length === 0) {
+                      alert(`${y} 年暫無內建建議，請手動新增。`);
+                      return;
+                    }
+                    setFormConfig({
+                      ...formConfig,
+                      nonTeachingDays: mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
+                    });
+                    alert(`已合併 ${y} 年建議放假日 ${suggested.length} 筆（請再核對校曆後按「儲存設定」）。`);
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50"
+                >
+                  匯入今年建議國定假日
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                {(formConfig.nonTeachingDays || []).length === 0 ? (
+                  <p className="text-xs text-slate-400 p-3">尚未設定放假日；目前結算會把所有平日都計入。</p>
+                ) : (
+                  (formConfig.nonTeachingDays || []).map((d) => (
+                    <div
+                      key={d.date}
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                    >
+                      <div>
+                        <span className="font-mono font-semibold text-slate-800">{d.date}</span>
+                        <span className="text-slate-500 ml-2">{d.label}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormConfig({
+                            ...formConfig,
+                            nonTeachingDays: (formConfig.nonTeachingDays || []).filter(
+                              (x) => x.date !== d.date
+                            ),
+                          })
+                        }
+                        className="p-1 text-slate-400 hover:text-rose-600"
+                        title="移除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             {/* Base Teaching Periods Card */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
@@ -795,7 +921,7 @@ export const AdminSettings: React.FC = () => {
 
               <div className="space-y-4 text-xs sm:text-sm">
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
-                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五實際日數計費）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
+                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五實際日數計費，並扣除放假日行事曆）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
                   專任、導師、組長、科主任、主任都可在下方填節數，按「儲存系統參數設定」後會套用到全校該職稱教師。團體活動 3 節中：班會／班級活動計入正課，對開社團 2 節不計入。
                 </div>
                 <div className="grid grid-cols-2 gap-3">

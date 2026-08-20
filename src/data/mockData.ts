@@ -100,6 +100,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   semester: '1',
   currentMonth: new Date().getMonth() + 1,
   weeksInMonth: 4,
+  nonTeachingDays: [],
   authConfig: {
     requirePassword: true,
     defaultTeacherPassword: '1234',

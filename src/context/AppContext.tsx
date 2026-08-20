@@ -37,6 +37,7 @@ import {
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
 import { countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
+import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
   ensurePasswordHashed,
@@ -286,6 +287,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         ...INITIAL_SYSTEM_CONFIG,
         ...parsed,
+        nonTeachingDays: Array.isArray(parsed.nonTeachingDays)
+          ? parsed.nonTeachingDays
+          : INITIAL_SYSTEM_CONFIG.nonTeachingDays || [],
         standardBasePeriods: normalizeStandardBasePeriods(
           parsed.standardBasePeriods || parsed.basePeriodsStandard
         ),
@@ -1812,17 +1816,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const counselingRate = systemConfig.nightHourlyRate;
     const settlementMonth = month ?? systemConfig.currentMonth ?? new Date().getMonth() + 1;
     const settlementYear = calendarYearForSettlementMonth(settlementMonth);
-    const weeks = settlementWeeksForMonth(settlementMonth);
+    const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+    const weeks = settlementWeeksForMonth(settlementMonth, new Date(), holidaySet);
 
     return teachers.map((teacher) => {
       // 1. Weekly actual and overload（不含第八節課輔）
       const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id);
       const base = teacher.basePeriods;
       const weeklyOverload = countWeeklyConcurrentPeriods(sessions, teacher.id);
-      const monthlyOverload = monthlyOverloadPeriods(sessions, teacher, settlementMonth);
+      const monthlyOverload = monthlyOverloadPeriods(
+        sessions,
+        teacher,
+        settlementMonth,
+        new Date(),
+        holidaySet
+      );
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
       const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id);
-      const monthlyCounseling = monthlyCounselingPeriods(sessions, teacher.id, settlementMonth);
+      const monthlyCounseling = monthlyCounselingPeriods(
+        sessions,
+        teacher.id,
+        settlementMonth,
+        new Date(),
+        holidaySet
+      );
       const monthlyCounselingAmount = monthlyCounseling * counselingRate;
 
       // 2. Tally approved substitution requests for the selected month only
@@ -1842,7 +1859,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const inMonthPeriods = countLeaveSubstitutePeriodsInMonth(
             r,
             settlementMonth,
-            settlementYear
+            settlementYear,
+            holidaySet
           );
           // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：仍依單號月份整筆計入
           const periods =

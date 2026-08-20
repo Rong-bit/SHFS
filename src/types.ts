@@ -166,6 +166,8 @@ export interface SystemConfig {
   semester: string; // 1
   currentMonth: number; // 10
   weeksInMonth: number; // 4 週
+  /** 不計鐘點之日（國定假日、校慶、彈性放假等），格式 YYYY-MM-DD */
+  nonTeachingDays?: NonTeachingDay[];
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
     defaultTeacherPassword: string; // 預設教師密碼雜湊（或遷移前明文）
@@ -173,6 +175,12 @@ export interface SystemConfig {
     academicPassword: string; // 教務組經辦密碼雜湊
     accountingPassword: string; // 主計出納密碼雜湊
   };
+}
+
+/** 行事曆放假日（不計超鐘點／代課鐘點） */
+export interface NonTeachingDay {
+  date: string; // YYYY-MM-DD
+  label: string;
 }
 
 export interface MonthlyTeacherSettlement {

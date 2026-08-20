@@ -1,4 +1,5 @@
 import { DayOfWeek, SubstituteRequest } from '../types';
+import { dateToIsoLocal, isNonTeachingDate } from './holidays';
 
 /** YYYY-MM-DD → 週一=1 … 週五=5；週末回傳 null */
 export function dateToDayOfWeek(isoDate: string): DayOfWeek | null {
@@ -15,19 +16,31 @@ export function resolveLeaveDateEnd(start?: string, end?: string): string | unde
   return end;
 }
 
-/** 區間內與指定星期相符的天數（含起迄） */
+export type ExcludeDates = Set<string> | Iterable<string> | null | undefined;
+
+function asExcludeSet(excludeDates?: ExcludeDates): Set<string> {
+  if (!excludeDates) return new Set();
+  if (excludeDates instanceof Set) return excludeDates;
+  return new Set(excludeDates);
+}
+
+/** 區間內與指定星期相符的天數（含起迄）；放假日不計 */
 export function countMatchingWeekdays(
   start: string,
   end: string,
-  dayOfWeek: DayOfWeek
+  dayOfWeek: DayOfWeek,
+  excludeDates?: ExcludeDates
 ): number {
   const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
   const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
+  const exclude = asExcludeSet(excludeDates);
 
   let count = 0;
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-    if (cur.getDay() === dayOfWeek) count += 1;
+    if (cur.getDay() !== dayOfWeek) continue;
+    if (isNonTeachingDate(dateToIsoLocal(cur), exclude)) continue;
+    count += 1;
   }
   return count;
 }
@@ -78,38 +91,42 @@ export function formatLeaveDateLabel(
   return `${formatSlashDate(start)}～${em}/${ed}`;
 }
 
-/** 請假派代結算節數：無日期舊案算 1；有日期則算區間內相符星期數 */
-export function countLeaveSubstitutePeriods(request: Pick<
-  SubstituteRequest,
-  'leaveDateStart' | 'leaveDateEnd' | 'originalSession'
->): number {
+/** 請假派代結算節數：無日期舊案算 1；有日期則算區間內相符星期數（放假日不計） */
+export function countLeaveSubstitutePeriods(
+  request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
+  excludeDates?: ExcludeDates
+): number {
   if (!request.leaveDateStart) return 1;
   const end = resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) || request.leaveDateStart;
   const n = countMatchingWeekdays(
     request.leaveDateStart,
     end,
-    request.originalSession.dayOfWeek
+    request.originalSession.dayOfWeek,
+    excludeDates
   );
   return Math.max(1, n);
 }
 
-/** 區間內、落在指定曆月（1–12）且相符星期的天數；可選西元年避免跨年重計 */
+/** 區間內、落在指定曆月（1–12）且相符星期的天數；可選西元年避免跨年重計；放假日不計 */
 export function countMatchingWeekdaysInMonth(
   start: string,
   end: string,
   dayOfWeek: DayOfWeek,
   month: number,
-  year?: number
+  year?: number,
+  excludeDates?: ExcludeDates
 ): number {
   const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
   const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
+  const exclude = asExcludeSet(excludeDates);
 
   let count = 0;
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
     if (cur.getDay() !== dayOfWeek) continue;
     if (cur.getMonth() + 1 !== month) continue;
     if (year != null && cur.getFullYear() !== year) continue;
+    if (isNonTeachingDate(dateToIsoLocal(cur), exclude)) continue;
     count += 1;
   }
   return count;
@@ -118,11 +135,13 @@ export function countMatchingWeekdaysInMonth(
 /**
  * 結算用：有請假日期則只計「落在結算月（與西元年）」的相符星期；
  * 無日期舊案回傳 null（由呼叫端依單號月份決定是否整筆計入）。
+ * 行事曆放假日不計節。
  */
 export function countLeaveSubstitutePeriodsInMonth(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
   settlementMonth: number,
-  settlementYear?: number
+  settlementYear?: number,
+  excludeDates?: ExcludeDates
 ): number | null {
   if (!request.leaveDateStart) return null;
   const end =
@@ -133,7 +152,8 @@ export function countLeaveSubstitutePeriodsInMonth(
     end,
     request.originalSession.dayOfWeek,
     settlementMonth,
-    settlementYear
+    settlementYear,
+    excludeDates
   );
 }
 

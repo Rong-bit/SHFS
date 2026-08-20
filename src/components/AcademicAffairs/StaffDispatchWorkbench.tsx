@@ -20,6 +20,7 @@ import {
   validateSubstituteLeaveInput,
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
+import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { ModalShell } from '../Common/ModalShell';
@@ -1052,7 +1053,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           leaveDateEnd &&
                           leaveDateEnd >= leaveDateStart &&
                           selectedOriginalSession
-                            ? `（所選節次在區間約 ${countMatchingWeekdays(leaveDateStart, leaveDateEnd, selectedOriginalSession.dayOfWeek)} 次）`
+                            ? `（所選節次在區間約 ${countMatchingWeekdays(leaveDateStart, leaveDateEnd, selectedOriginalSession.dayOfWeek, nonTeachingDateSet(systemConfig.nonTeachingDays))} 次，已扣除放假日）`
                             : ''}
                           。
                         </p>

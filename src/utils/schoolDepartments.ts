@@ -197,39 +197,63 @@ export const calendarYearForSettlementMonth = (month: number, now = new Date()) 
   return year;
 };
 
-/** 該月各星期幾出現次數（JS：0 日、1 一 … 6 六） */
-export const weekdayOccurrencesInMonth = (year: number, month: number) => {
+/** 該月各星期幾出現次數（JS：0 日、1 一 … 6 六）；excludeDates 為 YYYY-MM-DD 放假日 */
+export const weekdayOccurrencesInMonth = (
+  year: number,
+  month: number,
+  excludeDates?: Iterable<string> | Set<string> | null
+) => {
+  const exclude =
+    excludeDates instanceof Set
+      ? excludeDates
+      : excludeDates
+      ? new Set(excludeDates)
+      : null;
   const lastDay = new Date(year, month, 0).getDate();
   const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
   for (let day = 1; day <= lastDay; day += 1) {
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (exclude?.has(iso)) continue;
     const jsDay = new Date(year, month - 1, day).getDay();
     counts[jsDay] += 1;
   }
   return counts;
 };
 
-export const countMondaysInMonth = (year: number, month: number) =>
-  weekdayOccurrencesInMonth(year, month)[1];
+export const countMondaysInMonth = (
+  year: number,
+  month: number,
+  excludeDates?: Iterable<string> | Set<string> | null
+) => weekdayOccurrencesInMonth(year, month, excludeDates)[1];
 
 /** 週一至週五平均出現次數，用來折算每週基本鐘點／任務減授 */
-export const averageWeekdayWeeks = (year: number, month: number) => {
-  const c = weekdayOccurrencesInMonth(year, month);
+export const averageWeekdayWeeks = (
+  year: number,
+  month: number,
+  excludeDates?: Iterable<string> | Set<string> | null
+) => {
+  const c = weekdayOccurrencesInMonth(year, month, excludeDates);
   return (c[1] + c[2] + c[3] + c[4] + c[5]) / 5;
 };
 
-export const settlementWeeksForMonth = (month: number, now = new Date()) => {
+export const settlementWeeksForMonth = (
+  month: number,
+  now = new Date(),
+  excludeDates?: Iterable<string> | Set<string> | null
+) => {
   const year = calendarYearForSettlementMonth(month, now);
-  return averageWeekdayWeeks(year, month);
+  return averageWeekdayWeeks(year, month, excludeDates);
 };
 
-/** 該月實際正課節數：每堂課 × 該星期幾在當月出現次數 */
+/** 該月實際正課節數：每堂課 × 該星期幾在當月出現次數（放假日已從次數扣除） */
 export const monthlyTeachingPeriods = (
   sessions: CourseSession[],
   teacherId: string,
   year: number,
-  month: number
+  month: number,
+  excludeDates?: Iterable<string> | Set<string> | null
 ) => {
-  const counts = weekdayOccurrencesInMonth(year, month);
+  const counts = weekdayOccurrencesInMonth(year, month, excludeDates);
   return sessions
     .filter(
       (s) =>
@@ -240,14 +264,15 @@ export const monthlyTeachingPeriods = (
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
-/** 該月兼課節數：每個有兼課的時段 × 該星期幾在當月出現次數 */
+/** 該月兼課節數：每個有兼課的時段 × 該星期幾在當月出現次數（放假日不計） */
 export const monthlyConcurrentPeriods = (
   sessions: CourseSession[],
   teacherId: string,
   year: number,
-  month: number
+  month: number,
+  excludeDates?: Iterable<string> | Set<string> | null
 ) => {
-  const counts = weekdayOccurrencesInMonth(year, month);
+  const counts = weekdayOccurrencesInMonth(year, month, excludeDates);
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
@@ -268,10 +293,11 @@ export const monthlyCounselingPeriods = (
   sessions: CourseSession[],
   teacherId: string,
   month: number,
-  now = new Date()
+  now = new Date(),
+  excludeDates?: Iterable<string> | Set<string> | null
 ) => {
   const year = calendarYearForSettlementMonth(month, now);
-  const counts = weekdayOccurrencesInMonth(year, month);
+  const counts = weekdayOccurrencesInMonth(year, month, excludeDates);
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId || !isCounselingSlot(s) || isSubstituteCoverSession(s)) return;
@@ -289,10 +315,11 @@ export const monthlyOverloadPeriods = (
   sessions: CourseSession[],
   teacher: Pick<Teacher, 'id'>,
   month: number,
-  now = new Date()
+  now = new Date(),
+  excludeDates?: Iterable<string> | Set<string> | null
 ) => {
   const year = calendarYearForSettlementMonth(month, now);
-  return monthlyConcurrentPeriods(sessions, teacher.id, year, month);
+  return monthlyConcurrentPeriods(sessions, teacher.id, year, month, excludeDates);
 };
 
 /** 每週超鐘點 = 課表標示兼課的節數 */
