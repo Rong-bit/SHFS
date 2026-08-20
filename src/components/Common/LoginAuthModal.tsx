@@ -186,7 +186,19 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         onClose();
       }, 300);
     } else {
-      setErrorMsg('密碼錯誤，請重新輸入！');
+      if (target.type === 'role' && target.targetRole === 'academic') {
+        setErrorMsg(
+          '教學組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若管理員有改過，請向管理員詢問教學組登入密碼。組員名單也須由管理員在系統參數新增後才會出現。'
+        );
+      } else if (target.type === 'role' && target.targetRole === 'accounting') {
+        setErrorMsg(
+          '出納組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若有改過請向管理員確認。'
+        );
+      } else if (target.type === 'role' && target.targetRole === 'admin') {
+        setErrorMsg('系統管理員密碼錯誤，請重新輸入。');
+      } else {
+        setErrorMsg('密碼錯誤，請重新輸入！');
+      }
       inputRef.current?.select();
     }
   };
@@ -305,10 +317,19 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                 </span>
                 {!(target.type === 'role' && target.targetRole === 'admin') && (
                   <span className="text-[11px] text-amber-400/80 font-normal">
-                    💡 {hint}
+                    {hint}
                   </span>
                 )}
               </label>
+              {target.type === 'role' &&
+                (target.targetRole === 'academic' || target.targetRole === 'accounting') && (
+                  <p className="text-[11px] text-slate-400 mb-1.5 leading-relaxed">
+                    注意：這是<strong className="text-amber-300">角色登入密碼</strong>
+                    ，與右上角「加入同步」的<strong className="text-sky-300">學校同步密碼</strong>
+                    不同。登入密碼不會隨雲端同步，各電腦需使用管理員告知的同一組教學組／出納登入密碼（預設常為
+                    1234）。
+                  </p>
+                )}
 
               <div className="relative">
                 <input
