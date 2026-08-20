@@ -32,6 +32,33 @@ export function countMatchingWeekdays(
   return count;
 }
 
+/**
+ * 請假起迄區間內會出現的平日星期（1–5）。
+ * 僅填開始日、或結束日無效時，回傳開始日的星期。
+ */
+export function weekdaysInDateRange(start?: string, end?: string): DayOfWeek[] {
+  if (!start) return [];
+  const resolvedEnd = resolveLeaveDateEnd(start, end) || start;
+  const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
+  const e = new Date(resolvedEnd.replace(/-/g, '/') + ' 12:00:00');
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) {
+    const one = dateToDayOfWeek(start);
+    return one == null ? [] : [one];
+  }
+
+  const found = new Set<DayOfWeek>();
+  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+    const js = cur.getDay();
+    if (js >= 1 && js <= 5) found.add(js as DayOfWeek);
+  }
+  return Array.from(found).sort((a, b) => a - b);
+}
+
+export function formatWeekdayList(days: DayOfWeek[], dayNames: string[]): string {
+  if (days.length === 0) return '';
+  return days.map((d) => dayNames[d] || `週${d}`).join('、');
+}
+
 function formatSlashDate(iso: string): string {
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return iso;

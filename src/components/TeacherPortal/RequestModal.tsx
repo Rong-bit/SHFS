@@ -13,7 +13,9 @@ import { teacherWeeklyOverload } from '../../utils/schoolDepartments';
 import {
   countMatchingWeekdays,
   dateToDayOfWeek,
+  formatWeekdayList,
   resolveLeaveDateEnd,
+  weekdaysInDateRange,
 } from '../../utils/leaveDates';
 import { 
   X, 
@@ -96,14 +98,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // When teacher has sessions, offer only "has-class" slots.
   const [leaveSlotId, setLeaveSlotId] = useState<string>('');
 
-  const leaveFilterDay =
-    requestType === 'substitute' && leaveDateStart
-      ? dateToDayOfWeek(leaveDateStart)
-      : null;
+  const leaveFilterDays = useMemo(() => {
+    if (requestType !== 'substitute' || !leaveDateStart) return [] as DayOfWeek[];
+    return weekdaysInDateRange(
+      leaveDateStart,
+      leaveDateMode === 'range' ? leaveDateEnd || leaveDateStart : leaveDateStart
+    );
+  }, [requestType, leaveDateStart, leaveDateEnd, leaveDateMode]);
   const leaveSelectableSessions =
-    leaveFilterDay == null
+    leaveFilterDays.length === 0
       ? teacherSessions
-      : teacherSessions.filter((s) => s.dayOfWeek === leaveFilterDay);
+      : teacherSessions.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
 
   // Smart candidate recommendations / clash checking target:
   // - substitute：必用（請假星期/節次）建立暫代課堂
@@ -160,14 +165,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     if (teacherSessions.length === 0) return;
 
     const pool =
-      leaveFilterDay == null
+      leaveFilterDays.length === 0
         ? teacherSessions
-        : teacherSessions.filter((s) => s.dayOfWeek === leaveFilterDay);
+        : teacherSessions.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
 
     if (pool.length === 0) {
       setLeaveSlotId('');
-      if (leaveFilterDay != null) {
-        setLeaveDay(leaveFilterDay);
+      if (leaveFilterDays.length === 1) {
+        setLeaveDay(leaveFilterDays[0]);
+        setLeavePeriod('');
+      } else {
+        setLeaveDay('');
         setLeavePeriod('');
       }
       return;
@@ -190,7 +198,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       setLeavePeriod(first.period);
       return first.id;
     });
-  }, [requestType, teacherSessions, initialSession, leaveFilterDay]);
+  }, [requestType, teacherSessions, initialSession, leaveFilterDays]);
 
   // Candidate partner sessions for swap
   const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
@@ -316,13 +324,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       }
       const startDow = dateToDayOfWeek(leaveDateStart);
       if (startDow === null) {
-        alert('請假日期須為週一至週五。');
-        return;
-      }
-      if (startDow !== leaveDay) {
-        alert(
-          `請假日期的星期（${dayNames[startDow]}）與所選課堂（${dayNames[leaveDay as DayOfWeek]}）不符，請改日期或改節次。`
-        );
+        alert('請假開始日須為週一至週五。');
         return;
       }
       if (leaveDateMode === 'range') {
@@ -334,6 +336,16 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           alert('結束日期不可早於開始日期。');
           return;
         }
+      }
+      const allowedDays = weekdaysInDateRange(
+        leaveDateStart,
+        leaveDateMode === 'range' ? leaveDateEnd : leaveDateStart
+      );
+      if (!allowedDays.includes(leaveDay as DayOfWeek)) {
+        alert(
+          `所選課堂（${dayNames[leaveDay as DayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(allowedDays, dayNames)}）內，請改日期或改節次。`
+        );
+        return;
       }
     }
 
@@ -653,17 +665,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       </div>
                     )}
                   </div>
-                  {leaveFilterDay != null ? (
+                  {leaveFilterDays.length > 0 ? (
                     <p className="mt-1.5 text-[11px] text-indigo-700 font-medium leading-relaxed">
-                      已依請假日篩選，下方節次僅顯示「{dayNames[leaveFilterDay]}」
+                      已依請假起迄篩選，下方節次僅顯示「{formatWeekdayList(leaveFilterDays, dayNames)}」
                       {leaveDateMode === 'range' && leaveRangeHint > 0
-                        ? `（區間約 ${leaveRangeHint} 次）`
+                        ? `（所選節次區間約 ${leaveRangeHint} 次）`
                         : ''}
                       。
                     </p>
                   ) : (
                     <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
-                      請先選擇請假日期，節次列表會自動只顯示該星期有課的課堂。
+                      請先選擇請假日期，節次列表會自動只顯示區間內有課的課堂。
                     </p>
                   )}
                 </div>
@@ -673,14 +685,14 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       請假節次
-                      {leaveFilterDay != null
-                        ? `（僅 ${dayNames[leaveFilterDay]} · ${leaveSelectableSessions.length} 節）`
+                      {leaveFilterDays.length > 0
+                        ? `（僅 ${formatWeekdayList(leaveFilterDays, dayNames)} · ${leaveSelectableSessions.length} 節）`
                         : '（請先選請假日期，或暫列全部有課節次）'}
                     </label>
                     {leaveSelectableSessions.length === 0 ? (
                       <div className="p-2.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg">
-                        {leaveFilterDay != null
-                          ? `你在「${dayNames[leaveFilterDay]}」沒有排定課堂，請改請假日期。`
+                        {leaveFilterDays.length > 0
+                          ? `你在「${formatWeekdayList(leaveFilterDays, dayNames)}」沒有排定課堂，請改請假起迄。`
                           : '目前沒有可選節次。'}
                       </div>
                     ) : (

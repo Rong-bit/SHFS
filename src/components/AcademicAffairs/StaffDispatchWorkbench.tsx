@@ -16,7 +16,9 @@ import {
   countMatchingWeekdays,
   dateToDayOfWeek,
   formatLeaveDateLabel,
+  formatWeekdayList,
   resolveLeaveDateEnd,
+  weekdaysInDateRange,
 } from '../../utils/leaveDates';
 import { 
   UserCheck, 
@@ -154,16 +156,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Selected applicant teacher & their sessions
   const applicantTeacher = teachers.find((t) => t.id === selectedTeacherId) || teachers[0];
-  const leaveFilterDay =
-    requestType === 'substitute' && leaveDateStart
-      ? dateToDayOfWeek(leaveDateStart)
-      : null;
+  const leaveFilterDays = useMemo(() => {
+    if (requestType !== 'substitute' || !leaveDateStart) return [] as DayOfWeek[];
+    return weekdaysInDateRange(
+      leaveDateStart,
+      leaveDateMode === 'range' ? leaveDateEnd || leaveDateStart : leaveDateStart
+    );
+  }, [requestType, leaveDateStart, leaveDateEnd, leaveDateMode]);
   const applicantSessions = useMemo(() => {
     if (!applicantTeacher) return [];
     const all = sessions.filter((s) => s.teacherId === applicantTeacher.id);
-    if (leaveFilterDay == null) return all;
-    return all.filter((s) => s.dayOfWeek === leaveFilterDay);
-  }, [sessions, applicantTeacher, leaveFilterDay]);
+    if (leaveFilterDays.length === 0) return all;
+    return all.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
+  }, [sessions, applicantTeacher, leaveFilterDays]);
 
   // Selected original session
   const selectedOriginalSession = applicantSessions.find((s) => s.id === selectedSessionId) || applicantSessions[0];
@@ -298,13 +303,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
       }
       const startDow = dateToDayOfWeek(leaveDateStart);
       if (startDow === null) {
-        alert('請假日期須為週一至週五。');
-        return;
-      }
-      if (startDow !== selectedOriginalSession.dayOfWeek) {
-        alert(
-          `請假日期的星期（${dayNames[startDow]}）與原課堂（${dayNames[selectedOriginalSession.dayOfWeek]}）不符，請改日期或改課堂。`
-        );
+        alert('請假開始日須為週一至週五。');
         return;
       }
       if (leaveDateMode === 'range') {
@@ -316,6 +315,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
           alert('結束日期不可早於開始日期。');
           return;
         }
+      }
+      const allowedDays = weekdaysInDateRange(
+        leaveDateStart,
+        leaveDateMode === 'range' ? leaveDateEnd : leaveDateStart
+      );
+      if (!allowedDays.includes(selectedOriginalSession.dayOfWeek)) {
+        alert(
+          `所選課堂（${dayNames[selectedOriginalSession.dayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(allowedDays, dayNames)}）內，請改日期或改課堂。`
+        );
+        return;
       }
     }
 
@@ -795,22 +804,22 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      {selectedOriginalSession && leaveFilterDay == null && (
+                      {selectedOriginalSession && leaveFilterDays.length === 0 && (
                         <p className="mt-1.5 text-[11px] text-slate-500">
                           {leaveDateMode === 'single'
                             ? `請假日須為「${dayNames[selectedOriginalSession.dayOfWeek]}」，對應所選課堂。`
                             : `將涵蓋區間內所有「${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節」。`}
                         </p>
                       )}
-                      {leaveFilterDay != null && (
+                      {leaveFilterDays.length > 0 && (
                         <p className="mt-1.5 text-[11px] text-indigo-700 font-medium">
-                          已依請假日篩選，下方課堂僅顯示「{dayNames[leaveFilterDay]}」
+                          已依請假起迄篩選，下方課堂僅顯示「{formatWeekdayList(leaveFilterDays, dayNames)}」
                           {leaveDateMode === 'range' &&
                           leaveDateStart &&
                           leaveDateEnd &&
                           leaveDateEnd >= leaveDateStart &&
                           selectedOriginalSession
-                            ? `（區間約 ${countMatchingWeekdays(leaveDateStart, leaveDateEnd, leaveFilterDay)} 次）`
+                            ? `（所選節次在區間約 ${countMatchingWeekdays(leaveDateStart, leaveDateEnd, selectedOriginalSession.dayOfWeek)} 次）`
                             : ''}
                           。
                         </p>
@@ -904,19 +913,22 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-2">
                     請點選欲辦理調代之課堂 ({applicantSessions.length} 節)
-                    {leaveFilterDay != null ? ` · 僅顯示${dayNames[leaveFilterDay]}` : ''}：
+                    {leaveFilterDays.length > 0
+                      ? ` · 僅顯示${formatWeekdayList(leaveFilterDays, dayNames)}`
+                      : ''}
+                    ：
                   </label>
 
                   {requestType === 'substitute' && !leaveDateStart && (
                     <p className="mb-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                      建議先選擇上方「請假日期」，課堂列表會自動只顯示該星期有課的節次。
+                      建議先選擇上方「請假日期」，課堂列表會自動只顯示區間內有課的節次。
                     </p>
                   )}
 
                   {applicantSessions.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                      {leaveFilterDay != null
-                        ? `該教師在「${dayNames[leaveFilterDay]}」沒有排定課堂，請改請假日期或確認課表。`
+                      {leaveFilterDays.length > 0
+                        ? `該教師在「${formatWeekdayList(leaveFilterDays, dayNames)}」沒有排定課堂，請改請假起迄或確認課表。`
                         : '該教師目前在課表中無排定課堂，請至總課表確認或重新匯入課表。'}
                     </div>
                   ) : (
