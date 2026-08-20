@@ -330,14 +330,6 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   </span>
                 )}
               </label>
-              {target.type === 'role' &&
-                (target.targetRole === 'academic' || target.targetRole === 'accounting') && (
-                  <p className="text-[11px] text-slate-400 mb-1.5 leading-relaxed">
-                    注意：這是<strong className="text-amber-300">角色登入密碼</strong>
-                    ，與右上角「加入同步」的<strong className="text-sky-300">學校同步密碼</strong>
-                    不同；登入密碼不會隨雲端同步。
-                  </p>
-                )}
 
               <div className="relative">
                 <input
