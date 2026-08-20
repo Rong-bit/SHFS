@@ -152,6 +152,8 @@ interface AppContextType {
     sessionsOverride?: CourseSession[];
     /** 批次核准時傳入累進申請（含已核准佔用） */
     requestsOverride?: SubstituteRequest[];
+    /** 核准時排除本單，避免待簽核自佔用誤判衝堂 */
+    excludeRequestIds?: string[];
   }) => ClashCheckResult;
   
   // Settlement calculation
@@ -704,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     substituteTeacherId?: string;
     sessionsOverride?: CourseSession[];
     requestsOverride?: SubstituteRequest[];
+    excludeRequestIds?: string[];
   }): ClashCheckResult => {
     const messages: string[] = [];
     let severity: 'none' | 'warning' | 'danger' = 'none';
@@ -866,7 +869,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           substituteTeacherId,
           originalSession.dayOfWeek,
           originalSession.period,
-          collectSubstituteOccupancies(requestPool)
+          collectSubstituteOccupancies(requestPool, {
+            excludeRequestIds: params.excludeRequestIds,
+          })
         )
       ) {
         messages.push(
@@ -956,6 +961,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       swapTargetTeacherId: targetReq.swapTargetTeacherId,
       swapTargetSession: targetReq.swapTargetSession,
       substituteTeacherId: targetReq.substituteTeacherId,
+      excludeRequestIds: [requestId],
     });
     if (clashStatus.hasClash) {
       window.alert(clashStatus.messages[0] || '存在衝堂衝突，無法核准');
@@ -1017,6 +1023,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         substituteTeacherId: targetReq.substituteTeacherId,
         sessionsOverride: workingSessions,
         requestsOverride: workingRequests,
+        excludeRequestIds: [id],
       });
       if (clashStatus.hasClash) {
         skipped.push(
@@ -1514,6 +1521,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // remap 後由舊到新重套用已核准異動，避免匯入抹掉 [代課]／移課卻仍結算
       const remapped = remapRequestSessions(requests, finalSessions);
       const withCovers = reapplyApprovedRequestsOldestFirst(finalSessions, remapped);
+      const teachersAfterReapply = enrichTeachersFromSessions(
+        updatedTeachers,
+        withCovers,
+        systemConfig.standardBasePeriods.fulltime,
+        systemConfig.standardBasePeriods.homeroom,
+        systemConfig.standardBasePeriods.head,
+        systemConfig.standardBasePeriods.sectionChief,
+        systemConfig.standardBasePeriods.director
+      );
+      setTeachers(teachersAfterReapply);
       setSessions(withCovers);
       setRequests(remapped);
     } else {
