@@ -12,6 +12,8 @@ import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import {
   countMatchingWeekdays,
   dateToDayOfWeek,
+  findDuplicateLeaveConflicts,
+  formatDuplicateLeaveAlert,
   formatWeekdayList,
   resolveLeaveDateEnd,
   weekdaysInDateRange,
@@ -40,6 +42,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     teachers,
     venues,
     sessions,
+    requests,
     systemConfig,
     addSubstituteRequest,
     checkClashes,
@@ -340,6 +343,21 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         alert(
           `所選課堂（${dayNames[leaveDay as DayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(allowedDays, dayNames)}）內，請改日期或改節次。`
         );
+        return;
+      }
+      const resolvedEndForDup =
+        leaveDateMode === 'range'
+          ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+          : leaveDateStart;
+      const duplicates = findDuplicateLeaveConflicts({
+        existing: requests,
+        applicantTeacherId: currentTeacher.id,
+        leaveDateStart,
+        leaveDateEnd: resolvedEndForDup,
+        sessions: [effectiveOriginalSession],
+      });
+      if (duplicates.length > 0) {
+        alert(formatDuplicateLeaveAlert(duplicates, dayNames));
         return;
       }
     }

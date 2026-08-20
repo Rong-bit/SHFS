@@ -15,6 +15,8 @@ import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import {
   countMatchingWeekdays,
   dateToDayOfWeek,
+  findDuplicateLeaveConflicts,
+  formatDuplicateLeaveAlert,
   formatLeaveDateLabel,
   formatWeekdayList,
   resolveLeaveDateEnd,
@@ -384,6 +386,22 @@ export const StaffDispatchWorkbench: React.FC = () => {
         alert(
           `所選課堂（${dayNames[bad.dayOfWeek]}）不在請假區間涵蓋的星期（${formatWeekdayList(allowedDays, dayNames)}）內，請改日期或改課堂。`
         );
+        return;
+      }
+
+      const resolvedEndForDup =
+        leaveDateMode === 'range'
+          ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+          : leaveDateStart;
+      const duplicates = findDuplicateLeaveConflicts({
+        existing: requests,
+        applicantTeacherId: applicantTeacher.id,
+        leaveDateStart,
+        leaveDateEnd: resolvedEndForDup,
+        sessions: sessionsToDispatch,
+      });
+      if (duplicates.length > 0) {
+        alert(formatDuplicateLeaveAlert(duplicates, dayNames));
         return;
       }
     }
