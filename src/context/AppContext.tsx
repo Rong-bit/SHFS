@@ -33,6 +33,7 @@ import {
   pullSharedSchoolData,
   pushSharedSchoolData,
   testCloudSyncConnection,
+  mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
 import { countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
@@ -258,7 +259,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const skipCloudPushRef = useRef(false);
   const cloudReadyRef = useRef(false);
+  const cloudBusyRef = useRef(false);
   const lastCloudSyncAtRef = useRef<number>(lastCloudSyncAt || 0);
+  const teachersRef = useRef(teachers);
+  const systemConfigRef = useRef(systemConfig);
+  teachersRef.current = teachers;
+  systemConfigRef.current = systemConfig;
 
   // Authentication & Password Check States
   const [isLoginAuthOpen, setIsLoginAuthOpen] = useState<boolean>(false);
@@ -378,15 +384,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     academicStaffList: AcademicStaff[];
   }) => {
     skipCloudPushRef.current = true;
-    const remoteTeachers = (remote.teachers || []).map((t) => ({
+    const merged = mergeLocalSecretsIntoRemote(
+      remote,
+      teachersRef.current,
+      systemConfigRef.current.authConfig
+    );
+    const remoteTeachers = (merged.teachers || []).map((t) => ({
       ...t,
       email: ensureSchoolEmail(t.name, t.email),
     }));
-    const remoteSessions = (remote.sessions || []).map((s) => ({
+    const remoteSessions = (merged.sessions || []).map((s) => ({
       ...s,
       isPractical: inferIsPractical(s.subjectName, s.venueName),
     }));
-    const remoteStd = normalizeStandardBasePeriods(remote.systemConfig?.standardBasePeriods);
+    const remoteStd = normalizeStandardBasePeriods(merged.systemConfig?.standardBasePeriods);
     setTeachers(
       enrichTeachersFromSessions(
         remoteTeachers,
@@ -398,26 +409,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         remoteStd.director
       )
     );
-    setVenues(remote.venues || []);
+    setVenues(merged.venues || []);
     setSessions(remoteSessions);
-    setRequests(remote.requests || []);
+    setRequests(merged.requests || []);
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,
-      ...(remote.systemConfig || {}),
+      ...(merged.systemConfig || {}),
       standardBasePeriods: remoteStd,
       authConfig: withMigratedAuthConfig({
         ...INITIAL_SYSTEM_CONFIG.authConfig,
-        ...(remote.systemConfig?.authConfig || {}),
+        ...(merged.systemConfig?.authConfig || {}),
       }),
     });
-    if (remote.academicStaffList?.length) {
+    if (merged.academicStaffList?.length) {
       setAcademicStaffList(
-        remote.academicStaffList.map((s) => ({ ...s, email: ensureSchoolEmail(s.name, s.email) }))
+        merged.academicStaffList.map((s) => ({ ...s, email: ensureSchoolEmail(s.name, s.email) }))
       );
     }
-    lastCloudSyncAtRef.current = remote.updatedAt;
-    setLastCloudSyncAt(remote.updatedAt);
-    localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(remote.updatedAt));
+    lastCloudSyncAtRef.current = merged.updatedAt;
+    setLastCloudSyncAt(merged.updatedAt);
+    localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(merged.updatedAt));
   };
 
   const buildSharedSchoolData = (updatedAt: number) => ({
@@ -458,6 +469,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCloudSyncMessage('正在連線同步...');
 
     const pullOnce = async () => {
+      if (cloudBusyRef.current) return;
+      cloudBusyRef.current = true;
       try {
         const remote = await pullSharedSchoolData(cloudSyncSettings);
         if (stopped) return;
@@ -466,11 +479,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setCloudSyncMessage('已從雲端更新課表與設定');
         } else if (!remote && lastCloudSyncAtRef.current === 0) {
           const now = Date.now();
-          lastCloudSyncAtRef.current = now;
-          await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now));
-          setLastCloudSyncAt(now);
-          localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
-          setCloudSyncMessage('已建立雲端資料，其他電腦可用同一組設定讀取');
+          const result = await pushSharedSchoolData(
+            cloudSyncSettings,
+            buildSharedSchoolData(now)
+          );
+          if (result === 'ok') {
+            lastCloudSyncAtRef.current = now;
+            setLastCloudSyncAt(now);
+            localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
+            setCloudSyncMessage('已建立雲端資料，其他電腦可用同一組設定讀取');
+          }
         }
         cloudReadyRef.current = true;
         setCloudSyncStatus('synced');
@@ -479,6 +497,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cloudReadyRef.current = true;
         setCloudSyncStatus('error');
         setCloudSyncMessage(err?.message || '同步失敗');
+      } finally {
+        cloudBusyRef.current = false;
       }
     };
 
@@ -498,10 +518,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     const handle = window.setTimeout(async () => {
+      if (cloudBusyRef.current) return;
+      cloudBusyRef.current = true;
       try {
+        const baseUpdatedAt = lastCloudSyncAtRef.current;
         const now = Date.now();
+        const result = await pushSharedSchoolData(
+          cloudSyncSettings,
+          buildSharedSchoolData(now),
+          { ifMatchUpdatedAt: baseUpdatedAt }
+        );
+        if (result === 'conflict') {
+          const remote = await pullSharedSchoolData(cloudSyncSettings);
+          if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
+            applySharedSchoolData(remote);
+            setCloudSyncMessage('偵測到其他電腦較新資料，已改用雲端版本（未覆寫）');
+          }
+          setCloudSyncStatus('synced');
+          return;
+        }
+        // 寫入成功後才更新本機時間戳
         lastCloudSyncAtRef.current = now;
-        await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now));
         setLastCloudSyncAt(now);
         localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
         setCloudSyncStatus('synced');
@@ -509,6 +546,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (err: any) {
         setCloudSyncStatus('error');
         setCloudSyncMessage(err?.message || '同步寫入失敗');
+      } finally {
+        cloudBusyRef.current = false;
       }
     }, 800);
     return () => window.clearTimeout(handle);

@@ -100,6 +100,67 @@ const buildEndpoint = async (settings: CloudSyncSettings) => {
   return `${base}/shfs/${id}.json`;
 };
 
+/** 上傳前剝除登入密文：教師密碼與角色密碼不進雲端 */
+export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchoolData => {
+  const auth = data.systemConfig?.authConfig;
+  return {
+    ...data,
+    teachers: (data.teachers || []).map((t) => {
+      const { password: _pw, ...rest } = t;
+      return rest;
+    }),
+    systemConfig: {
+      ...data.systemConfig,
+      authConfig: auth
+        ? {
+            requirePassword: auth.requirePassword !== false,
+            defaultTeacherPassword: '',
+            adminPassword: '',
+            academicPassword: '',
+            accountingPassword: '',
+          }
+        : undefined,
+    },
+  };
+};
+
+/**
+ * 拉取後併回本機密文，避免雲端空密碼覆寫本機設定。
+ * requirePassword 仍採雲端（全校政策可同步）。
+ */
+export const mergeLocalSecretsIntoRemote = (
+  remote: SharedSchoolData,
+  localTeachers: Teacher[],
+  localAuth?: SystemConfig['authConfig']
+): SharedSchoolData => {
+  const localPwd = new Map(
+    localTeachers.filter((t) => t.password).map((t) => [t.id, t.password as string])
+  );
+  const remoteAuth = remote.systemConfig?.authConfig;
+  return {
+    ...remote,
+    teachers: (remote.teachers || []).map((t) => ({
+      ...t,
+      password: localPwd.get(t.id) || t.password,
+    })),
+    systemConfig: {
+      ...remote.systemConfig,
+      authConfig: {
+        requirePassword: remoteAuth?.requirePassword ?? localAuth?.requirePassword ?? true,
+        defaultTeacherPassword:
+          localAuth?.defaultTeacherPassword ||
+          remoteAuth?.defaultTeacherPassword ||
+          '1234',
+        adminPassword: localAuth?.adminPassword || remoteAuth?.adminPassword || '',
+        academicPassword:
+          localAuth?.academicPassword || remoteAuth?.academicPassword || '1234',
+        accountingPassword:
+          localAuth?.accountingPassword || remoteAuth?.accountingPassword || '1234',
+      },
+    },
+  };
+};
+
 const encryptPayload = async (schoolKey: string, data: SharedSchoolData): Promise<EncryptedEnvelope> => {
   const key = await deriveAesKey(schoolKey);
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -143,13 +204,29 @@ export const pullSharedSchoolData = async (
   throw new Error('雲端資料格式不符，或同步密碼不正確。');
 };
 
+export type PushSharedResult = 'ok' | 'conflict';
+
+/**
+ * 寫入雲端。若 ifMatchUpdatedAt 有值且遠端較新，不覆寫並回傳 conflict。
+ * 成功後才視為寫入完成（呼叫端應在 ok 後再更新本機時間戳）。
+ */
 export const pushSharedSchoolData = async (
   settings: CloudSyncSettings,
-  data: SharedSchoolData
-): Promise<void> => {
-  if (!isCloudSyncReady(settings)) return;
+  data: SharedSchoolData,
+  options?: { ifMatchUpdatedAt?: number }
+): Promise<PushSharedResult> => {
+  if (!isCloudSyncReady(settings)) return 'ok';
+
+  if (options?.ifMatchUpdatedAt != null) {
+    const remote = await pullSharedSchoolData(settings);
+    if (remote && remote.updatedAt > options.ifMatchUpdatedAt) {
+      return 'conflict';
+    }
+  }
+
   const endpoint = await buildEndpoint(settings);
-  const envelope = await encryptPayload(settings.schoolKey, data);
+  const safe = stripSecretsFromSharedData(data);
+  const envelope = await encryptPayload(settings.schoolKey, safe);
   const res = await fetch(endpoint, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -158,6 +235,7 @@ export const pushSharedSchoolData = async (
   if (!res.ok) {
     throw new Error(`同步寫入失敗（HTTP ${res.status}）。請確認 Realtime Database 規則允許寫入。`);
   }
+  return 'ok';
 };
 
 export const testCloudSyncConnection = async (settings: CloudSyncSettings): Promise<string> => {
