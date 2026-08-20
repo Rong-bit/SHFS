@@ -93,12 +93,13 @@ export function countLeaveSubstitutePeriods(request: Pick<
   return Math.max(1, n);
 }
 
-/** 區間內、落在指定曆月（1–12）且相符星期的天數 */
+/** 區間內、落在指定曆月（1–12）且相符星期的天數；可選西元年避免跨年重計 */
 export function countMatchingWeekdaysInMonth(
   start: string,
   end: string,
   dayOfWeek: DayOfWeek,
-  month: number
+  month: number,
+  year?: number
 ): number {
   const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
   const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
@@ -106,18 +107,22 @@ export function countMatchingWeekdaysInMonth(
 
   let count = 0;
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-    if (cur.getDay() === dayOfWeek && cur.getMonth() + 1 === month) count += 1;
+    if (cur.getDay() !== dayOfWeek) continue;
+    if (cur.getMonth() + 1 !== month) continue;
+    if (year != null && cur.getFullYear() !== year) continue;
+    count += 1;
   }
   return count;
 }
 
 /**
- * 結算用：有請假日期則只計「落在結算月」的相符星期；
+ * 結算用：有請假日期則只計「落在結算月（與西元年）」的相符星期；
  * 無日期舊案回傳 null（由呼叫端依單號月份決定是否整筆計入）。
  */
 export function countLeaveSubstitutePeriodsInMonth(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
-  settlementMonth: number
+  settlementMonth: number,
+  settlementYear?: number
 ): number | null {
   if (!request.leaveDateStart) return null;
   const end =
@@ -127,7 +132,8 @@ export function countLeaveSubstitutePeriodsInMonth(
     request.leaveDateStart,
     end,
     request.originalSession.dayOfWeek,
-    settlementMonth
+    settlementMonth,
+    settlementYear
   );
 }
 

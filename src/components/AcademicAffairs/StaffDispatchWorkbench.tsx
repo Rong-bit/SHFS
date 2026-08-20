@@ -268,10 +268,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
     candidateSubstitutes,
   ]);
 
-  // 切換原課堂／申請教師時，允許重新智慧媒合
+  // 切換申請教師／單節選堂／模式時，允許重新智慧媒合（多選勾選變化不重置，避免覆寫人選）
   React.useEffect(() => {
     setHasUserChosenSubstituteTeacher(false);
-  }, [selectedOriginalSession?.id, selectedSessionIds.join(','), selectedTeacherId, sessionPickMode]);
+  }, [selectedTeacherId, sessionPickMode, selectedSessionId, requestType]);
 
   // Auto-select first session if not set
   React.useEffect(() => {

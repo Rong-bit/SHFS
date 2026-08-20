@@ -34,6 +34,10 @@ export const AccountingSettlement: React.FC = () => {
   const totalCounselingAmount = filteredSettlements.reduce((acc, curr) => acc + curr.monthlyCounselingAmount, 0);
   const totalPublicSubAmount = filteredSettlements.reduce((acc, curr) => acc + curr.publicSubstituteAmount, 0);
   const totalPrivateSubAmount = filteredSettlements.reduce((acc, curr) => acc + curr.privateSubstituteEarnAmount, 0);
+  const totalPrivateLeaveDeduction = filteredSettlements.reduce(
+    (acc, curr) => acc + curr.privateLeaveDeductionAmount,
+    0
+  );
   const totalNetPayable = filteredSettlements.reduce((acc, curr) => acc + curr.netPayableAmount, 0);
   const warningCount = filteredSettlements.filter((s) => s.isOverLimit).length;
 
@@ -77,7 +81,7 @@ export const AccountingSettlement: React.FC = () => {
       '公費代課節數': 0 as any,
       '公費代課金額': totalPublicSubAmount,
       '自費代課(受領)金額': totalPrivateSubAmount,
-      '事病假代課(扣款)金額': 0 as any,
+      '事病假代課(扣款)金額': totalPrivateLeaveDeduction,
       '應領課點費總額 (元)': totalNetPayable,
       '每週兼代課估算 (節)': '' as any,
       '兼代課9節上限檢核': warningCount > 0 ? `共 ${warningCount} 人超額警示` : '全數合規',
@@ -202,7 +206,7 @@ export const AccountingSettlement: React.FC = () => {
             ${totalPrivateSubAmount.toLocaleString()}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            由事病假教師自費扣除轉發
+            受領合計；事病假扣款合計 ${totalPrivateLeaveDeduction.toLocaleString()}
           </p>
         </div>
 
@@ -389,7 +393,10 @@ export const AccountingSettlement: React.FC = () => {
                   ${totalPublicSubAmount.toLocaleString()}
                 </td>
                 <td className="p-3 text-center text-emerald-300">
-                  ${totalPrivateSubAmount.toLocaleString()}
+                  <div className="space-y-0.5 text-[11px]">
+                    <div>+領 ${totalPrivateSubAmount.toLocaleString()}</div>
+                    <div className="text-rose-300">-扣 ${totalPrivateLeaveDeduction.toLocaleString()}</div>
+                  </div>
                 </td>
                 <td className="p-3 text-right font-mono text-base text-amber-300 bg-slate-950">
                   ${totalNetPayable.toLocaleString()}

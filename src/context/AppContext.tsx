@@ -24,7 +24,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
+import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -92,6 +92,14 @@ interface AppContextType {
     requestMonth?: number,
     batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ) => SubstituteRequest;
+  /** 教師多節請假：全數預檢後一次寫入（原子） */
+  addSubstituteRequests: (
+    items: Array<
+      Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>
+    >,
+    requestMonth?: number,
+    batchOptions?: { idNoncePrefix?: string }
+  ) => SubstituteRequest[];
   createStaffDirectDispatch: (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
       autoApprove?: boolean;
@@ -592,8 +600,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const remote = await pullSharedSchoolData(cloudSyncSettings);
         if (stopped) return;
         if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
-          applySharedSchoolData(remote);
-          setCloudSyncMessage('已從雲端更新課表與設定');
+          if (cloudDirtyRef.current) {
+            // 本機尚有待推送變更：暫不套用遠端，避免覆蓋本機異動
+            setCloudSyncMessage('本機有待同步變更，暫緩套用雲端較新資料');
+          } else {
+            applySharedSchoolData(remote);
+            setCloudSyncMessage('已從雲端更新課表與設定');
+          }
         } else if (!remote && lastCloudSyncAtRef.current === 0) {
           const now = Date.now();
           const result = await pushSharedSchoolData(
@@ -661,14 +674,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { ifMatchUpdatedAt: baseUpdatedAt }
         );
         if (result === 'conflict') {
+          // 保留本機未推送變更：對齊遠端時間戳後重試覆寫，避免套用遠端導致本機異動遺失
           const remote = await pullSharedSchoolData(cloudSyncSettings);
-          if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
-            applySharedSchoolData(remote);
-            setCloudSyncMessage('偵測到其他電腦較新資料，已改用雲端版本（未覆寫）');
-          } else {
-            setCloudSyncMessage('雲端資料衝突，請稍後再試同步');
-          }
+          const remoteAt = remote?.updatedAt ?? baseUpdatedAt;
+          lastCloudSyncAtRef.current = remoteAt;
+          setLastCloudSyncAt(remoteAt);
+          localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(remoteAt));
+          cloudDirtyRef.current = true;
           setCloudSyncStatus('synced');
+          setCloudSyncMessage('偵測到其他電腦較新資料，已保留本機變更並將重新推送');
           return;
         }
         // 寫入成功後才更新本機時間戳
@@ -835,8 +849,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         severity = 'danger';
       }
 
+      // 互調後各堂帶原工場／教室至對方時段，需檢查目標時段是否已被其他課堂佔用
+      if (originalSession.venueId) {
+        const venueClashAtPartner = schedule.find(
+          (s) =>
+            s.venueId === originalSession.venueId &&
+            s.dayOfWeek === swapTargetSession.dayOfWeek &&
+            s.period === swapTargetSession.period &&
+            s.id !== originalSession.id &&
+            s.id !== swapTargetSession.id
+        );
+        if (venueClashAtPartner) {
+          messages.push(
+            `【工場教室衝堂】${originalSession.venueName || '申請人教室/工場'} 在 週${swapTargetSession.dayOfWeek} 第${swapTargetSession.period}節 已被「${venueClashAtPartner.className} ${venueClashAtPartner.subjectName}」借用`
+          );
+          severity = 'danger';
+        }
+      }
+      if (swapTargetSession.venueId) {
+        const venueClashAtApplicant = schedule.find(
+          (s) =>
+            s.venueId === swapTargetSession.venueId &&
+            s.dayOfWeek === originalSession.dayOfWeek &&
+            s.period === originalSession.period &&
+            s.id !== originalSession.id &&
+            s.id !== swapTargetSession.id
+        );
+        if (venueClashAtApplicant) {
+          messages.push(
+            `【工場教室衝堂】${swapTargetSession.venueName || '對調教室/工場'} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已被「${venueClashAtApplicant.className} ${venueClashAtApplicant.subjectName}」借用`
+          );
+          severity = 'danger';
+        }
+      }
+
       if (messages.length === 0) {
-        messages.push(`檢核通過：雙方教師與班級在互換時段均為空堂，實習工場與教室無衝突。`);
+        messages.push(`檢核通過：雙方教師、班級與工場／教室在互換時段均無衝突。`);
       }
     } else if (requestType === 'substitute') {
       if (!substituteTeacherId) {
@@ -901,42 +949,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
+  const addSubstituteRequests = (
+    items: Array<
+      Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>
+    >,
+    requestMonth?: number,
+    batchOptions?: { idNoncePrefix?: string }
+  ): SubstituteRequest[] => {
+    if (items.length === 0) return [];
+
+    const month = requestMonth ?? new Date().getMonth() + 1;
+    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, month);
+    const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
+    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+
+    let progressiveRequests = requests.slice();
+    const prepared: SubstituteRequest[] = [];
+
+    items.forEach((data, index) => {
+      const clashStatus = checkClashes({
+        requestType: data.requestType,
+        applicantTeacherId: data.applicantTeacherId,
+        originalSession: data.originalSession,
+        targetReschedule: data.targetReschedule,
+        swapTargetTeacherId: data.swapTargetTeacherId,
+        swapTargetSession: data.swapTargetSession,
+        substituteTeacherId: data.substituteTeacherId,
+        requestsOverride: progressiveRequests,
+      });
+      if (clashStatus.hasClash) {
+        throw new Error(
+          clashStatus.messages[0] ||
+            `第${data.originalSession.period}節存在衝堂，無法送出`
+        );
+      }
+
+      const seq = baseSeq + index;
+      const newRequest: SubstituteRequest = {
+        ...data,
+        id: `req-${stampPrefix}-${index}`,
+        requestNumber: formatRequestNumber(systemConfig.academicYear, month, seq),
+        createdAt: nowStr,
+        status: 'pending',
+        clashStatus,
+      };
+      prepared.push(newRequest);
+      progressiveRequests = [newRequest, ...progressiveRequests];
+    });
+
+    setRequests((prev) => [...prepared].reverse().concat(prev));
+    return prepared;
+  };
+
   const addSubstituteRequest = (
     data: Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'>,
     requestMonth?: number,
     batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ): SubstituteRequest => {
-    const seqOffset = batchOptions?.sequenceOffset ?? 0;
-    const idNonce = batchOptions?.idNonce ?? seqOffset;
-    const newId = `req-${Date.now()}-${idNonce}`;
-    const month = requestMonth ?? (new Date().getMonth() + 1);
-    const seq =
-      nextRequestSequence(requests, systemConfig.academicYear, month) + seqOffset;
-    const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
-
-    const clashStatus = checkClashes({
-      requestType: data.requestType,
-      applicantTeacherId: data.applicantTeacherId,
-      originalSession: data.originalSession,
-      targetReschedule: data.targetReschedule,
-      swapTargetTeacherId: data.swapTargetTeacherId,
-      swapTargetSession: data.swapTargetSession,
-      substituteTeacherId: data.substituteTeacherId,
+    const [created] = addSubstituteRequests([data], requestMonth, {
+      idNoncePrefix: String(batchOptions?.idNonce ?? `${Date.now()}-${batchOptions?.sequenceOffset ?? 0}`),
     });
-
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
-
-    const newRequest: SubstituteRequest = {
-      ...data,
-      id: newId,
-      requestNumber,
-      createdAt: nowStr,
-      status: 'pending',
-      clashStatus,
-    };
-
-    setRequests((prev) => [newRequest, ...prev]);
-    return newRequest;
+    return created;
   };
 
   const approveRequest = (requestId: string, reviewerName: string = '陳雅筑 組長 (教學組)'): boolean => {
@@ -1656,6 +1729,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const hourlyRate = systemConfig.dayHourlyRate;
     const counselingRate = systemConfig.nightHourlyRate;
     const settlementMonth = month ?? systemConfig.currentMonth ?? new Date().getMonth() + 1;
+    const settlementYear = calendarYearForSettlementMonth(settlementMonth);
     const weeks = settlementWeeksForMonth(settlementMonth);
 
     return teachers.map((teacher) => {
@@ -1683,7 +1757,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       requests
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
         .forEach((r) => {
-          const inMonthPeriods = countLeaveSubstitutePeriodsInMonth(r, settlementMonth);
+          const inMonthPeriods = countLeaveSubstitutePeriodsInMonth(
+            r,
+            settlementMonth,
+            settlementYear
+          );
           // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：仍依單號月份整筆計入
           const periods =
             inMonthPeriods === null
@@ -1770,6 +1848,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         requests,
         systemConfig,
         addSubstituteRequest,
+        addSubstituteRequests,
         createStaffDirectDispatch,
         createStaffDirectDispatches,
         approveRequest,

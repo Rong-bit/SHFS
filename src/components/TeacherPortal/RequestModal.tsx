@@ -45,6 +45,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     requests,
     systemConfig,
     addSubstituteRequest,
+    addSubstituteRequests,
     checkClashes,
   } = useApp();
 
@@ -470,11 +471,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           : leaveDateStart;
       const batchGroupId =
         sessionsToLeave.length > 1 ? `batch-${Date.now()}` : undefined;
+      const batchStamp = Date.now();
 
-      sessionsToLeave.forEach((originalSession, index) => {
-        addSubstituteRequest(
-          {
-            requestType: 'substitute',
+      try {
+        addSubstituteRequests(
+          sessionsToLeave.map((originalSession) => ({
+            requestType: 'substitute' as const,
             applicantTeacherId: currentTeacher.id,
             applicantTeacherName: currentTeacher.name,
             applicantDepartment: currentTeacher.department,
@@ -487,11 +489,14 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             batchGroupId,
             substituteTeacherId: substituteTeacherId || undefined,
             substituteTeacherName: subTeacher?.name,
-          },
+          })),
           requestMonth,
-          { sequenceOffset: index, idNonce: `${Date.now()}-${index}` }
+          { idNoncePrefix: String(batchStamp) }
         );
-      });
+      } catch (err) {
+        alert(err instanceof Error ? err.message : '送出失敗，請檢查資料後重試。');
+        return;
+      }
       onClose();
       return;
     }
