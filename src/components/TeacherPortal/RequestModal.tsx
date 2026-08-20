@@ -536,11 +536,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden my-6 animate-in fade-in zoom-in duration-150">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs">
+      <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4 py-4 sm:py-6">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden max-h-[min(92dvh,920px)] flex flex-col animate-in fade-in zoom-in duration-150">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white px-6 py-4 flex items-center justify-between">
+        <div className="shrink-0 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
               +
@@ -560,9 +561,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           </button>
         </div>
 
-        {/* Content Body */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-5 text-slate-800 text-sm">
-            
+        {/* Content Body：獨立捲動，避免連續節次時整窗超出螢幕卻捲不到 */}
+          <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col text-slate-800 text-sm">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-5">
+
             {/* Step 1: Select Original Session / Leave Slot */}
             <div>
               {requestType === 'substitute' ? (
@@ -921,7 +923,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                         <p className="text-[11px] text-slate-500">
                           勾選同一天要請假的節次（例如實習第2～7節）。送出後會產生多筆申請並合併通知單。
                         </p>
-                        <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                        <div className="max-h-56 sm:max-h-64 overflow-y-auto space-y-1.5 pr-1">
                           {multiDaySessions.length === 0 ? (
                             <p className="text-[11px] text-amber-800">此日沒有排定課堂。</p>
                           ) : (
@@ -1354,8 +1356,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end space-x-3 pt-2">
+          </div>
+
+          {/* Action Buttons：固定在底部，捲動內容時仍可見 */}
+          <div className="shrink-0 flex items-center justify-end space-x-3 px-6 py-3 border-t border-slate-100 bg-white">
             <button
               type="button"
               onClick={onClose}
@@ -1385,6 +1389,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           </div>
 
         </form>
+        </div>
       </div>
     </div>
   );
