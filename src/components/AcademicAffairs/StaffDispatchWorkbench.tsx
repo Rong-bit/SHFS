@@ -154,10 +154,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Selected applicant teacher & their sessions
   const applicantTeacher = teachers.find((t) => t.id === selectedTeacherId) || teachers[0];
+  const leaveFilterDay =
+    requestType === 'substitute' && leaveDateStart
+      ? dateToDayOfWeek(leaveDateStart)
+      : null;
   const applicantSessions = useMemo(() => {
     if (!applicantTeacher) return [];
-    return sessions.filter((s) => s.teacherId === applicantTeacher.id);
-  }, [sessions, applicantTeacher]);
+    const all = sessions.filter((s) => s.teacherId === applicantTeacher.id);
+    if (leaveFilterDay == null) return all;
+    return all.filter((s) => s.dayOfWeek === leaveFilterDay);
+  }, [sessions, applicantTeacher, leaveFilterDay]);
 
   // Selected original session
   const selectedOriginalSession = applicantSessions.find((s) => s.id === selectedSessionId) || applicantSessions[0];
@@ -789,15 +795,24 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      {selectedOriginalSession && (
+                      {selectedOriginalSession && leaveFilterDay == null && (
                         <p className="mt-1.5 text-[11px] text-slate-500">
                           {leaveDateMode === 'single'
                             ? `請假日須為「${dayNames[selectedOriginalSession.dayOfWeek]}」，對應所選課堂。`
-                            : `將涵蓋區間內所有「${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節」${
-                                leaveDateStart && leaveDateEnd && leaveDateEnd >= leaveDateStart
-                                  ? `（約 ${countMatchingWeekdays(leaveDateStart, leaveDateEnd, selectedOriginalSession.dayOfWeek)} 次）`
-                                  : ''
-                              }。`}
+                            : `將涵蓋區間內所有「${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節」。`}
+                        </p>
+                      )}
+                      {leaveFilterDay != null && (
+                        <p className="mt-1.5 text-[11px] text-indigo-700 font-medium">
+                          已依請假日篩選，下方課堂僅顯示「{dayNames[leaveFilterDay]}」
+                          {leaveDateMode === 'range' &&
+                          leaveDateStart &&
+                          leaveDateEnd &&
+                          leaveDateEnd >= leaveDateStart &&
+                          selectedOriginalSession
+                            ? `（區間約 ${countMatchingWeekdays(leaveDateStart, leaveDateEnd, leaveFilterDay)} 次）`
+                            : ''}
+                          。
                         </p>
                       )}
                     </div>
@@ -888,12 +903,21 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 {/* Sessions Grid */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-2">
-                    請點選欲辦理調代之課堂 ({applicantSessions.length} 節)：
+                    請點選欲辦理調代之課堂 ({applicantSessions.length} 節)
+                    {leaveFilterDay != null ? ` · 僅顯示${dayNames[leaveFilterDay]}` : ''}：
                   </label>
+
+                  {requestType === 'substitute' && !leaveDateStart && (
+                    <p className="mb-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                      建議先選擇上方「請假日期」，課堂列表會自動只顯示該星期有課的節次。
+                    </p>
+                  )}
 
                   {applicantSessions.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                      該教師目前在課表中無排定課堂，請至總課表確認或重新匯入課表。
+                      {leaveFilterDay != null
+                        ? `該教師在「${dayNames[leaveFilterDay]}」沒有排定課堂，請改請假日期或確認課表。`
+                        : '該教師目前在課表中無排定課堂，請至總課表確認或重新匯入課表。'}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">

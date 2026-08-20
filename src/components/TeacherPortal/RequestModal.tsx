@@ -96,6 +96,15 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // When teacher has sessions, offer only "has-class" slots.
   const [leaveSlotId, setLeaveSlotId] = useState<string>('');
 
+  const leaveFilterDay =
+    requestType === 'substitute' && leaveDateStart
+      ? dateToDayOfWeek(leaveDateStart)
+      : null;
+  const leaveSelectableSessions =
+    leaveFilterDay == null
+      ? teacherSessions
+      : teacherSessions.filter((s) => s.dayOfWeek === leaveFilterDay);
+
   // Smart candidate recommendations / clash checking target:
   // - substitute：必用（請假星期/節次）建立暫代課堂
   // - swap/reschedule：使用原課堂 selectedSession
@@ -149,19 +158,39 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   useEffect(() => {
     if (requestType !== 'substitute') return;
     if (teacherSessions.length === 0) return;
-    // If user opened modal from timetable cell, prefer that slot.
-    if (initialSession && teacherSessions.some((s) => s.id === initialSession.id)) {
-      setLeaveSlotId(initialSession.id);
-      setLeaveDay(initialSession.dayOfWeek);
-      setLeavePeriod(initialSession.period);
+
+    const pool =
+      leaveFilterDay == null
+        ? teacherSessions
+        : teacherSessions.filter((s) => s.dayOfWeek === leaveFilterDay);
+
+    if (pool.length === 0) {
+      setLeaveSlotId('');
+      if (leaveFilterDay != null) {
+        setLeaveDay(leaveFilterDay);
+        setLeavePeriod('');
+      }
       return;
     }
 
-    const first = teacherSessions[0];
-    setLeaveSlotId((prev) => (prev ? prev : first.id));
-    setLeaveDay((prev) => (prev !== '' ? prev : first.dayOfWeek));
-    setLeavePeriod((prev) => (prev !== '' ? prev : first.period));
-  }, [requestType, teacherSessions, initialSession]);
+    setLeaveSlotId((prev) => {
+      if (prev && pool.some((s) => s.id === prev)) {
+        const cur = pool.find((s) => s.id === prev)!;
+        setLeaveDay(cur.dayOfWeek);
+        setLeavePeriod(cur.period);
+        return prev;
+      }
+      if (initialSession && pool.some((s) => s.id === initialSession.id)) {
+        setLeaveDay(initialSession.dayOfWeek);
+        setLeavePeriod(initialSession.period);
+        return initialSession.id;
+      }
+      const first = pool[0];
+      setLeaveDay(first.dayOfWeek);
+      setLeavePeriod(first.period);
+      return first.id;
+    });
+  }, [requestType, teacherSessions, initialSession, leaveFilterDay]);
 
   // Candidate partner sessions for swap
   const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
@@ -566,36 +595,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             {/* SUBTITUTE: Leave Type & Auto Payment */}
             {requestType === 'substitute' && (
               <>
-                {/* When teacher has sessions, show "has-class" leave slot selector here
-                    so user can pick the leave time without scrolling to Step 1. */}
-                {teacherSessions.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      請假節次（僅列出你名下「有課」的節次）
-                    </label>
-                    <select
-                      id="select-leave-slot"
-                      value={leaveSlotId}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        setLeaveSlotId(id);
-                        const slot = teacherSessions.find((s) => s.id === id);
-                        if (slot) {
-                          setLeaveDay(slot.dayOfWeek);
-                          setLeavePeriod(slot.period);
-                        }
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
-                    >
-                      {teacherSessions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                     請假日期
@@ -654,16 +653,60 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       </div>
                     )}
                   </div>
-                  {leaveDay !== '' && (
+                  {leaveFilterDay != null ? (
+                    <p className="mt-1.5 text-[11px] text-indigo-700 font-medium leading-relaxed">
+                      已依請假日篩選，下方節次僅顯示「{dayNames[leaveFilterDay]}」
+                      {leaveDateMode === 'range' && leaveRangeHint > 0
+                        ? `（區間約 ${leaveRangeHint} 次）`
+                        : ''}
+                      。
+                    </p>
+                  ) : (
                     <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
-                      {leaveDateMode === 'single'
-                        ? `請假日須為「${dayNames[leaveDay]}」，對應該堂課。`
-                        : `將涵蓋區間內所有「${dayNames[leaveDay]} 第${leavePeriod || 'N'}節」${
-                            leaveRangeHint > 0 ? `（目前約 ${leaveRangeHint} 次）` : ''
-                          }。`}
+                      請先選擇請假日期，節次列表會自動只顯示該星期有課的課堂。
                     </p>
                   )}
                 </div>
+
+                {/* When teacher has sessions, show filtered leave slot selector */}
+                {teacherSessions.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      請假節次
+                      {leaveFilterDay != null
+                        ? `（僅 ${dayNames[leaveFilterDay]} · ${leaveSelectableSessions.length} 節）`
+                        : '（請先選請假日期，或暫列全部有課節次）'}
+                    </label>
+                    {leaveSelectableSessions.length === 0 ? (
+                      <div className="p-2.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg">
+                        {leaveFilterDay != null
+                          ? `你在「${dayNames[leaveFilterDay]}」沒有排定課堂，請改請假日期。`
+                          : '目前沒有可選節次。'}
+                      </div>
+                    ) : (
+                      <select
+                        id="select-leave-slot"
+                        value={leaveSlotId}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          setLeaveSlotId(id);
+                          const slot = leaveSelectableSessions.find((s) => s.id === id);
+                          if (slot) {
+                            setLeaveDay(slot.dayOfWeek);
+                            setLeavePeriod(slot.period);
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
+                      >
+                        {leaveSelectableSessions.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
