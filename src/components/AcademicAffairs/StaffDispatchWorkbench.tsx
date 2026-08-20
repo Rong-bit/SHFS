@@ -60,7 +60,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     sessions,
     requests,
     systemConfig,
-    createStaffDirectDispatch,
+    createStaffDirectDispatches,
     approveRequest,
     deleteRequest,
     batchApproveRequests,
@@ -131,6 +131,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Substitute specific
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
+  const [hasUserChosenSubstituteTeacher, setHasUserChosenSubstituteTeacher] = useState(false);
   const [leaveDateMode, setLeaveDateMode] = useState<'single' | 'range'>('single');
   const [leaveDateStart, setLeaveDateStart] = useState<string>('');
   const [leaveDateEnd, setLeaveDateEnd] = useState<string>('');
@@ -242,20 +243,34 @@ export const StaffDispatchWorkbench: React.FC = () => {
     batchSelectedSessions,
   ]);
 
-  // 點選課堂變更後，自動改選「同科目／同科／空堂」最佳人選
+  // 課堂／候選變更時自動補人選：使用者已點選則不覆寫；僅空值或現人選衝堂時補最佳
   React.useEffect(() => {
+    if (requestType !== 'substitute') return;
     if (candidateSubstitutes.length === 0) return;
-    const best =
-      candidateSubstitutes.find((c) => !c.hasClash && c.isSameSubject) ||
-      candidateSubstitutes.find((c) => !c.hasClash && c.isSameDept) ||
-      candidateSubstitutes.find((c) => !c.hasClash);
-    if (best) setSubstituteTeacherId(best.teacher.id);
+    if (hasUserChosenSubstituteTeacher) return;
+
+    const selected = substituteTeacherId
+      ? candidateSubstitutes.find((c) => c.teacher.id === substituteTeacherId)
+      : undefined;
+
+    if (!substituteTeacherId || selected?.hasClash) {
+      const best =
+        candidateSubstitutes.find((c) => !c.hasClash && c.isSameSubject) ||
+        candidateSubstitutes.find((c) => !c.hasClash && c.isSameDept) ||
+        candidateSubstitutes.find((c) => !c.hasClash);
+      if (best) setSubstituteTeacherId(best.teacher.id);
+    }
   }, [
-    selectedOriginalSession?.id,
-    selectedSessionIds.join(','),
-    sessionPickMode,
+    requestType,
+    substituteTeacherId,
+    hasUserChosenSubstituteTeacher,
     candidateSubstitutes,
   ]);
+
+  // 切換原課堂／申請教師時，允許重新智慧媒合
+  React.useEffect(() => {
+    setHasUserChosenSubstituteTeacher(false);
+  }, [selectedOriginalSession?.id, selectedSessionIds.join(','), selectedTeacherId, sessionPickMode]);
 
   // Auto-select first session if not set
   React.useEffect(() => {
@@ -469,39 +484,38 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
     let created;
     try {
-      created = sessionsToDispatch.map((originalSession, index) =>
-        createStaffDirectDispatch(
-          {
-            requestType,
-            applicantTeacherId: applicantTeacher.id,
-            applicantTeacherName: applicantTeacher.name,
-            applicantDepartment: applicantTeacher.department,
-            leaveType,
-            leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
-            leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
-            paymentType,
-            reason,
-            originalSession,
-            substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
-            substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
-            batchGroupId,
-            targetReschedule:
-              requestType === 'reschedule' && targetVenue
-                ? {
-                    dayOfWeek: targetDay,
-                    period: targetPeriod,
-                    venueId: targetVenue.id,
-                    venueName: targetVenue.name,
-                  }
-                : undefined,
-            swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
-            swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
-            swapTargetSession: requestType === 'swap' ? swapSession : undefined,
-            autoApprove,
-          },
-          dispatchMonth,
-          { sequenceOffset: index, idNonce: `${Date.now()}-${index}` }
-        )
+      const batchStamp = Date.now();
+      created = createStaffDirectDispatches(
+        sessionsToDispatch.map((originalSession) => ({
+          requestType,
+          applicantTeacherId: applicantTeacher.id,
+          applicantTeacherName: applicantTeacher.name,
+          applicantDepartment: applicantTeacher.department,
+          leaveType,
+          leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
+          leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
+          paymentType,
+          reason,
+          originalSession,
+          substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+          substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
+          batchGroupId,
+          targetReschedule:
+            requestType === 'reschedule' && targetVenue
+              ? {
+                  dayOfWeek: targetDay,
+                  period: targetPeriod,
+                  venueId: targetVenue.id,
+                  venueName: targetVenue.name,
+                }
+              : undefined,
+          swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
+          swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
+          swapTargetSession: requestType === 'swap' ? swapSession : undefined,
+          autoApprove,
+        })),
+        dispatchMonth,
+        { idNoncePrefix: String(batchStamp) }
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : '派代失敗，請檢查資料後重試。');
@@ -1309,7 +1323,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         return (
                           <div
                             key={cand.id}
-                            onClick={() => !hasClash && setSubstituteTeacherId(cand.id)}
+                            onClick={() => {
+                              if (hasClash) return;
+                              setHasUserChosenSubstituteTeacher(true);
+                              setSubstituteTeacherId(cand.id);
+                            }}
                             className={`p-3 rounded-xl border transition ${
                               hasClash
                                 ? 'opacity-50 bg-rose-50/40 border-rose-200 cursor-not-allowed'

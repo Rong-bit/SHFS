@@ -1,60 +1,73 @@
 import { CourseSession, SubstituteRequest } from '../types';
+import { isPlaceholderSession, resolveOriginalSession } from './resolveOriginalSession';
 
 const SUBSTITUTE_NOTE = '[代課]';
 const RESCHEDULE_NOTE = '[已移課]';
 const SWAP_NOTE = '[相互調課]';
+
+function matchesOriginalSession(s: CourseSession, req: SubstituteRequest, orig: CourseSession): boolean {
+  if (!isPlaceholderSession(orig) && s.id === orig.id) return true;
+  return (
+    s.dayOfWeek === orig.dayOfWeek &&
+    s.period === orig.period &&
+    s.teacherId === req.applicantTeacherId
+  );
+}
 
 /** 核准時套用課表異動（移課／互調／代課任課） */
 export function applyRequestToSessions(
   sessions: CourseSession[],
   req: SubstituteRequest
 ): CourseSession[] {
-  if (req.requestType === 'reschedule' && req.targetReschedule) {
+  const resolvedOrig = resolveOriginalSession(req, sessions);
+  const reqResolved: SubstituteRequest = { ...req, originalSession: resolvedOrig };
+
+  if (reqResolved.requestType === 'reschedule' && reqResolved.targetReschedule) {
     return sessions.map((s) => {
-      if (s.id !== req.originalSession.id) return s;
+      if (s.id !== resolvedOrig.id) return s;
       return {
         ...s,
-        dayOfWeek: req.targetReschedule!.dayOfWeek,
-        period: req.targetReschedule!.period,
-        venueId: req.targetReschedule!.venueId,
-        venueName: req.targetReschedule!.venueName,
-        notes: `${RESCHEDULE_NOTE} 原週${req.originalSession.dayOfWeek}第${req.originalSession.period}節`,
+        dayOfWeek: reqResolved.targetReschedule!.dayOfWeek,
+        period: reqResolved.targetReschedule!.period,
+        venueId: reqResolved.targetReschedule!.venueId,
+        venueName: reqResolved.targetReschedule!.venueName,
+        notes: `${RESCHEDULE_NOTE} 原週${resolvedOrig.dayOfWeek}第${resolvedOrig.period}節`,
       };
     });
   }
 
-  if (req.requestType === 'swap' && req.swapTargetSession) {
+  if (reqResolved.requestType === 'swap' && reqResolved.swapTargetSession) {
     return sessions.map((s) => {
-      if (s.id === req.originalSession.id) {
+      if (s.id === resolvedOrig.id) {
         return {
           ...s,
-          dayOfWeek: req.swapTargetSession!.dayOfWeek,
-          period: req.swapTargetSession!.period,
-          notes: `${SWAP_NOTE} 與 ${req.swapTargetTeacherName} 對調`,
+          dayOfWeek: reqResolved.swapTargetSession!.dayOfWeek,
+          period: reqResolved.swapTargetSession!.period,
+          notes: `${SWAP_NOTE} 與 ${reqResolved.swapTargetTeacherName} 對調`,
         };
       }
-      if (s.id === req.swapTargetSession!.id) {
+      if (s.id === reqResolved.swapTargetSession!.id) {
         return {
           ...s,
-          dayOfWeek: req.originalSession.dayOfWeek,
-          period: req.originalSession.period,
-          notes: `${SWAP_NOTE} 與 ${req.applicantTeacherName} 對調`,
+          dayOfWeek: resolvedOrig.dayOfWeek,
+          period: resolvedOrig.period,
+          notes: `${SWAP_NOTE} 與 ${reqResolved.applicantTeacherName} 對調`,
         };
       }
       return s;
     });
   }
 
-  if (req.requestType === 'substitute' && req.substituteTeacherId) {
+  if (reqResolved.requestType === 'substitute' && reqResolved.substituteTeacherId) {
     return sessions.map((s) => {
-      if (s.id !== req.originalSession.id) return s;
+      if (!matchesOriginalSession(s, reqResolved, resolvedOrig)) return s;
       // 已是此代課覆蓋則略過（避免重複核准疊字）
-      if (s.teacherId === req.substituteTeacherId && s.notes?.includes(SUBSTITUTE_NOTE)) return s;
+      if (s.teacherId === reqResolved.substituteTeacherId && s.notes?.includes(SUBSTITUTE_NOTE)) return s;
       return {
         ...s,
-        teacherId: req.substituteTeacherId!,
-        teacherName: req.substituteTeacherName || s.teacherName,
-        notes: `${SUBSTITUTE_NOTE} 原任課 ${req.applicantTeacherName}`,
+        teacherId: reqResolved.substituteTeacherId!,
+        teacherName: reqResolved.substituteTeacherName || s.teacherName,
+        notes: `${SUBSTITUTE_NOTE} 原任課 ${reqResolved.applicantTeacherName}`,
       };
     });
   }
@@ -261,8 +274,12 @@ export function remapRequestSessions(
       return r;
     }
 
-    // 找不到對應課堂：已核准移課／互調標記作廢（狀態改 cancelled），其餘更新 id
-    if (orphaned && (r.requestType === 'reschedule' || r.requestType === 'swap') && r.status === 'approved') {
+    // 找不到對應課堂：已核准移課／互調／代課標記作廢，避免 orphan 單據繼續結算
+    if (
+      orphaned &&
+      (r.requestType === 'reschedule' || r.requestType === 'swap' || r.requestType === 'substitute') &&
+      r.status === 'approved'
+    ) {
       return {
         ...r,
         originalSession,

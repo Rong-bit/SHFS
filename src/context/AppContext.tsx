@@ -51,6 +51,7 @@ import {
   rollbackApprovedRequestsNewestFirst,
   rollbackRequestFromSessionsDetailed,
 } from '../utils/scheduleAdjustments';
+import { isPlaceholderSession, resolveOriginalSession } from '../utils/resolveOriginalSession';
 import {
   collectSubstituteOccupancies,
   teacherHasSubstituteOccupancy,
@@ -97,7 +98,18 @@ interface AppContextType {
     requestMonth?: number,
     batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ) => SubstituteRequest;
-  approveRequest: (requestId: string, reviewerName?: string) => void;
+  /** 批次逕行派代：全數預檢通過後一次寫入課表與單據（原子） */
+  createStaffDirectDispatches: (
+    items: Array<
+      Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
+        autoApprove?: boolean;
+      }
+    >,
+    requestMonth?: number,
+    batchOptions?: { idNoncePrefix?: string }
+  ) => SubstituteRequest[];
+  /** 核准成功回傳 true；佔位課堂無法對應課表時回傳 false */
+  approveRequest: (requestId: string, reviewerName?: string) => boolean;
   batchApproveRequests: (requestIds: string[], reviewerName?: string) => number;
   rejectRequest: (requestId: string, reason: string, reviewerName?: string) => void;
   cancelRequest: (requestId: string) => void;
@@ -285,6 +297,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const skipCloudPushRef = useRef(false);
   const cloudReadyRef = useRef(false);
   const cloudBusyRef = useRef(false);
+  /** busy 時有本機變更未推送；結束後重試 */
+  const cloudDirtyRef = useRef(false);
+  const [cloudPushNonce, setCloudPushNonce] = useState(0);
   const lastCloudSyncAtRef = useRef<number>(lastCloudSyncAt || 0);
   const teachersRef = useRef(teachers);
   const systemConfigRef = useRef(systemConfig);
@@ -561,7 +576,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCloudSyncMessage('正在連線同步...');
 
     const pullOnce = async () => {
-      if (cloudBusyRef.current) return;
+      if (cloudBusyRef.current) {
+        cloudDirtyRef.current = true;
+        return;
+      }
       cloudBusyRef.current = true;
       try {
         const remote = await pullSharedSchoolData(cloudSyncSettings);
@@ -591,6 +609,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCloudSyncMessage(err?.message || '同步失敗');
       } finally {
         cloudBusyRef.current = false;
+        if (cloudDirtyRef.current && !stopped) {
+          cloudDirtyRef.current = false;
+          setCloudPushNonce((n) => n + 1);
+        }
       }
     };
 
@@ -610,8 +632,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     const handle = window.setTimeout(async () => {
-      if (cloudBusyRef.current) return;
+      if (cloudBusyRef.current) {
+        cloudDirtyRef.current = true;
+        // busy 結束後由對方 finally 或下方延遲觸發重試，避免本機變更被丟棄
+        window.setTimeout(() => {
+          if (cloudDirtyRef.current && !cloudBusyRef.current) {
+            cloudDirtyRef.current = false;
+            setCloudPushNonce((n) => n + 1);
+          }
+        }, 1200);
+        return;
+      }
       cloudBusyRef.current = true;
+      cloudDirtyRef.current = false;
       try {
         const baseUpdatedAt = lastCloudSyncAtRef.current;
         const now = Date.now();
@@ -625,6 +658,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
             applySharedSchoolData(remote);
             setCloudSyncMessage('偵測到其他電腦較新資料，已改用雲端版本（未覆寫）');
+          } else {
+            setCloudSyncMessage('雲端資料衝突，請稍後再試同步');
           }
           setCloudSyncStatus('synced');
           return;
@@ -640,11 +675,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCloudSyncMessage(err?.message || '同步寫入失敗');
       } finally {
         cloudBusyRef.current = false;
+        if (cloudDirtyRef.current) {
+          cloudDirtyRef.current = false;
+          setCloudPushNonce((n) => n + 1);
+        }
       }
     }, 800);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teachers, venues, sessions, requests, systemConfig, academicStaffList]);
+  }, [teachers, venues, sessions, requests, systemConfig, academicStaffList, cloudPushNonce]);
 
   const currentTeacher = teachers.find((t) => t.id === currentTeacherId) || teachers[0];
   const currentAcademicStaff = academicStaffList.find((s) => s.id === currentAcademicStaffId) || academicStaffList[0];
@@ -885,21 +924,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newRequest;
   };
 
-  const approveRequest = (requestId: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
+  const approveRequest = (requestId: string, reviewerName: string = '陳雅筑 組長 (教學組)'): boolean => {
     const targetReq = requests.find((r) => r.id === requestId);
-    if (!targetReq) return;
+    if (!targetReq) return false;
     // 已核准不可再核准（避免 swap／移課重複套用）
-    if (targetReq.status === 'approved') return;
+    if (targetReq.status === 'approved') return false;
+
+    const resolvedOrig = resolveOriginalSession(targetReq, sessions);
+    if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
+      window.alert(
+        '無法核准：找不到對應課表課堂（佔位資料）。請先匯入／確認該教師該時段課表，或改由教學組逕行派代。'
+      );
+      return false;
+    }
 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const approvedReq: SubstituteRequest = {
+      ...targetReq,
+      originalSession: resolvedOrig,
+      status: 'approved',
+      reviewedAt: nowStr,
+      reviewedBy: reviewerName,
+    };
 
-    setSessions((prev) => applyRequestToSessions(prev, { ...targetReq, status: 'approved' }));
+    setSessions((prev) => applyRequestToSessions(prev, approvedReq));
 
     setRequests((prev) =>
       prev.map((r) =>
         r.id === requestId
           ? {
               ...r,
+              originalSession: resolvedOrig,
               status: 'approved',
               reviewedAt: nowStr,
               reviewedBy: reviewerName,
@@ -907,6 +962,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : r
       )
     );
+    return true;
   };
 
   const batchApproveRequests = (requestIds: string[], reviewerName: string = '陳雅筑 組長 (教學組)'): number => {
@@ -914,10 +970,104 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     requestIds.forEach((id) => {
       const r = requests.find((x) => x.id === id);
       if (!r || r.status === 'approved') return;
-      approveRequest(id, reviewerName);
-      count++;
+      if (approveRequest(id, reviewerName)) count++;
     });
     return count;
+  };
+
+  const createStaffDirectDispatches = (
+    items: Array<
+      Omit<SubstituteRequest, 'id' | 'requestNumber' | 'createdAt' | 'status' | 'clashStatus'> & {
+        autoApprove?: boolean;
+      }
+    >,
+    requestMonth?: number,
+    batchOptions?: { idNoncePrefix?: string }
+  ): SubstituteRequest[] => {
+    if (items.length === 0) return [];
+
+    const month = requestMonth ?? systemConfig.currentMonth;
+    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, month);
+    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
+    const staffName = (() => {
+      if (!currentAcademicStaff) return '教學組經辦';
+      const t = currentAcademicStaff.title;
+      const m = t.match(/^(.+?組).*?\((.+?)\)$/);
+      const stamp = m ? `${m[1]}${m[2]}` : t;
+      return `${currentAcademicStaff.name}(${stamp})`;
+    })();
+
+    // 全數預檢：任一步失敗則不寫入任何單據／課表
+    const prepared: SubstituteRequest[] = items.map((data, index) => {
+      if (
+        data.requestType === 'substitute' &&
+        data.autoApprove !== false &&
+        !data.substituteTeacherId
+      ) {
+        throw new Error('逕行核定請假派代須指定代課教師');
+      }
+
+      const resolvedOrig = resolveOriginalSession(
+        {
+          applicantTeacherId: data.applicantTeacherId,
+          substituteTeacherId: data.substituteTeacherId,
+          originalSession: data.originalSession,
+        } as SubstituteRequest,
+        sessions
+      );
+      if (
+        data.requestType === 'substitute' &&
+        data.autoApprove !== false &&
+        isPlaceholderSession(resolvedOrig)
+      ) {
+        throw new Error('找不到對應課表課堂，無法逕行核定（請確認該時段已有課堂）');
+      }
+
+      const clashStatus = checkClashes({
+        requestType: data.requestType,
+        applicantTeacherId: data.applicantTeacherId,
+        originalSession: resolvedOrig,
+        targetReschedule: data.targetReschedule,
+        swapTargetTeacherId: data.swapTargetTeacherId,
+        swapTargetSession: data.swapTargetSession,
+        substituteTeacherId: data.substituteTeacherId,
+      });
+
+      if (data.autoApprove !== false && clashStatus.hasClash) {
+        throw new Error(clashStatus.messages[0] || '存在衝堂衝突，無法逕行核定');
+      }
+
+      const isAutoApproved = data.autoApprove !== false;
+      const seq = baseSeq + index;
+      const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
+
+      return {
+        ...data,
+        originalSession: resolvedOrig,
+        id: `req-${stampPrefix}-${index}`,
+        requestNumber,
+        createdAt: nowStr,
+        status: isAutoApproved ? 'approved' : 'pending',
+        reviewedAt: isAutoApproved ? nowStr : undefined,
+        reviewedBy: isAutoApproved ? `${staffName} [教務處逕行派代]` : undefined,
+        clashStatus,
+      } as SubstituteRequest;
+    });
+
+    const approvedOnes = prepared.filter((r) => r.status === 'approved');
+    if (approvedOnes.length > 0) {
+      setSessions((prev) => {
+        let next = prev;
+        for (const r of approvedOnes) {
+          next = applyRequestToSessions(next, r);
+        }
+        return next;
+      });
+    }
+
+    setRequests((prev) => [...prepared].reverse().concat(prev));
+    return prepared;
   };
 
   const createStaffDirectDispatch = (
@@ -927,67 +1077,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     requestMonth?: number,
     batchOptions?: { sequenceOffset?: number; idNonce?: string | number }
   ): SubstituteRequest => {
-    const seqOffset = batchOptions?.sequenceOffset ?? 0;
-    const idNonce = batchOptions?.idNonce ?? seqOffset;
-    const newId = `req-${Date.now()}-${idNonce}`;
-    const month = requestMonth ?? systemConfig.currentMonth;
-    // 以同月最大序號配號（勿用 requests.length，刪單後會重號）；批次用 sequenceOffset 連號
-    const seq =
-      nextRequestSequence(requests, systemConfig.academicYear, month) + seqOffset;
-    const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
-
-    if (
-      data.requestType === 'substitute' &&
-      data.autoApprove !== false &&
-      !data.substituteTeacherId
-    ) {
-      throw new Error('逕行核定請假派代須指定代課教師');
-    }
-
-    const clashStatus = checkClashes({
-      requestType: data.requestType,
-      applicantTeacherId: data.applicantTeacherId,
-      originalSession: data.originalSession,
-      targetReschedule: data.targetReschedule,
-      swapTargetTeacherId: data.swapTargetTeacherId,
-      swapTargetSession: data.swapTargetSession,
-      substituteTeacherId: data.substituteTeacherId,
+    const [created] = createStaffDirectDispatches([data], requestMonth, {
+      idNoncePrefix: String(batchOptions?.idNonce ?? `${Date.now()}-${batchOptions?.sequenceOffset ?? 0}`),
     });
-
-    if (data.autoApprove !== false && clashStatus.hasClash) {
-      throw new Error(clashStatus.messages[0] || '存在衝堂衝突，無法逕行核定');
-    }
-
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
-    const staffName = (() => {
-      if (!currentAcademicStaff) return '教學組經辦';
-      const t = currentAcademicStaff.title;
-      const m = t.match(/^(.+?組).*?\((.+?)\)$/);
-      const stamp = m ? `${m[1]}${m[2]}` : t;
-      return `${currentAcademicStaff.name}(${stamp})`;
-    })();
-
-    const isAutoApproved = data.autoApprove !== false;
-
-    const newRequest: SubstituteRequest = {
-      ...data,
-      id: newId,
-      requestNumber,
-      createdAt: nowStr,
-      status: isAutoApproved ? 'approved' : 'pending',
-      reviewedAt: isAutoApproved ? nowStr : undefined,
-      reviewedBy: isAutoApproved ? `${staffName} [教務處逕行派代]` : undefined,
-      clashStatus,
-    };
-
-    if (isAutoApproved) {
-      setSessions((prev) => applyRequestToSessions(prev, newRequest));
-    }
-
-    setRequests((prev) => [newRequest, ...prev]);
-    return newRequest;
+    return created;
   };
-
   const rejectRequest = (requestId: string, reason: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
     const target = requests.find((r) => r.id === requestId);
     if (target?.status === 'approved') {
@@ -1552,6 +1646,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         systemConfig,
         addSubstituteRequest,
         createStaffDirectDispatch,
+        createStaffDirectDispatches,
         approveRequest,
         batchApproveRequests,
         rejectRequest,
