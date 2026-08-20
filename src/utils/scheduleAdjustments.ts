@@ -19,10 +19,24 @@ function matchesOriginalSession(s: CourseSession, req: SubstituteRequest, orig: 
 }
 
 /** 核准時套用課表異動（移課／互調／代課任課） */
+export type ApplyRequestResult = {
+  sessions: CourseSession[];
+  /** true＝已達目標態（含本次變更或原本已套用／冪等） */
+  applied: boolean;
+  reason?: string;
+};
+
 export function applyRequestToSessions(
   sessions: CourseSession[],
   req: SubstituteRequest
 ): CourseSession[] {
+  return applyRequestToSessionsDetailed(sessions, req).sessions;
+}
+
+export function applyRequestToSessionsDetailed(
+  sessions: CourseSession[],
+  req: SubstituteRequest
+): ApplyRequestResult {
   // 保留申請當下快照（互調／移課冪等判斷用），勿被 resolve 成現行時段後再對調一次
   const snapOrig = { ...req.originalSession };
   const snapPartner = req.swapTargetSession ? { ...req.swapTargetSession } : undefined;
@@ -37,32 +51,48 @@ export function applyRequestToSessions(
 
   if (reqResolved.requestType === 'reschedule' && reqResolved.targetReschedule) {
     const t = reqResolved.targetReschedule;
-    return sessions.map((s) => {
-      if (s.id !== resolvedOrig.id) return s;
-      // 已在目標時段：冪等略過（避免 notes 被改寫）
-      if (
-        s.dayOfWeek === t.dayOfWeek &&
-        s.period === t.period &&
-        (!t.venueId || s.venueId === t.venueId)
-      ) {
-        return s;
-      }
+    const live = sessions.find((s) => s.id === resolvedOrig.id);
+    if (!live) {
       return {
-        ...s,
-        dayOfWeek: t.dayOfWeek,
-        period: t.period,
-        venueId: t.venueId,
-        venueName: t.venueName,
-        notes: `${RESCHEDULE_NOTE} 原週${snapOrig.dayOfWeek}第${snapOrig.period}節`,
+        sessions,
+        applied: false,
+        reason: '找不到欲移課的課堂於現行課表',
       };
-    });
+    }
+    if (
+      live.dayOfWeek === t.dayOfWeek &&
+      live.period === t.period &&
+      (!t.venueId || live.venueId === t.venueId)
+    ) {
+      return { sessions, applied: true }; // 已在目標時段
+    }
+    return {
+      sessions: sessions.map((s) => {
+        if (s.id !== resolvedOrig.id) return s;
+        return {
+          ...s,
+          dayOfWeek: t.dayOfWeek,
+          period: t.period,
+          venueId: t.venueId,
+          venueName: t.venueName,
+          notes: `${RESCHEDULE_NOTE} 原週${snapOrig.dayOfWeek}第${snapOrig.period}節`,
+        };
+      }),
+      applied: true,
+    };
   }
 
   if (reqResolved.requestType === 'swap' && snapPartner) {
     const partnerId = (resolvedSwap || snapPartner).id;
     const liveA = sessions.find((s) => s.id === resolvedOrig.id);
     const liveB = sessions.find((s) => s.id === partnerId);
-    if (!liveA || !liveB) return sessions;
+    if (!liveA || !liveB) {
+      return {
+        sessions,
+        applied: false,
+        reason: '找不到互調雙方課堂於現行課表',
+      };
+    }
 
     // 目標態：A 在對方原時段、B 在申請人原時段（依申請快照）
     const alreadySwapped =
@@ -70,7 +100,7 @@ export function applyRequestToSessions(
       liveA.period === snapPartner.period &&
       liveB.dayOfWeek === snapOrig.dayOfWeek &&
       liveB.period === snapOrig.period;
-    if (alreadySwapped) return sessions;
+    if (alreadySwapped) return { sessions, applied: true };
 
     // 僅在「仍為申請當下原時段」時才對調，避免中間態誤翻
     const atOriginalSlots =
@@ -78,44 +108,75 @@ export function applyRequestToSessions(
       liveA.period === snapOrig.period &&
       liveB.dayOfWeek === snapPartner.dayOfWeek &&
       liveB.period === snapPartner.period;
-    if (!atOriginalSlots) return sessions;
+    if (!atOriginalSlots) {
+      return {
+        sessions,
+        applied: false,
+        reason: '互調課堂現況已非申請時段（之後可能又有異動），無法套用',
+      };
+    }
 
-    return sessions.map((s) => {
-      if (s.id === resolvedOrig.id) {
-        return {
-          ...s,
-          dayOfWeek: snapPartner.dayOfWeek,
-          period: snapPartner.period,
-          notes: `${SWAP_NOTE} 與 ${reqResolved.swapTargetTeacherName} 對調`,
-        };
-      }
-      if (s.id === partnerId) {
-        return {
-          ...s,
-          dayOfWeek: snapOrig.dayOfWeek,
-          period: snapOrig.period,
-          notes: `${SWAP_NOTE} 與 ${reqResolved.applicantTeacherName} 對調`,
-        };
-      }
-      return s;
-    });
+    return {
+      sessions: sessions.map((s) => {
+        if (s.id === resolvedOrig.id) {
+          return {
+            ...s,
+            dayOfWeek: snapPartner.dayOfWeek,
+            period: snapPartner.period,
+            notes: `${SWAP_NOTE} 與 ${reqResolved.swapTargetTeacherName} 對調`,
+          };
+        }
+        if (s.id === partnerId) {
+          return {
+            ...s,
+            dayOfWeek: snapOrig.dayOfWeek,
+            period: snapOrig.period,
+            notes: `${SWAP_NOTE} 與 ${reqResolved.applicantTeacherName} 對調`,
+          };
+        }
+        return s;
+      }),
+      applied: true,
+    };
   }
 
   if (reqResolved.requestType === 'substitute' && reqResolved.substituteTeacherId) {
-    return sessions.map((s) => {
-      if (!matchesOriginalSession(s, reqResolved, resolvedOrig)) return s;
-      // 已是此代課覆蓋則略過（避免重複核准疊字）
-      if (s.teacherId === reqResolved.substituteTeacherId && s.notes?.includes(SUBSTITUTE_NOTE)) return s;
+    const targets = sessions.filter((s) =>
+      matchesOriginalSession(s, reqResolved, resolvedOrig)
+    );
+    if (targets.length === 0) {
       return {
-        ...s,
-        teacherId: reqResolved.substituteTeacherId!,
-        teacherName: reqResolved.substituteTeacherName || s.teacherName,
-        notes: `${SUBSTITUTE_NOTE} 原任課 ${reqResolved.applicantTeacherName}`,
+        sessions,
+        applied: false,
+        reason: '找不到欲派代的課堂於現行課表',
       };
-    });
+    }
+    const alreadyCovered = targets.every(
+      (s) =>
+        s.teacherId === reqResolved.substituteTeacherId &&
+        Boolean(s.notes?.includes(SUBSTITUTE_NOTE))
+    );
+    if (alreadyCovered) return { sessions, applied: true };
+
+    return {
+      sessions: sessions.map((s) => {
+        if (!matchesOriginalSession(s, reqResolved, resolvedOrig)) return s;
+        if (s.teacherId === reqResolved.substituteTeacherId && s.notes?.includes(SUBSTITUTE_NOTE)) {
+          return s;
+        }
+        return {
+          ...s,
+          teacherId: reqResolved.substituteTeacherId!,
+          teacherName: reqResolved.substituteTeacherName || s.teacherName,
+          notes: `${SUBSTITUTE_NOTE} 原任課 ${reqResolved.applicantTeacherName}`,
+        };
+      }),
+      applied: true,
+    };
   }
 
-  return sessions;
+  // 請假未指定代課等：無課表異動，視為成功（僅改單據狀態）
+  return { sessions, applied: true };
 }
 
 function findLiveSessionForSubstitute(

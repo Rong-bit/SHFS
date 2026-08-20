@@ -294,6 +294,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
       subjectName: targetSessions.map((s) => s.subjectName),
       applicantDepartment: applicantTeacher.department,
       maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+      leaveDateStart: leaveDateStart || undefined,
+      leaveDateEnd:
+        leaveDateMode === 'range'
+          ? leaveDateEnd || leaveDateStart || undefined
+          : leaveDateStart || undefined,
     });
   }, [
     teachers,
@@ -304,6 +309,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
     systemConfig,
     sessionPickMode,
     batchSelectedSessions,
+    leaveDateStart,
+    leaveDateEnd,
+    leaveDateMode,
   ]);
 
   // 課堂／候選變更時自動補人選：使用者已點選則不覆寫；僅空值或現人選衝堂時補最佳
@@ -428,6 +436,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
         swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
         swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
         substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+        leaveDateStart:
+          requestType === 'substitute' ? leaveDateStart || undefined : undefined,
+        leaveDateEnd:
+          requestType === 'substitute'
+            ? leaveDateMode === 'range'
+              ? leaveDateEnd || leaveDateStart || undefined
+              : leaveDateStart || undefined
+            : undefined,
       });
       const prefix =
         sessionsToCheck.length > 1 ? `第${originalSession.period}節：` : '';
@@ -460,6 +476,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
     swapTargetSessionId,
     substituteTeacherId,
     sessions,
+    leaveDateStart,
+    leaveDateEnd,
+    leaveDateMode,
   ]);
 
   // Handle direct dispatch submission
@@ -521,6 +540,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
         swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
         swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
         substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+        leaveDateStart:
+          requestType === 'substitute' ? leaveDateStart || undefined : undefined,
+        leaveDateEnd:
+          requestType === 'substitute'
+            ? leaveDateMode === 'range'
+              ? leaveDateEnd || leaveDateStart || undefined
+              : leaveDateStart || undefined
+            : undefined,
       });
       if (clash.hasClash) {
         alert(
@@ -947,8 +974,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           onChange={(e) => handleLeaveTypeChange(e.target.value as LeaveType)}
                           className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         >
-                          <option value="official">🏛️ 公假 / 公差 (公費派代 · 420元/節)</option>
-                          <option value="training">📚 專題競賽 / 專業研習 / 監評 (公費派代 · 420元/節)</option>
+                          <option value="official">🏛️ 公假 / 公差 (公費派代 · {systemConfig.dayHourlyRate}元/節，第八節課輔 {systemConfig.nightHourlyRate})</option>
+                          <option value="training">📚 專題競賽 / 專業研習 / 監評 (公費派代 · {systemConfig.dayHourlyRate}元/節，第八節課輔 {systemConfig.nightHourlyRate})</option>
                           <option value="sick">🏥 病假 / 住院 / 緊急就醫 (自費代課)</option>
                           <option value="personal">💼 個人事假 (自費代課)</option>
                           <option value="bereavement">🕊️ 喪假 (公費派代)</option>
@@ -1617,7 +1644,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       <div className="text-slate-200">
                         代課教師：<strong className="text-indigo-400 text-sm">{teachers.find(t => t.id === substituteTeacherId)?.name || '未指定'}</strong>
                         <div className="text-[11px] text-slate-400 mt-0.5">
-                          {paymentType === 'public' ? '🏛️ 公費派代 (420元/節)' : '👤 自費代課 (420元/節)'}
+                          {paymentType === 'public'
+                            ? `🏛️ 公費派代 (${(sessionPickMode === 'periodRange' ? batchSelectedSessions[0]?.period : selectedOriginalSession?.period) === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)`
+                            : `👤 自費代課 (${(sessionPickMode === 'periodRange' ? batchSelectedSessions[0]?.period : selectedOriginalSession?.period) === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)`}
                         </div>
                       </div>
                     )}

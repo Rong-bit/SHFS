@@ -48,6 +48,7 @@ import {
 } from '../utils/passwordCrypto';
 import {
   applyRequestToSessions,
+  applyRequestToSessionsDetailed,
   reapplyApprovedRequestsOldestFirst,
   remapRequestSessions,
   rollbackApprovedRequestsNewestFirstDetailed,
@@ -163,6 +164,9 @@ interface AppContextType {
     requestsOverride?: SubstituteRequest[];
     /** 核准時排除本單，避免待簽核自佔用誤判衝堂 */
     excludeRequestIds?: string[];
+    /** 代課請假區間：與既有代課佔用比對是否重疊 */
+    leaveDateStart?: string;
+    leaveDateEnd?: string;
   }) => ClashCheckResult;
   
   // Settlement calculation
@@ -322,6 +326,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cloudBusyRef = useRef(false);
   /** busy 時有本機變更未推送；結束後重試 */
   const cloudDirtyRef = useRef(false);
+  /** 推送衝突中：禁止輪詢自動套用遠端，直到手動拉取或強制推送 */
+  const cloudConflictRef = useRef(false);
   const [cloudPushNonce, setCloudPushNonce] = useState(0);
   const lastCloudSyncAtRef = useRef<number>(lastCloudSyncAt || 0);
   const teachersRef = useRef(teachers);
@@ -601,6 +607,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
       cloudDirtyRef.current = false;
+      cloudConflictRef.current = false;
       applySharedSchoolData(remote);
       setCloudSyncStatus('synced');
       setCloudSyncMessage('已採用雲端資料（本機未推送變更已放棄）');
@@ -645,6 +652,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
       }
       cloudDirtyRef.current = false;
+      cloudConflictRef.current = false;
       setCloudSyncStatus('synced');
       setCloudSyncMessage('已強制推送本機（雲端已改為本機內容）');
     } catch (err: any) {
@@ -675,7 +683,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const remote = await pullSharedSchoolData(cloudSyncSettings);
         if (stopped) return;
         if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
-          if (cloudDirtyRef.current) {
+          if (cloudConflictRef.current) {
+            // 衝突待處理：不可靜默套用遠端，否則衝突提示／本機變更會被蓋掉
+            setCloudSyncStatus('error');
+            setCloudSyncMessage(
+              '其他電腦有較新資料，已暫停自動覆寫。請至「雲端同步」選擇「拉取遠端（採用對方）」或「強制推送本機」。'
+            );
+          } else if (cloudDirtyRef.current) {
             // 本機尚有待推送變更：暫不套用遠端，避免覆蓋本機異動
             setCloudSyncMessage('本機有待同步變更，暫緩套用雲端較新資料');
           } else {
@@ -722,6 +736,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (!isCloudSyncReady(cloudSyncSettings) || !cloudReadyRef.current) return;
+    if (cloudConflictRef.current) return; // 衝突待手動處理：暫停自動推送
     if (skipCloudPushRef.current) {
       skipCloudPushRef.current = false;
       return;
@@ -750,6 +765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
     if (result === 'conflict') {
       // 暫停自動覆寫，避免蓋掉其他電腦已同步資料；請使用者明確選擇拉取或強制推送
+      cloudConflictRef.current = true;
       setCloudSyncStatus('error');
       setCloudSyncMessage(
         '其他電腦有較新資料，已暫停自動覆寫以免覆蓋對方變更。請至「雲端同步」選擇「拉取遠端（採用對方）」或「強制推送本機」。'
@@ -815,6 +831,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sessionsOverride?: CourseSession[];
     requestsOverride?: SubstituteRequest[];
     excludeRequestIds?: string[];
+    leaveDateStart?: string;
+    leaveDateEnd?: string;
   }): ClashCheckResult => {
     const messages: string[] = [];
     let severity: 'none' | 'warning' | 'danger' = 'none';
@@ -827,6 +845,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       swapTargetTeacherId,
       swapTargetSession,
       substituteTeacherId,
+      leaveDateStart,
+      leaveDateEnd,
     } = params;
 
     const schedule = params.sessionsOverride ?? sessions;
@@ -1071,11 +1091,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           originalSession.period,
           collectSubstituteOccupancies(requestPool, {
             excludeRequestIds: params.excludeRequestIds,
-          })
+          }),
+          { leaveDateStart, leaveDateEnd }
         )
       ) {
         messages.push(
-          `【代課教師衝堂】${subTeacher?.name} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有其他已派代／待簽核代課`
+          `【代課教師衝堂】${subTeacher?.name} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有其他已派代／待簽核代課（請假區間重疊）`
         );
         severity = 'danger';
       }
@@ -1128,6 +1149,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         swapTargetSession: data.swapTargetSession,
         substituteTeacherId: data.substituteTeacherId,
         requestsOverride: progressiveRequests,
+        leaveDateStart: data.leaveDateStart,
+        leaveDateEnd: data.leaveDateEnd,
       });
       if (clashStatus.hasClash) {
         throw new Error(
@@ -1222,6 +1245,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       swapTargetSession: resolvedSwap,
       substituteTeacherId: targetReq.substituteTeacherId,
       excludeRequestIds: [requestId],
+      leaveDateStart: targetReq.leaveDateStart,
+      leaveDateEnd: targetReq.leaveDateEnd,
     });
     if (clashStatus.hasClash) {
       window.alert(clashStatus.messages[0] || '存在衝堂衝突，無法核准');
@@ -1238,7 +1263,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       reviewedBy: reviewerName,
     };
 
-    setSessions((prev) => applyRequestToSessions(prev, approvedReq));
+    const applyResult = applyRequestToSessionsDetailed(sessions, approvedReq);
+    if (!applyResult.applied) {
+      window.alert(applyResult.reason || '無法套用課表異動，核准已取消');
+      return false;
+    }
+
+    setSessions(applyResult.sessions);
 
     setRequests((prev) =>
       prev.map((r) =>
@@ -1317,6 +1348,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sessionsOverride: workingSessions,
         requestsOverride: workingRequests,
         excludeRequestIds: [id],
+        leaveDateStart: targetReq.leaveDateStart,
+        leaveDateEnd: targetReq.leaveDateEnd,
       });
       if (clashStatus.hasClash) {
         skipped.push(
@@ -1334,7 +1367,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reviewedBy: reviewerName,
         clashStatus,
       };
-      workingSessions = applyRequestToSessions(workingSessions, approvedReq);
+      const applyResult = applyRequestToSessionsDetailed(workingSessions, approvedReq);
+      if (!applyResult.applied) {
+        skipped.push(
+          `${targetReq.requestNumber || id}：${applyResult.reason || '無法套用課表'}`
+        );
+        continue;
+      }
+      workingSessions = applyResult.sessions;
       workingRequests = workingRequests.map((r) => (r.id === id ? approvedReq : r));
       count++;
     }
@@ -1443,6 +1483,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         substituteTeacherId: data.substituteTeacherId,
         sessionsOverride: progressiveSessions,
         requestsOverride: progressiveRequests,
+        leaveDateStart: data.leaveDateStart,
+        leaveDateEnd: data.leaveDateEnd,
       });
 
       if (data.autoApprove !== false && clashStatus.hasClash) {
@@ -1465,22 +1507,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clashStatus,
       } as SubstituteRequest;
 
+      if (isAutoApproved) {
+        const applyResult = applyRequestToSessionsDetailed(progressiveSessions, newRequest);
+        if (!applyResult.applied) {
+          throw new Error(
+            applyResult.reason ||
+              `第${data.originalSession.period}節：無法套用課表，逕行核定已取消`
+          );
+        }
+        progressiveSessions = applyResult.sessions;
+      }
+
       prepared.push(newRequest);
       progressiveRequests = [newRequest, ...progressiveRequests];
-      if (isAutoApproved) {
-        progressiveSessions = applyRequestToSessions(progressiveSessions, newRequest);
-      }
     });
 
     const approvedOnes = prepared.filter((r) => r.status === 'approved');
     if (approvedOnes.length > 0) {
-      setSessions((prev) => {
-        let next = prev;
-        for (const r of approvedOnes) {
-          next = applyRequestToSessions(next, r);
-        }
-        return next;
-      });
+      setSessions(progressiveSessions);
     }
 
     setRequests((prev) => [...prepared].reverse().concat(prev));

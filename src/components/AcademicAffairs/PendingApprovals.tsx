@@ -29,7 +29,8 @@ export const PendingApprovals: React.FC = () => {
     clearAllRequests, 
     setPrintModalRequest, 
     currentAcademicStaff, 
-    academicStaffList 
+    academicStaffList,
+    systemConfig,
   } = useApp();
   const [filter, setFilter] = useState<'pending' | 'all' | 'approved' | 'rejected'>('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -175,7 +176,9 @@ export const PendingApprovals: React.FC = () => {
                           : 'bg-amber-50 text-amber-800 border border-amber-200'
                       }`}
                     >
-                      {req.paymentType === 'public' ? '公費派代 (420元)' : '自費代課 (420元)'}
+                      {req.paymentType === 'public'
+                        ? `公費派代 (${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元)`
+                        : `自費代課 (${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元)`}
                     </span>
                   </div>
 
@@ -242,7 +245,9 @@ export const PendingApprovals: React.FC = () => {
                           {req.substituteTeacherName || '未指定（由教學組媒合）'}
                         </strong>
                         <span className="text-xs text-slate-600 ml-2">
-                          ({req.paymentType === 'public' ? '公費派代 420元/節' : '自費代課 420元/節'})
+                          ({req.paymentType === 'public'
+                            ? `公費派代 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`
+                            : `自費代課 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`})
                         </span>
                       </div>
                     )}

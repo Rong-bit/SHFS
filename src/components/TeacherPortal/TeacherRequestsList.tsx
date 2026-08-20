@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export const TeacherRequestsList: React.FC = () => {
-  const { currentTeacher, requests, cancelRequest, setPrintModalRequest } = useApp();
+  const { currentTeacher, requests, cancelRequest, setPrintModalRequest, systemConfig } = useApp();
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const myRequests = requests.filter((r) => r.applicantTeacherId === currentTeacher?.id);
@@ -133,11 +133,11 @@ export const TeacherRequestsList: React.FC = () => {
                   </span>
                   {req.paymentType === 'public' ? (
                     <span className="text-[11px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">
-                      公費派代 (420元/節)
+                      公費派代 ({req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)
                     </span>
                   ) : (
                     <span className="text-[11px] px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded font-semibold">
-                      自費代課 (420元/節)
+                      自費代課 ({req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)
                     </span>
                   )}
                 </div>

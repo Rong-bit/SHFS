@@ -1,5 +1,6 @@
 import { CourseSession, DayOfWeek, SubstituteRequest, Teacher } from '../types';
 import { teacherWeeklyOverload } from './schoolDepartments';
+import { resolveLeaveDateEnd } from './leaveDates';
 
 export interface SubstituteCandidate {
   teacher: Teacher;
@@ -15,7 +16,21 @@ export type SubstituteOccupancy = {
   teacherId: string;
   dayOfWeek: DayOfWeek;
   period: number;
+  leaveDateStart?: string;
+  leaveDateEnd?: string;
 };
+
+function leaveRangesOverlap(
+  aStart?: string,
+  aEnd?: string,
+  bStart?: string,
+  bEnd?: string
+): boolean {
+  if (!aStart || !bStart) return true; // 缺日期舊案：保守視為佔用
+  const aE = resolveLeaveDateEnd(aStart, aEnd) || aStart;
+  const bE = resolveLeaveDateEnd(bStart, bEnd) || bStart;
+  return aStart <= bE && bStart <= aE;
+}
 
 /** 科目名稱正規化：略過「補強-」等前綴以便比對 */
 export function normalizeSubjectName(name: string): string {
@@ -46,6 +61,7 @@ export function teacherTeachesSubject(
 
 /**
  * 已派代／待簽核代課佔用的時段（代課教師在該星期＋節次視為非空堂）
+ * 含請假起迄，供「同槽但週次不重疊」時放行。
  */
 export function collectSubstituteOccupancies(
   requests: SubstituteRequest[],
@@ -62,6 +78,8 @@ export function collectSubstituteOccupancies(
       teacherId: r.substituteTeacherId,
       dayOfWeek: r.originalSession.dayOfWeek,
       period: r.originalSession.period,
+      leaveDateStart: r.leaveDateStart,
+      leaveDateEnd: r.leaveDateEnd,
     });
   }
   return out;
@@ -71,18 +89,27 @@ export function teacherHasSubstituteOccupancy(
   teacherId: string,
   dayOfWeek: DayOfWeek,
   period: number,
-  occupancies: SubstituteOccupancy[]
+  occupancies: SubstituteOccupancy[],
+  probeLeave?: { leaveDateStart?: string; leaveDateEnd?: string }
 ): boolean {
-  return occupancies.some(
-    (o) => o.teacherId === teacherId && o.dayOfWeek === dayOfWeek && o.period === period
-  );
+  return occupancies.some((o) => {
+    if (o.teacherId !== teacherId || o.dayOfWeek !== dayOfWeek || o.period !== period) {
+      return false;
+    }
+    return leaveRangesOverlap(
+      probeLeave?.leaveDateStart,
+      probeLeave?.leaveDateEnd,
+      o.leaveDateStart,
+      o.leaveDateEnd
+    );
+  });
 }
 
 /**
  * 智慧派代排序：
  * 1. 相同科目優先
  * 2. 其次同科別
- * 3. 再以該時段沒課（空堂）優先——含已核准／待簽核代課佔用
+ * 3. 再以該時段沒課（空堂）優先——含已核准／待簽核代課佔用（請假區間重疊才算衝）
  * 連續節次時：任一節有課即視為衝堂；任教科目與任一目標科目相符即視為同科目
  */
 export function rankSubstituteCandidates(params: {
@@ -98,6 +125,8 @@ export function rankSubstituteCandidates(params: {
   /** 已派代佔用（不傳則只看課表） */
   substituteOccupancies?: SubstituteOccupancy[];
   requests?: SubstituteRequest[];
+  leaveDateStart?: string;
+  leaveDateEnd?: string;
 }): SubstituteCandidate[] {
   const {
     teachers,
@@ -116,6 +145,10 @@ export function rankSubstituteCandidates(params: {
   const occupancies =
     params.substituteOccupancies ||
     (params.requests ? collectSubstituteOccupancies(params.requests) : []);
+  const probeLeave = {
+    leaveDateStart: params.leaveDateStart,
+    leaveDateEnd: params.leaveDateEnd,
+  };
 
   return teachers
     .filter((t) => t.id !== excludeTeacherId)
@@ -127,7 +160,8 @@ export function rankSubstituteCandidates(params: {
               s.teacherId === t.id &&
               s.dayOfWeek === targetDayOfWeek &&
               s.period === p
-          ) || teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies)
+          ) ||
+          teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies, probeLeave)
       );
       const isSameSubject = subjects.some((subj) =>
         teacherTeachesSubject(t.id, subj, sessions)

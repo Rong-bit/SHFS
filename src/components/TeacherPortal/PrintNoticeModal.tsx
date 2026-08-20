@@ -259,17 +259,28 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 課點鐘點費支給
               </div>
               <div className="p-2 font-medium">
-                {request.paymentType === 'public' ? (
-                  <span className="text-blue-700 font-bold">
-                    公費派代 (學校公款支領 420元/節
-                    {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
-                  </span>
-                ) : (
-                  <span className="text-amber-800 font-bold">
-                    自費代課 (申請教師自付 420元/節
-                    {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
-                  </span>
-                )}
+                {(() => {
+                  const periods = groupedSessions.map((s) => s.period);
+                  const hasCounseling = periods.some((p) => p === 8);
+                  const hasDay = periods.some((p) => p !== 8);
+                  const rateLabel =
+                    hasCounseling && hasDay
+                      ? `日間 ${systemConfig.dayHourlyRate}／課輔 ${systemConfig.nightHourlyRate}元/節`
+                      : hasCounseling
+                        ? `${systemConfig.nightHourlyRate}元/節（第八節課輔）`
+                        : `${systemConfig.dayHourlyRate}元/節`;
+                  return request.paymentType === 'public' ? (
+                    <span className="text-blue-700 font-bold">
+                      公費派代 (學校公款支領 {rateLabel}
+                      {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
+                    </span>
+                  ) : (
+                    <span className="text-amber-800 font-bold">
+                      自費代課 (申請教師自付 {rateLabel}
+                      {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 

@@ -206,6 +206,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       subjectName: targets.map((s) => s.subjectName),
       applicantDepartment: currentTeacher.department,
       maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+      leaveDateStart: leaveDateStart || undefined,
+      leaveDateEnd:
+        leaveDateMode === 'range'
+          ? leaveDateEnd || leaveDateStart || undefined
+          : leaveDateStart || undefined,
     });
   }, [
     teachers,
@@ -216,6 +221,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     systemConfig,
     leavePickMode,
     leaveSessionsForSubmit,
+    leaveDateStart,
+    leaveDateEnd,
+    leaveDateMode,
   ]);
 
   // If in substitute mode and teacher has sessions, initialize leave slot
@@ -405,6 +413,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           applicantTeacherId: currentTeacher.id,
           originalSession,
           substituteTeacherId: substituteTeacherId || undefined,
+          leaveDateStart: leaveDateStart || undefined,
+          leaveDateEnd:
+            leaveDateMode === 'range'
+              ? leaveDateEnd || leaveDateStart || undefined
+              : leaveDateStart || undefined,
         });
         const prefix = targets.length > 1 ? `第${originalSession.period}節：` : '';
         return {
