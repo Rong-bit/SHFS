@@ -36,7 +36,7 @@ import {
   mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
-import { countLeaveSubstitutePeriodsInMonth, countMatchingWeekdays, resolveLeaveDateEnd } from '../utils/leaveDates';
+import { countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -1187,52 +1187,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return created;
   };
 
-  const approveRequest = (requestId: string, reviewerName: string = '陳雅筑 組長 (教學組)'): boolean => {
-    const targetReq = requests.find((r) => r.id === requestId);
-    if (!targetReq) return false;
-    // 已核准不可再核准（避免 swap／移課重複套用）
-    if (targetReq.status === 'approved') return false;
+  /** 單筆核准核心；成功回傳更新後課表／申請，失敗回傳 reason */
+  const approveSingleRequest = (
+    requestId: string,
+    reviewerName: string,
+    workingSessions: CourseSession[],
+    workingRequests: SubstituteRequest[]
+  ):
+    | { ok: true; sessions: CourseSession[]; request: SubstituteRequest }
+    | { ok: false; reason: string } => {
+    const targetReq = workingRequests.find((r) => r.id === requestId);
+    if (!targetReq) return { ok: false, reason: '找不到申請單' };
+    if (targetReq.status === 'approved') return { ok: false, reason: '已核准' };
 
     if (targetReq.requestType === 'substitute' && !targetReq.substituteTeacherId) {
-      window.alert('無法核准：尚未指定代課教師。請先指定代課人選，或改由教學組逕行派代。');
-      return false;
+      return { ok: false, reason: '尚未指定代課教師' };
     }
 
-    const resolvedOrig = resolveOriginalSession(targetReq, sessions);
+    const resolvedOrig = resolveOriginalSession(targetReq, workingSessions);
     const resolvedSwap =
       targetReq.requestType === 'swap'
-        ? resolveSwapTargetSession(targetReq, sessions)
+        ? resolveSwapTargetSession(targetReq, workingSessions)
         : targetReq.swapTargetSession;
     if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
-      window.alert(
-        '無法核准：找不到對應課表課堂（佔位資料）。請先匯入／確認該教師該時段課表，或改由教學組逕行派代。'
-      );
-      return false;
+      return { ok: false, reason: '找不到對應課表課堂（佔位資料）' };
     }
     if (targetReq.requestType === 'swap') {
-      if (!resolvedSwap || !sessions.some((s) => s.id === resolvedSwap.id)) {
-        window.alert('無法核准：找不到對調課堂於現行課表，請確認後再核准。');
-        return false;
+      if (!resolvedSwap || !workingSessions.some((s) => s.id === resolvedSwap.id)) {
+        return { ok: false, reason: '找不到對調課堂於現行課表' };
       }
     }
 
-    // 請假區間若皆為放假日：不可核准（避免改週課表卻結算 0 節）
-    if (targetReq.requestType === 'substitute' && targetReq.leaveDateStart) {
+    if (targetReq.requestType === 'substitute') {
       const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-      const leaveEnd =
-        resolveLeaveDateEnd(targetReq.leaveDateStart, targetReq.leaveDateEnd) ||
-        targetReq.leaveDateStart;
-      const billable = countMatchingWeekdays(
-        targetReq.leaveDateStart,
-        leaveEnd,
-        targetReq.originalSession.dayOfWeek,
-        holidaySet
+      const { billable, missingLeaveDate } = countBillableDaysForSubstituteApprove(
+        targetReq,
+        holidaySet,
+        (month) =>
+          calendarYearForSettlementMonth(month, new Date(), systemConfig.academicYear)
       );
       if (billable <= 0) {
-        window.alert(
-          '無法核准：請假區間內無實際上課日（可能皆為放假日）。請改請假日期或調整行事曆放假日。'
-        );
-        return false;
+        return {
+          ok: false,
+          reason: missingLeaveDate
+            ? '無請假日期，且依單號月份推估該月該星期皆為放假日'
+            : '請假區間內無實際上課日（可能皆為放假日）',
+        };
       }
     }
 
@@ -1244,13 +1244,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       swapTargetTeacherId: targetReq.swapTargetTeacherId,
       swapTargetSession: resolvedSwap,
       substituteTeacherId: targetReq.substituteTeacherId,
+      sessionsOverride: workingSessions,
+      requestsOverride: workingRequests,
       excludeRequestIds: [requestId],
       leaveDateStart: targetReq.leaveDateStart,
       leaveDateEnd: targetReq.leaveDateEnd,
     });
     if (clashStatus.hasClash) {
-      window.alert(clashStatus.messages[0] || '存在衝堂衝突，無法核准');
-      return false;
+      return { ok: false, reason: clashStatus.messages[0] || '存在衝堂衝突' };
     }
 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
@@ -1261,122 +1262,130 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'approved',
       reviewedAt: nowStr,
       reviewedBy: reviewerName,
+      clashStatus,
     };
 
-    const applyResult = applyRequestToSessionsDetailed(sessions, approvedReq);
+    const applyResult = applyRequestToSessionsDetailed(workingSessions, approvedReq);
     if (!applyResult.applied) {
-      window.alert(applyResult.reason || '無法套用課表異動，核准已取消');
-      return false;
+      return { ok: false, reason: applyResult.reason || '無法套用課表異動' };
     }
 
-    setSessions(applyResult.sessions);
+    return { ok: true, sessions: applyResult.sessions, request: approvedReq };
+  };
 
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.id === requestId
-          ? {
-              ...r,
-              originalSession: resolvedOrig,
-              swapTargetSession: resolvedSwap ?? r.swapTargetSession,
-              status: 'approved',
-              reviewedAt: nowStr,
-              reviewedBy: reviewerName,
-              clashStatus,
-            }
-          : r
-      )
-    );
+  /** 連續節次整批：全過才寫入，任一失敗則整批不核准 */
+  const batchApproveRequestsAllOrNothing = (
+    requestIds: string[],
+    reviewerName: string,
+    options?: { alertOnFail?: boolean }
+  ): number => {
+    let workingSessions = sessions;
+    let workingRequests = requests.slice();
+    let count = 0;
+
+    for (const id of requestIds) {
+      const result = approveSingleRequest(id, reviewerName, workingSessions, workingRequests);
+      if (result.ok === false) {
+        if (options?.alertOnFail !== false) {
+          const failed = workingRequests.find((r) => r.id === id);
+          window.alert(
+            `連續節次須整批核准：${failed?.requestNumber || id}（${result.reason}），整批未核准。`
+          );
+        }
+        return 0;
+      }
+      workingSessions = result.sessions;
+      workingRequests = workingRequests.map((r) => (r.id === id ? result.request : r));
+      count += 1;
+    }
+
+    if (count === 0) return 0;
+    setSessions(workingSessions);
+    setRequests(workingRequests);
+    return count;
+  };
+
+  const approveRequest = (requestId: string, reviewerName: string = '陳雅筑 組長 (教學組)'): boolean => {
+    const targetReq = requests.find((r) => r.id === requestId);
+    if (!targetReq) return false;
+    if (targetReq.status === 'approved') return false;
+
+    // 連續節次：核准與刪除／取消同為整批，避免半核准再取消踩雷
+    if (targetReq.batchGroupId) {
+      const pendingIds = requests
+        .filter((r) => r.batchGroupId === targetReq.batchGroupId && r.status === 'pending')
+        .map((r) => r.id);
+      if (pendingIds.length === 0) return false;
+      if (pendingIds.length > 1) {
+        return batchApproveRequestsAllOrNothing(pendingIds, reviewerName) > 0;
+      }
+    }
+
+    const result = approveSingleRequest(requestId, reviewerName, sessions, requests);
+    if (result.ok === false) {
+      window.alert(`無法核准：${result.reason}`);
+      return false;
+    }
+    setSessions(result.sessions);
+    setRequests((prev) => prev.map((r) => (r.id === requestId ? result.request : r)));
     return true;
   };
 
   const batchApproveRequests = (requestIds: string[], reviewerName: string = '陳雅筑 組長 (教學組)'): number => {
+    // 展開連續節次同批 pending，並以 batchGroup 為單位全有或全無
+    const expanded = new Set<string>();
+    for (const id of requestIds) {
+      const t = requests.find((r) => r.id === id);
+      if (!t || t.status === 'approved') continue;
+      if (t.batchGroupId) {
+        requests
+          .filter((r) => r.batchGroupId === t.batchGroupId && r.status === 'pending')
+          .forEach((r) => expanded.add(r.id));
+      } else {
+        expanded.add(id);
+      }
+    }
+
+    const byGroup = new Map<string, string[]>();
+    for (const id of expanded) {
+      const t = requests.find((r) => r.id === id);
+      if (!t) continue;
+      const key = t.batchGroupId || id;
+      const list = byGroup.get(key) || [];
+      list.push(id);
+      byGroup.set(key, list);
+    }
+
     let workingSessions = sessions;
     let workingRequests = requests.slice();
     let count = 0;
     const skipped: string[] = [];
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
 
-    for (const id of requestIds) {
-      const targetReq = workingRequests.find((r) => r.id === id);
-      if (!targetReq || targetReq.status === 'approved') continue;
+    for (const [, ids] of byGroup) {
+      let groupSessions = workingSessions;
+      let groupRequests = workingRequests;
+      const approvedInGroup: SubstituteRequest[] = [];
+      let groupFailed: string | null = null;
 
-      const resolvedOrig = resolveOriginalSession(targetReq, workingSessions);
-      const resolvedSwap =
-        targetReq.requestType === 'swap'
-          ? resolveSwapTargetSession(targetReq, workingSessions)
-          : targetReq.swapTargetSession;
-      if (targetReq.requestType === 'substitute' && !targetReq.substituteTeacherId) {
-        skipped.push(`${targetReq.requestNumber || id}：尚未指定代課教師`);
-        continue;
-      }
-      if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
-        skipped.push(`${targetReq.requestNumber || id}：找不到對應課表`);
-        continue;
-      }
-      if (
-        targetReq.requestType === 'swap' &&
-        (!resolvedSwap || !workingSessions.some((s) => s.id === resolvedSwap.id))
-      ) {
-        skipped.push(`${targetReq.requestNumber || id}：找不到對調課堂`);
-        continue;
-      }
-      if (targetReq.requestType === 'substitute' && targetReq.leaveDateStart) {
-        const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-        const leaveEnd =
-          resolveLeaveDateEnd(targetReq.leaveDateStart, targetReq.leaveDateEnd) ||
-          targetReq.leaveDateStart;
-        const billable = countMatchingWeekdays(
-          targetReq.leaveDateStart,
-          leaveEnd,
-          targetReq.originalSession.dayOfWeek,
-          holidaySet
-        );
-        if (billable <= 0) {
-          skipped.push(`${targetReq.requestNumber || id}：請假區間皆為放假日`);
-          continue;
+      for (const id of ids) {
+        const result = approveSingleRequest(id, reviewerName, groupSessions, groupRequests);
+        if (result.ok === false) {
+          const failed = groupRequests.find((r) => r.id === id);
+          groupFailed = `${failed?.requestNumber || id}：${result.reason}`;
+          break;
         }
+        groupSessions = result.sessions;
+        groupRequests = groupRequests.map((r) => (r.id === id ? result.request : r));
+        approvedInGroup.push(result.request);
       }
 
-      const clashStatus = checkClashes({
-        requestType: targetReq.requestType,
-        applicantTeacherId: targetReq.applicantTeacherId,
-        originalSession: resolvedOrig,
-        targetReschedule: targetReq.targetReschedule,
-        swapTargetTeacherId: targetReq.swapTargetTeacherId,
-        swapTargetSession: resolvedSwap,
-        substituteTeacherId: targetReq.substituteTeacherId,
-        sessionsOverride: workingSessions,
-        requestsOverride: workingRequests,
-        excludeRequestIds: [id],
-        leaveDateStart: targetReq.leaveDateStart,
-        leaveDateEnd: targetReq.leaveDateEnd,
-      });
-      if (clashStatus.hasClash) {
-        skipped.push(
-          `${targetReq.requestNumber || id}：${clashStatus.messages[0] || '衝堂'}`
-        );
+      if (groupFailed) {
+        skipped.push(groupFailed + (ids.length > 1 ? '（同批連續節次整批略過）' : ''));
         continue;
       }
-
-      const approvedReq: SubstituteRequest = {
-        ...targetReq,
-        originalSession: resolvedOrig,
-        swapTargetSession: resolvedSwap ?? targetReq.swapTargetSession,
-        status: 'approved',
-        reviewedAt: nowStr,
-        reviewedBy: reviewerName,
-        clashStatus,
-      };
-      const applyResult = applyRequestToSessionsDetailed(workingSessions, approvedReq);
-      if (!applyResult.applied) {
-        skipped.push(
-          `${targetReq.requestNumber || id}：${applyResult.reason || '無法套用課表'}`
-        );
-        continue;
-      }
-      workingSessions = applyResult.sessions;
-      workingRequests = workingRequests.map((r) => (r.id === id ? approvedReq : r));
-      count++;
+      workingSessions = groupSessions;
+      workingRequests = groupRequests;
+      count += approvedInGroup.length;
     }
 
     if (count > 0) {
@@ -1454,21 +1463,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (
         data.requestType === 'substitute' &&
-        data.autoApprove !== false &&
-        data.leaveDateStart
+        data.autoApprove !== false
       ) {
         const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-        const leaveEnd =
-          resolveLeaveDateEnd(data.leaveDateStart, data.leaveDateEnd) || data.leaveDateStart;
-        const billable = countMatchingWeekdays(
-          data.leaveDateStart,
-          leaveEnd,
-          data.originalSession.dayOfWeek,
-          holidaySet
+        const probe = {
+          leaveDateStart: data.leaveDateStart,
+          leaveDateEnd: data.leaveDateEnd,
+          originalSession: data.originalSession,
+          requestNumber: formatRequestNumber(systemConfig.academicYear, month, baseSeq + index),
+          createdAt: nowStr,
+        };
+        const { billable, missingLeaveDate } = countBillableDaysForSubstituteApprove(
+          probe,
+          holidaySet,
+          (m) => calendarYearForSettlementMonth(m, new Date(), systemConfig.academicYear)
         );
         if (billable <= 0) {
           throw new Error(
-            `第${data.originalSession.period}節：請假區間皆為放假日，無法逕行核定`
+            missingLeaveDate
+              ? `第${data.originalSession.period}節：無請假日期且該月該星期皆為放假日，無法逕行核定`
+              : `第${data.originalSession.period}節：請假區間皆為放假日，無法逕行核定`
           );
         }
       }
@@ -2114,11 +2128,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             settlementYear,
             holidaySet
           );
-          // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：仍依單號月份整筆計入
+          // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：依單號月份，且該月該星期須有上課日
           const periods =
             inMonthPeriods === null
               ? requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth)
-                ? 1
+                ? countLeaveSubstitutePeriods(r, holidaySet, {
+                    settlementMonth,
+                    settlementYear,
+                  })
                 : 0
               : inMonthPeriods;
           if (periods <= 0) return;

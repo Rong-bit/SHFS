@@ -761,6 +761,22 @@ export const AdminSettings: React.FC = () => {
                       onChange={(e) => setFormConfig({ ...formConfig, academicYear: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold text-slate-900"
                     />
+                    {Number(formConfig.academicYear) <
+                      (() => {
+                        const y = new Date().getFullYear();
+                        const m = new Date().getMonth() + 1;
+                        return m >= 8 ? y - 1911 : y - 1912;
+                      })() && (
+                      <p className="text-[10px] text-amber-700 mt-1 leading-snug">
+                        學年度似乎未更新至本學期；結算將暫以西曆校正，建議改為{' '}
+                        {(() => {
+                          const y = new Date().getFullYear();
+                          const m = new Date().getMonth() + 1;
+                          return m >= 8 ? y - 1911 : y - 1912;
+                        })()}
+                        。
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 mb-1">學期</label>

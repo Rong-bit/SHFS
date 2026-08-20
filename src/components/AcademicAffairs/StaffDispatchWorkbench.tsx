@@ -1973,12 +1973,34 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                     const title = staff?.title || '教學組';
                                     const m = title.match(/^(.+?組).*?\((.+?)\)$/);
                                     const stampTitle = m ? `${m[1]}${m[2]}` : title;
+                                    const pendingCount = req.batchGroupId
+                                      ? requests.filter(
+                                          (r) =>
+                                            r.batchGroupId === req.batchGroupId &&
+                                            r.status === 'pending'
+                                        ).length
+                                      : 1;
+                                    if (pendingCount > 1) {
+                                      const ok = window.confirm(
+                                        `此為連續節次（共 ${pendingCount} 節待核定），將整批一次核准。確定？`
+                                      );
+                                      if (!ok) return;
+                                    }
                                     approveRequest(req.id, `${staff?.name || '教學組'}(${stampTitle})`);
                                   }}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-xs transition"
                                 >
                                   <Check className="w-3 h-3" />
-                                  <span>核定</span>
+                                  <span>
+                                    {req.batchGroupId &&
+                                    requests.filter(
+                                      (r) =>
+                                        r.batchGroupId === req.batchGroupId &&
+                                        r.status === 'pending'
+                                    ).length > 1
+                                      ? '整批核定'
+                                      : '核定'}
+                                  </span>
                                 </button>
                               )}
 

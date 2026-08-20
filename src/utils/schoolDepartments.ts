@@ -188,9 +188,28 @@ export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherI
 export const countWeeklyCounselingPeriods = (sessions: CourseSession[], teacherId: string) =>
   breakdownWeeklyOverloadPeriods(sessions, teacherId).counseling;
 
+/** 依目前日期推估應為哪個民國學年度（8 月起為新學年） */
+export const expectedRocAcademicYear = (now = new Date()) => {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  return m >= 8 ? y - 1911 : y - 1912;
+};
+
+/** 無學年度（或學年度過期）時：以西曆推估結算月所屬年 */
+const calendarYearFromWallClock = (month: number, now: Date) => {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  if (month >= 8) {
+    // 8–12 月：若目前在上半年，代表上一學年的秋季
+    return m >= 8 ? y : y - 1;
+  }
+  // 1–7 月：取「本西元年」的該月（現在 8 月選 1 月 → 今年 1 月，不是明年）
+  return y;
+};
+
 /** 結算月份對應的西元年。
  * 優先依學年度：學年 N 的 8–12 月 → N+1911；1–7 月 → N+1912。
- * 無學年度時以 8 月為界，避免「現在 8 月選 1 月卻變成明年」。
+ * 若設定的學年度已落後於目前應有學年（忘記換學年），改以西曆推估，避免 8 月結算落到上一年。
  */
 export const calendarYearForSettlementMonth = (
   month: number,
@@ -200,17 +219,14 @@ export const calendarYearForSettlementMonth = (
   if (academicYear != null && String(academicYear).trim() !== '') {
     const roc = Number(academicYear);
     if (!Number.isNaN(roc) && roc > 90) {
+      const expected = expectedRocAcademicYear(now);
+      if (roc < expected) {
+        return calendarYearFromWallClock(month, now);
+      }
       return month >= 8 ? roc + 1911 : roc + 1912;
     }
   }
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1;
-  if (month >= 8) {
-    // 8–12 月：若目前在上半年，代表上一學年的秋季
-    return m >= 8 ? y : y - 1;
-  }
-  // 1–7 月：取「本西元年」的該月（現在 8 月選 1 月 → 今年 1 月，不是明年）
-  return y;
+  return calendarYearFromWallClock(month, now);
 };
 
 /** 該月各星期幾出現次數（JS：0 日、1 一 … 6 六）；excludeDates 為 YYYY-MM-DD 放假日 */

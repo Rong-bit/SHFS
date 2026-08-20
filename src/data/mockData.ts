@@ -96,7 +96,14 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
     director: 0,
   },
   schoolName: '國立技術型高級中等學校',
-  academicYear: '114',
+  // 8 月起為新學年：依本機日期推估民國學年度，避免預設停在舊年導致結算西元年偏移
+  academicYear: String(
+    (() => {
+      const y = new Date().getFullYear();
+      const m = new Date().getMonth() + 1;
+      return m >= 8 ? y - 1911 : y - 1912;
+    })()
+  ),
   semester: '1',
   currentMonth: new Date().getMonth() + 1,
   weeksInMonth: 4,

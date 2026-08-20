@@ -91,12 +91,28 @@ export function formatLeaveDateLabel(
   return `${formatSlashDate(start)}～${em}/${ed}`;
 }
 
-/** 請假派代結算節數：無日期舊案算 1；有日期則算區間內相符星期數（放假日不計） */
+/** 請假派代結算節數：無日期舊案若該結算月該星期仍有上課日算 1，皆放假則 0；有日期則算區間內相符星期數（放假日不計） */
 export function countLeaveSubstitutePeriods(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
-  excludeDates?: ExcludeDates
+  excludeDates?: ExcludeDates,
+  options?: { settlementMonth?: number; settlementYear?: number }
 ): number {
-  if (!request.leaveDateStart) return 1;
+  if (!request.leaveDateStart) {
+    const month = options?.settlementMonth;
+    const year = options?.settlementYear;
+    if (month == null || year == null) return 1;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const start = `${year}-${pad(month)}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const end = `${year}-${pad(month)}-${pad(lastDay)}`;
+    const n = countMatchingWeekdays(
+      start,
+      end,
+      request.originalSession.dayOfWeek,
+      excludeDates
+    );
+    return n > 0 ? 1 : 0;
+  }
   const end = resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) || request.leaveDateStart;
   const n = countMatchingWeekdays(
     request.leaveDateStart,
@@ -134,7 +150,7 @@ export function countMatchingWeekdaysInMonth(
 
 /**
  * 結算用：有請假日期則只計「落在結算月（與西元年）」的相符星期；
- * 無日期舊案回傳 null（由呼叫端依單號月份決定是否整筆計入）。
+ * 無日期舊案回傳 null（由呼叫端依單號月份決定是否計入，再以整月放假檢查）。
  * 行事曆放假日不計節。
  */
 export function countLeaveSubstitutePeriodsInMonth(
@@ -155,6 +171,67 @@ export function countLeaveSubstitutePeriodsInMonth(
     settlementYear,
     excludeDates
   );
+}
+
+/** 從單號或建立時間推估申請月份（1–12） */
+export function inferRequestMonth(
+  requestNumber?: string,
+  createdAt?: string,
+  fallbackMonth?: number
+): number {
+  const m = requestNumber?.match(/VOC-\d+-(\d+)-/i);
+  if (m) {
+    const n = Number(m[1]);
+    if (n >= 1 && n <= 12) return n;
+  }
+  if (createdAt) {
+    const parsed = new Date(createdAt.replace(/-/g, '/'));
+    if (!Number.isNaN(parsed.getTime())) return parsed.getMonth() + 1;
+  }
+  return fallbackMonth ?? new Date().getMonth() + 1;
+}
+
+/**
+ * 核准前檢查請假區間實際上課日數。
+ * 無請假日期之舊單：以單號月份＋課堂星期推估整月，皆放假則不可核准。
+ */
+export function countBillableDaysForSubstituteApprove(
+  request: Pick<
+    SubstituteRequest,
+    'leaveDateStart' | 'leaveDateEnd' | 'originalSession' | 'requestNumber' | 'createdAt'
+  >,
+  excludeDates: ExcludeDates,
+  settlementYearForMonth: (month: number) => number
+): { billable: number; missingLeaveDate: boolean } {
+  if (request.leaveDateStart) {
+    const end =
+      resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) ||
+      request.leaveDateStart;
+    return {
+      billable: countMatchingWeekdays(
+        request.leaveDateStart,
+        end,
+        request.originalSession.dayOfWeek,
+        excludeDates
+      ),
+      missingLeaveDate: false,
+    };
+  }
+  const month = inferRequestMonth(request.requestNumber, request.createdAt);
+  const year = settlementYearForMonth(month);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const start = `${year}-${pad(month)}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const end = `${year}-${pad(month)}-${pad(lastDay)}`;
+  return {
+    billable: countMatchingWeekdays(
+      start,
+      end,
+      request.originalSession.dayOfWeek,
+      excludeDates
+    ),
+    missingLeaveDate: true,
+  };
 }
 
 function leaveRangesOverlap(

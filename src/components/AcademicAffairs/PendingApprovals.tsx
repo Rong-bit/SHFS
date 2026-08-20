@@ -68,6 +68,15 @@ export const PendingApprovals: React.FC = () => {
   };
 
   const handleApprove = (req: SubstituteRequest) => {
+    const pendingCount = req.batchGroupId
+      ? requests.filter((r) => r.batchGroupId === req.batchGroupId && r.status === 'pending').length
+      : 1;
+    if (pendingCount > 1) {
+      const ok = window.confirm(
+        `此為連續節次申請（共 ${pendingCount} 節待簽核），將整批一次核准（與刪除／取消相同）。確定？`
+      );
+      if (!ok) return;
+    }
     approveRequest(req.id, reviewerSignature);
   };
 
@@ -341,7 +350,14 @@ export const PendingApprovals: React.FC = () => {
                           className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-sm transition active:scale-95 flex items-center space-x-1"
                         >
                           <Check className="w-3.5 h-3.5" />
-                          <span>核准生效</span>
+                          <span>
+                            {req.batchGroupId &&
+                            requests.filter(
+                              (r) => r.batchGroupId === req.batchGroupId && r.status === 'pending'
+                            ).length > 1
+                              ? '整批核准'
+                              : '核准生效'}
+                          </span>
                         </button>
                       </>
                     )}

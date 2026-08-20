@@ -127,19 +127,21 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     return '請假派代';
   };
 
-  /** 連續節次批次：同一 batchGroupId 合併為一張通知單 */
-  const groupedRequests =
-    request.batchGroupId
+  /** 連續節次：僅合併同批「已核准」節次；pending 不進通知單 */
+  const printGroup =
+    request.status === 'approved' && request.batchGroupId
       ? requests
-          .filter((r) => r.batchGroupId === request.batchGroupId)
+          .filter(
+            (r) => r.batchGroupId === request.batchGroupId && r.status === 'approved'
+          )
           .sort(
             (a, b) =>
               a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
               a.originalSession.period - b.originalSession.period
           )
       : [request];
-  const isMergedBatch = groupedRequests.length > 1;
-  const groupedSessions = groupedRequests.map((r) => resolveOriginalSession(r, sessions));
+  const isMergedBatch = printGroup.length > 1;
+  const groupedSessions = printGroup.map((r) => resolveOriginalSession(r, sessions));
   const originalSession = groupedSessions[0] || resolveOriginalSession(request, sessions);
   const courseBlocks = collapseConsecutiveSessions(groupedSessions);
   const periodRangeLabel = isMergedBatch
@@ -148,7 +150,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       )}（共 ${groupedSessions.length} 節）`
     : `${dayNames[originalSession.dayOfWeek]} ${getPeriodLabel(originalSession.period)}`;
   const requestNumberLabel = isMergedBatch
-    ? `${groupedRequests[0].requestNumber}～${groupedRequests[groupedRequests.length - 1].requestNumber}（合併 ${groupedRequests.length} 節）`
+    ? `${printGroup[0].requestNumber}～${printGroup[printGroup.length - 1].requestNumber}（合併 ${printGroup.length} 節）`
     : request.requestNumber;
 
   const getLeaveTypeName = (leave?: string) => {

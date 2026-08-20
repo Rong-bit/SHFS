@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { displayTeacherTitle, SCHOOL_DEPARTMENTS, settlementWeeksForMonth } from '../../utils/schoolDepartments';
+import { calendarYearForSettlementMonth, displayTeacherTitle, expectedRocAcademicYear, SCHOOL_DEPARTMENTS, settlementWeeksForMonth } from '../../utils/schoolDepartments';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import * as XLSX from 'xlsx';
 import { 
@@ -27,6 +27,15 @@ export const AccountingSettlement: React.FC = () => {
     nonTeachingDateSet(systemConfig.nonTeachingDays),
     systemConfig.academicYear
   );
+  const settlementYear = calendarYearForSettlementMonth(
+    selectedMonth,
+    new Date(),
+    systemConfig.academicYear
+  );
+  const expectedAy = expectedRocAcademicYear();
+  const academicYearStale =
+    Number(systemConfig.academicYear) < expectedAy &&
+    !Number.isNaN(Number(systemConfig.academicYear));
 
   const settlements = calculateMonthlySettlement(selectedMonth);
 
@@ -138,7 +147,12 @@ export const AccountingSettlement: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">
             基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜
             第八節課輔 <strong>{systemConfig.nightHourlyRate} 元/節</strong> ｜ 
-            本月週數依 <strong>{selectedMonth} 月週一至週五實際日數（約 {settlementWeeks.toFixed(1)} 週）</strong>
+            本月週數依 <strong>{selectedMonth} 月（西元 {settlementYear}）週一至週五實際日數（約 {settlementWeeks.toFixed(1)} 週）</strong>
+            {academicYearStale && (
+              <span className="block mt-1 text-amber-800">
+                系統學年度仍為 {systemConfig.academicYear}（建議 {expectedAy}），結算西元年已自動以西曆校正；請至系統參數更新學年度以免單號／報表標題混淆。
+              </span>
+            )}
             計，並已扣除系統設定之放假日 ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
           </p>
