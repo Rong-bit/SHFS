@@ -1,7 +1,8 @@
 import { STORAGE_KEYS } from '../context/AppContext';
+import { isPasswordHash } from './passwordCrypto';
 
 export const BACKUP_APP_ID = 'SHFS';
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export interface SystemBackupFile {
   app: string;
@@ -10,10 +11,60 @@ export interface SystemBackupFile {
   data: Record<string, string | null>;
 }
 
+/** 備份中若仍有明文密碼則剔除（雜湊可保留以便還原登入） */
+function sanitizeTeachersJson(raw: string | null): string | null {
+  if (!raw) return raw;
+  try {
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return raw;
+    const cleaned = list.map((t: Record<string, unknown>) => {
+      if (!t || typeof t !== 'object') return t;
+      const pw = t.password;
+      if (typeof pw === 'string' && pw && !isPasswordHash(pw)) {
+        const { password: _p, ...rest } = t;
+        return rest;
+      }
+      return t;
+    });
+    return JSON.stringify(cleaned);
+  } catch {
+    return raw;
+  }
+}
+
+function sanitizeConfigJson(raw: string | null): string | null {
+  if (!raw) return raw;
+  try {
+    const cfg = JSON.parse(raw);
+    if (!cfg || typeof cfg !== 'object') return raw;
+    const auth = cfg.authConfig;
+    if (auth && typeof auth === 'object') {
+      for (const key of [
+        'defaultTeacherPassword',
+        'adminPassword',
+        'academicPassword',
+        'accountingPassword',
+      ]) {
+        const v = auth[key];
+        if (typeof v === 'string' && v && !isPasswordHash(v)) {
+          auth[key] = '';
+        }
+      }
+      cfg.authConfig = auth;
+    }
+    return JSON.stringify(cfg);
+  } catch {
+    return raw;
+  }
+}
+
 export const exportSystemBackup = () => {
   const data: Record<string, string | null> = {};
   Object.values(STORAGE_KEYS).forEach((key) => {
-    data[key] = localStorage.getItem(key);
+    let value = localStorage.getItem(key);
+    if (key === STORAGE_KEYS.TEACHERS) value = sanitizeTeachersJson(value);
+    if (key === STORAGE_KEYS.CONFIG) value = sanitizeConfigJson(value);
+    data[key] = value;
   });
 
   const payload: SystemBackupFile = {
@@ -51,7 +102,13 @@ export const importSystemBackup = async (file: File): Promise<void> => {
   }
 
   Object.values(STORAGE_KEYS).forEach((key) => {
-    const value = payload.data[key];
+    let value = payload.data[key];
+    if (key === STORAGE_KEYS.TEACHERS && typeof value === 'string') {
+      value = sanitizeTeachersJson(value);
+    }
+    if (key === STORAGE_KEYS.CONFIG && typeof value === 'string') {
+      value = sanitizeConfigJson(value);
+    }
     if (typeof value === 'string') {
       localStorage.setItem(key, value);
     } else if (value == null) {

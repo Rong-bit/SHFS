@@ -43,6 +43,7 @@ import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL
 import { normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadSystemManual } from '../../utils/generateManual';
+import { isPasswordHash } from '../../utils/passwordCrypto';
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -83,10 +84,11 @@ export const AdminSettings: React.FC = () => {
     weeksInMonth: systemConfig?.weeksInMonth ?? 4,
     authConfig: {
       requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
-      defaultTeacherPassword: systemConfig?.authConfig?.defaultTeacherPassword ?? '1234',
-      adminPassword: systemConfig?.authConfig?.adminPassword ?? DEFAULT_ADMIN_PASSWORD,
-      academicPassword: systemConfig?.authConfig?.academicPassword ?? '1234',
-      accountingPassword: systemConfig?.authConfig?.accountingPassword ?? '1234',
+      // 表單不回填雜湊／明文，留空表示沿用既有密碼
+      defaultTeacherPassword: '',
+      adminPassword: '',
+      academicPassword: '',
+      accountingPassword: '',
     },
   }));
 
@@ -104,10 +106,10 @@ export const AdminSettings: React.FC = () => {
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
       authConfig: {
         requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
-        defaultTeacherPassword: systemConfig?.authConfig?.defaultTeacherPassword ?? '1234',
-        adminPassword: systemConfig?.authConfig?.adminPassword ?? DEFAULT_ADMIN_PASSWORD,
-        academicPassword: systemConfig?.authConfig?.academicPassword ?? '1234',
-        accountingPassword: systemConfig?.authConfig?.accountingPassword ?? '1234',
+        defaultTeacherPassword: '',
+        adminPassword: '',
+        academicPassword: '',
+        accountingPassword: '',
       },
     });
   }, [systemConfig]);
@@ -970,8 +972,10 @@ export const AdminSettings: React.FC = () => {
                   <span className="text-[10px] text-amber-600 font-mono">預設: 1234</span>
                 </label>
                 <input
-                  type="text"
+                  type="password"
+                  autoComplete="new-password"
                   value={formConfig.authConfig?.defaultTeacherPassword || ''}
+                  placeholder={isPasswordHash(systemConfig.authConfig?.defaultTeacherPassword) ? '已設定，留空則不變' : '預設 1234，留空沿用'}
                   onChange={(e) =>
                     setFormConfig({
                       ...formConfig,
@@ -987,10 +991,9 @@ export const AdminSettings: React.FC = () => {
                     })
                   }
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
-                  placeholder="如 1234"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  老師可自行設定專屬密碼。若忘記密碼，管理員可到「師資名冊」重設為預設密碼或指定新密碼。
+                  老師可自行設定專屬密碼。若忘記密碼，管理員可到「師資名冊」重設為預設密碼或指定新密碼。密碼以雜湊保存。
                 </p>
               </div>
 
@@ -1000,8 +1003,10 @@ export const AdminSettings: React.FC = () => {
                   <span className="text-[10px] text-indigo-600 font-mono">預設: 1234</span>
                 </label>
                 <input
-                  type="text"
+                  type="password"
+                  autoComplete="new-password"
                   value={formConfig.authConfig?.academicPassword || ''}
+                  placeholder={isPasswordHash(systemConfig.authConfig?.academicPassword) ? '已設定，留空則不變' : '預設 1234，留空沿用'}
                   onChange={(e) =>
                     setFormConfig({
                       ...formConfig,
@@ -1017,7 +1022,6 @@ export const AdminSettings: React.FC = () => {
                     })
                   }
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
-                  placeholder="如 1234"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   切換至【教務處教學組】身分時所需的確認密碼。
@@ -1030,8 +1034,10 @@ export const AdminSettings: React.FC = () => {
                   <span className="text-[10px] text-amber-600 font-mono">預設: 1234</span>
                 </label>
                 <input
-                  type="text"
+                  type="password"
+                  autoComplete="new-password"
                   value={formConfig.authConfig?.accountingPassword || ''}
+                  placeholder={isPasswordHash(systemConfig.authConfig?.accountingPassword) ? '已設定，留空則不變' : '預設 1234，留空沿用'}
                   onChange={(e) =>
                     setFormConfig({
                       ...formConfig,
@@ -1047,7 +1053,6 @@ export const AdminSettings: React.FC = () => {
                     })
                   }
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
-                  placeholder="如 1234"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   切換至【出納組】結算身分時所需的確認密碼。

@@ -38,6 +38,13 @@ import {
 } from '../utils/cloudSync';
 import { countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
+import {
+  ensurePasswordHashed,
+  hashAuthConfigPasswords,
+  hashPassword,
+  isPasswordHash,
+  resolveAuthConfigForSave,
+} from '../utils/passwordCrypto';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -322,14 +329,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateTeacherPassword = (teacherId: string, newPassword: string) => {
-    setTeachers((prev) =>
-      prev.map((t) => {
-        if (t.id !== teacherId) return t;
-        const next = newPassword.trim();
-        return { ...t, password: next || undefined };
-      })
-    );
+    const next = newPassword.trim();
+    if (!next) {
+      setTeachers((prev) =>
+        prev.map((t) => (t.id === teacherId ? { ...t, password: undefined } : t))
+      );
+      return;
+    }
+    void hashPassword(next).then((hashed) => {
+      setTeachers((prev) =>
+        prev.map((t) => (t.id === teacherId ? { ...t, password: hashed } : t))
+      );
+    });
   };
+
+  // 啟動時將本機殘留明文密碼改為雜湊（僅執行一次）
+  useEffect(() => {
+    let cancelled = false;
+    const migrate = async () => {
+      const auth = systemConfigRef.current.authConfig;
+      let authChanged = false;
+      let nextAuth = auth;
+      if (auth) {
+        const hashedAuth = await hashAuthConfigPasswords(auth);
+        authChanged = (['defaultTeacherPassword', 'adminPassword', 'academicPassword', 'accountingPassword'] as const).some(
+          (k) => hashedAuth[k] !== auth[k]
+        );
+        if (authChanged) nextAuth = hashedAuth;
+      }
+
+      const currentTeachers = teachersRef.current;
+      let teachersChanged = false;
+      const nextTeachers = await Promise.all(
+        currentTeachers.map(async (t) => {
+          if (!t.password || isPasswordHash(t.password)) return t;
+          teachersChanged = true;
+          return { ...t, password: await ensurePasswordHashed(t.password) };
+        })
+      );
+
+      if (cancelled || (!authChanged && !teachersChanged)) return;
+      if (authChanged && nextAuth) {
+        setSystemConfig((prev) => ({
+          ...prev,
+          authConfig: withMigratedAuthConfig(nextAuth),
+        }));
+      }
+      if (teachersChanged) {
+        setTeachers(nextTeachers);
+      }
+    };
+    void migrate();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.STAFF_LIST, JSON.stringify(academicStaffList));
@@ -991,29 +1046,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...systemConfig.standardBasePeriods,
       ...(newConfig.standardBasePeriods || {}),
     });
-    setSystemConfig((prev) => ({
-      ...prev,
-      ...newConfig,
-      standardBasePeriods: nextBase,
-    }));
-    setTeachers((prev) =>
-      prev.map((t) => {
-        const resolved = resolveTeacherBasePeriods(
-          t,
-          nextBase.fulltime,
-          nextBase.homeroom,
-          nextBase.head,
-          nextBase.sectionChief,
-          nextBase.director
-        );
-        return {
-          ...t,
-          dutyReductionPeriods: resolved.dutyReductionPeriods,
-          basePeriods: resolved.basePeriods,
-          title: resolved.title,
-        };
-      })
-    );
+
+    const apply = (authConfig?: SystemConfig['authConfig']) => {
+      setSystemConfig((prev) => ({
+        ...prev,
+        ...newConfig,
+        standardBasePeriods: nextBase,
+        ...(authConfig ? { authConfig: withMigratedAuthConfig(authConfig) } : {}),
+      }));
+      setTeachers((prev) =>
+        prev.map((t) => {
+          const resolved = resolveTeacherBasePeriods(
+            t,
+            nextBase.fulltime,
+            nextBase.homeroom,
+            nextBase.head,
+            nextBase.sectionChief,
+            nextBase.director
+          );
+          return {
+            ...t,
+            dutyReductionPeriods: resolved.dutyReductionPeriods,
+            basePeriods: resolved.basePeriods,
+            title: resolved.title,
+          };
+        })
+      );
+    };
+
+    if (newConfig.authConfig) {
+      void resolveAuthConfigForSave(newConfig.authConfig, systemConfigRef.current.authConfig).then(
+        (resolved) => apply(resolved as SystemConfig['authConfig'])
+      );
+      return;
+    }
+    apply();
   };
 
   const importSchedule = (params: {

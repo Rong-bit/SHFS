@@ -149,7 +149,7 @@ export const TeacherSchedule: React.FC = () => {
                     </span>
                     <button
                       onClick={() => {
-                        setNewPassword(currentTeacher.password || systemConfig.authConfig?.defaultTeacherPassword || '1234');
+                        setNewPassword(''); // 不回填雜湊／明文，留空表示重新設定
                         setIsChangePasswordOpen(true);
                       }}
                       className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[11px] font-medium flex items-center space-x-1 transition"
@@ -497,7 +497,7 @@ export const TeacherSchedule: React.FC = () => {
 
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-400">
-                設定此教師身分切換或登入時所需的專屬密碼。若未設定，系統將自動套用預設密碼（{systemConfig.authConfig?.defaultTeacherPassword || '1234'}）。
+                設定此教師身分切換或登入時所需的專屬密碼。若未設定，系統將自動套用全校教師預設密碼（密碼以雜湊保存，不會顯示明文）。
               </p>
 
               <div>

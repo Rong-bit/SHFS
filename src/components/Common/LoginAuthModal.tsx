@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Lock, KeyRound, Eye, EyeOff, ShieldCheck, User, X, AlertCircle, Sparkles, Check } from 'lucide-react';
-import { UserRole, Teacher, AcademicStaff } from '../../types';
+import { Lock, KeyRound, Eye, EyeOff, ShieldCheck, User, X, AlertCircle, Check } from 'lucide-react';
+import { UserRole } from '../../types';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
+import { isPasswordHash, verifyPassword } from '../../utils/passwordCrypto';
 
 export interface LoginTarget {
   type: 'teacher' | 'role' | 'teacher_action';
@@ -39,6 +40,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +64,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setPassword('');
       setErrorMsg('');
       setIsSuccess(false);
+      setIsVerifying(false);
       setShowPassword(false);
       let initialStaffId = '';
       if (target?.type === 'role' && target?.targetRole === 'accounting') {
@@ -82,25 +85,27 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
   if (!isOpen || !target) return null;
 
-  // Compute expected password and role display
   let targetTitle = '';
   let targetSubtitle = '';
   let targetBadge = '';
   let expectedPassword = '1234';
-  let hint = '預設密碼為 1234';
+  let hint = '請輸入登入密碼';
+
+  const passwordHint = (stored: string | undefined, fallbackPlain: string) =>
+    isPasswordHash(stored) ? '請輸入登入密碼（不會顯示於畫面）' : `預設密碼為 ${fallbackPlain}`;
 
   if (target.type === 'teacher_action' && targetTeacher) {
     targetTitle = targetTeacher.name;
     targetSubtitle = target.actionName ? `即將執行：${target.actionName}` : '調代課申請身分確認';
     targetBadge = '申請送件驗證';
     expectedPassword = targetTeacher.password || auth.defaultTeacherPassword || '1234';
-    hint = `請輸入【${targetTeacher.name}】密碼以繼續申請 (預設: ${auth.defaultTeacherPassword || '1234'})`;
+    hint = `請輸入【${targetTeacher.name}】密碼以繼續申請`;
   } else if (target.type === 'teacher' && targetTeacher) {
     targetTitle = targetTeacher.name;
     targetSubtitle = `${targetTeacher.department} · ${targetTeacher.title}`;
     targetBadge = '教師身分登入';
     expectedPassword = targetTeacher.password || auth.defaultTeacherPassword || '1234';
-    hint = `預設密碼為 ${auth.defaultTeacherPassword || '1234'}`;
+    hint = passwordHint(expectedPassword, '1234');
   } else if (target.type === 'role') {
     switch (target.targetRole) {
       case 'academic':
@@ -110,7 +115,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           : '請先選擇組長或組員身分';
         targetBadge = targetStaff?.title || '教學組行政權限';
         expectedPassword = auth.academicPassword || '1234';
-        hint = `預設密碼為 ${auth.academicPassword || '1234'}`;
+        hint = passwordHint(auth.academicPassword, '1234');
         break;
       case 'accounting': {
         const accStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'accounting');
@@ -120,7 +125,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           : '請先選擇出納組組長或組員身分';
         targetBadge = accStaff?.title || '財務結算權限';
         expectedPassword = auth.accountingPassword || '1234';
-        hint = `預設密碼為 ${auth.accountingPassword || '1234'}`;
+        hint = passwordHint(auth.accountingPassword, '1234');
         break;
       }
       case 'admin':
@@ -136,12 +141,12 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         targetSubtitle = '個人課表檢視 · 發起調代課與派代';
         targetBadge = '教師專區';
         expectedPassword = targetTeacher?.password || auth.defaultTeacherPassword || '1234';
-        hint = `預設密碼為 ${auth.defaultTeacherPassword || '1234'}`;
+        hint = passwordHint(expectedPassword, '1234');
         break;
     }
   }
 
-  const handleVerify = (inputPassToTest?: string) => {
+  const handleVerify = async (inputPassToTest?: string) => {
     if (target.type === 'role' && target.targetRole === 'academic' && !selectedStaffId) {
       setErrorMsg('請先選擇教學組組長或組員身分');
       return;
@@ -155,20 +160,20 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     }
 
     const passToTest = inputPassToTest !== undefined ? inputPassToTest : password;
-    
-    // Check password
-    if (passToTest === expectedPassword) {
-      setIsSuccess(true);
-      setErrorMsg('');
+    setIsVerifying(true);
+    setErrorMsg('');
+    const ok = await verifyPassword(passToTest, expectedPassword);
+    setIsVerifying(false);
 
+    if (ok) {
+      setIsSuccess(true);
       setTimeout(() => {
-        // Execute state update
         if (target.type === 'teacher' && target.teacherId) {
           setCurrentTeacherId(target.teacherId);
           setCurrentRole('teacher');
         } else if (target.type === 'role' && target.targetRole) {
           setCurrentRole(target.targetRole);
-          if (target.targetRole === 'academic' && selectedStaffId) {
+          if ((target.targetRole === 'academic' || target.targetRole === 'accounting') && selectedStaffId) {
             setCurrentAcademicStaffId(selectedStaffId);
           } else if (target.academicStaffId) {
             setCurrentAcademicStaffId(target.academicStaffId);
@@ -184,10 +189,6 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setErrorMsg('密碼錯誤，請重新輸入！');
       inputRef.current?.select();
     }
-  };
-
-  const handleQuickDemoUnlock = () => {
-    handleVerify(expectedPassword);
   };
 
   return (
@@ -288,7 +289,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleVerify();
+              void handleVerify();
             }}
             className="space-y-4"
           >
@@ -344,19 +345,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
             {/* Action Buttons */}
             <div className="pt-2 flex items-center justify-between gap-3">
-              {target.type === 'role' && target.targetRole === 'admin' ? (
-                <span className="text-[11px] text-slate-500">管理員密碼不會顯示於畫面</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleQuickDemoUnlock}
-                  className="flex items-center space-x-1 text-xs text-slate-400 hover:text-amber-300 font-medium transition py-2"
-                  title="快速帶入預設密碼登入"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>免打字快速登入</span>
-                </button>
-              )}
+              <span className="text-[11px] text-slate-500">密碼以雜湊存放，不會出現在畫面或雲端同步</span>
 
               <div className="flex items-center space-x-2">
                 <button
@@ -371,7 +360,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSuccess}
+                  disabled={isSuccess || isVerifying}
                   className={`px-5 py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center space-x-1.5 ${
                     isSuccess
                       ? 'bg-emerald-600 text-white'
@@ -386,7 +375,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   ) : (
                     <>
                       <Lock className="w-3.5 h-3.5" />
-                      <span>確認登入</span>
+                      <span>{isVerifying ? '驗證中...' : '確認登入'}</span>
                     </>
                   )}
                 </button>

@@ -44,7 +44,7 @@ export interface Teacher {
   phone: string;
   certifications: string[]; // 專業證照或任教專長
   avatarBg?: string;
-  password?: string; // 自訂教師登入密碼 (未填寫時採用系統預設密碼)
+  password?: string; // 自訂教師登入密碼雜湊 (shfs1$…；未填寫時採用系統預設)
 }
 
 export type DayOfWeek = 1 | 2 | 3 | 4 | 5; // 週一至週五
@@ -168,10 +168,10 @@ export interface SystemConfig {
   weeksInMonth: number; // 4 週
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
-    defaultTeacherPassword: string; // 預設教師密碼 (預設 "1234")
-    adminPassword: string; // 系統管理員密碼 (預設不顯示於畫面)
-    academicPassword: string; // 教務組經辦密碼 (預設 "academic123")
-    accountingPassword: string; // 主計出納密碼 (預設 "account123")
+    defaultTeacherPassword: string; // 預設教師密碼雜湊（或遷移前明文）
+    adminPassword: string; // 系統管理員密碼雜湊
+    academicPassword: string; // 教務組經辦密碼雜湊
+    accountingPassword: string; // 主計出納密碼雜湊
   };
 }
 
