@@ -47,7 +47,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   } = useApp();
 
   // Current teacher's sessions
-  const teacherSessions = sessions.filter((s) => s.teacherId === currentTeacher?.id);
+  const teacherSessions = useMemo(() => {
+    const mine = sessions.filter((s) => s.teacherId === currentTeacher?.id);
+    return [...mine].sort(
+      (a, b) => a.dayOfWeek - b.dayOfWeek || a.period - b.period
+    );
+  }, [sessions, currentTeacher?.id]);
   
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
     initialSession ? initialSession.id : teacherSessions[0]?.id || ''
@@ -106,10 +111,16 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       leaveDateMode === 'range' ? leaveDateEnd || leaveDateStart : leaveDateStart
     );
   }, [requestType, leaveDateStart, leaveDateEnd, leaveDateMode]);
-  const leaveSelectableSessions =
-    leaveFilterDays.length === 0
-      ? teacherSessions
-      : teacherSessions.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
+  const leaveSelectableSessions = useMemo(() => {
+    const pool =
+      leaveFilterDays.length === 0
+        ? teacherSessions
+        : teacherSessions.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
+    // 週一第1節 → 第7／8節，再週二…至週五
+    return [...pool].sort(
+      (a, b) => a.dayOfWeek - b.dayOfWeek || a.period - b.period
+    );
+  }, [teacherSessions, leaveFilterDays]);
 
   // Smart candidate recommendations / clash checking target:
   // - substitute：必用（請假星期/節次）建立暫代課堂

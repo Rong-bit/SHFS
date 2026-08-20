@@ -174,8 +174,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const applicantSessions = useMemo(() => {
     if (!applicantTeacher) return [];
     const all = sessions.filter((s) => s.teacherId === applicantTeacher.id);
-    if (leaveFilterDays.length === 0) return all;
-    return all.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
+    const pool =
+      leaveFilterDays.length === 0
+        ? all
+        : all.filter((s) => leaveFilterDays.includes(s.dayOfWeek));
+    // 週一第1節起，依星期→節次排列至週五
+    return [...pool].sort(
+      (a, b) => a.dayOfWeek - b.dayOfWeek || a.period - b.period
+    );
   }, [sessions, applicantTeacher, leaveFilterDays]);
 
   // 連續節次：同日、節次介於起迄之間的課堂
