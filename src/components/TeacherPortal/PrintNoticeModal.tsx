@@ -1,5 +1,5 @@
 import React from 'react';
-import { SubstituteRequest } from '../../types';
+import { CourseSession, SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
@@ -9,6 +9,60 @@ import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
 interface PrintNoticeModalProps {
   request: SubstituteRequest;
   onClose: () => void;
+}
+
+/** 連續且同班／同科目／同場地的節次合併顯示 */
+function collapseConsecutiveSessions(sessions: CourseSession[]): Array<{
+  periodStart: number;
+  periodEnd: number;
+  className: string;
+  subjectName: string;
+  venueName: string;
+  isPractical?: boolean;
+  isConcurrent?: boolean;
+}> {
+  const sorted = [...sessions].sort((a, b) => a.period - b.period);
+  const blocks: Array<{
+    periodStart: number;
+    periodEnd: number;
+    className: string;
+    subjectName: string;
+    venueName: string;
+    isPractical?: boolean;
+    isConcurrent?: boolean;
+  }> = [];
+
+  for (const s of sorted) {
+    const last = blocks[blocks.length - 1];
+    const sameCourse =
+      last &&
+      last.className === s.className &&
+      last.subjectName === s.subjectName &&
+      last.venueName === s.venueName &&
+      last.periodEnd + 1 === s.period;
+
+    if (sameCourse) {
+      last.periodEnd = s.period;
+      last.isPractical = last.isPractical || s.isPractical;
+      last.isConcurrent = last.isConcurrent || s.isConcurrent;
+    } else {
+      blocks.push({
+        periodStart: s.period,
+        periodEnd: s.period,
+        className: s.className,
+        subjectName: s.subjectName,
+        venueName: s.venueName,
+        isPractical: s.isPractical,
+        isConcurrent: s.isConcurrent,
+      });
+    }
+  }
+
+  return blocks;
+}
+
+function formatPeriodBlockLabel(start: number, end: number): string {
+  return start === end ? `第${start}節` : `第${start}節～第${end}節`;
 }
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
@@ -85,11 +139,9 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const isMergedBatch = groupedRequests.length > 1;
   const groupedSessions = groupedRequests.map((r) => resolveOriginalSession(r, sessions));
   const originalSession = groupedSessions[0] || resolveOriginalSession(request, sessions);
-  const periodNums = groupedSessions.map((s) => s.period);
+  const courseBlocks = collapseConsecutiveSessions(groupedSessions);
   const periodRangeLabel = isMergedBatch
-    ? `${dayNames[originalSession.dayOfWeek]} 第${Math.min(...periodNums)}～${Math.max(
-        ...periodNums
-      )}節（共 ${groupedSessions.length} 節）`
+    ? `${dayNames[originalSession.dayOfWeek]}（共 ${groupedSessions.length} 節）`
     : `${dayNames[originalSession.dayOfWeek]} ${getPeriodLabel(originalSession.period)}`;
   const requestNumberLabel = isMergedBatch
     ? `${groupedRequests[0].requestNumber}～${groupedRequests[groupedRequests.length - 1].requestNumber}（合併 ${groupedRequests.length} 節）`
@@ -248,31 +300,29 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                         </span>
                       )}
                     </div>
-                    <div className="space-y-1.5 border border-slate-200 rounded-lg overflow-hidden">
-                      {groupedSessions.map((s, idx) => (
+                    <div className="space-y-2">
+                      {courseBlocks.map((block, idx) => (
                         <div
-                          key={`${s.id}-${idx}`}
-                          className={`px-2.5 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 ${
-                            idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'
-                          }`}
+                          key={`${block.className}-${block.subjectName}-${block.periodStart}-${idx}`}
+                          className="leading-relaxed"
                         >
-                          <span className="font-bold text-indigo-900 w-24 shrink-0">
-                            第{s.period}節
-                          </span>
-                          <span>
-                            {s.className} ｜ 《{s.subjectName}》
-                          </span>
-                          <span className="text-slate-600">@ {s.venueName}</span>
-                          {s.isPractical && (
-                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] rounded font-medium">
-                              專業實習
-                            </span>
-                          )}
-                          {s.isConcurrent && (
-                            <span className="px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
-                              兼課
-                            </span>
-                          )}
+                          <div className="font-bold text-indigo-900">
+                            {formatPeriodBlockLabel(block.periodStart, block.periodEnd)}
+                          </div>
+                          <div>
+                            {block.className}《{block.subjectName}》
+                            {block.isPractical ? (
+                              <span className="ml-1.5 px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] rounded font-medium">
+                                專業實習
+                              </span>
+                            ) : null}
+                            {block.isConcurrent ? (
+                              <span className="ml-1.5 px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
+                                兼課
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-slate-600">@ {block.venueName}</div>
                         </div>
                       ))}
                     </div>
