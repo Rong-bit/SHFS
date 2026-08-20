@@ -48,7 +48,8 @@ import {
 import {
   applyRequestToSessions,
   remapRequestSessions,
-  rollbackRequestFromSessions,
+  rollbackApprovedRequestsNewestFirst,
+  rollbackRequestFromSessionsDetailed,
 } from '../utils/scheduleAdjustments';
 import {
   collectSubstituteOccupancies,
@@ -990,7 +991,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const rejectRequest = (requestId: string, reason: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
     const target = requests.find((r) => r.id === requestId);
     if (target?.status === 'approved') {
-      setSessions((prev) => rollbackRequestFromSessions(prev, target));
+      setSessions((prev) => {
+        const result = rollbackRequestFromSessionsDetailed(prev, target);
+        if (!result.rolledBack && result.blockedReason) {
+          console.warn(`[回滾略過] ${target.requestNumber}: ${result.blockedReason}`);
+        }
+        return result.sessions;
+      });
     }
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
     setRequests((prev) =>
@@ -1011,7 +1018,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cancelRequest = (requestId: string) => {
     const target = requests.find((r) => r.id === requestId);
     if (target?.status === 'approved') {
-      setSessions((prev) => rollbackRequestFromSessions(prev, target));
+      setSessions((prev) => {
+        const result = rollbackRequestFromSessionsDetailed(prev, target);
+        if (!result.rolledBack && result.blockedReason) {
+          console.warn(`[回滾略過] ${target.requestNumber}: ${result.blockedReason}`);
+        }
+        return result.sessions;
+      });
     }
     setRequests((prev) =>
       prev.map((r) => (r.id === requestId ? { ...r, status: 'cancelled' } : r))
@@ -1021,12 +1034,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteRequest = (requestId: string) => {
     const target = requests.find((r) => r.id === requestId);
     if (target?.status === 'approved') {
-      setSessions((prev) => rollbackRequestFromSessions(prev, target));
+      setSessions((prev) => {
+        const result = rollbackRequestFromSessionsDetailed(prev, target);
+        if (!result.rolledBack && result.blockedReason) {
+          console.warn(`[回滾略過] ${target.requestNumber}: ${result.blockedReason}`);
+        }
+        return result.sessions;
+      });
     }
     setRequests((prev) => prev.filter((r) => r.id !== requestId));
   };
 
   const clearAllRequests = () => {
+    setSessions((prev) => rollbackApprovedRequestsNewestFirst(prev, requests));
     setRequests([]);
     localStorage.removeItem(STORAGE_KEYS.REQUESTS);
   };

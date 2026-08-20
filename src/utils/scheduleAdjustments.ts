@@ -1,5 +1,9 @@
 import { CourseSession, SubstituteRequest } from '../types';
 
+const SUBSTITUTE_NOTE = '[代課]';
+const RESCHEDULE_NOTE = '[已移課]';
+const SWAP_NOTE = '[相互調課]';
+
 /** 核准時套用課表異動（移課／互調／代課任課） */
 export function applyRequestToSessions(
   sessions: CourseSession[],
@@ -14,7 +18,7 @@ export function applyRequestToSessions(
         period: req.targetReschedule!.period,
         venueId: req.targetReschedule!.venueId,
         venueName: req.targetReschedule!.venueName,
-        notes: `[已移課] 原週${req.originalSession.dayOfWeek}第${req.originalSession.period}節`,
+        notes: `${RESCHEDULE_NOTE} 原週${req.originalSession.dayOfWeek}第${req.originalSession.period}節`,
       };
     });
   }
@@ -26,7 +30,7 @@ export function applyRequestToSessions(
           ...s,
           dayOfWeek: req.swapTargetSession!.dayOfWeek,
           period: req.swapTargetSession!.period,
-          notes: `[相互調課] 與 ${req.swapTargetTeacherName} 對調`,
+          notes: `${SWAP_NOTE} 與 ${req.swapTargetTeacherName} 對調`,
         };
       }
       if (s.id === req.swapTargetSession!.id) {
@@ -34,7 +38,7 @@ export function applyRequestToSessions(
           ...s,
           dayOfWeek: req.originalSession.dayOfWeek,
           period: req.originalSession.period,
-          notes: `[相互調課] 與 ${req.applicantTeacherName} 對調`,
+          notes: `${SWAP_NOTE} 與 ${req.applicantTeacherName} 對調`,
         };
       }
       return s;
@@ -45,12 +49,12 @@ export function applyRequestToSessions(
     return sessions.map((s) => {
       if (s.id !== req.originalSession.id) return s;
       // 已是此代課覆蓋則略過（避免重複核准疊字）
-      if (s.teacherId === req.substituteTeacherId && s.notes?.includes('[代課]')) return s;
+      if (s.teacherId === req.substituteTeacherId && s.notes?.includes(SUBSTITUTE_NOTE)) return s;
       return {
         ...s,
         teacherId: req.substituteTeacherId!,
         teacherName: req.substituteTeacherName || s.teacherName,
-        notes: `[代課] 原任課 ${req.applicantTeacherName}`,
+        notes: `${SUBSTITUTE_NOTE} 原任課 ${req.applicantTeacherName}`,
       };
     });
   }
@@ -58,30 +62,88 @@ export function applyRequestToSessions(
   return sessions;
 }
 
-/** 取消／刪除／駁回已核准單時回滾課表 */
+/**
+ * 若課表現況已不是本申請核准後的預期狀態（後續又有異動），回傳阻擋原因；可安全回滾則回傳 null。
+ */
+export function getRollbackBlockReason(
+  sessions: CourseSession[],
+  req: SubstituteRequest
+): string | null {
+  if (req.status !== 'approved') return '申請尚未核准，無需回滾課表';
+
+  if (req.requestType === 'reschedule' && req.targetReschedule) {
+    const live = sessions.find((s) => s.id === req.originalSession.id);
+    if (!live) return '找不到原課堂，無法回滾移課';
+    const t = req.targetReschedule;
+    const matchesTarget =
+      live.dayOfWeek === t.dayOfWeek &&
+      live.period === t.period &&
+      (!t.venueId || live.venueId === t.venueId);
+    if (!matchesTarget) {
+      return '該課堂之後又有移課／調課，略過回滾以免覆寫較新課表';
+    }
+    return null;
+  }
+
+  if (req.requestType === 'swap' && req.swapTargetSession) {
+    const a = sessions.find((s) => s.id === req.originalSession.id);
+    const b = sessions.find((s) => s.id === req.swapTargetSession!.id);
+    if (!a || !b) return '找不到互調課堂，無法回滾';
+    const aAtPartnerSlot =
+      a.dayOfWeek === req.swapTargetSession.dayOfWeek &&
+      a.period === req.swapTargetSession.period;
+    const bAtApplicantSlot =
+      b.dayOfWeek === req.originalSession.dayOfWeek &&
+      b.period === req.originalSession.period;
+    if (!aAtPartnerSlot || !bAtApplicantSlot) {
+      return '互調課堂之後又有異動，略過回滾以免覆寫較新課表';
+    }
+    return null;
+  }
+
+  if (req.requestType === 'substitute' && req.substituteTeacherId) {
+    const live = sessions.find((s) => s.id === req.originalSession.id);
+    if (!live) return '找不到原課堂，無法回滾代課';
+    if (live.teacherId !== req.substituteTeacherId) {
+      return '該課堂任課已變更（可能另有派代），略過回滾';
+    }
+    return null;
+  }
+
+  return null;
+}
+
+export type RollbackResult = {
+  sessions: CourseSession[];
+  rolledBack: boolean;
+  blockedReason?: string;
+};
+
+/** 取消／刪除／駁回已核准單時回滾課表；現況不符則不改課表 */
 export function rollbackRequestFromSessions(
   sessions: CourseSession[],
   req: SubstituteRequest
 ): CourseSession[] {
-  if (req.status !== 'approved') return sessions;
+  return rollbackRequestFromSessionsDetailed(sessions, req).sessions;
+}
 
-  if (req.requestType === 'reschedule' && req.targetReschedule) {
-    return sessions.map((s) => {
-      if (s.id !== req.originalSession.id) return s;
-      return {
-        ...s,
-        dayOfWeek: req.originalSession.dayOfWeek,
-        period: req.originalSession.period,
-        venueId: req.originalSession.venueId,
-        venueName: req.originalSession.venueName,
-        notes: undefined,
-      };
-    });
+export function rollbackRequestFromSessionsDetailed(
+  sessions: CourseSession[],
+  req: SubstituteRequest
+): RollbackResult {
+  if (req.status !== 'approved') {
+    return { sessions, rolledBack: false, blockedReason: '申請尚未核准' };
   }
 
-  if (req.requestType === 'swap' && req.swapTargetSession) {
-    return sessions.map((s) => {
-      if (s.id === req.originalSession.id) {
+  const blocked = getRollbackBlockReason(sessions, req);
+  if (blocked) {
+    return { sessions, rolledBack: false, blockedReason: blocked };
+  }
+
+  if (req.requestType === 'reschedule' && req.targetReschedule) {
+    return {
+      sessions: sessions.map((s) => {
+        if (s.id !== req.originalSession.id) return s;
         return {
           ...s,
           dayOfWeek: req.originalSession.dayOfWeek,
@@ -90,35 +152,77 @@ export function rollbackRequestFromSessions(
           venueName: req.originalSession.venueName,
           notes: undefined,
         };
-      }
-      if (s.id === req.swapTargetSession!.id) {
-        return {
-          ...s,
-          dayOfWeek: req.swapTargetSession!.dayOfWeek,
-          period: req.swapTargetSession!.period,
-          venueId: req.swapTargetSession!.venueId,
-          venueName: req.swapTargetSession!.venueName,
-          notes: undefined,
-        };
-      }
-      return s;
-    });
+      }),
+      rolledBack: true,
+    };
+  }
+
+  if (req.requestType === 'swap' && req.swapTargetSession) {
+    return {
+      sessions: sessions.map((s) => {
+        if (s.id === req.originalSession.id) {
+          return {
+            ...s,
+            dayOfWeek: req.originalSession.dayOfWeek,
+            period: req.originalSession.period,
+            venueId: req.originalSession.venueId,
+            venueName: req.originalSession.venueName,
+            notes: undefined,
+          };
+        }
+        if (s.id === req.swapTargetSession!.id) {
+          return {
+            ...s,
+            dayOfWeek: req.swapTargetSession!.dayOfWeek,
+            period: req.swapTargetSession!.period,
+            venueId: req.swapTargetSession!.venueId,
+            venueName: req.swapTargetSession!.venueName,
+            notes: undefined,
+          };
+        }
+        return s;
+      }),
+      rolledBack: true,
+    };
   }
 
   if (req.requestType === 'substitute' && req.substituteTeacherId) {
-    return sessions.map((s) => {
-      if (s.id !== req.originalSession.id) return s;
-      if (s.teacherId !== req.substituteTeacherId) return s;
-      return {
-        ...s,
-        teacherId: req.applicantTeacherId,
-        teacherName: req.applicantTeacherName,
-        notes: undefined,
-      };
-    });
+    return {
+      sessions: sessions.map((s) => {
+        if (s.id !== req.originalSession.id) return s;
+        return {
+          ...s,
+          teacherId: req.applicantTeacherId,
+          teacherName: req.applicantTeacherName,
+          notes: undefined,
+        };
+      }),
+      rolledBack: true,
+    };
   }
 
-  return sessions;
+  return { sessions, rolledBack: false };
+}
+
+/** 由新到舊回滾多筆已核准申請（用於清空清冊） */
+export function rollbackApprovedRequestsNewestFirst(
+  sessions: CourseSession[],
+  requests: SubstituteRequest[]
+): CourseSession[] {
+  const approved = requests
+    .filter((r) => r.status === 'approved')
+    .slice()
+    .sort((a, b) => {
+      const ta = a.reviewedAt || a.createdAt || '';
+      const tb = b.reviewedAt || b.createdAt || '';
+      return tb.localeCompare(ta);
+    });
+
+  let next = sessions;
+  for (const r of approved) {
+    next = rollbackRequestFromSessions(next, r);
+  }
+  return next;
 }
 
 /** 匯入後依「星期+節次+班級」對齊申請單上的 session id */

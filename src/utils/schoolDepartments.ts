@@ -112,13 +112,19 @@ const isDaytimeSlot = (s: CourseSession) =>
 export const isCounselingSlot = (s: Pick<CourseSession, 'dayOfWeek' | 'period'>) =>
   s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8;
 
+/** 代課覆蓋的課堂：鐘點已由代課申請計費，不可再計入課輔／兼課月結 */
+export const isSubstituteCoverSession = (s: Pick<CourseSession, 'notes' | 'teacherId'>) =>
+  Boolean(s.notes && s.notes.includes('[代課]'));
+
 export const breakdownWeeklyOverloadPeriods = (
   sessions: CourseSession[],
   teacherId: string
 ): WeeklyOverloadBreakdown => {
   const mine = sessions.filter((s) => s.teacherId === teacherId);
   const visible = mine.filter(isDaytimeSlot);
-  const counselingMine = mine.filter(isCounselingSlot);
+  const counselingMine = mine.filter(
+    (s) => isCounselingSlot(s) && !isSubstituteCoverSession(s)
+  );
   const counselingSlots = new Set(counselingMine.map((s) => `${s.dayOfWeek}-${s.period}`));
   const slotMap = new Map<string, CourseSession[]>();
   visible.forEach((s) => {
@@ -246,6 +252,7 @@ export const monthlyConcurrentPeriods = (
     if (s.teacherId !== teacherId) return;
     if (!s.isConcurrent || isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period)) return;
     if (!isDaytimeSlot(s)) return;
+    if (isSubstituteCoverSession(s)) return; // 代課覆蓋：改由代課申請計費
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });
   let total = 0;
@@ -266,7 +273,7 @@ export const monthlyCounselingPeriods = (
   const counts = weekdayOccurrencesInMonth(year, month);
   const slots = new Set<string>();
   sessions.forEach((s) => {
-    if (s.teacherId !== teacherId || !isCounselingSlot(s)) return;
+    if (s.teacherId !== teacherId || !isCounselingSlot(s) || isSubstituteCoverSession(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });
   let total = 0;
