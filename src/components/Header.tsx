@@ -11,10 +11,12 @@ import {
   Settings, 
   Cloud,
   CloudOff,
-  Loader2
+  Loader2,
+  KeyRound
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
+import { StaffChangePasswordModal } from './Common/StaffChangePasswordModal';
 
 export const Header: React.FC = () => {
   const {
@@ -22,15 +24,18 @@ export const Header: React.FC = () => {
     currentTeacherId,
     academicStaffList,
     currentAcademicStaffId,
+    currentAcademicStaff,
     teachers,
     requests,
     systemConfig,
     requestRoleSwitchWithAuth,
     requestTeacherSwitchWithAuth,
+    updateAcademicStaffPassword,
     cloudSyncStatus,
   } = useApp();
 
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
+  const [isStaffPasswordOpen, setIsStaffPasswordOpen] = useState(false);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
@@ -59,6 +64,7 @@ export const Header: React.FC = () => {
   ];
 
   return (
+    <>
     <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -198,13 +204,50 @@ export const Header: React.FC = () => {
                     </option>
                   ))}
               </select>
+              <button
+                type="button"
+                onClick={() => setIsStaffPasswordOpen(true)}
+                title="自行修改登入密碼"
+                className="px-2 py-0.5 bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded text-[11px] font-medium flex items-center gap-1 transition"
+              >
+                <KeyRound className="w-3 h-3" />
+                改密碼
+              </button>
             </div>
           )}
 
           {currentRole === 'accounting' && (
-            <div className="text-xs text-slate-400 flex items-center space-x-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-              <span>主計出納結算：日間 {systemConfig.dayHourlyRate}元／課輔 {systemConfig.nightHourlyRate}元 · 超額9節預警 · Excel 匯出</span>
+            <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
+              <span className="text-slate-400 flex items-center gap-1">
+                <Calculator className="w-3.5 h-3.5 text-amber-400" />
+                出納組登入：
+              </span>
+              <select
+                id="select-header-accounting-staff"
+                value={currentAcademicStaffId}
+                onChange={(e) => requestRoleSwitchWithAuth('accounting', e.target.value)}
+                className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
+              >
+                {academicStaffList
+                  .filter((s) => s.group === 'accounting')
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.title})
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsStaffPasswordOpen(true)}
+                title="自行修改登入密碼"
+                className="px-2 py-0.5 bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded text-[11px] font-medium flex items-center gap-1 transition"
+              >
+                <KeyRound className="w-3 h-3" />
+                改密碼
+              </button>
+              <span className="hidden md:inline text-slate-500 pl-1.5 border-l border-slate-700">
+                日間 {systemConfig.dayHourlyRate}元／課輔 {systemConfig.nightHourlyRate}元
+              </span>
             </div>
           )}
 
@@ -217,5 +260,17 @@ export const Header: React.FC = () => {
         </div>
       </div>
     </header>
+
+    {isStaffPasswordOpen &&
+      currentAcademicStaff &&
+      (currentRole === 'academic' || currentRole === 'accounting') && (
+        <StaffChangePasswordModal
+          staff={currentAcademicStaff}
+          groupLabel={currentRole === 'accounting' ? '出納組' : '教學組'}
+          onSave={(pw) => updateAcademicStaffPassword(currentAcademicStaff.id, pw)}
+          onClose={() => setIsStaffPasswordOpen(false)}
+        />
+      )}
+    </>
   );
 };

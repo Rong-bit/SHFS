@@ -12,7 +12,7 @@ export interface SystemBackupFile {
 }
 
 /** 備份中若仍有明文密碼則剔除（雜湊可保留以便還原登入） */
-function sanitizeTeachersJson(raw: string | null): string | null {
+function sanitizePasswordListJson(raw: string | null): string | null {
   if (!raw) return raw;
   try {
     const list = JSON.parse(raw);
@@ -30,6 +30,10 @@ function sanitizeTeachersJson(raw: string | null): string | null {
   } catch {
     return raw;
   }
+}
+
+function sanitizeTeachersJson(raw: string | null): string | null {
+  return sanitizePasswordListJson(raw);
 }
 
 function sanitizeConfigJson(raw: string | null): string | null {
@@ -105,6 +109,9 @@ export const importSystemBackup = async (file: File): Promise<void> => {
     let value = payload.data[key];
     if (key === STORAGE_KEYS.TEACHERS && typeof value === 'string') {
       value = sanitizeTeachersJson(value);
+    }
+    if (key === STORAGE_KEYS.STAFF_LIST && typeof value === 'string') {
+      value = sanitizePasswordListJson(value);
     }
     if (key === STORAGE_KEYS.CONFIG && typeof value === 'string') {
       value = sanitizeConfigJson(value);

@@ -10,6 +10,8 @@ export interface AcademicStaff {
   avatarBg?: string;
   responsibleScope: string;
   group?: 'academic' | 'accounting';
+  /** 個人登入密碼雜湊；未填則使用系統教學組／出納組預設密碼 */
+  password?: string;
 }
 
 export type DepartmentType =

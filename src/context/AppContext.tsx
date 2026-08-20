@@ -191,6 +191,8 @@ interface AppContextType {
   requestTeacherSwitchWithAuth: (teacherId: string) => void;
   requestTeacherActionAuth: (teacherId: string, actionCallback: () => void, actionName?: string) => void;
   updateTeacherPassword: (teacherId: string, newPassword: string) => void;
+  /** 教學組／出納組組員自行設定個人登入密碼；空字串＝改回組別預設 */
+  updateAcademicStaffPassword: (staffId: string, newPassword: string) => void;
 
   cloudSyncSettings: CloudSyncSettings;
   cloudSyncStatus: 'off' | 'connecting' | 'synced' | 'error';
@@ -335,8 +337,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const lastCloudSyncAtRef = useRef<number>(lastCloudSyncAt || 0);
   const teachersRef = useRef(teachers);
   const systemConfigRef = useRef(systemConfig);
+  const academicStaffListRef = useRef(academicStaffList);
   teachersRef.current = teachers;
   systemConfigRef.current = systemConfig;
+  academicStaffListRef.current = academicStaffList;
 
   // Authentication & Password Check States
   const [isLoginAuthOpen, setIsLoginAuthOpen] = useState<boolean>(false);
@@ -427,6 +431,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const updateAcademicStaffPassword = (staffId: string, newPassword: string) => {
+    const next = newPassword.trim();
+    if (!next) {
+      setAcademicStaffList((prev) =>
+        prev.map((s) => (s.id === staffId ? { ...s, password: undefined } : s))
+      );
+      return;
+    }
+    void hashPassword(next).then((hashed) => {
+      setAcademicStaffList((prev) =>
+        prev.map((s) => (s.id === staffId ? { ...s, password: hashed } : s))
+      );
+    });
+  };
+
   // 啟動時將本機殘留明文密碼改為雜湊（僅執行一次）
   useEffect(() => {
     let cancelled = false;
@@ -452,7 +471,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })
       );
 
-      if (cancelled || (!authChanged && !teachersChanged)) return;
+      const currentStaff = academicStaffListRef.current;
+      let staffChanged = false;
+      const nextStaff = await Promise.all(
+        currentStaff.map(async (s) => {
+          if (!s.password || isPasswordHash(s.password)) return s;
+          staffChanged = true;
+          return { ...s, password: await ensurePasswordHashed(s.password) };
+        })
+      );
+
+      if (cancelled || (!authChanged && !teachersChanged && !staffChanged)) return;
       if (authChanged && nextAuth) {
         setSystemConfig((prev) => ({
           ...prev,
@@ -461,6 +490,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (teachersChanged) {
         setTeachers(nextTeachers);
+      }
+      if (staffChanged) {
+        setAcademicStaffList(nextStaff);
       }
     };
     void migrate();
@@ -536,7 +568,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const merged = mergeLocalSecretsIntoRemote(
       remote,
       teachersRef.current,
-      systemConfigRef.current.authConfig
+      systemConfigRef.current.authConfig,
+      academicStaffListRef.current
     );
     const remoteTeachers = (merged.teachers || []).map((t) => ({
       ...t,
@@ -2411,6 +2444,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         requestTeacherSwitchWithAuth,
         requestTeacherActionAuth,
         updateTeacherPassword,
+        updateAcademicStaffPassword,
         cloudSyncSettings,
         cloudSyncStatus,
         cloudSyncMessage,

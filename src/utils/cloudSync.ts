@@ -100,13 +100,17 @@ const buildEndpoint = async (settings: CloudSyncSettings) => {
   return `${base}/shfs/${id}.json`;
 };
 
-/** 上傳前剝除登入密文：教師密碼與角色密碼不進雲端 */
+/** 上傳前剝除登入密文：教師／組員密碼與角色密碼不進雲端 */
 export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchoolData => {
   const auth = data.systemConfig?.authConfig;
   return {
     ...data,
     teachers: (data.teachers || []).map((t) => {
       const { password: _pw, ...rest } = t;
+      return rest;
+    }),
+    academicStaffList: (data.academicStaffList || []).map((s) => {
+      const { password: _pw, ...rest } = s;
       return rest;
     }),
     systemConfig: {
@@ -131,10 +135,14 @@ export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchool
 export const mergeLocalSecretsIntoRemote = (
   remote: SharedSchoolData,
   localTeachers: Teacher[],
-  localAuth?: SystemConfig['authConfig']
+  localAuth?: SystemConfig['authConfig'],
+  localStaff?: AcademicStaff[]
 ): SharedSchoolData => {
   const localPwd = new Map(
     localTeachers.filter((t) => t.password).map((t) => [t.id, t.password as string])
+  );
+  const localStaffPwd = new Map(
+    (localStaff || []).filter((s) => s.password).map((s) => [s.id, s.password as string])
   );
   const remoteAuth = remote.systemConfig?.authConfig;
   return {
@@ -142,6 +150,10 @@ export const mergeLocalSecretsIntoRemote = (
     teachers: (remote.teachers || []).map((t) => ({
       ...t,
       password: localPwd.get(t.id) || t.password,
+    })),
+    academicStaffList: (remote.academicStaffList || []).map((s) => ({
+      ...s,
+      password: localStaffPwd.get(s.id) || s.password,
     })),
     systemConfig: {
       ...remote.systemConfig,
