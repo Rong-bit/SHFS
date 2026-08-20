@@ -1,5 +1,9 @@
 import { CourseSession, SubstituteRequest } from '../types';
-import { isPlaceholderSession, resolveOriginalSession } from './resolveOriginalSession';
+import {
+  isPlaceholderSession,
+  resolveOriginalSession,
+  resolveSwapTargetSession,
+} from './resolveOriginalSession';
 
 const SUBSTITUTE_NOTE = '[代課]';
 const RESCHEDULE_NOTE = '[已移課]';
@@ -20,7 +24,12 @@ export function applyRequestToSessions(
   req: SubstituteRequest
 ): CourseSession[] {
   const resolvedOrig = resolveOriginalSession(req, sessions);
-  const reqResolved: SubstituteRequest = { ...req, originalSession: resolvedOrig };
+  const resolvedSwap = resolveSwapTargetSession(req, sessions);
+  const reqResolved: SubstituteRequest = {
+    ...req,
+    originalSession: resolvedOrig,
+    swapTargetSession: resolvedSwap ?? req.swapTargetSession,
+  };
 
   if (reqResolved.requestType === 'reschedule' && reqResolved.targetReschedule) {
     return sessions.map((s) => {
@@ -37,20 +46,31 @@ export function applyRequestToSessions(
   }
 
   if (reqResolved.requestType === 'swap' && reqResolved.swapTargetSession) {
+    const partner = reqResolved.swapTargetSession;
+    const liveA = sessions.find((s) => s.id === resolvedOrig.id);
+    const liveB = sessions.find((s) => s.id === partner.id);
+    // 缺任一方則不套用，避免單邊改日時
+    if (!liveA || !liveB) return sessions;
+
+    const aDay = liveA.dayOfWeek;
+    const aPeriod = liveA.period;
+    const bDay = liveB.dayOfWeek;
+    const bPeriod = liveB.period;
+
     return sessions.map((s) => {
       if (s.id === resolvedOrig.id) {
         return {
           ...s,
-          dayOfWeek: reqResolved.swapTargetSession!.dayOfWeek,
-          period: reqResolved.swapTargetSession!.period,
+          dayOfWeek: bDay,
+          period: bPeriod,
           notes: `${SWAP_NOTE} 與 ${reqResolved.swapTargetTeacherName} 對調`,
         };
       }
-      if (s.id === reqResolved.swapTargetSession!.id) {
+      if (s.id === partner.id) {
         return {
           ...s,
-          dayOfWeek: resolvedOrig.dayOfWeek,
-          period: resolvedOrig.period,
+          dayOfWeek: aDay,
+          period: aPeriod,
           notes: `${SWAP_NOTE} 與 ${reqResolved.applicantTeacherName} 對調`,
         };
       }

@@ -52,7 +52,7 @@ import {
   rollbackApprovedRequestsNewestFirstDetailed,
   rollbackRequestFromSessionsDetailed,
 } from '../utils/scheduleAdjustments';
-import { isPlaceholderSession, resolveOriginalSession } from '../utils/resolveOriginalSession';
+import { isPlaceholderSession, resolveOriginalSession, resolveSwapTargetSession } from '../utils/resolveOriginalSession';
 import {
   collectSubstituteOccupancies,
   teacherHasSubstituteOccupancy,
@@ -794,9 +794,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }
 
+      // 相互調課：同一班級、不同老師對調時段；雙方教師皆不可因此衝堂
+      if (originalSession.teacherId && originalSession.teacherId !== applicantTeacherId) {
+        return {
+          hasClash: true,
+          severity: 'danger',
+          messages: ['申請課堂任課教師與申請人不符，請重新選擇課堂'],
+        };
+      }
+
+      if (swapTargetSession.teacherId !== swapTargetTeacherId) {
+        return {
+          hasClash: true,
+          severity: 'danger',
+          messages: [
+            `對調課堂任課為「${swapTargetSession.teacherName}」，與所選對調教師不符，請重新選擇`,
+          ],
+        };
+      }
+
+      if (originalSession.className !== swapTargetSession.className) {
+        return {
+          hasClash: true,
+          severity: 'danger',
+          messages: [
+            `【須同班互調】相互調課僅限同一班級。申請課堂為「${originalSession.className}」，對調課堂為「${swapTargetSession.className}」，請改選同班課程。`,
+          ],
+        };
+      }
+
+      if (swapTargetTeacherId === applicantTeacherId) {
+        return {
+          hasClash: true,
+          severity: 'danger',
+          messages: ['相互調課須與其他教師對調，不可選擇本人'],
+        };
+      }
+
+      if (
+        originalSession.dayOfWeek === swapTargetSession.dayOfWeek &&
+        originalSession.period === swapTargetSession.period
+      ) {
+        return {
+          hasClash: true,
+          severity: 'danger',
+          messages: ['對調雙方已是同一時段，無需互調'],
+        };
+      }
+
       const partner = teachers.find((t) => t.id === swapTargetTeacherId);
 
-      // Applicant going to partner's slot (swapTargetSession.dayOfWeek, swapTargetSession.period)
+      // 申請人改上對方時段：申請人在該時段不可已有其他課
       const applicantClashInPartnerSlot = schedule.find(
         (s) =>
           s.teacherId === applicantTeacherId &&
@@ -805,11 +853,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.id !== originalSession.id
       );
       if (applicantClashInPartnerSlot) {
-        messages.push(`【申請人衝堂】${applicant?.name} 在互調時段（週${swapTargetSession.dayOfWeek} 第${swapTargetSession.period}節）已有「${applicantClashInPartnerSlot.subjectName}」`);
+        messages.push(
+          `【教師衝堂】${applicant?.name} 在互調後時段（週${swapTargetSession.dayOfWeek} 第${swapTargetSession.period}節）已有「${applicantClashInPartnerSlot.className} ${applicantClashInPartnerSlot.subjectName}」，不可再調入`
+        );
         severity = 'danger';
       }
 
-      // Partner going to applicant's slot (originalSession.dayOfWeek, originalSession.period)
+      // 對調教師改上申請人時段：對調教師在該時段不可已有其他課
       const partnerClashInApplicantSlot = schedule.find(
         (s) =>
           s.teacherId === swapTargetTeacherId &&
@@ -818,11 +868,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.id !== swapTargetSession.id
       );
       if (partnerClashInApplicantSlot) {
-        messages.push(`【對調教師衝堂】${partner?.name} 在原課堂時段（週${originalSession.dayOfWeek} 第${originalSession.period}節）已有「${partnerClashInApplicantSlot.subjectName}」`);
+        messages.push(
+          `【教師衝堂】${partner?.name} 在互調後時段（週${originalSession.dayOfWeek} 第${originalSession.period}節）已有「${partnerClashInApplicantSlot.className} ${partnerClashInApplicantSlot.subjectName}」，不可再調入`
+        );
         severity = 'danger';
       }
 
-      // Check class conflicts
+      // 同班在對方時段不可另有第三堂課（對調雙方那兩堂除外）
       const applicantClassInPartnerSlot = schedule.find(
         (s) =>
           s.className === originalSession.className &&
@@ -832,7 +884,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.id !== swapTargetSession.id
       );
       if (applicantClassInPartnerSlot) {
-        messages.push(`【班級衝堂】${originalSession.className} 在 週${swapTargetSession.dayOfWeek} 第${swapTargetSession.period}節 已有其他課程`);
+        messages.push(
+          `【班級衝堂】班級 ${originalSession.className} 在 週${swapTargetSession.dayOfWeek} 第${swapTargetSession.period}節 已有其他課程「${applicantClassInPartnerSlot.subjectName}」`
+        );
         severity = 'danger';
       }
 
@@ -845,11 +899,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.id !== swapTargetSession.id
       );
       if (partnerClassInApplicantSlot) {
-        messages.push(`【班級衝堂】${swapTargetSession.className} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有其他課程`);
+        messages.push(
+          `【班級衝堂】班級 ${swapTargetSession.className} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有其他課程「${partnerClassInApplicantSlot.subjectName}」`
+        );
         severity = 'danger';
       }
 
-      // 互調後各堂帶原工場／教室至對方時段，需檢查目標時段是否已被其他課堂佔用
+      // 互調後各堂帶原工場／教室至對方時段
       if (originalSession.venueId) {
         const venueClashAtPartner = schedule.find(
           (s) =>
@@ -884,7 +940,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (messages.length === 0) {
-        messages.push(`檢核通過：雙方教師、班級與工場／教室在互換時段均無衝突。`);
+        messages.push(
+          `檢核通過：同班「${originalSession.className}」互調；雙方教師於對方時段皆為空堂，班級與工場／教室無衝突。`
+        );
       }
     } else if (requestType === 'substitute') {
       if (!substituteTeacherId) {
@@ -1019,11 +1077,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq.status === 'approved') return false;
 
     const resolvedOrig = resolveOriginalSession(targetReq, sessions);
+    const resolvedSwap =
+      targetReq.requestType === 'swap'
+        ? resolveSwapTargetSession(targetReq, sessions)
+        : targetReq.swapTargetSession;
     if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
       window.alert(
         '無法核准：找不到對應課表課堂（佔位資料）。請先匯入／確認該教師該時段課表，或改由教學組逕行派代。'
       );
       return false;
+    }
+    if (targetReq.requestType === 'swap') {
+      if (!resolvedSwap || !sessions.some((s) => s.id === resolvedSwap.id)) {
+        window.alert('無法核准：找不到對調課堂於現行課表，請確認後再核准。');
+        return false;
+      }
     }
 
     const clashStatus = checkClashes({
@@ -1032,7 +1100,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       originalSession: resolvedOrig,
       targetReschedule: targetReq.targetReschedule,
       swapTargetTeacherId: targetReq.swapTargetTeacherId,
-      swapTargetSession: targetReq.swapTargetSession,
+      swapTargetSession: resolvedSwap,
       substituteTeacherId: targetReq.substituteTeacherId,
       excludeRequestIds: [requestId],
     });
@@ -1045,6 +1113,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const approvedReq: SubstituteRequest = {
       ...targetReq,
       originalSession: resolvedOrig,
+      swapTargetSession: resolvedSwap ?? targetReq.swapTargetSession,
       status: 'approved',
       reviewedAt: nowStr,
       reviewedBy: reviewerName,
@@ -1058,6 +1127,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? {
               ...r,
               originalSession: resolvedOrig,
+              swapTargetSession: resolvedSwap ?? r.swapTargetSession,
               status: 'approved',
               reviewedAt: nowStr,
               reviewedBy: reviewerName,
@@ -1081,8 +1151,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!targetReq || targetReq.status === 'approved') continue;
 
       const resolvedOrig = resolveOriginalSession(targetReq, workingSessions);
+      const resolvedSwap =
+        targetReq.requestType === 'swap'
+          ? resolveSwapTargetSession(targetReq, workingSessions)
+          : targetReq.swapTargetSession;
       if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
         skipped.push(`${targetReq.requestNumber || id}：找不到對應課表`);
+        continue;
+      }
+      if (
+        targetReq.requestType === 'swap' &&
+        (!resolvedSwap || !workingSessions.some((s) => s.id === resolvedSwap.id))
+      ) {
+        skipped.push(`${targetReq.requestNumber || id}：找不到對調課堂`);
         continue;
       }
 
@@ -1092,7 +1173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         originalSession: resolvedOrig,
         targetReschedule: targetReq.targetReschedule,
         swapTargetTeacherId: targetReq.swapTargetTeacherId,
-        swapTargetSession: targetReq.swapTargetSession,
+        swapTargetSession: resolvedSwap,
         substituteTeacherId: targetReq.substituteTeacherId,
         sessionsOverride: workingSessions,
         requestsOverride: workingRequests,
@@ -1108,6 +1189,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const approvedReq: SubstituteRequest = {
         ...targetReq,
         originalSession: resolvedOrig,
+        swapTargetSession: resolvedSwap ?? targetReq.swapTargetSession,
         status: 'approved',
         reviewedAt: nowStr,
         reviewedBy: reviewerName,

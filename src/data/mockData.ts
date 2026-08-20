@@ -442,7 +442,7 @@ export const INITIAL_SESSIONS: CourseSession[] = [
   },
   {
     id: 'sess-lin-4',
-    dayOfWeek: 2,
+    dayOfWeek: 1,
     period: 1,
     className: '資訊二甲',
     subjectName: '數位邏輯實習',
@@ -451,6 +451,7 @@ export const INITIAL_SESSIONS: CourseSession[] = [
     venueId: 'venue-cs-micro',
     venueName: '微處理機與單晶片實習室',
     isPractical: true,
+    notes: '[相互調課] 與 蔡宏達 老師 對調',
   },
   {
     id: 'sess-lin-5',
@@ -932,7 +933,7 @@ export const INITIAL_SESSIONS: CourseSession[] = [
   // 蔡宏達 老師 (資訊科專任, 16節)
   {
     id: 'sess-tsai-1',
-    dayOfWeek: 1,
+    dayOfWeek: 2,
     period: 1,
     className: '資訊二甲',
     subjectName: '網路規劃與管理實務',
@@ -941,6 +942,7 @@ export const INITIAL_SESSIONS: CourseSession[] = [
     venueId: 'venue-cs-lab1',
     venueName: '物聯網軟體實驗室 (電腦教室一)',
     isPractical: true,
+    notes: '[相互調課] 與 林美惠 老師 對調',
   },
   {
     id: 'sess-tsai-2',
@@ -999,19 +1001,19 @@ export const INITIAL_REQUESTS: SubstituteRequest[] = [
     applicantTeacherName: '林美惠 老師',
     applicantDepartment: '資訊科',
     leaveType: 'personal',
-    reason: '資訊三乙導師因應家長到校晤談升學規劃，與蔡宏達老師對調時段',
+    reason: '資訊二甲導師因應家長到校晤談升學規劃，與蔡宏達老師對調同班時段',
     paymentType: 'private',
     originalSession: {
-      id: 'sess-lin-7',
-      dayOfWeek: 3,
+      id: 'sess-lin-4',
+      dayOfWeek: 2,
       period: 1,
-      className: '資訊一甲',
-      subjectName: '計算機概論',
+      className: '資訊二甲',
+      subjectName: '數位邏輯實習',
       teacherId: 't-cs-guide',
       teacherName: '林美惠 老師',
-      venueId: 'venue-cs-lab1',
-      venueName: '物聯網軟體實驗室 (電腦教室一)',
-      isPractical: false,
+      venueId: 'venue-cs-micro',
+      venueName: '微處理機與單晶片實習室',
+      isPractical: true,
     },
     swapTargetTeacherId: 't-cs-teacher2',
     swapTargetTeacherName: '蔡宏達 老師',
@@ -1034,7 +1036,7 @@ export const INITIAL_REQUESTS: SubstituteRequest[] = [
     clashStatus: {
       hasClash: false,
       severity: 'none',
-      messages: ['雙方教師與班級在互調時段均為空堂，電腦教室一設備無衝突。已核准生效。'],
+      messages: ['檢核通過：同班「資訊二甲」互調；雙方教師於對方時段皆為空堂，班級與工場／教室無衝突。'],
     },
   },
   {

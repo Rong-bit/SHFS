@@ -283,8 +283,30 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     }
   }, [requestType, leavePickMode, leaveDaysAvailable, leaveSelectableSessions, multiLeaveDay]);
 
-  // Candidate partner sessions for swap
-  const swapTeacherSessions = sessions.filter((s) => s.teacherId === swapTeacherId);
+  // Candidate partner sessions for swap：僅同班
+  const swapTeacherSessions = sessions.filter(
+    (s) =>
+      s.teacherId === swapTeacherId &&
+      effectiveOriginalSession &&
+      s.className === effectiveOriginalSession.className &&
+      s.id !== effectiveOriginalSession.id
+  );
+
+  // 同班可互調的其他教師（至少有一堂同班課）
+  const swapPartnerTeachers = useMemo(() => {
+    if (!effectiveOriginalSession || !currentTeacher) return [];
+    const className = effectiveOriginalSession.className;
+    const ids = new Set(
+      sessions
+        .filter(
+          (s) =>
+            s.className === className &&
+            s.teacherId !== currentTeacher.id
+        )
+        .map((s) => s.teacherId)
+    );
+    return teachers.filter((t) => ids.has(t.id));
+  }, [sessions, teachers, effectiveOriginalSession, currentTeacher]);
 
   // Auto-set paymentType based on leaveType
   useEffect(() => {
@@ -299,20 +321,38 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     }
   }, [leaveType, requestType]);
 
-  // Set default swap partner or substitute when available
+  // 互調：預設選同班教師；調課／補課仍可用全校預設
   useEffect(() => {
+    if (requestType === 'swap') {
+      if (swapPartnerTeachers.length === 0) {
+        if (swapTeacherId) setSwapTeacherId('');
+        return;
+      }
+      if (!swapTeacherId || !swapPartnerTeachers.some((t) => t.id === swapTeacherId)) {
+        setSwapTeacherId(swapPartnerTeachers[0].id);
+      }
+      return;
+    }
     const candidateTeachers = teachers.filter((t) => t.id !== currentTeacher?.id);
-    // Prefer same department teacher
     const sameDept = candidateTeachers.find((t) => t.department === currentTeacher?.department);
     const defaultPartner = sameDept || candidateTeachers[0];
-    if (defaultPartner && !swapTeacherId) {
-      setSwapTeacherId(defaultPartner.id);
-    }
     // Substitute (請假派代) 需要先選定請假節次才知道有沒有衝堂
     if (requestType !== 'substitute' && defaultPartner && !substituteTeacherId) {
       setSubstituteTeacherId(defaultPartner.id);
     }
-  }, [currentTeacher, teachers, requestType]);
+  }, [currentTeacher, teachers, requestType, swapPartnerTeachers, swapTeacherId, substituteTeacherId]);
+
+  // 互調課堂：對調教師變更或同班過濾後，自動選第一堂可對調課
+  useEffect(() => {
+    if (requestType !== 'swap') return;
+    if (swapTeacherSessions.length === 0) {
+      if (swapSessionId) setSwapSessionId('');
+      return;
+    }
+    if (!swapSessionId || !swapTeacherSessions.some((s) => s.id === swapSessionId)) {
+      setSwapSessionId(swapTeacherSessions[0].id);
+    }
+  }, [requestType, swapTeacherSessions, swapSessionId]);
 
   // When substitute mode + leave slot is ready, auto-pick a non-clashing substitute
   useEffect(() => {
@@ -340,13 +380,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     candidateSubstitutes,
     hasUserChosenSubstituteTeacher,
   ]);
-
-  // Set default swap session when swapTeacher changes
-  useEffect(() => {
-    if (swapTeacherSessions.length > 0 && !swapSessionId) {
-      setSwapSessionId(swapTeacherSessions[0].id);
-    }
-  }, [swapTeacherId, swapTeacherSessions]);
 
   // Target Reschedule Venue default
   useEffect(() => {
@@ -503,40 +536,65 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     if (!effectiveOriginalSession) return;
 
+    if (clashResult.hasClash) {
+      alert(clashResult.messages[0] || '存在衝堂衝突，請調整後再送出。');
+      return;
+    }
+
     if (requestType === 'swap' && (!swapTeacherId || !swapTargetSession)) {
       alert('請完整選擇對調教師與對調課堂');
       return;
     }
 
+    if (requestType === 'swap' && effectiveOriginalSession && swapTargetSession) {
+      if (effectiveOriginalSession.className !== swapTargetSession.className) {
+        alert('相互調課僅限同一班級內、兩位教師對調時段，不可跨班。');
+        return;
+      }
+      if (effectiveOriginalSession.teacherId === swapTargetSession.teacherId) {
+        alert('相互調課須與另一位教師對調，不可選自己的課。');
+        return;
+      }
+      if (swapTargetSession.teacherId !== swapTeacherId) {
+        alert('對調課堂與所選對調教師不符，請重新選擇。');
+        return;
+      }
+    }
+
     const swapPartner = teachers.find((t) => t.id === swapTeacherId);
     const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
 
-    addSubstituteRequest({
-      requestType,
-      applicantTeacherId: currentTeacher.id,
-      applicantTeacherName: currentTeacher.name,
-      applicantDepartment: currentTeacher.department,
-      leaveType: undefined,
-      leaveDateStart: undefined,
-      leaveDateEnd: undefined,
-      reason,
-      paymentType,
-      originalSession: effectiveOriginalSession,
-      targetReschedule:
-        requestType === 'reschedule'
-          ? {
-              dayOfWeek: targetDay,
-              period: targetPeriod,
-              venueId: targetVenueId,
-              venueName: targetVenueObj?.name || '指定教室',
-            }
-          : undefined,
-      swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,
-      swapTargetTeacherName: requestType === 'swap' ? swapPartner?.name : undefined,
-      swapTargetSession: requestType === 'swap' ? swapTargetSession : undefined,
-      substituteTeacherId: undefined,
-      substituteTeacherName: undefined,
-    }, requestMonth);
+    try {
+      addSubstituteRequest({
+        requestType,
+        applicantTeacherId: currentTeacher.id,
+        applicantTeacherName: currentTeacher.name,
+        applicantDepartment: currentTeacher.department,
+        leaveType: undefined,
+        leaveDateStart: undefined,
+        leaveDateEnd: undefined,
+        reason,
+        paymentType,
+        originalSession: effectiveOriginalSession,
+        targetReschedule:
+          requestType === 'reschedule'
+            ? {
+                dayOfWeek: targetDay,
+                period: targetPeriod,
+                venueId: targetVenueId,
+                venueName: targetVenueObj?.name || '指定教室',
+              }
+            : undefined,
+        swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,
+        swapTargetTeacherName: requestType === 'swap' ? swapPartner?.name : undefined,
+        swapTargetSession: requestType === 'swap' ? swapTargetSession : undefined,
+        substituteTeacherId: undefined,
+        substituteTeacherName: undefined,
+      }, requestMonth);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '送出失敗，請檢查資料後重試。');
+      return;
+    }
 
     onClose();
   };
@@ -1173,55 +1231,68 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
               </>
             )}
 
-            {/* SWAP: Partner & Partner Session */}
+            {/* SWAP: 同班雙師對調時段；雙方教師調入後皆不可衝堂 */}
             {requestType === 'swap' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    對調教師
-                  </label>
-                  <select
-                    id="select-swap-teacher"
-                    value={swapTeacherId}
-                    onChange={(e) => {
-                      setSwapTeacherId(e.target.value);
-                      const targetTeacherSessions = sessions.filter((s) => s.teacherId === e.target.value);
-                      if (targetTeacherSessions.length > 0) {
-                        setSwapSessionId(targetTeacherSessions[0].id);
-                      }
-                    }}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {teachers
-                      .filter((t) => t.id !== currentTeacher?.id)
-                      .map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.department} · {t.title})
-                        </option>
-                      ))}
-                  </select>
-                </div>
+              <div className="space-y-3">
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  相互調課＝同一班級內兩位教師對調時段。雙方調入對方時段後皆不可衝堂（教師課表／班級／工場）。
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      同班對調教師
+                    </label>
+                    <select
+                      id="select-swap-teacher"
+                      value={swapTeacherId}
+                      disabled={swapPartnerTeachers.length === 0}
+                      onChange={(e) => {
+                        const nextId = e.target.value;
+                        setSwapTeacherId(nextId);
+                        const className = effectiveOriginalSession?.className;
+                        const partnerSameClass = sessions.filter(
+                          (s) =>
+                            s.teacherId === nextId &&
+                            s.className === className &&
+                            s.id !== effectiveOriginalSession?.id
+                        );
+                        setSwapSessionId(partnerSameClass[0]?.id || '');
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-indigo-500"
+                    >
+                      {swapPartnerTeachers.length === 0 ? (
+                        <option value="">此班無其他教師可對調</option>
+                      ) : (
+                        swapPartnerTeachers.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.department} · {t.title})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    對方要互換的課堂
-                  </label>
-                  <select
-                    id="select-swap-session"
-                    value={swapSessionId}
-                    onChange={(e) => setSwapSessionId(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {swapTeacherSessions.length === 0 ? (
-                      <option value="">該教師暫無排課</option>
-                    ) : (
-                      swapTeacherSessions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {dayNames[s.dayOfWeek]} 第{s.period}節 ｜ {s.className} 《{s.subjectName}》
-                        </option>
-                      ))
-                    )}
-                  </select>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      對方同班課堂（調入您時段）
+                    </label>
+                    <select
+                      id="select-swap-session"
+                      value={swapSessionId}
+                      onChange={(e) => setSwapSessionId(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-indigo-500"
+                    >
+                      {swapTeacherSessions.length === 0 ? (
+                        <option value="">該教師於此班暫無可對調課堂</option>
+                      ) : (
+                        swapTeacherSessions.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
                 </div>
               </div>
             )}

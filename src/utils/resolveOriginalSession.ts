@@ -50,3 +50,30 @@ export const resolveOriginalSession = (
 
   return orig;
 };
+
+/**
+ * 將互調對調課堂對應到現行課表（以 id 優先；否則對調教師＋時段）。
+ * 找不到現行課表時回傳快照，由核准／套用流程再判斷。
+ */
+export const resolveSwapTargetSession = (
+  request: SubstituteRequest,
+  sessions: CourseSession[]
+): CourseSession | undefined => {
+  const snap = request.swapTargetSession;
+  if (!snap) return undefined;
+
+  const byId = sessions.find((s) => s.id === snap.id);
+  if (byId) return { ...snap, ...byId, id: byId.id };
+
+  if (request.swapTargetTeacherId) {
+    const bySlot = sessions.find(
+      (s) =>
+        s.teacherId === request.swapTargetTeacherId &&
+        s.dayOfWeek === snap.dayOfWeek &&
+        s.period === snap.period
+    );
+    if (bySlot) return { ...snap, ...bySlot, id: bySlot.id };
+  }
+
+  return snap;
+};

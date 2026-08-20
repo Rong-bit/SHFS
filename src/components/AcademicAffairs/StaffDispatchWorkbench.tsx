@@ -206,6 +206,67 @@ export const StaffDispatchWorkbench: React.FC = () => {
       ? batchSelectedSessions[0] || periodRangeSessions[0]
       : applicantSessions.find((s) => s.id === selectedSessionId) || applicantSessions[0];
 
+  // 同班可互調的其他教師（至少有一堂同班課）
+  const swapPartnerTeachers = useMemo(() => {
+    if (!selectedOriginalSession || !applicantTeacher) return [];
+    const className = selectedOriginalSession.className;
+    const ids = new Set(
+      sessions
+        .filter(
+          (s) =>
+            s.className === className &&
+            s.teacherId !== applicantTeacher.id
+        )
+        .map((s) => s.teacherId)
+    );
+    return teachers.filter((t) => ids.has(t.id));
+  }, [sessions, teachers, selectedOriginalSession, applicantTeacher]);
+
+  const swapPartnerSessions = useMemo(() => {
+    if (!selectedOriginalSession || !swapTargetTeacherId) return [];
+    return sessions.filter(
+      (s) =>
+        s.teacherId === swapTargetTeacherId &&
+        s.className === selectedOriginalSession.className &&
+        s.id !== selectedOriginalSession.id
+    );
+  }, [sessions, selectedOriginalSession, swapTargetTeacherId]);
+
+  // 進入互調或換申請課堂後，預設／校正同班對調對象
+  React.useEffect(() => {
+    if (requestType !== 'swap') return;
+    if (swapPartnerTeachers.length === 0) {
+      if (swapTargetTeacherId) setSwapTargetTeacherId('');
+      if (swapTargetSessionId) setSwapTargetSessionId('');
+      return;
+    }
+    const teacherOk = swapPartnerTeachers.some((t) => t.id === swapTargetTeacherId);
+    const nextTeacherId = teacherOk ? swapTargetTeacherId : swapPartnerTeachers[0].id;
+    if (nextTeacherId !== swapTargetTeacherId) {
+      setSwapTargetTeacherId(nextTeacherId);
+    }
+    const partnerSessions = sessions.filter(
+      (s) =>
+        s.teacherId === nextTeacherId &&
+        s.className === selectedOriginalSession?.className &&
+        s.id !== selectedOriginalSession?.id
+    );
+    if (partnerSessions.length === 0) {
+      if (swapTargetSessionId) setSwapTargetSessionId('');
+      return;
+    }
+    if (!partnerSessions.some((s) => s.id === swapTargetSessionId)) {
+      setSwapTargetSessionId(partnerSessions[0].id);
+    }
+  }, [
+    requestType,
+    swapPartnerTeachers,
+    swapTargetTeacherId,
+    swapTargetSessionId,
+    sessions,
+    selectedOriginalSession,
+  ]);
+
   const availableRangeDays = useMemo(() => {
     const days = Array.from(
       new Set(applicantSessions.map((s) => s.dayOfWeek))
@@ -846,7 +907,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   {[
                     { key: 'substitute', label: '👤 差假派代', desc: '公假公差、研習、事病假指定代課' },
                     { key: 'reschedule', label: '⏱️ 行政移課', desc: '實習檢定、全校模擬考改期' },
-                    { key: 'swap', label: '🔄 雙師調課', desc: '兩位教師對調授課時段' },
+                    { key: 'swap', label: '🔄 同班雙師調課', desc: '同班兩位教師對調時段，雙方不可衝堂' },
                   ].map((t) => (
                     <button
                       type="button"
@@ -1440,48 +1501,65 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* If Swap: Partner teacher and partner session */}
+              {/* If Swap: 同班雙師對調；雙方教師調入後皆不可衝堂 */}
               {requestType === 'swap' && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
                   <div className="border-b border-slate-100 pb-3">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                       <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">3</span>
-                      <span>指定對調之教師與目標課堂</span>
+                      <span>指定同班對調教師與課堂</span>
                     </h3>
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-3">
+                      相互調課＝同一班級內兩位教師對調時段。雙方調入對方時段後皆不可衝堂（教師課表／班級／工場）。
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">對調教師：</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">同班對調教師：</label>
                       <select
                         value={swapTargetTeacherId}
+                        disabled={swapPartnerTeachers.length === 0}
                         onChange={(e) => {
-                          setSwapTargetTeacherId(e.target.value);
-                          const partnerSess = sessions.filter(s => s.teacherId === e.target.value);
-                          if (partnerSess[0]) setSwapTargetSessionId(partnerSess[0].id);
+                          const nextId = e.target.value;
+                          setSwapTargetTeacherId(nextId);
+                          const className = selectedOriginalSession?.className;
+                          const partnerSameClass = sessions.filter(
+                            (s) =>
+                              s.teacherId === nextId &&
+                              s.className === className &&
+                              s.id !== selectedOriginalSession?.id
+                          );
+                          setSwapTargetSessionId(partnerSameClass[0]?.id || '');
                         }}
                         className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
                       >
-                        <option value="">-- 請選擇對調教師 --</option>
-                        {teachers.filter(t => t.id !== applicantTeacher.id).map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name} ({t.department})
-                          </option>
-                        ))}
+                        {swapPartnerTeachers.length === 0 ? (
+                          <option value="">此班無其他教師可對調</option>
+                        ) : (
+                          <>
+                            <option value="">-- 請選擇同班對調教師 --</option>
+                            {swapPartnerTeachers.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name} ({t.department})
+                              </option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">對調課堂：</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">對方同班課堂：</label>
                       <select
                         value={swapTargetSessionId}
                         onChange={(e) => setSwapTargetSessionId(e.target.value)}
                         className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
                       >
                         <option value="">-- 請選擇互換課堂 --</option>
-                        {sessions.filter(s => s.teacherId === swapTargetTeacherId).map((s) => (
+                        {swapPartnerSessions.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {dayNames[s.dayOfWeek]} 第{s.period}節 - {s.className} 《{s.subjectName}》
+                            {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
                           </option>
                         ))}
                       </select>
