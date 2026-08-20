@@ -18,6 +18,7 @@ import {
 } from '../../utils/leaveDates';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
+import { ModalShell } from '../Common/ModalShell';
 import { 
   X, 
   ArrowLeftRight, 
@@ -536,10 +537,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs">
-      <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4 py-4 sm:py-6">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden max-h-[min(92dvh,920px)] flex flex-col animate-in fade-in zoom-in duration-150">
-        
+    <ModalShell
+      scroll="body"
+      panelClassName="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 animate-in fade-in zoom-in duration-150"
+    >
         {/* Header */}
         <div className="shrink-0 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
@@ -1389,8 +1390,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           </div>
 
         </form>
-        </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
