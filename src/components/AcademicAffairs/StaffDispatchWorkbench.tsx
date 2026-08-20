@@ -265,10 +265,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
   }, [availableRangeDays, rangeDayOfWeek]);
 
-  // 連續節次範圍變更時，自動勾選該範圍內全部課堂
+  // 連續節次範圍變更：保留仍在範圍內的勾選；若皆失效則全選（首次／清空後）
   React.useEffect(() => {
     if (sessionPickMode !== 'periodRange') return;
-    setSelectedSessionIds(periodRangeSessions.map((s) => s.id));
+    const ids = periodRangeSessions.map((s) => s.id);
+    setSelectedSessionIds((prev) => {
+      const retained = prev.filter((id) => ids.includes(id));
+      return retained.length > 0 ? retained : ids;
+    });
   }, [sessionPickMode, periodRangeSessions]);
 
   // 切換回單節／非派代時清掉多選
@@ -302,32 +306,62 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
   };
 
-  // Preview clash check
+  // Preview clash check（連續節次：逐節檢核後合併）
   const clashPreview = useMemo(() => {
-    if (!selectedOriginalSession || !applicantTeacher) {
-      return { hasClash: false, severity: 'none', messages: [] } as any;
-    }
+    const empty = { hasClash: false, severity: 'none' as const, messages: [] as string[] };
+    if (!applicantTeacher) return empty;
+
+    const sessionsToCheck =
+      requestType === 'substitute' && sessionPickMode === 'periodRange'
+        ? batchSelectedSessions
+        : selectedOriginalSession
+        ? [selectedOriginalSession]
+        : [];
+
+    if (sessionsToCheck.length === 0) return empty;
 
     const swapPartnerSession = sessions.find((s) => s.id === swapTargetSessionId);
-
-    return checkClashes({
-      requestType,
-      applicantTeacherId: applicantTeacher.id,
-      originalSession: selectedOriginalSession,
-      targetReschedule: requestType === 'reschedule' ? {
-        dayOfWeek: targetDay,
-        period: targetPeriod,
-        venueId: targetVenueId,
-      } : undefined,
-      swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
-      swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
-      substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+    const results = sessionsToCheck.map((originalSession) => {
+      const result = checkClashes({
+        requestType,
+        applicantTeacherId: applicantTeacher.id,
+        originalSession,
+        targetReschedule:
+          requestType === 'reschedule'
+            ? {
+                dayOfWeek: targetDay,
+                period: targetPeriod,
+                venueId: targetVenueId,
+              }
+            : undefined,
+        swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
+        swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
+        substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+      });
+      const prefix =
+        sessionsToCheck.length > 1 ? `第${originalSession.period}節：` : '';
+      return {
+        ...result,
+        messages: result.messages.map((m) => `${prefix}${m}`),
+      };
     });
+
+    const messages = results.flatMap((r) => r.messages);
+    const hasClash = results.some((r) => r.hasClash);
+    const severity = results.some((r) => r.severity === 'danger')
+      ? ('danger' as const)
+      : results.some((r) => r.severity === 'warning')
+      ? ('warning' as const)
+      : ('none' as const);
+
+    return { hasClash, severity, messages };
   }, [
     checkClashes,
     requestType,
     applicantTeacher,
     selectedOriginalSession,
+    batchSelectedSessions,
+    sessionPickMode,
     targetDay,
     targetPeriod,
     targetVenueId,
@@ -358,6 +392,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
 
     if (requestType === 'substitute') {
+      if (!substituteTeacherId) {
+        alert('請假派代須指定代課教師。');
+        return;
+      }
       if (!leaveDateStart) {
         alert('請填寫請假日期。');
         return;
@@ -406,6 +444,33 @@ export const StaffDispatchWorkbench: React.FC = () => {
       }
     }
 
+    // 送出前再逐節衝堂（防預覽與送出之間狀態變化）
+    const swapPartnerSession = sessions.find((s) => s.id === swapTargetSessionId);
+    for (const originalSession of sessionsToDispatch) {
+      const clash = checkClashes({
+        requestType,
+        applicantTeacherId: applicantTeacher.id,
+        originalSession,
+        targetReschedule:
+          requestType === 'reschedule'
+            ? {
+                dayOfWeek: targetDay,
+                period: targetPeriod,
+                venueId: targetVenueId,
+              }
+            : undefined,
+        swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
+        swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
+        substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+      });
+      if (clash.hasClash) {
+        alert(
+          `第${originalSession.period}節存在衝堂，無法送出：\n${clash.messages.join('\n')}`
+        );
+        return;
+      }
+    }
+
     const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
     const swapTeacher = teachers.find((t) => t.id === swapTargetTeacherId);
     const swapSession = sessions.find((s) => s.id === swapTargetSessionId);
@@ -422,40 +487,46 @@ export const StaffDispatchWorkbench: React.FC = () => {
         ? `batch-${Date.now()}`
         : undefined;
 
-    const created = sessionsToDispatch.map((originalSession, index) =>
-      createStaffDirectDispatch(
-        {
-          requestType,
-          applicantTeacherId: applicantTeacher.id,
-          applicantTeacherName: applicantTeacher.name,
-          applicantDepartment: applicantTeacher.department,
-          leaveType,
-          leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
-          leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
-          paymentType,
-          reason,
-          originalSession,
-          substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
-          substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
-          batchGroupId,
-          targetReschedule:
-            requestType === 'reschedule' && targetVenue
-              ? {
-                  dayOfWeek: targetDay,
-                  period: targetPeriod,
-                  venueId: targetVenue.id,
-                  venueName: targetVenue.name,
-                }
-              : undefined,
-          swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
-          swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
-          swapTargetSession: requestType === 'swap' ? swapSession : undefined,
-          autoApprove,
-        },
-        dispatchMonth,
-        { sequenceOffset: index, idNonce: `${Date.now()}-${index}` }
-      )
-    );
+    let created;
+    try {
+      created = sessionsToDispatch.map((originalSession, index) =>
+        createStaffDirectDispatch(
+          {
+            requestType,
+            applicantTeacherId: applicantTeacher.id,
+            applicantTeacherName: applicantTeacher.name,
+            applicantDepartment: applicantTeacher.department,
+            leaveType,
+            leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
+            leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
+            paymentType,
+            reason,
+            originalSession,
+            substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+            substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
+            batchGroupId,
+            targetReschedule:
+              requestType === 'reschedule' && targetVenue
+                ? {
+                    dayOfWeek: targetDay,
+                    period: targetPeriod,
+                    venueId: targetVenue.id,
+                    venueName: targetVenue.name,
+                  }
+                : undefined,
+            swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
+            swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
+            swapTargetSession: requestType === 'swap' ? swapSession : undefined,
+            autoApprove,
+          },
+          dispatchMonth,
+          { sequenceOffset: index, idNonce: `${Date.now()}-${index}` }
+        )
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '派代失敗，請檢查資料後重試。');
+      return;
+    }
 
     const first = created[0];
     setSuccessToast(
@@ -1524,18 +1595,24 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 {/* Submit button */}
                 <button
                   type="submit"
-                  disabled={clashPreview.hasClash}
+                  disabled={
+                    clashPreview.hasClash ||
+                    (requestType === 'substitute' && !substituteTeacherId)
+                  }
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 ${
-                    clashPreview.hasClash
+                    clashPreview.hasClash ||
+                    (requestType === 'substitute' && !substituteTeacherId)
                       ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 active:scale-98'
                   }`}
                 >
                   <Send className="w-4 h-4" />
                   <span>
-                    {requestType === 'substitute' &&
-                    sessionPickMode === 'periodRange' &&
-                    batchSelectedSessions.length > 1
+                    {requestType === 'substitute' && !substituteTeacherId
+                      ? '請先指定代課教師'
+                      : requestType === 'substitute' &&
+                        sessionPickMode === 'periodRange' &&
+                        batchSelectedSessions.length > 1
                       ? `確定批次派代 ${batchSelectedSessions.length} 節`
                       : '確定登記並執行派代'}
                   </span>

@@ -124,7 +124,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     requestType === 'substitute'
       ? currentTeacher && leaveDay !== '' && leavePeriod !== ''
         ? matchedLeaveSession || {
-            id: 's-placeholder',
+            id: `s-placeholder-${currentTeacher.id}-${leaveDay}-${leavePeriod}`,
             dayOfWeek: leaveDay,
             period: leavePeriod,
             className: '未指派課堂',

@@ -35,7 +35,8 @@ import {
   testCloudSyncConnection,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
-import { countLeaveSubstitutePeriods } from '../utils/leaveDates';
+import { countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
+import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -708,9 +709,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     requestMonth?: number
   ): SubstituteRequest => {
     const newId = `req-${Date.now()}`;
-    const nextSeq = (requests.length + 1).toString().padStart(3, '0');
     const month = requestMonth ?? (new Date().getMonth() + 1);
-    const requestNumber = `VOC-${systemConfig.academicYear}-${month}-${nextSeq}`;
+    const seq = nextRequestSequence(requests, systemConfig.academicYear, month);
+    const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
 
     const clashStatus = checkClashes({
       requestType: data.requestType,
@@ -817,9 +818,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const seqOffset = batchOptions?.sequenceOffset ?? 0;
     const idNonce = batchOptions?.idNonce ?? seqOffset;
     const newId = `req-${Date.now()}-${idNonce}`;
-    const nextSeq = (requests.length + 1 + seqOffset).toString().padStart(3, '0');
     const month = requestMonth ?? systemConfig.currentMonth;
-    const requestNumber = `VOC-${systemConfig.academicYear}-${month}-${nextSeq}`;
+    // 以同月最大序號配號（勿用 requests.length，刪單後會重號）；批次用 sequenceOffset 連號
+    const seq =
+      nextRequestSequence(requests, systemConfig.academicYear, month) + seqOffset;
+    const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
+
+    if (
+      data.requestType === 'substitute' &&
+      data.autoApprove !== false &&
+      !data.substituteTeacherId
+    ) {
+      throw new Error('逕行核定請假派代須指定代課教師');
+    }
 
     const clashStatus = checkClashes({
       requestType: data.requestType,
@@ -830,6 +841,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       swapTargetSession: data.swapTargetSession,
       substituteTeacherId: data.substituteTeacherId,
     });
+
+    if (data.autoApprove !== false && clashStatus.hasClash) {
+      throw new Error(clashStatus.messages[0] || '存在衝堂衝突，無法逕行核定');
+    }
 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
     const staffName = (() => {
@@ -1327,29 +1342,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         r.originalSession?.period === 8 ? counselingRate : hourlyRate;
 
       requests
-        .filter(
-          (r) =>
-            r.status === 'approved' &&
-            requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth)
-        )
+        .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
         .forEach((r) => {
-          if (r.requestType === 'substitute') {
-            const rate = rateForRequest(r);
-            const periods = countLeaveSubstitutePeriods(r);
-            if (r.substituteTeacherId === teacher.id) {
-              if (r.paymentType === 'public') {
-                publicSubstitutePeriods += periods;
-                publicSubstituteAmount += rate * periods;
-              } else {
-                privateSubstituteEarnPeriods += periods;
-                privateSubstituteEarnAmount += rate * periods;
-              }
+          const inMonthPeriods = countLeaveSubstitutePeriodsInMonth(r, settlementMonth);
+          // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：仍依單號月份整筆計入
+          const periods =
+            inMonthPeriods === null
+              ? requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth)
+                ? 1
+                : 0
+              : inMonthPeriods;
+          if (periods <= 0) return;
+
+          const rate = rateForRequest(r);
+          if (r.substituteTeacherId === teacher.id) {
+            if (r.paymentType === 'public') {
+              publicSubstitutePeriods += periods;
+              publicSubstituteAmount += rate * periods;
+            } else {
+              privateSubstituteEarnPeriods += periods;
+              privateSubstituteEarnAmount += rate * periods;
             }
-            if (r.applicantTeacherId === teacher.id) {
-              if (r.paymentType === 'private') {
-                privateLeaveDeductionPeriods += periods;
-                privateLeaveDeductionAmount += rate * periods;
-              }
+          }
+          if (r.applicantTeacherId === teacher.id) {
+            if (r.paymentType === 'private') {
+              privateLeaveDeductionPeriods += periods;
+              privateLeaveDeductionAmount += rate * periods;
             }
           }
         });

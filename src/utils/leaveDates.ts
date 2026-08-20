@@ -93,6 +93,44 @@ export function countLeaveSubstitutePeriods(request: Pick<
   return Math.max(1, n);
 }
 
+/** 區間內、落在指定曆月（1–12）且相符星期的天數 */
+export function countMatchingWeekdaysInMonth(
+  start: string,
+  end: string,
+  dayOfWeek: DayOfWeek,
+  month: number
+): number {
+  const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
+  const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
+
+  let count = 0;
+  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+    if (cur.getDay() === dayOfWeek && cur.getMonth() + 1 === month) count += 1;
+  }
+  return count;
+}
+
+/**
+ * 結算用：有請假日期則只計「落在結算月」的相符星期；
+ * 無日期舊案回傳 null（由呼叫端依單號月份決定是否整筆計入）。
+ */
+export function countLeaveSubstitutePeriodsInMonth(
+  request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
+  settlementMonth: number
+): number | null {
+  if (!request.leaveDateStart) return null;
+  const end =
+    resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) ||
+    request.leaveDateStart;
+  return countMatchingWeekdaysInMonth(
+    request.leaveDateStart,
+    end,
+    request.originalSession.dayOfWeek,
+    settlementMonth
+  );
+}
+
 function leaveRangesOverlap(
   aStart?: string,
   aEnd?: string,
@@ -105,11 +143,24 @@ function leaveRangesOverlap(
   return aStart <= bE && bStart <= aE;
 }
 
+function isPlaceholderSessionId(id?: string): boolean {
+  return !id || id === 's-placeholder' || id.startsWith('s-placeholder');
+}
+
 function isSameLeaveSlot(
   a: { id: string; dayOfWeek: DayOfWeek; period: number; className: string },
   b: { id: string; dayOfWeek: DayOfWeek; period: number; className: string }
 ): boolean {
-  if (a.id && b.id && a.id === b.id) return true;
+  // 佔位課堂固定／共用 id，不可只靠 id 判定同一節
+  if (
+    a.id &&
+    b.id &&
+    a.id === b.id &&
+    !isPlaceholderSessionId(a.id) &&
+    !isPlaceholderSessionId(b.id)
+  ) {
+    return true;
+  }
   return a.dayOfWeek === b.dayOfWeek && a.period === b.period && a.className === b.className;
 }
 

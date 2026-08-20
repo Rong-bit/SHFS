@@ -5,7 +5,10 @@ export const resolveOriginalSession = (
   sessions: CourseSession[]
 ): CourseSession => {
   const orig = request.originalSession;
-  const isPlaceholder = orig.className === '未指派課堂' || orig.id === 's-placeholder';
+  const isPlaceholder =
+    orig.className === '未指派課堂' ||
+    orig.id === 's-placeholder' ||
+    orig.id.startsWith('s-placeholder');
   if (!isPlaceholder) return orig;
 
   const found = sessions.find(
