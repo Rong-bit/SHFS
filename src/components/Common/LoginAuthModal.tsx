@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Lock, KeyRound, Eye, EyeOff, ShieldCheck, User, X, AlertCircle, Check } from 'lucide-react';
 import { UserRole } from '../../types';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
-import { isPasswordHash, verifyPassword } from '../../utils/passwordCrypto';
+import { verifyPassword } from '../../utils/passwordCrypto';
 import { ModalShell } from './ModalShell';
 
 export interface LoginTarget {
@@ -88,23 +88,34 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   let targetSubtitle = '';
   let targetBadge = '';
   let expectedPassword = '1234';
+  /** 畫面上告知使用者的預設密碼提示（雜湊後仍顯示出廠預設） */
   let hint = '請輸入登入密碼';
+  let defaultPasswordNotice: string | null = null;
 
-  const passwordHint = (stored: string | undefined, fallbackPlain: string) =>
-    isPasswordHash(stored) ? '請輸入登入密碼（不會顯示於畫面）' : `預設密碼為 ${fallbackPlain}`;
+  const FACTORY_DEFAULT_PLAIN = '1234';
 
   if (target.type === 'teacher_action' && targetTeacher) {
     targetTitle = targetTeacher.name;
     targetSubtitle = target.actionName ? `即將執行：${target.actionName}` : '調代課申請身分確認';
     targetBadge = '申請送件驗證';
     expectedPassword = targetTeacher.password || auth.defaultTeacherPassword || '1234';
-    hint = `請輸入【${targetTeacher.name}】密碼以繼續申請`;
+    const custom = Boolean(targetTeacher.password);
+    hint = custom
+      ? `請輸入【${targetTeacher.name}】個人密碼`
+      : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
+    defaultPasswordNotice = custom
+      ? `此教師已設個人密碼。未改過的教師預設密碼為 ${FACTORY_DEFAULT_PLAIN}`
+      : `教師預設登入密碼：${FACTORY_DEFAULT_PLAIN}`;
   } else if (target.type === 'teacher' && targetTeacher) {
     targetTitle = targetTeacher.name;
     targetSubtitle = `${targetTeacher.department} · ${targetTeacher.title}`;
     targetBadge = '教師身分登入';
     expectedPassword = targetTeacher.password || auth.defaultTeacherPassword || '1234';
-    hint = passwordHint(expectedPassword, '1234');
+    const custom = Boolean(targetTeacher.password);
+    hint = custom ? '已設定個人密碼' : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
+    defaultPasswordNotice = custom
+      ? `此教師已設個人密碼（非預設）。全校教師未改過者預設為 ${FACTORY_DEFAULT_PLAIN}`
+      : `教師預設登入密碼：${FACTORY_DEFAULT_PLAIN}`;
   } else if (target.type === 'role') {
     switch (target.targetRole) {
       case 'academic':
@@ -114,7 +125,8 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           : '請先選擇組長或組員身分';
         targetBadge = targetStaff?.title || '教學組行政權限';
         expectedPassword = auth.academicPassword || '1234';
-        hint = passwordHint(auth.academicPassword, '1234');
+        hint = `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
+        defaultPasswordNotice = `教學組登入預設密碼：${FACTORY_DEFAULT_PLAIN}（全員共用）。若管理員已更改，請以其告知為準。`;
         break;
       case 'accounting': {
         const accStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'accounting');
@@ -124,7 +136,8 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           : '請先選擇出納組組長或組員身分';
         targetBadge = accStaff?.title || '財務結算權限';
         expectedPassword = auth.accountingPassword || '1234';
-        hint = passwordHint(auth.accountingPassword, '1234');
+        hint = `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
+        defaultPasswordNotice = `出納組登入預設密碼：${FACTORY_DEFAULT_PLAIN}（全員共用）。若管理員已更改，請以其告知為準。`;
         break;
       }
       case 'admin':
@@ -133,6 +146,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         targetBadge = '最高管理權限';
         expectedPassword = auth.adminPassword || DEFAULT_ADMIN_PASSWORD;
         hint = '請輸入系統管理員密碼';
+        defaultPasswordNotice = null;
         break;
       case 'teacher':
       default:
@@ -140,7 +154,8 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         targetSubtitle = '個人課表檢視 · 發起調代課與派代';
         targetBadge = '教師專區';
         expectedPassword = targetTeacher?.password || auth.defaultTeacherPassword || '1234';
-        hint = passwordHint(expectedPassword, '1234');
+        hint = `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
+        defaultPasswordNotice = `教師預設登入密碼：${FACTORY_DEFAULT_PLAIN}`;
         break;
     }
   }
@@ -310,26 +325,31 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
             className="space-y-4"
           >
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 shrink-0">
                   <KeyRound className="w-3.5 h-3.5 text-amber-400" />
                   請輸入身分登入密碼：
                 </span>
                 {!(target.type === 'role' && target.targetRole === 'admin') && (
-                  <span className="text-[11px] text-amber-400/80 font-normal">
+                  <span className="text-[11px] text-amber-300 font-bold font-mono tracking-wide text-right">
                     {hint}
                   </span>
                 )}
               </label>
-              {target.type === 'role' &&
-                (target.targetRole === 'academic' || target.targetRole === 'accounting') && (
-                  <p className="text-[11px] text-slate-400 mb-1.5 leading-relaxed">
-                    注意：這是<strong className="text-amber-300">角色登入密碼</strong>
-                    ，與右上角「加入同步」的<strong className="text-sky-300">學校同步密碼</strong>
-                    不同。登入密碼不會隨雲端同步，各電腦需使用管理員告知的同一組教學組／出納登入密碼（預設常為
-                    1234）。
-                  </p>
-                )}
+              {defaultPasswordNotice && (
+                <div className="mb-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[12px] text-amber-100 leading-relaxed">
+                  <span className="font-bold text-amber-300">預設密碼告知：</span>
+                  {defaultPasswordNotice}
+                  {target.type === 'role' &&
+                    (target.targetRole === 'academic' || target.targetRole === 'accounting') && (
+                      <span className="block mt-1 text-[11px] text-slate-400">
+                        注意：這是角色<strong className="text-amber-300">登入密碼</strong>
+                        ，與右上角「加入同步」的<strong className="text-sky-300">學校同步密碼</strong>
+                        不同；登入密碼不會隨雲端同步。
+                      </span>
+                    )}
+                </div>
+              )}
 
               <div className="relative">
                 <input
@@ -370,7 +390,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
             {/* Action Buttons */}
             <div className="pt-2 flex items-center justify-between gap-3">
-              <span className="text-[11px] text-slate-500">密碼以雜湊存放，不會出現在畫面或雲端同步</span>
+              <span className="text-[11px] text-slate-500 max-w-[12rem] leading-snug">
+                {defaultPasswordNotice
+                  ? '上方已顯示預設密碼提示；實際密碼以雜湊存放，不會上傳雲端'
+                  : '密碼以雜湊存放，不會上傳雲端'}
+              </span>
 
               <div className="flex items-center space-x-2">
                 <button

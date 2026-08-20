@@ -480,7 +480,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 )}
               </div>
               <div className="text-[10px] text-emerald-700 font-semibold mt-2">
-                {request.reviewedAt || '2026-10-15'} 核准
+                {request.reviewedAt || '—'} 核准
               </div>
             </div>
 

@@ -239,14 +239,36 @@ export const TeacherRequestsList: React.FC = () => {
                 {req.status === 'pending' && (
                   <button
                     onClick={() => {
-                      if (window.confirm('確定要撤回此調代課申請嗎？')) {
+                      const pendingCount = req.batchGroupId
+                        ? requests.filter(
+                            (r) =>
+                              r.batchGroupId === req.batchGroupId &&
+                              r.status === 'pending' &&
+                              r.applicantTeacherId === currentTeacher?.id
+                          ).length
+                        : 1;
+                      const msg =
+                        pendingCount > 1
+                          ? `此為連續節次申請（共 ${pendingCount} 節待審），將整批一次撤回。確定？`
+                          : '確定要撤回此調代課申請嗎？';
+                      if (window.confirm(msg)) {
                         cancelRequest(req.id);
                       }
                     }}
                     className="flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-semibold rounded-lg transition"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>撤回申請</span>
+                    <span>
+                      {req.batchGroupId &&
+                      requests.filter(
+                        (r) =>
+                          r.batchGroupId === req.batchGroupId &&
+                          r.status === 'pending' &&
+                          r.applicantTeacherId === currentTeacher?.id
+                      ).length > 1
+                        ? '整批撤回'
+                        : '撤回申請'}
+                    </span>
                   </button>
                 )}
               </div>

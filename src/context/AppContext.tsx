@@ -36,7 +36,7 @@ import {
   mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
-import { countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
+import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -220,8 +220,10 @@ export const STORAGE_KEYS = {
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentRole, setCurrentRole] = useState<UserRole>(() => {
+    // 重整不還原教務／出納／管理員，避免略過密碼門檻；僅教師可持久化
     const saved = localStorage.getItem(STORAGE_KEYS.ROLE);
-    return (saved as UserRole) || 'teacher';
+    if (saved === 'teacher') return 'teacher';
+    return 'teacher';
   });
 
   const [currentTeacherId, setCurrentTeacherId] = useState<string>(() => {
@@ -473,7 +475,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [academicStaffList]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ROLE, currentRole);
+    // 特權角色不寫入持久化，重整後一律回教師（須再密碼驗證）
+    localStorage.setItem(STORAGE_KEYS.ROLE, 'teacher');
   }, [currentRole]);
 
   useEffect(() => {
@@ -588,15 +591,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const updateCloudSyncSettings = (settings: CloudSyncSettings) => {
+    const prevKey = cloudSyncSettings.schoolKey.trim();
+    const prevUrl = cloudSyncSettings.databaseUrl.trim();
+    const nextKey = settings.schoolKey.trim();
+    const nextUrl = settings.databaseUrl.trim();
+    const pathChanged =
+      prevKey !== nextKey ||
+      prevUrl.replace(/\/+$/, '') !== nextUrl.replace(/\/+$/, '');
+
     setCloudSyncSettings(settings);
     saveCloudSyncSettings(settings);
+
+    // 換密碼／網址＝換雲端路徑：必須清時間戳，否則可能用舊路徑時間戳覆寫新路徑
+    if (pathChanged) {
+      lastCloudSyncAtRef.current = 0;
+      setLastCloudSyncAt(null);
+      localStorage.removeItem(CLOUD_SYNC_UPDATED_AT_KEY);
+      cloudConflictRef.current = false;
+      cloudDirtyRef.current = false;
+      cloudReadyRef.current = false;
+    }
+
     if (!isCloudSyncReady(settings)) {
       setCloudSyncStatus('off');
       setCloudSyncMessage('尚未啟用跨電腦同步');
       cloudReadyRef.current = false;
     } else {
       setCloudSyncStatus('connecting');
-      setCloudSyncMessage('正在連線同步...');
+      setCloudSyncMessage(
+        pathChanged
+          ? '同步密碼或網址已變更，正在重新連線…'
+          : '正在連線同步...'
+      );
     }
   };
 
@@ -632,35 +658,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCloudSyncMessage('尚未啟用跨電腦同步');
       return;
     }
+    if (cloudBusyRef.current) {
+      setCloudSyncMessage('同步進行中，請稍後再強制推送');
+      return;
+    }
     setCloudSyncStatus('connecting');
     setCloudSyncMessage('正在強制推送本機…');
+    cloudBusyRef.current = true;
     try {
       const remote = await pullSharedSchoolData(cloudSyncSettings);
       const remoteAt = remote?.updatedAt ?? lastCloudSyncAtRef.current;
-      // 對齊遠端時間戳後寫入，刻意覆寫對方
       lastCloudSyncAtRef.current = remoteAt;
       const now = Date.now();
-      const result = await pushSharedSchoolData(
+      let result = await pushSharedSchoolData(
         cloudSyncSettings,
         buildSharedSchoolData(now),
         { ifMatchUpdatedAt: remoteAt }
       );
+      let writtenAt = now;
       if (result === 'conflict') {
-        // 極短時間內又變新：再對齊一次
         const again = await pullSharedSchoolData(cloudSyncSettings);
         const at2 = again?.updatedAt ?? Date.now();
         const now2 = Date.now();
-        await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now2), {
+        result = await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now2), {
           ifMatchUpdatedAt: at2,
         });
-        lastCloudSyncAtRef.current = now2;
-        setLastCloudSyncAt(now2);
-        localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now2));
-      } else {
-        lastCloudSyncAtRef.current = now;
-        setLastCloudSyncAt(now);
-        localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(now));
+        writtenAt = now2;
       }
+      if (result === 'conflict') {
+        cloudConflictRef.current = true;
+        setCloudSyncStatus('error');
+        setCloudSyncMessage(
+          '強制推送仍衝突（他機同時寫入）。請稍後再試「強制推送本機」，或改「拉取遠端」。'
+        );
+        return;
+      }
+      lastCloudSyncAtRef.current = writtenAt;
+      setLastCloudSyncAt(writtenAt);
+      localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(writtenAt));
       cloudDirtyRef.current = false;
       cloudConflictRef.current = false;
       setCloudSyncStatus('synced');
@@ -668,6 +703,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err: any) {
       setCloudSyncStatus('error');
       setCloudSyncMessage(err?.message || '強制推送失敗');
+    } finally {
+      cloudBusyRef.current = false;
     }
   };
 
@@ -701,7 +738,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             );
           } else if (cloudDirtyRef.current) {
             // 本機尚有待推送變更：暫不套用遠端，避免覆蓋本機異動
-            setCloudSyncMessage('本機有待同步變更，暫緩套用雲端較新資料');
+            setCloudSyncStatus('error');
+            setCloudSyncMessage(
+              '本機有待同步變更，暫緩套用雲端較新資料。請稍候自動推送，或至雲端同步手動處理。'
+            );
           } else {
             applySharedSchoolData(remote);
             setCloudSyncMessage('已從雲端更新課表與設定');
@@ -720,8 +760,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
         cloudReadyRef.current = true;
-        // 衝突待處理：不可改回 synced，否則 UI 以為已同步
-        if (cloudConflictRef.current) {
+        // 衝突或本機 dirty 暫緩：不可改回 synced
+        if (cloudConflictRef.current || cloudDirtyRef.current) {
           setCloudSyncStatus('error');
         } else {
           setCloudSyncStatus('synced');
@@ -911,6 +951,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         severity = 'danger';
       }
 
+      // 申請人若該時段已有代課任務（請假派代佔用），亦不可移入
+      if (
+        teacherHasSubstituteOccupancy(
+          applicantTeacherId,
+          dayOfWeek,
+          period,
+          collectSubstituteOccupancies(requestPool, {
+            excludeRequestIds: params.excludeRequestIds,
+          })
+        )
+      ) {
+        messages.push(
+          `【代課佔用】申請教師在 週${dayOfWeek} 第${period}節 已有已派代／待簽核代課任務，不可再移課進入`
+        );
+        severity = 'danger';
+      }
+
       if (messages.length === 0) {
         messages.push(`檢核通過：目標時段（週${dayOfWeek} 第${period}節）教師空堂、班級空堂、教室工場無佔用，可順利移課。`);
       }
@@ -999,6 +1056,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (partnerClashInApplicantSlot) {
         messages.push(
           `【教師衝堂】${partner?.name} 在互調後時段（週${originalSession.dayOfWeek} 第${originalSession.period}節）已有「${partnerClashInApplicantSlot.className} ${partnerClashInApplicantSlot.subjectName}」，不可再調入`
+        );
+        severity = 'danger';
+      }
+
+      const occPool = collectSubstituteOccupancies(requestPool, {
+        excludeRequestIds: params.excludeRequestIds,
+      });
+      if (
+        teacherHasSubstituteOccupancy(
+          applicantTeacherId,
+          swapTargetSession.dayOfWeek,
+          swapTargetSession.period,
+          occPool
+        )
+      ) {
+        messages.push(
+          `【代課佔用】${applicant?.name} 在互調後時段（週${swapTargetSession.dayOfWeek} 第${swapTargetSession.period}節）已有代課任務，不可再調入`
+        );
+        severity = 'danger';
+      }
+      if (
+        teacherHasSubstituteOccupancy(
+          swapTargetTeacherId,
+          originalSession.dayOfWeek,
+          originalSession.period,
+          occPool
+        )
+      ) {
+        messages.push(
+          `【代課佔用】${partner?.name} 在互調後時段（週${originalSession.dayOfWeek} 第${originalSession.period}節）已有代課任務，不可再調入`
         );
         severity = 'danger';
       }
@@ -1609,9 +1696,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     group: SubstituteRequest[]
   ): { ok: true; sessions: CourseSession[] } | { ok: false; reason: string } => {
     const approved = group.filter((r) => r.status === 'approved');
+    // 回滾時需看全庫仍核准單，避免清掉同格其他請假標註
+    const poolForSibling = requests;
     let next = sessions;
     for (const r of approved) {
-      const result = rollbackRequestFromSessionsDetailed(next, r);
+      const result = rollbackRequestFromSessionsDetailed(next, r, poolForSibling);
       if (!result.rolledBack && result.blockedReason) {
         return {
           ok: false,
@@ -2118,7 +2207,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id);
       const base = teacher.basePeriods;
       const weeklyOverload = countWeeklyConcurrentPeriods(sessions, teacher.id);
-      const monthlyOverload = monthlyOverloadPeriods(
+      const rawMonthlyOverload = monthlyOverloadPeriods(
         sessions,
         teacher,
         settlementMonth,
@@ -2126,9 +2215,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         holidaySet,
         systemConfig.academicYear
       );
+      // 請假日按日扣兼課：週課表 [請假派代] 不整月排除，只扣實際請假天數
+      const leaveConcurrentDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
+        requests,
+        teacher.id,
+        settlementMonth,
+        settlementYear,
+        holidaySet,
+        {
+          matchSession: (s) =>
+            Boolean(s.isConcurrent) &&
+            s.dayOfWeek >= 1 &&
+            s.dayOfWeek <= 5 &&
+            s.period >= 1 &&
+            s.period <= 7,
+          includeLegacyWithoutDates: (r) =>
+            requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth),
+        }
+      );
+      const monthlyOverload = Math.max(0, rawMonthlyOverload - leaveConcurrentDeduct);
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
       const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id);
-      const monthlyCounseling = monthlyCounselingPeriods(
+      const rawMonthlyCounseling = monthlyCounselingPeriods(
         sessions,
         teacher.id,
         settlementMonth,
@@ -2136,6 +2244,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         holidaySet,
         systemConfig.academicYear
       );
+      const leaveCounselingDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
+        requests,
+        teacher.id,
+        settlementMonth,
+        settlementYear,
+        holidaySet,
+        {
+          matchSession: (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
+          includeLegacyWithoutDates: (r) =>
+            requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth),
+        }
+      );
+      const monthlyCounseling = Math.max(0, rawMonthlyCounseling - leaveCounselingDeduct);
       const monthlyCounselingAmount = monthlyCounseling * counselingRate;
 
       // 2. Tally approved substitution requests for the selected month only
@@ -2198,10 +2319,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         privateSubstituteEarnAmount -
         privateLeaveDeductionAmount;
 
+      // 整月平日皆放假時 weeks=0，避免 Infinity
       const totalSubstituteWeeklyEstimated =
-        weeklyOverload + (publicSubstitutePeriods + privateSubstituteEarnPeriods) / weeks;
+        weeks > 0
+          ? weeklyOverload + (publicSubstitutePeriods + privateSubstituteEarnPeriods) / weeks
+          : weeklyOverload;
 
-      const isOverLimit = totalSubstituteWeeklyEstimated > systemConfig.maxWeeklyOverloadPeriods;
+      const isOverLimit =
+        weeks > 0 &&
+        totalSubstituteWeeklyEstimated > systemConfig.maxWeeklyOverloadPeriods;
 
       return {
         teacherId: teacher.id,

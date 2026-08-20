@@ -82,6 +82,19 @@ export const PendingApprovals: React.FC = () => {
 
   const handleConfirmReject = () => {
     if (!rejectingId) return;
+    const target = requests.find((r) => r.id === rejectingId);
+    const pendingCount =
+      target?.batchGroupId
+        ? requests.filter(
+            (r) => r.batchGroupId === target.batchGroupId && r.status === 'pending'
+          ).length
+        : 1;
+    if (pendingCount > 1) {
+      const ok = window.confirm(
+        `此為連續節次申請（共 ${pendingCount} 節待簽核），將整批一次駁回。確定？`
+      );
+      if (!ok) return;
+    }
     rejectRequest(rejectingId, rejectReason, reviewerSignature);
     setRejectingId(null);
   };
@@ -487,6 +500,19 @@ export const PendingApprovals: React.FC = () => {
             </h3>
             <p className="text-xs text-slate-500 mt-1">
               駁回原因將同步顯示於申請教師之調代課清單中。
+              {(() => {
+                const t = requests.find((r) => r.id === rejectingId);
+                if (!t?.batchGroupId) return null;
+                const n = requests.filter(
+                  (r) => r.batchGroupId === t.batchGroupId && r.status === 'pending'
+                ).length;
+                if (n <= 1) return null;
+                return (
+                  <span className="block mt-1 text-amber-700 font-semibold">
+                    注意：此為連續節次，確定後將整批駁回共 {n} 筆。
+                  </span>
+                );
+              })()}
             </p>
             <textarea
               rows={3}

@@ -556,6 +556,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     if (!effectiveOriginalSession) return;
 
+    if (requestType === 'reschedule') {
+      if (venues.length === 0) {
+        alert('尚未維護實習工場／教室清單，無法送出移課。請先至系統參數新增場地。');
+        return;
+      }
+      if (!targetVenueId) {
+        alert('請選擇移課目標工場／教室。');
+        return;
+      }
+    }
+
     if (clashResult.hasClash) {
       alert(clashResult.messages[0] || '存在衝堂衝突，請調整後再送出。');
       return;
@@ -666,30 +677,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   </div>
 
                   {teacherSessions.length > 0 ? (
-                    <div>
-                      <select
-                        id="select-leave-slot"
-                        value={leaveSlotId}
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          setLeaveSlotId(id);
-                          const slot = teacherSessions.find((s) => s.id === id);
-                          if (slot) {
-                            setLeaveDay(slot.dayOfWeek);
-                            setLeavePeriod(slot.period);
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
-                      >
-                        {teacherSessions.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》{s.isConcurrent ? '【兼課】' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[11px] text-slate-500 mt-2">
-                        僅列出你名下「有課」的節次。
-                      </p>
+                    <div className="p-2.5 text-[11px] text-slate-600 bg-amber-50/80 border border-amber-200 rounded-lg leading-relaxed">
+                      請先於下方選擇「請假日期」與「請假節次」（會依請假日起迄自動篩選有課節次）。上方不再重複列出全部節次，以免選錯。
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-3">
@@ -1360,18 +1349,24 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     上課工場 / 教室
                   </label>
-                  <select
-                    id="select-target-venue"
-                    value={targetVenueId}
-                    onChange={(e) => setTargetVenueId(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
-                  >
-                    {venues.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
+                  {venues.length === 0 ? (
+                    <div className="p-2.5 text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded-lg">
+                      尚未維護工場／教室，無法移課。請先請管理員至系統參數新增場地。
+                    </div>
+                  ) : (
+                    <select
+                      id="select-target-venue"
+                      value={targetVenueId}
+                      onChange={(e) => setTargetVenueId(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
+                    >
+                      {venues.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}（{v.code}）
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
             )}

@@ -187,6 +187,61 @@ export function countLeaveSubstitutePeriodsInMonth(
   return fromLeaveYear;
 }
 
+type LeaveCoverRequest = Pick<
+  SubstituteRequest,
+  | 'status'
+  | 'requestType'
+  | 'applicantTeacherId'
+  | 'substituteTeacherId'
+  | 'leaveDateStart'
+  | 'leaveDateEnd'
+  | 'originalSession'
+  | 'requestNumber'
+  | 'createdAt'
+>;
+
+/**
+ * 申請人已核准請假落在結算月的節數（依請假日按日計）。
+ * 用於從週課表模板推算的兼課／課輔月結中「按日扣減」，避免 [請假派代] 註記永久吃掉整月。
+ */
+export function countApplicantApprovedLeaveCoverPeriodsInMonth(
+  requests: LeaveCoverRequest[],
+  applicantTeacherId: string,
+  settlementMonth: number,
+  settlementYear: number,
+  excludeDates?: ExcludeDates,
+  options?: {
+    matchSession?: (session: LeaveCoverRequest['originalSession']) => boolean;
+    /** 無請假日期舊案：是否計入該結算月（通常依單號／建立日） */
+    includeLegacyWithoutDates?: (r: LeaveCoverRequest) => boolean;
+  }
+): number {
+  const match = options?.matchSession ?? (() => true);
+  let total = 0;
+  for (const r of requests) {
+    if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
+    if (r.applicantTeacherId !== applicantTeacherId || !r.substituteTeacherId) continue;
+    if (!match(r.originalSession)) continue;
+
+    const inMonth = countLeaveSubstitutePeriodsInMonth(
+      r,
+      settlementMonth,
+      settlementYear,
+      excludeDates
+    );
+    if (inMonth === null) {
+      if (!options?.includeLegacyWithoutDates?.(r)) continue;
+      total += countLeaveSubstitutePeriods(r, excludeDates, {
+        settlementMonth,
+        settlementYear,
+      });
+      continue;
+    }
+    if (inMonth > 0) total += inMonth;
+  }
+  return total;
+}
+
 /** 從單號或建立時間推估申請月份（1–12） */
 export function inferRequestMonth(
   requestNumber?: string,

@@ -19,6 +19,35 @@ function leaveCoverNote(req: SubstituteRequest): string {
   return `${LEAVE_COVER_NOTE} 代課教師：${subName}`;
 }
 
+/** 回滾時若同格尚有其他已核准請假，保留其標註 */
+function findRemainingLeaveCoverNote(
+  live: CourseSession,
+  rollingBack: SubstituteRequest,
+  allRequests?: SubstituteRequest[]
+): string | undefined {
+  if (!allRequests?.length) return undefined;
+  const siblings = allRequests
+    .filter(
+      (r) =>
+        r.id !== rollingBack.id &&
+        r.status === 'approved' &&
+        r.requestType === 'substitute' &&
+        Boolean(r.substituteTeacherId) &&
+        r.applicantTeacherId === rollingBack.applicantTeacherId &&
+        (r.originalSession.id === live.id ||
+          (r.originalSession.dayOfWeek === live.dayOfWeek &&
+            r.originalSession.period === live.period &&
+            (!live.className || r.originalSession.className === live.className)))
+    )
+    .sort((a, b) => {
+      const ta = a.reviewedAt || a.createdAt || '';
+      const tb = b.reviewedAt || b.createdAt || '';
+      return tb.localeCompare(ta);
+    });
+  if (siblings.length === 0) return undefined;
+  return leaveCoverNote(siblings[0]);
+}
+
 function matchesOriginalSession(s: CourseSession, req: SubstituteRequest, orig: CourseSession): boolean {
   if (!isPlaceholderSession(orig) && s.id === orig.id) return true;
   return (
@@ -321,14 +350,16 @@ export type RollbackResult = {
 /** 取消／刪除／駁回已核准單時回滾課表；現況不符則不改課表 */
 export function rollbackRequestFromSessions(
   sessions: CourseSession[],
-  req: SubstituteRequest
+  req: SubstituteRequest,
+  allRequests?: SubstituteRequest[]
 ): CourseSession[] {
-  return rollbackRequestFromSessionsDetailed(sessions, req).sessions;
+  return rollbackRequestFromSessionsDetailed(sessions, req, allRequests).sessions;
 }
 
 export function rollbackRequestFromSessionsDetailed(
   sessions: CourseSession[],
-  req: SubstituteRequest
+  req: SubstituteRequest,
+  allRequests?: SubstituteRequest[]
 ): RollbackResult {
   if (req.status !== 'approved') {
     return { sessions, rolledBack: false, blockedReason: '申請尚未核准' };
@@ -390,11 +421,14 @@ export function rollbackRequestFromSessionsDetailed(
     if (!live) {
       return { sessions, rolledBack: false, blockedReason: '找不到原課堂，無法回滾代課' };
     }
-    // 已是申請人：清請假註記即可（新邏輯／已回滾）
+    // 已是申請人：清請假註記；若同格尚有其他已核准請假，改回仍有效單的標註
     if (live.teacherId === req.applicantTeacherId) {
+      const siblingNote = findRemainingLeaveCoverNote(live, req, allRequests);
       return {
         sessions: sessions.map((s) =>
-          s.id === live.id && isLeaveCoverNote(s.notes) ? { ...s, notes: undefined } : s
+          s.id === live.id && isLeaveCoverNote(s.notes)
+            ? { ...s, notes: siblingNote }
+            : s
         ),
         rolledBack: true,
       };
@@ -407,6 +441,11 @@ export function rollbackRequestFromSessionsDetailed(
       };
     }
     // 舊版：任課在代課老師身上 → 還原申請人
+    const siblingNote = findRemainingLeaveCoverNote(
+      { ...live, teacherId: req.applicantTeacherId },
+      req,
+      allRequests
+    );
     return {
       sessions: sessions.map((s) => {
         if (s.id !== live.id) return s;
@@ -414,7 +453,7 @@ export function rollbackRequestFromSessionsDetailed(
           ...s,
           teacherId: req.applicantTeacherId,
           teacherName: req.applicantTeacherName,
-          notes: undefined,
+          notes: siblingNote,
         };
       }),
       rolledBack: true,
@@ -460,7 +499,7 @@ export function rollbackApprovedRequestsNewestFirstDetailed(
   let next = sessions;
   const blocked: BatchRollbackResult['blocked'] = [];
   for (const r of approved) {
-    const result = rollbackRequestFromSessionsDetailed(next, r);
+    const result = rollbackRequestFromSessionsDetailed(next, r, requests);
     if (!result.rolledBack && result.blockedReason) {
       blocked.push({ request: r, reason: result.blockedReason });
       continue;

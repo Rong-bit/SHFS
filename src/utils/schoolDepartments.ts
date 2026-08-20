@@ -112,11 +112,9 @@ const isDaytimeSlot = (s: CourseSession) =>
 export const isCounselingSlot = (s: Pick<CourseSession, 'dayOfWeek' | 'period'>) =>
   s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8;
 
-/** 代課覆蓋／請假派代標註：鐘點改由代課申請計費，不可再計入課輔／兼課月結 */
+/** 舊版「任課已改成代課老師」的課堂（notes 含原任課）；新版 [請假派代] 僅標註、不排除月結模板 */
 export const isSubstituteCoverSession = (s: Pick<CourseSession, 'notes' | 'teacherId'>) =>
-  Boolean(
-    s.notes && (s.notes.includes('[代課]') || s.notes.includes('[請假派代]'))
-  );
+  Boolean(s.notes && s.notes.includes('[代課]') && s.notes.includes('原任課'));
 
 export const breakdownWeeklyOverloadPeriods = (
   sessions: CourseSession[],
