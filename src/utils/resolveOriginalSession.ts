@@ -12,7 +12,7 @@ export const isPlaceholderSession = (session: CourseSession | undefined | null):
 
 /**
  * 將佔位／暫代 originalSession 對應到現行課表課堂（含真實 id）。
- * 優先以「申請教師 + 星期 + 節次」比對；找不到再以代課教師時段比對。
+ * 僅以「申請教師 + 星期 + 節次」比對；找不到則維持佔位（由核准流程擋下）。
  */
 export const resolveOriginalSession = (
   request: SubstituteRequest,
@@ -34,19 +34,17 @@ export const resolveOriginalSession = (
     return { ...orig, ...byApplicant, id: byApplicant.id };
   }
 
-  if (request.substituteTeacherId) {
-    const bySub = sessions.find(
-      (s) => sameSlot(s) && s.teacherId === request.substituteTeacherId
+  // 申請人該格已是此單的代課覆蓋（任課已改為代課教師）時，仍可對回該課堂
+  if (request.substituteTeacherId && request.applicantTeacherName) {
+    const byCover = sessions.find(
+      (s) =>
+        sameSlot(s) &&
+        s.teacherId === request.substituteTeacherId &&
+        Boolean(s.notes?.includes('[代課]')) &&
+        Boolean(s.notes?.includes(request.applicantTeacherName))
     );
-    if (bySub) {
-      return { ...orig, ...bySub, id: bySub.id };
-    }
-  }
-
-  if (orig.teacherId) {
-    const byOrigTeacher = sessions.find((s) => sameSlot(s) && s.teacherId === orig.teacherId);
-    if (byOrigTeacher) {
-      return { ...orig, ...byOrigTeacher, id: byOrigTeacher.id };
+    if (byCover) {
+      return { ...orig, ...byCover, id: byCover.id };
     }
   }
 

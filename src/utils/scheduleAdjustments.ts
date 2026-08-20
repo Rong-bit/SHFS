@@ -222,6 +222,20 @@ export function rollbackApprovedRequestsNewestFirst(
   sessions: CourseSession[],
   requests: SubstituteRequest[]
 ): CourseSession[] {
+  return rollbackApprovedRequestsNewestFirstDetailed(sessions, requests).sessions;
+}
+
+export type BatchRollbackResult = {
+  sessions: CourseSession[];
+  /** 無法回滾、應保留的已核准單 */
+  blocked: Array<{ request: SubstituteRequest; reason: string }>;
+};
+
+/** 由新到舊回滾；任一筆被擋則該筆不改課表並列入 blocked */
+export function rollbackApprovedRequestsNewestFirstDetailed(
+  sessions: CourseSession[],
+  requests: SubstituteRequest[]
+): BatchRollbackResult {
   const approved = requests
     .filter((r) => r.status === 'approved')
     .slice()
@@ -232,8 +246,35 @@ export function rollbackApprovedRequestsNewestFirst(
     });
 
   let next = sessions;
+  const blocked: BatchRollbackResult['blocked'] = [];
   for (const r of approved) {
-    next = rollbackRequestFromSessions(next, r);
+    const result = rollbackRequestFromSessionsDetailed(next, r);
+    if (!result.rolledBack && result.blockedReason) {
+      blocked.push({ request: r, reason: result.blockedReason });
+      continue;
+    }
+    next = result.sessions;
+  }
+  return { sessions: next, blocked };
+}
+
+/** 匯入後依審核時間由舊到新重套用已核准異動（還原代課覆蓋／移課等） */
+export function reapplyApprovedRequestsOldestFirst(
+  sessions: CourseSession[],
+  requests: SubstituteRequest[]
+): CourseSession[] {
+  const approved = requests
+    .filter((r) => r.status === 'approved')
+    .slice()
+    .sort((a, b) => {
+      const ta = a.reviewedAt || a.createdAt || '';
+      const tb = b.reviewedAt || b.createdAt || '';
+      return ta.localeCompare(tb);
+    });
+
+  let next = sessions;
+  for (const r of approved) {
+    next = applyRequestToSessions(next, r);
   }
   return next;
 }

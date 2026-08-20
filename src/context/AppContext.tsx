@@ -47,8 +47,9 @@ import {
 } from '../utils/passwordCrypto';
 import {
   applyRequestToSessions,
+  reapplyApprovedRequestsOldestFirst,
   remapRequestSessions,
-  rollbackApprovedRequestsNewestFirst,
+  rollbackApprovedRequestsNewestFirstDetailed,
   rollbackRequestFromSessionsDetailed,
 } from '../utils/scheduleAdjustments';
 import { isPlaceholderSession, resolveOriginalSession } from '../utils/resolveOriginalSession';
@@ -147,6 +148,10 @@ interface AppContextType {
     swapTargetTeacherId?: string;
     swapTargetSession?: CourseSession;
     substituteTeacherId?: string;
+    /** 批次核准時傳入累進課表 */
+    sessionsOverride?: CourseSession[];
+    /** 批次核准時傳入累進申請（含已核准佔用） */
+    requestsOverride?: SubstituteRequest[];
   }) => ClashCheckResult;
   
   // Settlement calculation
@@ -697,6 +702,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     swapTargetTeacherId?: string;
     swapTargetSession?: CourseSession;
     substituteTeacherId?: string;
+    sessionsOverride?: CourseSession[];
+    requestsOverride?: SubstituteRequest[];
   }): ClashCheckResult => {
     const messages: string[] = [];
     let severity: 'none' | 'warning' | 'danger' = 'none';
@@ -711,13 +718,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       substituteTeacherId,
     } = params;
 
+    const schedule = params.sessionsOverride ?? sessions;
+    const requestPool = params.requestsOverride ?? requests;
     const applicant = teachers.find((t) => t.id === applicantTeacherId);
 
     if (requestType === 'reschedule' && targetReschedule) {
       const { dayOfWeek, period, venueId } = targetReschedule;
 
       // 1. Check if applicant already teaches at target time
-      const teacherClash = sessions.find(
+      const teacherClash = schedule.find(
         (s) =>
           s.teacherId === applicantTeacherId &&
           s.dayOfWeek === dayOfWeek &&
@@ -730,7 +739,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 2. Check if the original class already has another course at target time
-      const classClash = sessions.find(
+      const classClash = schedule.find(
         (s) =>
           s.className === originalSession.className &&
           s.dayOfWeek === dayOfWeek &&
@@ -743,7 +752,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 3. Check if target venue/workshop is occupied
-      const venueClash = sessions.find(
+      const venueClash = schedule.find(
         (s) =>
           s.venueId === venueId &&
           s.dayOfWeek === dayOfWeek &&
@@ -771,7 +780,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const partner = teachers.find((t) => t.id === swapTargetTeacherId);
 
       // Applicant going to partner's slot (swapTargetSession.dayOfWeek, swapTargetSession.period)
-      const applicantClashInPartnerSlot = sessions.find(
+      const applicantClashInPartnerSlot = schedule.find(
         (s) =>
           s.teacherId === applicantTeacherId &&
           s.dayOfWeek === swapTargetSession.dayOfWeek &&
@@ -784,7 +793,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Partner going to applicant's slot (originalSession.dayOfWeek, originalSession.period)
-      const partnerClashInApplicantSlot = sessions.find(
+      const partnerClashInApplicantSlot = schedule.find(
         (s) =>
           s.teacherId === swapTargetTeacherId &&
           s.dayOfWeek === originalSession.dayOfWeek &&
@@ -797,7 +806,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Check class conflicts
-      const applicantClassInPartnerSlot = sessions.find(
+      const applicantClassInPartnerSlot = schedule.find(
         (s) =>
           s.className === originalSession.className &&
           s.dayOfWeek === swapTargetSession.dayOfWeek &&
@@ -810,7 +819,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         severity = 'danger';
       }
 
-      const partnerClassInApplicantSlot = sessions.find(
+      const partnerClassInApplicantSlot = schedule.find(
         (s) =>
           s.className === swapTargetSession.className &&
           s.dayOfWeek === originalSession.dayOfWeek &&
@@ -842,11 +851,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Check if substitute teacher already has a class in that slot
-      const subClash = sessions.find(
+      const subClash = schedule.find(
         (s) =>
           s.teacherId === substituteTeacherId &&
           s.dayOfWeek === originalSession.dayOfWeek &&
-          s.period === originalSession.period
+          s.period === originalSession.period &&
+          s.id !== originalSession.id
       );
       if (subClash) {
         messages.push(`【代課教師衝堂】${subTeacher?.name} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有正課「${subClash.className} ${subClash.subjectName}」`);
@@ -856,7 +866,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           substituteTeacherId,
           originalSession.dayOfWeek,
           originalSession.period,
-          collectSubstituteOccupancies(requests)
+          collectSubstituteOccupancies(requestPool)
         )
       ) {
         messages.push(
@@ -867,7 +877,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Overload check (9 periods limit)
       if (subTeacher) {
-        const weeklyOverload = teacherWeeklyOverload(subTeacher, sessions);
+        const weeklyOverload = teacherWeeklyOverload(subTeacher, schedule);
         if (weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods) {
           messages.push(`【法規防呆警示】${subTeacher.name} 本週兼任超鐘點已達 ${weeklyOverload} 節（法定上限為 ${systemConfig.maxWeeklyOverloadPeriods} 節），若再承擔代課將超過法規上限！`);
           if (severity !== 'danger') severity = 'warning';
@@ -938,6 +948,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
+    const clashStatus = checkClashes({
+      requestType: targetReq.requestType,
+      applicantTeacherId: targetReq.applicantTeacherId,
+      originalSession: resolvedOrig,
+      targetReschedule: targetReq.targetReschedule,
+      swapTargetTeacherId: targetReq.swapTargetTeacherId,
+      swapTargetSession: targetReq.swapTargetSession,
+      substituteTeacherId: targetReq.substituteTeacherId,
+    });
+    if (clashStatus.hasClash) {
+      window.alert(clashStatus.messages[0] || '存在衝堂衝突，無法核准');
+      return false;
+    }
+
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
     const approvedReq: SubstituteRequest = {
       ...targetReq,
@@ -958,6 +982,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               status: 'approved',
               reviewedAt: nowStr,
               reviewedBy: reviewerName,
+              clashStatus,
             }
           : r
       )
@@ -966,12 +991,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const batchApproveRequests = (requestIds: string[], reviewerName: string = '陳雅筑 組長 (教學組)'): number => {
+    let workingSessions = sessions;
+    let workingRequests = requests.slice();
     let count = 0;
-    requestIds.forEach((id) => {
-      const r = requests.find((x) => x.id === id);
-      if (!r || r.status === 'approved') return;
-      if (approveRequest(id, reviewerName)) count++;
-    });
+    const skipped: string[] = [];
+    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+
+    for (const id of requestIds) {
+      const targetReq = workingRequests.find((r) => r.id === id);
+      if (!targetReq || targetReq.status === 'approved') continue;
+
+      const resolvedOrig = resolveOriginalSession(targetReq, workingSessions);
+      if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
+        skipped.push(`${targetReq.requestNumber || id}：找不到對應課表`);
+        continue;
+      }
+
+      const clashStatus = checkClashes({
+        requestType: targetReq.requestType,
+        applicantTeacherId: targetReq.applicantTeacherId,
+        originalSession: resolvedOrig,
+        targetReschedule: targetReq.targetReschedule,
+        swapTargetTeacherId: targetReq.swapTargetTeacherId,
+        swapTargetSession: targetReq.swapTargetSession,
+        substituteTeacherId: targetReq.substituteTeacherId,
+        sessionsOverride: workingSessions,
+        requestsOverride: workingRequests,
+      });
+      if (clashStatus.hasClash) {
+        skipped.push(
+          `${targetReq.requestNumber || id}：${clashStatus.messages[0] || '衝堂'}`
+        );
+        continue;
+      }
+
+      const approvedReq: SubstituteRequest = {
+        ...targetReq,
+        originalSession: resolvedOrig,
+        status: 'approved',
+        reviewedAt: nowStr,
+        reviewedBy: reviewerName,
+        clashStatus,
+      };
+      workingSessions = applyRequestToSessions(workingSessions, approvedReq);
+      workingRequests = workingRequests.map((r) => (r.id === id ? approvedReq : r));
+      count++;
+    }
+
+    if (count > 0) {
+      setSessions(workingSessions);
+      setRequests(workingRequests);
+    }
+    if (skipped.length > 0) {
+      window.alert(
+        `已核准 ${count} 筆；略過 ${skipped.length} 筆：\n${skipped.slice(0, 8).join('\n')}${
+          skipped.length > 8 ? '\n…' : ''
+        }`
+      );
+    }
     return count;
   };
 
@@ -998,8 +1075,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return `${currentAcademicStaff.name}(${stamp})`;
     })();
 
-    // 全數預檢：任一步失敗則不寫入任何單據／課表
-    const prepared: SubstituteRequest[] = items.map((data, index) => {
+    // 全數預檢（累進課表／申請佔用）：任一步失敗則不寫入任何單據／課表
+    let progressiveSessions = sessions;
+    let progressiveRequests = requests.slice();
+    const prepared: SubstituteRequest[] = [];
+
+    items.forEach((data, index) => {
       if (
         data.requestType === 'substitute' &&
         data.autoApprove !== false &&
@@ -1012,9 +1093,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           applicantTeacherId: data.applicantTeacherId,
           substituteTeacherId: data.substituteTeacherId,
+          applicantTeacherName: data.applicantTeacherName,
           originalSession: data.originalSession,
         } as SubstituteRequest,
-        sessions
+        progressiveSessions
       );
       if (
         data.requestType === 'substitute' &&
@@ -1032,6 +1114,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         swapTargetTeacherId: data.swapTargetTeacherId,
         swapTargetSession: data.swapTargetSession,
         substituteTeacherId: data.substituteTeacherId,
+        sessionsOverride: progressiveSessions,
+        requestsOverride: progressiveRequests,
       });
 
       if (data.autoApprove !== false && clashStatus.hasClash) {
@@ -1042,7 +1126,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const seq = baseSeq + index;
       const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
 
-      return {
+      const newRequest = {
         ...data,
         originalSession: resolvedOrig,
         id: `req-${stampPrefix}-${index}`,
@@ -1053,6 +1137,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reviewedBy: isAutoApproved ? `${staffName} [教務處逕行派代]` : undefined,
         clashStatus,
       } as SubstituteRequest;
+
+      prepared.push(newRequest);
+      progressiveRequests = [newRequest, ...progressiveRequests];
+      if (isAutoApproved) {
+        progressiveSessions = applyRequestToSessions(progressiveSessions, newRequest);
+      }
     });
 
     const approvedOnes = prepared.filter((r) => r.status === 'approved');
@@ -1085,13 +1175,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const rejectRequest = (requestId: string, reason: string, reviewerName: string = '陳雅筑 組長 (教學組)') => {
     const target = requests.find((r) => r.id === requestId);
     if (target?.status === 'approved') {
-      setSessions((prev) => {
-        const result = rollbackRequestFromSessionsDetailed(prev, target);
-        if (!result.rolledBack && result.blockedReason) {
-          console.warn(`[回滾略過] ${target.requestNumber}: ${result.blockedReason}`);
-        }
-        return result.sessions;
-      });
+      const result = rollbackRequestFromSessionsDetailed(sessions, target);
+      if (!result.rolledBack && result.blockedReason) {
+        window.alert(`無法駁回：${result.blockedReason}\n請先處理後續課表異動，再駁回此單。`);
+        return;
+      }
+      setSessions(result.sessions);
     }
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
     setRequests((prev) =>
@@ -1112,13 +1201,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cancelRequest = (requestId: string) => {
     const target = requests.find((r) => r.id === requestId);
     if (target?.status === 'approved') {
-      setSessions((prev) => {
-        const result = rollbackRequestFromSessionsDetailed(prev, target);
-        if (!result.rolledBack && result.blockedReason) {
-          console.warn(`[回滾略過] ${target.requestNumber}: ${result.blockedReason}`);
-        }
-        return result.sessions;
-      });
+      const result = rollbackRequestFromSessionsDetailed(sessions, target);
+      if (!result.rolledBack && result.blockedReason) {
+        window.alert(`無法取消：${result.blockedReason}\n請先處理後續課表異動，再取消此單。`);
+        return;
+      }
+      setSessions(result.sessions);
     }
     setRequests((prev) =>
       prev.map((r) => (r.id === requestId ? { ...r, status: 'cancelled' } : r))
@@ -1128,19 +1216,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteRequest = (requestId: string) => {
     const target = requests.find((r) => r.id === requestId);
     if (target?.status === 'approved') {
-      setSessions((prev) => {
-        const result = rollbackRequestFromSessionsDetailed(prev, target);
-        if (!result.rolledBack && result.blockedReason) {
-          console.warn(`[回滾略過] ${target.requestNumber}: ${result.blockedReason}`);
-        }
-        return result.sessions;
-      });
+      const result = rollbackRequestFromSessionsDetailed(sessions, target);
+      if (!result.rolledBack && result.blockedReason) {
+        window.alert(`無法刪除：${result.blockedReason}\n請先處理後續課表異動，再刪除此單。`);
+        return;
+      }
+      setSessions(result.sessions);
     }
     setRequests((prev) => prev.filter((r) => r.id !== requestId));
   };
 
   const clearAllRequests = () => {
-    setSessions((prev) => rollbackApprovedRequestsNewestFirst(prev, requests));
+    const { sessions: nextSessions, blocked } = rollbackApprovedRequestsNewestFirstDetailed(
+      sessions,
+      requests
+    );
+    if (blocked.length > 0) {
+      window.alert(
+        `無法一鍵清空：有 ${blocked.length} 筆已核准申請課表無法回滾（之後又有異動）。\n` +
+          blocked
+            .slice(0, 5)
+            .map((b) => `${b.request.requestNumber}：${b.reason}`)
+            .join('\n') +
+          (blocked.length > 5 ? '\n…' : '') +
+          '\n\n請先個別處理後再清空，以免單據與課表不一致。'
+      );
+      return;
+    }
+    setSessions(nextSessions);
     setRequests([]);
     localStorage.removeItem(STORAGE_KEYS.REQUESTS);
   };
@@ -1407,9 +1510,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setTeachers(updatedTeachers);
     setVenues(updatedVenues);
-    setSessions(finalSessions);
     if (mode === 'append') {
-      setRequests((prev) => remapRequestSessions(prev, finalSessions));
+      // remap 後由舊到新重套用已核准異動，避免匯入抹掉 [代課]／移課卻仍結算
+      const remapped = remapRequestSessions(requests, finalSessions);
+      const withCovers = reapplyApprovedRequestsOldestFirst(finalSessions, remapped);
+      setSessions(withCovers);
+      setRequests(remapped);
+    } else {
+      setSessions(finalSessions);
     }
 
     return {

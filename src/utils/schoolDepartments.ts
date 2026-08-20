@@ -121,7 +121,8 @@ export const breakdownWeeklyOverloadPeriods = (
   teacherId: string
 ): WeeklyOverloadBreakdown => {
   const mine = sessions.filter((s) => s.teacherId === teacherId);
-  const visible = mine.filter(isDaytimeSlot);
+  // 代課覆蓋節次改由代課申請計費，不計入週兼課／超鐘點格數（與月結一致）
+  const visible = mine.filter((s) => isDaytimeSlot(s) && !isSubstituteCoverSession(s));
   const counselingMine = mine.filter(
     (s) => isCounselingSlot(s) && !isSubstituteCoverSession(s)
   );
