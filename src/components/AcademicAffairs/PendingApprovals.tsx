@@ -83,15 +83,13 @@ export const PendingApprovals: React.FC = () => {
   const handleConfirmReject = () => {
     if (!rejectingId) return;
     const target = requests.find((r) => r.id === rejectingId);
-    const pendingCount =
+    const relatedCount =
       target?.batchGroupId
-        ? requests.filter(
-            (r) => r.batchGroupId === target.batchGroupId && r.status === 'pending'
-          ).length
+        ? requests.filter((r) => r.batchGroupId === target.batchGroupId).length
         : 1;
-    if (pendingCount > 1) {
+    if (relatedCount > 1) {
       const ok = window.confirm(
-        `此為連續節次申請（共 ${pendingCount} 節待簽核），將整批一次駁回。確定？`
+        `此為連續節次申請（共 ${relatedCount} 筆將一併駁回，含已核准單會回滾課表），確定？`
       );
       if (!ok) return;
     }

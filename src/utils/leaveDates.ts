@@ -1,4 +1,4 @@
-import { DayOfWeek, SubstituteRequest } from '../types';
+import { DayOfWeek, PartialNonTeachingDay, SubstituteRequest, TemporaryScheduleMove } from '../types';
 import { dateToIsoLocal, isNonTeachingDate } from './holidays';
 
 /** YYYY-MM-DD → 週一=1 … 週五=5；週末回傳 null */
@@ -18,28 +18,62 @@ export function resolveLeaveDateEnd(start?: string, end?: string): string | unde
 
 export type ExcludeDates = Set<string> | Iterable<string> | null | undefined;
 
+/** 結算用：半日停課／暫時移課等（與 calendarSettlement 對齊） */
+export type LeaveBillableOptions = {
+  /** 該節次；有值時才套用半日停課／移課排除 */
+  period?: number;
+  temporaryMoves?: TemporaryScheduleMove[] | null;
+  partialStops?: PartialNonTeachingDay[] | null;
+};
+
 function asExcludeSet(excludeDates?: ExcludeDates): Set<string> {
   if (!excludeDates) return new Set();
   if (excludeDates instanceof Set) return excludeDates;
   return new Set(excludeDates);
 }
 
-/** 區間內與指定星期相符的天數（含起迄）；放假日不計 */
+const ALL_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+/** 該日該節是否仍應計請假／代課節數（整天放假、半日停課、暫時移走皆不计） */
+export function isLeaveDatePeriodBillable(
+  isoDate: string,
+  excludeDates?: ExcludeDates,
+  options?: LeaveBillableOptions
+): boolean {
+  const exclude = asExcludeSet(excludeDates);
+  if (isNonTeachingDate(isoDate, exclude)) return false;
+  const period = options?.period;
+  if (period == null || period < 1 || period > 8) return true;
+
+  for (const stop of options?.partialStops || []) {
+    if (stop?.date === isoDate && stop.periods?.includes(period)) return false;
+  }
+  for (const move of options?.temporaryMoves || []) {
+    if (!move?.sourceDate || move.sourceDate !== isoDate) continue;
+    const periods =
+      !move.periods || move.periods.length === 0 ? ALL_PERIODS : move.periods;
+    if (periods.includes(period)) return false;
+  }
+  return true;
+}
+
+/** 區間內與指定星期相符的天數（含起迄）；放假日／半日停課／移課原日不計 */
 export function countMatchingWeekdays(
   start: string,
   end: string,
   dayOfWeek: DayOfWeek,
-  excludeDates?: ExcludeDates
+  excludeDates?: ExcludeDates,
+  billableOptions?: LeaveBillableOptions
 ): number {
   const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
   const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
-  const exclude = asExcludeSet(excludeDates);
 
   let count = 0;
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
     if (cur.getDay() !== dayOfWeek) continue;
-    if (isNonTeachingDate(dateToIsoLocal(cur), exclude)) continue;
+    const iso = dateToIsoLocal(cur);
+    if (!isLeaveDatePeriodBillable(iso, excludeDates, billableOptions)) continue;
     count += 1;
   }
   return count;
@@ -95,8 +129,13 @@ export function formatLeaveDateLabel(
 export function countLeaveSubstitutePeriods(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
   excludeDates?: ExcludeDates,
-  options?: { settlementMonth?: number; settlementYear?: number }
+  options?: { settlementMonth?: number; settlementYear?: number } & LeaveBillableOptions
 ): number {
+  const billableOptions: LeaveBillableOptions = {
+    period: options?.period ?? request.originalSession?.period,
+    temporaryMoves: options?.temporaryMoves,
+    partialStops: options?.partialStops,
+  };
   if (!request.leaveDateStart) {
     const month = options?.settlementMonth;
     const year = options?.settlementYear;
@@ -109,7 +148,8 @@ export function countLeaveSubstitutePeriods(
       start,
       end,
       request.originalSession.dayOfWeek,
-      excludeDates
+      excludeDates,
+      billableOptions
     );
     return n > 0 ? 1 : 0;
   }
@@ -118,34 +158,58 @@ export function countLeaveSubstitutePeriods(
     request.leaveDateStart,
     end,
     request.originalSession.dayOfWeek,
-    excludeDates
+    excludeDates,
+    billableOptions
   );
   return Math.max(0, n);
 }
 
-/** 區間內、落在指定曆月（1–12）且相符星期的天數；可選西元年避免跨年重計；放假日不計 */
+/** 區間內、落在指定曆月（1–12）且相符星期的天數；可選西元年避免跨年重計；放假日／半日停課／移課原日不計 */
 export function countMatchingWeekdaysInMonth(
   start: string,
   end: string,
   dayOfWeek: DayOfWeek,
   month: number,
   year?: number,
-  excludeDates?: ExcludeDates
+  excludeDates?: ExcludeDates,
+  billableOptions?: LeaveBillableOptions
 ): number {
   const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
   const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
-  const exclude = asExcludeSet(excludeDates);
 
   let count = 0;
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
     if (cur.getDay() !== dayOfWeek) continue;
     if (cur.getMonth() + 1 !== month) continue;
     if (year != null && cur.getFullYear() !== year) continue;
-    if (isNonTeachingDate(dateToIsoLocal(cur), exclude)) continue;
+    const iso = dateToIsoLocal(cur);
+    if (!isLeaveDatePeriodBillable(iso, excludeDates, billableOptions)) continue;
     count += 1;
   }
   return count;
+}
+
+/** 請假區間內、落在指定曆月的西元年（通常僅一年；跨年同月取最接近 settlementYear 者） */
+function resolveLeaveYearForSettlementMonth(
+  start: string,
+  end: string,
+  settlementMonth: number,
+  settlementYear?: number
+): number | undefined {
+  const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
+  const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return undefined;
+  const years = new Set<number>();
+  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+    if (cur.getMonth() + 1 === settlementMonth) years.add(cur.getFullYear());
+  }
+  if (years.size === 0) return undefined;
+  const list = Array.from(years);
+  if (settlementYear == null) return list[0];
+  return list.reduce((best, y) =>
+    Math.abs(y - settlementYear) < Math.abs(best - settlementYear) ? y : best
+  );
 }
 
 /**
@@ -157,13 +221,19 @@ export function countLeaveSubstitutePeriodsInMonth(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
   settlementMonth: number,
   settlementYear?: number,
-  excludeDates?: ExcludeDates
+  excludeDates?: ExcludeDates,
+  billableOptions?: LeaveBillableOptions
 ): number | null {
   if (!request.leaveDateStart) return null;
   const end =
     resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) ||
     request.leaveDateStart;
   const dayOfWeek = request.originalSession.dayOfWeek;
+  const opts: LeaveBillableOptions = {
+    period: billableOptions?.period ?? request.originalSession?.period,
+    temporaryMoves: billableOptions?.temporaryMoves,
+    partialStops: billableOptions?.partialStops,
+  };
 
   const withSettlementYear = countMatchingWeekdaysInMonth(
     request.leaveDateStart,
@@ -171,20 +241,28 @@ export function countLeaveSubstitutePeriodsInMonth(
     dayOfWeek,
     settlementMonth,
     settlementYear,
-    excludeDates
+    excludeDates,
+    opts
   );
   if (withSettlementYear > 0 || settlementYear == null) return withSettlementYear;
 
-  // 結算西元年與請假日期年不一致時：改以請假區間內「該月」實際出現的年份計節
-  const fromLeaveYear = countMatchingWeekdaysInMonth(
+  // 結算西元年與請假日期年不一致：改以請假區間內「該月」實際年份計（禁止無 year 全掃）
+  const leaveYear = resolveLeaveYearForSettlementMonth(
+    request.leaveDateStart,
+    end,
+    settlementMonth,
+    settlementYear
+  );
+  if (leaveYear == null) return 0;
+  return countMatchingWeekdaysInMonth(
     request.leaveDateStart,
     end,
     dayOfWeek,
     settlementMonth,
-    undefined, // 不限年，只要落在該月
-    excludeDates
+    leaveYear,
+    excludeDates,
+    opts
   );
-  return fromLeaveYear;
 }
 
 type LeaveCoverRequest = Pick<
@@ -214,26 +292,38 @@ export function countApplicantApprovedLeaveCoverPeriodsInMonth(
     matchSession?: (session: LeaveCoverRequest['originalSession']) => boolean;
     /** 無請假日期舊案：是否計入該結算月（通常依單號／建立日） */
     includeLegacyWithoutDates?: (r: LeaveCoverRequest) => boolean;
+    temporaryMoves?: TemporaryScheduleMove[] | null;
+    partialStops?: PartialNonTeachingDay[] | null;
   }
 ): number {
   const match = options?.matchSession ?? (() => true);
+  const calendarOpts: LeaveBillableOptions = {
+    temporaryMoves: options?.temporaryMoves,
+    partialStops: options?.partialStops,
+  };
   let total = 0;
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (r.applicantTeacherId !== applicantTeacherId || !r.substituteTeacherId) continue;
     if (!match(r.originalSession)) continue;
 
+    const periodOpts: LeaveBillableOptions = {
+      ...calendarOpts,
+      period: r.originalSession?.period,
+    };
     const inMonth = countLeaveSubstitutePeriodsInMonth(
       r,
       settlementMonth,
       settlementYear,
-      excludeDates
+      excludeDates,
+      periodOpts
     );
     if (inMonth === null) {
       if (!options?.includeLegacyWithoutDates?.(r)) continue;
       total += countLeaveSubstitutePeriods(r, excludeDates, {
         settlementMonth,
         settlementYear,
+        ...periodOpts,
       });
       continue;
     }
@@ -270,8 +360,14 @@ export function countBillableDaysForSubstituteApprove(
     'leaveDateStart' | 'leaveDateEnd' | 'originalSession' | 'requestNumber' | 'createdAt'
   >,
   excludeDates: ExcludeDates,
-  settlementYearForMonth: (month: number) => number
+  settlementYearForMonth: (month: number) => number,
+  billableOptions?: LeaveBillableOptions
 ): { billable: number; missingLeaveDate: boolean } {
+  const opts: LeaveBillableOptions = {
+    period: billableOptions?.period ?? request.originalSession?.period,
+    temporaryMoves: billableOptions?.temporaryMoves,
+    partialStops: billableOptions?.partialStops,
+  };
   if (request.leaveDateStart) {
     const end =
       resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) ||
@@ -281,7 +377,8 @@ export function countBillableDaysForSubstituteApprove(
         request.leaveDateStart,
         end,
         request.originalSession.dayOfWeek,
-        excludeDates
+        excludeDates,
+        opts
       ),
       missingLeaveDate: false,
     };
@@ -297,7 +394,8 @@ export function countBillableDaysForSubstituteApprove(
       start,
       end,
       request.originalSession.dayOfWeek,
-      excludeDates
+      excludeDates,
+      opts
     ),
     missingLeaveDate: true,
   };
@@ -447,6 +545,8 @@ export function validateSubstituteLeaveInput(params: {
   excludeRequestIds?: string[];
   /** 行事曆放假日（YYYY-MM-DD），放假日不可請假派代 */
   nonTeachingDates?: ExcludeDates;
+  temporaryMoves?: TemporaryScheduleMove[] | null;
+  partialStops?: PartialNonTeachingDay[] | null;
 }): ValidateSubstituteLeaveResult {
   const {
     leaveDateMode,
@@ -458,6 +558,8 @@ export function validateSubstituteLeaveInput(params: {
     dayNames,
     excludeRequestIds,
     nonTeachingDates,
+    temporaryMoves,
+    partialStops,
   } = params;
 
   if (!leaveDateStart) {
@@ -482,26 +584,31 @@ export function validateSubstituteLeaveInput(params: {
       : leaveDateStart;
 
   const holidaySet = asExcludeSet(nonTeachingDates);
-  if (holidaySet.size > 0) {
-    if (isNonTeachingDate(leaveDateStart, holidaySet) && leaveDateMode === 'single') {
+  if (isNonTeachingDate(leaveDateStart, holidaySet) && leaveDateMode === 'single') {
+    return {
+      ok: false,
+      message: `請假日 ${leaveDateStart} 為行事曆放假日，不計鐘點且不可派代。請改選上課日，或至系統參數調整放假日。`,
+    };
+  }
+
+  // 含半日停課／暫時移課：即使沒有整天放假日也要檢查可計節
+  for (const s of targetSessions) {
+    const billable = countMatchingWeekdays(
+      leaveDateStart,
+      resolvedLeaveEnd,
+      s.dayOfWeek,
+      holidaySet,
+      {
+        period: s.period,
+        temporaryMoves,
+        partialStops,
+      }
+    );
+    if (billable <= 0) {
       return {
         ok: false,
-        message: `請假日 ${leaveDateStart} 為行事曆放假日，不計鐘點且不可派代。請改選上課日，或至系統參數調整放假日。`,
+        message: `請假區間內「${dayNames[s.dayOfWeek]}第${s.period}節」無可計節上課日（放假／半日停課／暫時移課），無法派代。請改日期或調整行事曆。`,
       };
-    }
-    for (const s of targetSessions) {
-      const billable = countMatchingWeekdays(
-        leaveDateStart,
-        resolvedLeaveEnd,
-        s.dayOfWeek,
-        holidaySet
-      );
-      if (billable <= 0) {
-        return {
-          ok: false,
-          message: `請假區間內「${dayNames[s.dayOfWeek]}」皆為放假日（或不含可計節上課日），無法派代。請改日期或調整行事曆放假日。`,
-        };
-      }
     }
   }
 

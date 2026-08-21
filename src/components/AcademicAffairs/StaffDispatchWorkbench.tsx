@@ -515,9 +515,29 @@ export const StaffDispatchWorkbench: React.FC = () => {
         applicantTeacherId: applicantTeacher.id,
         dayNames,
         nonTeachingDates: nonTeachingDateSet(systemConfig.nonTeachingDays),
+        temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+        partialStops: systemConfig.partialNonTeachingDays || [],
       });
       if (leaveCheck.ok === false) {
         alert(leaveCheck.message);
+        return;
+      }
+    }
+
+    if (requestType === 'reschedule') {
+      if (venues.length === 0) {
+        alert('尚未維護實習工場／教室清單，無法送出移課。請先至系統參數新增場地。');
+        return;
+      }
+      if (!targetVenueId) {
+        alert('請選擇移課目標工場／教室。');
+        return;
+      }
+    }
+
+    if (requestType === 'swap') {
+      if (!swapTargetTeacherId || !swapTargetSessionId) {
+        alert('請完整選擇對調教師與對調課堂');
         return;
       }
     }

@@ -789,7 +789,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const now = Date.now();
           const result = await pushSharedSchoolData(
             cloudSyncSettings,
-            buildSharedSchoolData(now)
+            buildSharedSchoolData(now),
+            { ifMatchUpdatedAt: 0 }
           );
           if (result === 'ok') {
             lastCloudSyncAtRef.current = now;
@@ -1344,6 +1345,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq.requestType === 'substitute' && !targetReq.substituteTeacherId) {
       return { ok: false, reason: '尚未指定代課教師' };
     }
+    if (targetReq.requestType === 'reschedule' && !targetReq.targetReschedule) {
+      return { ok: false, reason: '移課申請缺少目標時段／場地' };
+    }
+    if (targetReq.requestType === 'swap' && !targetReq.swapTargetSession) {
+      return { ok: false, reason: '相互調課缺少對調課堂' };
+    }
 
     const resolvedOrig = resolveOriginalSession(targetReq, workingSessions);
     const resolvedSwap =
@@ -1365,7 +1372,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         targetReq,
         holidaySet,
         (month) =>
-          calendarYearForSettlementMonth(month, new Date(), systemConfig.academicYear)
+          calendarYearForSettlementMonth(month, new Date(), systemConfig.academicYear),
+        {
+          temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+          partialStops: systemConfig.partialNonTeachingDays || [],
+        }
       );
       if (billable <= 0) {
         return {
@@ -1629,7 +1640,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { billable, missingLeaveDate } = countBillableDaysForSubstituteApprove(
           probe,
           holidaySet,
-          (m) => calendarYearForSettlementMonth(m, new Date(), systemConfig.academicYear)
+          (m) => calendarYearForSettlementMonth(m, new Date(), systemConfig.academicYear),
+          {
+            temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+            partialStops: systemConfig.partialNonTeachingDays || [],
+          }
         );
         if (billable <= 0) {
           throw new Error(
@@ -1735,10 +1750,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     group: SubstituteRequest[]
   ): { ok: true; sessions: CourseSession[] } | { ok: false; reason: string } => {
     const approved = group.filter((r) => r.status === 'approved');
-    // 回滾時需看全庫仍核准單，避免清掉同格其他請假標註
-    const poolForSibling = requests;
+    // 回滾時需看全庫仍核准單，但已回滾的 id 須排除，避免幽靈 [請假派代] 標註
     let next = sessions;
+    const completedRollbackIds = new Set<string>();
     for (const r of approved) {
+      const poolForSibling = requests.filter((x) => !completedRollbackIds.has(x.id));
       const result = rollbackRequestFromSessionsDetailed(next, r, poolForSibling);
       if (!result.rolledBack && result.blockedReason) {
         return {
@@ -1746,6 +1762,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           reason: `${r.requestNumber || r.id}：${result.blockedReason}`,
         };
       }
+      if (result.rolledBack) completedRollbackIds.add(r.id);
       next = result.sessions;
     }
     return { ok: true, sessions: next };
@@ -2277,6 +2294,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             s.period <= 7,
           includeLegacyWithoutDates: (r) =>
             requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth),
+          temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+          partialStops: systemConfig.partialNonTeachingDays || [],
         }
       );
       const monthlyOverload = Math.max(0, rawMonthlyOverload - leaveConcurrentDeduct);
@@ -2301,6 +2320,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           matchSession: (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
           includeLegacyWithoutDates: (r) =>
             requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth),
+          temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+          partialStops: systemConfig.partialNonTeachingDays || [],
         }
       );
       const monthlyCounseling = Math.max(0, rawMonthlyCounseling - leaveCounselingDeduct);
@@ -2317,6 +2338,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const rateForRequest = (r: SubstituteRequest) =>
         r.originalSession?.period === 8 ? counselingRate : hourlyRate;
 
+      const leaveCalendarOpts = {
+        temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+        partialStops: systemConfig.partialNonTeachingDays || [],
+      };
+
       requests
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
         .forEach((r) => {
@@ -2324,7 +2350,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             r,
             settlementMonth,
             settlementYear,
-            holidaySet
+            holidaySet,
+            leaveCalendarOpts
           );
           // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：依單號月份，且該月該星期須有上課日
           const periods =
@@ -2333,6 +2360,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 ? countLeaveSubstitutePeriods(r, holidaySet, {
                     settlementMonth,
                     settlementYear,
+                    ...leaveCalendarOpts,
                   })
                 : 0
               : inMonthPeriods;

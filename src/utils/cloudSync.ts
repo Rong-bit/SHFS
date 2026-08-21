@@ -216,10 +216,29 @@ export const pullSharedSchoolData = async (
   throw new Error('雲端資料格式不符，或同步密碼不正確。');
 };
 
+/** 讀取遠端並取得 ETag，供條件寫入避免最後寫入覆蓋 */
+const pullSharedSchoolDataWithEtag = async (
+  settings: CloudSyncSettings
+): Promise<{ data: SharedSchoolData | null; etag: string | null }> => {
+  const endpoint = await buildEndpoint(settings);
+  const res = await fetch(endpoint);
+  if (!res.ok) {
+    throw new Error(`同步讀取失敗（HTTP ${res.status}）。請確認資料庫網址與規則。`);
+  }
+  const etag = res.headers.get('ETag');
+  const json = await res.json();
+  if (!json) return { data: null, etag };
+  if (json.v === 1 && json.ct && json.iv) {
+    return { data: await decryptPayload(settings.schoolKey, json as EncryptedEnvelope), etag };
+  }
+  throw new Error('雲端資料格式不符，或同步密碼不正確。');
+};
+
 export type PushSharedResult = 'ok' | 'conflict';
 
 /**
  * 寫入雲端。若 ifMatchUpdatedAt 有值且遠端較新，不覆寫並回傳 conflict。
+ * 盡量以 Firebase REST ETag + If-Match 做條件寫入，縮短 check-then-PUT 競態。
  * 成功後才視為寫入完成（呼叫端應在 ok 後再更新本機時間戳）。
  */
 export const pushSharedSchoolData = async (
@@ -229,21 +248,36 @@ export const pushSharedSchoolData = async (
 ): Promise<PushSharedResult> => {
   if (!isCloudSyncReady(settings)) return 'ok';
 
+  let ifMatchEtag: string | null = null;
+  let remoteHadData = false;
   if (options?.ifMatchUpdatedAt != null) {
-    const remote = await pullSharedSchoolData(settings);
-    if (remote && remote.updatedAt > options.ifMatchUpdatedAt) {
+    const remote = await pullSharedSchoolDataWithEtag(settings);
+    if (remote.data && remote.data.updatedAt > options.ifMatchUpdatedAt) {
       return 'conflict';
     }
+    remoteHadData = Boolean(remote.data);
+    ifMatchEtag = remote.etag;
   }
 
   const endpoint = await buildEndpoint(settings);
   const safe = stripSecretsFromSharedData(data);
   const envelope = await encryptPayload(settings.schoolKey, safe);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // 有遠端資料時帶 If-Match；空節點則用 If-None-Match 擋雙機同時首次建檔
+  if (remoteHadData && ifMatchEtag && ifMatchEtag !== 'null' && ifMatchEtag !== '"null"') {
+    headers['If-Match'] = ifMatchEtag;
+  } else if (options?.ifMatchUpdatedAt != null && !remoteHadData) {
+    headers['If-None-Match'] = '*';
+  }
+
   const res = await fetch(endpoint, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(envelope),
   });
+  if (res.status === 412) {
+    return 'conflict';
+  }
   if (!res.ok) {
     throw new Error(`同步寫入失敗（HTTP ${res.status}）。請確認 Realtime Database 規則允許寫入。`);
   }

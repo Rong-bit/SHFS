@@ -67,6 +67,7 @@ export const exportSystemBackup = () => {
   Object.values(STORAGE_KEYS).forEach((key) => {
     let value = localStorage.getItem(key);
     if (key === STORAGE_KEYS.TEACHERS) value = sanitizeTeachersJson(value);
+    if (key === STORAGE_KEYS.STAFF_LIST) value = sanitizePasswordListJson(value);
     if (key === STORAGE_KEYS.CONFIG) value = sanitizeConfigJson(value);
     data[key] = value;
   });

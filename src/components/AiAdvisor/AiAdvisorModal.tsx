@@ -74,8 +74,8 @@ export const AiAdvisorModal: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query,
-          context: {
+          message: query,
+          contextData: {
             teachers: teachers.map((t) => ({
               id: t.id,
               name: t.name,
@@ -89,16 +89,37 @@ export const AiAdvisorModal: React.FC = () => {
               id: v.id,
               name: v.name,
               department: v.department,
-              isWorkshop: v.isWorkshop,
+              safetyLevel: v.safetyLevel,
+              isWorkshop:
+                v.safetyLevel === '高安全防護' ||
+                v.safetyLevel === '危險機具區' ||
+                v.name.includes('工場') ||
+                v.name.includes('實習'),
             })),
-            systemConfig,
+            systemConfig: {
+              schoolName: systemConfig.schoolName,
+              academicYear: systemConfig.academicYear,
+              semester: systemConfig.semester,
+              currentMonth: systemConfig.currentMonth,
+              dayHourlyRate: systemConfig.dayHourlyRate,
+              nightHourlyRate: systemConfig.nightHourlyRate,
+              maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+              standardBasePeriods: systemConfig.standardBasePeriods,
+              // 刻意不送 authConfig／密碼相關欄位
+            },
             sessionsCount: sessions.length,
           },
         }),
       });
 
       const data = await response.json();
-      const reply = data.answer || '抱歉，系統暫時無法取得回應，請稍後再試。';
+      const reply =
+        data.reply ||
+        data.fallbackReply ||
+        data.answer ||
+        (data.error
+          ? `AI 顧問暫時無法回應：${data.error}`
+          : '抱歉，系統暫時無法取得回應，請稍後再試。');
 
       const botMsg: ChatMessage = {
         id: `bot-${Date.now()}`,

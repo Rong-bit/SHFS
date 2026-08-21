@@ -10,7 +10,6 @@ import {
   BookOpen, 
   Plus, 
   ArrowLeftRight, 
-  Sparkles,
   AlertCircle,
   Coins,
   CheckCircle,
@@ -207,11 +206,17 @@ export const TeacherSchedule: React.FC = () => {
                     </span>
                     <button
                       onClick={() => {
-                        setNewPassword(''); // 不回填雜湊／明文，留空表示重新設定
-                        setIsChangePasswordOpen(true);
+                        requestTeacherActionAuth(
+                          currentTeacher.id,
+                          () => {
+                            setNewPassword(''); // 不回填雜湊／明文，留空表示重新設定
+                            setIsChangePasswordOpen(true);
+                          },
+                          '設定登入密碼'
+                        );
                       }}
                       className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[11px] font-medium flex items-center space-x-1 transition"
-                      title="修改此教師身分的登入密碼"
+                      title="修改此教師身分的登入密碼（須先通過身分驗證）"
                     >
                       <KeyRound className="w-3 h-3 text-amber-400" />
                       <span>設定密碼</span>

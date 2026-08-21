@@ -19,6 +19,7 @@ import {
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
+import { isPlaceholderSession } from '../../utils/resolveOriginalSession';
 import { ModalShell } from '../Common/ModalShell';
 import { 
   X, 
@@ -468,7 +469,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           leaveDateStart,
           leaveDateEnd,
           leaveDay,
-          nonTeachingDateSet(systemConfig.nonTeachingDays)
+          nonTeachingDateSet(systemConfig.nonTeachingDays),
+          {
+            period: leavePeriod !== '' ? leavePeriod : undefined,
+            temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+            partialStops: systemConfig.partialNonTeachingDays || [],
+          }
         )
       : 0;
 
@@ -507,9 +513,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         applicantTeacherId: currentTeacher.id,
         dayNames,
         nonTeachingDates: nonTeachingDateSet(systemConfig.nonTeachingDays),
+        temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+        partialStops: systemConfig.partialNonTeachingDays || [],
       });
       if (leaveCheck.ok === false) {
         alert(leaveCheck.message);
+        return;
+      }
+      if (sessionsToLeave.some((s) => isPlaceholderSession(s))) {
+        alert(
+          '找不到對應課表課堂（佔位資料）。請先匯入／維護個人課表後再申請，或改由教學組逕行派代。'
+        );
         return;
       }
       if (clashResult.hasClash) {
@@ -565,6 +579,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         alert('請選擇移課目標工場／教室。');
         return;
       }
+      if (!targetVenueObj) {
+        alert('所選移課場地無效或不存在，請重新選擇目標工場／教室。');
+        return;
+      }
     }
 
     if (clashResult.hasClash) {
@@ -608,12 +626,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         paymentType,
         originalSession: effectiveOriginalSession,
         targetReschedule:
-          requestType === 'reschedule'
+          requestType === 'reschedule' && targetVenueObj
             ? {
                 dayOfWeek: targetDay,
                 period: targetPeriod,
-                venueId: targetVenueId,
-                venueName: targetVenueObj?.name || '指定教室',
+                venueId: targetVenueObj.id,
+                venueName: targetVenueObj.name,
               }
             : undefined,
         swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,

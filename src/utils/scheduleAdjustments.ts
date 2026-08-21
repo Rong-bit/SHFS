@@ -229,6 +229,21 @@ export function applyRequestToSessionsDetailed(
     };
   }
 
+  if (reqResolved.requestType === 'reschedule') {
+    return {
+      sessions,
+      applied: false,
+      reason: '移課申請缺少目標時段／場地，無法套用課表',
+    };
+  }
+  if (reqResolved.requestType === 'swap') {
+    return {
+      sessions,
+      applied: false,
+      reason: '相互調課缺少對調課堂，無法套用課表',
+    };
+  }
+
   // 請假未指定代課等：無課表異動，視為成功（僅改單據狀態）
   return { sessions, applied: true };
 }
@@ -498,12 +513,16 @@ export function rollbackApprovedRequestsNewestFirstDetailed(
 
   let next = sessions;
   const blocked: BatchRollbackResult['blocked'] = [];
+  /** 已回滾的單須自 sibling pool 排除，避免後續回滾又寫回幽靈請假標註 */
+  const completedRollbackIds = new Set<string>();
   for (const r of approved) {
-    const result = rollbackRequestFromSessionsDetailed(next, r, requests);
+    const poolForSibling = requests.filter((x) => !completedRollbackIds.has(x.id));
+    const result = rollbackRequestFromSessionsDetailed(next, r, poolForSibling);
     if (!result.rolledBack && result.blockedReason) {
       blocked.push({ request: r, reason: result.blockedReason });
       continue;
     }
+    if (result.rolledBack) completedRollbackIds.add(r.id);
     next = result.sessions;
   }
   return { sessions: next, blocked };

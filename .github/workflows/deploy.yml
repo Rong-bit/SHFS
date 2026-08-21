@@ -40,7 +40,11 @@ jobs:
           touch dist/.nojekyll
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          # 若倉庫尚未啟用 Pages，由此自動啟用（build_type=workflow）
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

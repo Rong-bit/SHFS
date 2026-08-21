@@ -12,7 +12,8 @@ import {
   Cloud,
   CloudOff,
   Loader2,
-  KeyRound
+  KeyRound,
+  Sparkles
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
@@ -32,6 +33,7 @@ export const Header: React.FC = () => {
     requestTeacherSwitchWithAuth,
     updateAcademicStaffPassword,
     cloudSyncStatus,
+    setIsAiAdvisorOpen,
   } = useApp();
 
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
@@ -89,8 +91,17 @@ export const Header: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Actions: AI Advisor & Reset */}
+          {/* Right Actions: AI Advisor & Sync */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+            <button
+              type="button"
+              onClick={() => setIsAiAdvisorOpen(true)}
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11px] sm:text-xs font-bold border border-amber-500/40 transition"
+              title="開啟 AI 法規與排課顧問"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">AI 顧問</span>
+            </button>
             {cloudSyncStatus === 'off' ? (
               <button
                 type="button"

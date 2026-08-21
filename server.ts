@@ -39,7 +39,11 @@ app.get("/api/health", (_req, res) => {
 // AI Advisor endpoint for Vocational High School Regulations & Schedule Optimization
 app.post("/api/ai-advisor", async (req, res) => {
   try {
-    const { message, contextData, conversationHistory } = req.body;
+    const body = req.body || {};
+    // 相容前端 message/contextData 與舊版 query/context
+    const message = body.message || body.query || "";
+    const contextData = body.contextData ?? body.context;
+    const conversationHistory = body.conversationHistory;
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -48,6 +52,10 @@ app.post("/api/ai-advisor", async (req, res) => {
         reply: `【教育部技術型高級中等學校排課與調代課法規指引】\n\n針對您的提問：「${message}」\n\n根據《高級中等學校教師每週授課節數標準》及相關代課差假法規要點：\n1. **鐘點費基準**：高職日間部教師兼代課鐘點費標準為 **420元/節**；夜間部/進修部/第八節課輔為 **500元/節**。\n2. **授課節數標準**：專任教師 16 節、導師 12 節（減授4節）、科主任 10 節（減授6節）、各處室組長 8 節（減授8節）。\n3. **兼代課上限**：專任教師每週兼任、代課節數合計以 **9 節** 為限（兼課不得超過 4 節，代課不得超過 5 節）。\n4. **公差假公費派代**：因公派差（如指導學生參加全國技藝競賽、技能檢定監評、校外輔導團公差）由學校支給代課鐘點費（公費派代），原任教師不扣薪；私人事病假則採自費代課。\n5. **實習工場安全**：高職專業實習課凡分組教學（達25人以上）或具危險性機具操作，得依規定安排雙師協同教學，並核實核算授課鐘點。\n\n如需進一步推薦特定無課代課教師，請於系統排課模組直接檢視即時衝堂分析！`,
         modelUsed: "local-rules-engine",
       });
+    }
+
+    if (!String(message).trim()) {
+      return res.status(400).json({ error: "請提供諮詢問題", reply: "請輸入您想詢問的調代課或鐘點費問題。" });
     }
 
     const ai = getGeminiAI();
@@ -79,6 +87,14 @@ ${typeof contextData === "string" ? contextData : JSON.stringify(contextData, nu
 
 【使用者問題/諮詢情境】：
 ${message}`;
+    }
+
+    if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+      const historyText = conversationHistory
+        .slice(-8)
+        .map((h: { role?: string; content?: string }) => `${h.role || "user"}: ${h.content || ""}`)
+        .join("\n");
+      promptText = `【近期對話】\n${historyText}\n\n${promptText}`;
     }
 
     const response = await ai.models.generateContent({
