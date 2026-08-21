@@ -4,9 +4,11 @@ import {
   parseScheduleFile,
   generateTemplateExcel,
   exportScheduleToExcel,
+  venueOptionsForImportRow,
   ImportParseResult,
   ParsedImportRow,
 } from '../../utils/scheduleImporter';
+import { departmentFromClassName } from '../../utils/schoolDepartments';
 import {
   Upload,
   FileSpreadsheet,
@@ -368,6 +370,35 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
     }
   };
 
+  /** 預覽時下拉改選工場／教室 */
+  const updatePreviewVenue = (target: ParsedImportRow, venueName: string) => {
+    setParseResult((prev) => {
+      if (!prev) return prev;
+      const match = (r: ParsedImportRow) =>
+        r.rowNumber === target.rowNumber &&
+        r.dayOfWeek === target.dayOfWeek &&
+        r.period === target.period &&
+        r.className === target.className &&
+        r.subjectName === target.subjectName;
+      const patch = (list: ParsedImportRow[]) =>
+        list.map((r) => {
+          if (!match(r)) return r;
+          const warnings = r.warnings.filter(
+            (w) => !w.includes('未填「實習工場') && !w.includes('將暫用')
+          );
+          return { ...r, venueName, warnings };
+        });
+      const validRows = patch(prev.validRows);
+      const invalidRows = patch(prev.invalidRows);
+      const allNames = [...validRows, ...invalidRows]
+        .map((r) => r.venueName.trim())
+        .filter(Boolean);
+      const existing = new Set(venues.map((v) => v.name.trim()));
+      const newVenueNames = Array.from(new Set(allNames.filter((n) => !existing.has(n))));
+      return { ...prev, validRows, invalidRows, newVenuesDetected: newVenueNames };
+    });
+  };
+
   // Filter preview rows
   const getFilteredRows = () => {
     if (!parseResult) return [];
@@ -509,14 +540,14 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                           首次使用？請先下載「高職課表匯入範本 Excel」
                         </h4>
                         <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
-                          範本已預先內建高職技術群科欄位（包含實習工場、專業科別、實習課註記與防呆規則）。您填妥後即可直接上傳。
+                          範本含「場地清單」工作表（可篩電機科工場）。上傳後也可在預覽用下拉選單改選工場。
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={generateTemplateExcel}
+                        onClick={() => generateTemplateExcel(venues)}
                         className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition active:scale-95"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -962,6 +993,9 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                     </div>
 
                     {/* Table View */}
+                    <p className="text-[11px] text-slate-500 mb-1.5">
+                      「實習工場／教室」欄可下拉改選；同科工場會標 ★（例如電機科課優先列出電機科工場）。
+                    </p>
                     <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 border-b border-slate-200">
@@ -971,7 +1005,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                             <th className="p-2.5 w-20">班級</th>
                             <th className="p-2.5">科目名稱</th>
                             <th className="p-2.5 w-20">授課教師</th>
-                            <th className="p-2.5">實習工場 / 教室</th>
+                            <th className="p-2.5">實習工場 / 教室（可下拉）</th>
                             <th className="p-2.5 text-center w-16">屬性</th>
                             <th className="p-2.5">狀態</th>
                           </tr>
@@ -1007,8 +1041,29 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                                 <td className="p-2.5 font-semibold text-indigo-700">
                                   {row.teacherName}
                                 </td>
-                                <td className="p-2.5 text-slate-600 truncate max-w-[160px]">
-                                  {row.venueName}
+                                <td className="p-2.5 text-slate-600 max-w-[220px]">
+                                  <select
+                                    value={row.venueName}
+                                    onChange={(e) => updatePreviewVenue(row, e.target.value)}
+                                    className="w-full max-w-[200px] bg-white border border-slate-300 rounded-lg px-1.5 py-1 text-[11px] text-slate-800 focus:ring-1 focus:ring-amber-500"
+                                    title="依科別優先列出工場；可改選後再確認匯入"
+                                  >
+                                    {venueOptionsForImportRow(row, venues).map((name) => {
+                                      const dept =
+                                        row.department ||
+                                        departmentFromClassName(row.className) ||
+                                        '';
+                                      const sameDept =
+                                        dept &&
+                                        (venues.find((v) => v.name === name)?.department === dept ||
+                                          name.includes(String(dept).replace(/科$/, '')));
+                                      return (
+                                        <option key={name} value={name}>
+                                          {sameDept ? `★ ${name}` : name}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
                                 </td>
                                 <td className="p-2.5 text-center">
                                   <div className="flex flex-col items-center gap-0.5">

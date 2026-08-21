@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
 import { departmentFromClassName, departmentFromLabel, isInternshipCourse } from './schoolDepartments';
 import {
+  classifyVenueKind,
   practicalVenueMissingWarn,
   resolveImportVenueName,
 } from './venueKinds';
@@ -791,9 +792,10 @@ export const parseScheduleFile = async (
 };
 
 /**
- * Generate sample Excel template for users to download and fill in
+ * Generate sample Excel template for users to download and fill in.
+ * 若傳入 venues，會附加「場地清單」工作表，方便對照／複製工場名稱。
  */
-export const generateTemplateExcel = () => {
+export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
   const wb = XLSX.utils.book_new();
 
   // 1. Template data sheet
@@ -805,7 +807,7 @@ export const generateTemplateExcel = () => {
       '科目名稱': '電工機械實習',
       '授課教師姓名': '林建宏',
       '教師科別 (電機科/資訊科/機械科/共同科目)': '電機科',
-      '實習工場/教室名稱': '電機實習工場 A (室內配線)',
+      '實習工場/教室名稱': '電機科電工機械實習工場',
       '是否為實習實作課 (是/否)': '是',
       '1.兼課2.': '',
       '備註說明 (選填)': '分組實習第1組',
@@ -817,20 +819,20 @@ export const generateTemplateExcel = () => {
       '科目名稱': '電工機械實習',
       '授課教師姓名': '林建宏',
       '教師科別 (電機科/資訊科/機械科/共同科目)': '電機科',
-      '實習工場/教室名稱': '電機實習工場 A (室內配線)',
+      '實習工場/教室名稱': '電機科電工機械實習工場',
       '是否為實習實作課 (是/否)': '是',
       '備註說明 (選填)': '分組實習第1組',
     },
     {
       '星期 (1~5 或 週一~週五)': '週一',
       '節次 (1~8)': 3,
-      '班級名稱': '資訊三乙',
-      '科目名稱': '微處理機實習',
-      '授課教師姓名': '張志強',
-      '教師科別 (電機科/資訊科/機械科/共同科目)': '資訊科',
-      '實習工場/教室名稱': '微處理機與單晶片實習室',
+      '班級名稱': '電機一孝',
+      '科目名稱': '配線實習',
+      '授課教師姓名': '林建宏',
+      '教師科別 (電機科/資訊科/機械科/共同科目)': '電機科',
+      '實習工場/教室名稱': '電機科配線實習工場',
       '是否為實習實作課 (是/否)': '是',
-      '備註說明 (選填)': 'ARM 單晶片專題',
+      '備註說明 (選填)': '室內配線',
     },
     {
       '星期 (1~5 或 週一~週五)': '週二',
@@ -850,10 +852,10 @@ export const generateTemplateExcel = () => {
       '科目名稱': '實用數學 II',
       '授課教師姓名': '李雅筑',
       '教師科別 (電機科/資訊科/機械科/共同科目)': '共同科目',
-      '實習工場/教室名稱': '普通教學大樓 301 教室',
+      '實習工場/教室名稱': '',
       '是否為實習實作課 (是/否)': '否',
       '1.兼課2.': 1,
-      '備註說明 (選填)': '一般部定必修學科',
+      '備註說明 (選填)': '學科未填教室→原班普通教室',
     },
   ];
 
@@ -869,12 +871,38 @@ export const generateTemplateExcel = () => {
     { wch: 24 }, // 科別
     { wch: 30 }, // 場地
     { wch: 18 }, // 實習
+    { wch: 12 }, // 兼課
     { wch: 20 }, // 備註
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, '高職課表匯入範本');
 
-  // 2. Add guide sheet
+  // 2. Venue list sheet (for copy / Excel data validation reference)
+  const venueListHeader = [['科別', '場地類型', '場地名稱', '代碼']];
+  const venueListRows =
+    venues.length > 0
+      ? [...venues]
+          .sort((a, b) =>
+            String(a.department).localeCompare(String(b.department), 'zh-Hant') ||
+            a.name.localeCompare(b.name, 'zh-Hant')
+          )
+          .map((v) => {
+            const kind = classifyVenueKind(v.name);
+            const kindLabel =
+              kind === 'workshop' ? '實習工場' : kind === 'homeroom' ? '原班教室' : '一般教室';
+            return [v.department, kindLabel, v.name, v.code];
+          })
+      : [
+          ['電機科', '實習工場', '電機科配線實習工場', 'WS-101'],
+          ['電機科', '實習工場', '電機科電工機械實習工場', 'WS-102'],
+          ['電機科', '實習工場', '電機科實習工場', 'WS-100'],
+          ['機械科', '實習工場', 'CNC 精密車銑複合工場', 'WS-201'],
+        ];
+  const wsVenues = XLSX.utils.aoa_to_sheet([...venueListHeader, ...venueListRows]);
+  wsVenues['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 36 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, wsVenues, '場地清單');
+
+  // 3. Add guide sheet
   const guideData = [
     ['技術型高級中等學校 (高職) 課表匯入說明指南'],
     [''],
@@ -885,20 +913,65 @@ export const generateTemplateExcel = () => {
     ['科目名稱', '必填', '如：電工機械實習、數位邏輯、CNC銑床加工'],
     ['授課教師姓名', '必填', '填寫教師全名。如系統中尚無該教師，系統將自動建檔並標記科別'],
     ['教師科別', '選填', '電機科 / 資訊科 / 機械科 / 共同科目'],
-    ['實習工場/教室名稱', '建議填寫', '有填→依名稱建立工場；實習課未填→暫用「xx科實習工場」；學科未填→「班級 原班普通教室」'],
+    [
+      '實習工場/教室名稱',
+      '建議填寫',
+      '請從「場地清單」工作表複製名稱貼上。實習課建議填具體工場（如電機科配線實習工場）。上傳後亦可在預覽畫面用下拉選單改選。',
+    ],
     ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定實習工場課程'],
     ['1.兼課2.', '選填', '填 1 代表此節為兼課，課表會顯示「兼課」標籤'],
     ['備註說明', '選填', '如：分組教學、協同教學、課輔節數等備註'],
+    [''],
+    ['如何在 Excel 設下拉選單（選用）：'],
+    ['1. 選取「高職課表匯入範本」工作表的「實習工場/教室名稱」欄資料列'],
+    ['2. 資料 → 資料驗證 → 允許「清單」→ 來源選「場地清單」工作表的「場地名稱」欄'],
+    ['3. 可先在場地清單用篩選只顯示「電機科」再複製名稱'],
     [''],
     ['法規提醒：'],
     ['1. 實習工場請確認無同時間重複借用，以確保學生實作安全及工場容留人數限制。'],
     ['2. 匯入前系統會自動進行衝堂檢核（包含教師衝堂、班級衝堂與實習工場佔用）。'],
   ];
   const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
-  wsGuide['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 60 }];
+  wsGuide['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 70 }];
   XLSX.utils.book_append_sheet(wb, wsGuide, '欄位填寫說明與安全指南');
 
   XLSX.writeFile(wb, '高職課表匯入範本_技術型高中標準.xlsx');
+};
+
+/** 匯入預覽：依班級／科別排序工場選項（同科工場優先） */
+export const venueOptionsForImportRow = (
+  row: Pick<ParsedImportRow, 'className' | 'department' | 'venueName' | 'isPractical'>,
+  venues: WorkshopVenue[]
+): string[] => {
+  const dept =
+    row.department ||
+    departmentFromClassName(row.className) ||
+    '共同科目';
+  const names = new Set<string>();
+  if (row.venueName?.trim()) names.add(row.venueName.trim());
+
+  const sameDept = venues.filter((v) => v.department === dept);
+  const sameDeptWorkshops = sameDept.filter((v) => classifyVenueKind(v.name) === 'workshop');
+  const sameDeptOther = sameDept.filter((v) => classifyVenueKind(v.name) !== 'workshop');
+  const otherWorkshops = venues.filter(
+    (v) => v.department !== dept && classifyVenueKind(v.name) === 'workshop'
+  );
+
+  for (const v of [...sameDeptWorkshops, ...sameDeptOther, ...otherWorkshops, ...venues]) {
+    if (v.name?.trim()) names.add(v.name.trim());
+  }
+
+  // 常用預設名稱（系統尚無該場地時仍可選，匯入會自動建檔）
+  if (row.isPractical && dept && dept !== '共同科目') {
+    names.add(`${dept}實習工場`);
+    names.add(`${dept}配線實習工場`);
+    names.add(`${dept}電工機械實習工場`);
+  }
+  if (row.className) {
+    names.add(`${row.className} 原班普通教室`);
+  }
+
+  return Array.from(names);
 };
 
 /**

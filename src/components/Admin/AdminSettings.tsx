@@ -517,9 +517,9 @@ export const AdminSettings: React.FC = () => {
           {/* Download Template Excel */}
           <button
             id="btn-admin-top-download-template"
-            onClick={generateTemplateExcel}
+            onClick={() => generateTemplateExcel(venues)}
             className="flex items-center space-x-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
-            title="下載標準課表 Excel 範本檔案"
+            title="下載標準課表 Excel 範本檔案（含場地清單）"
           >
             <Download className="w-3.5 h-3.5 text-slate-600" />
             <span className="hidden sm:inline">下載範本</span>
@@ -2081,7 +2081,7 @@ export const AdminSettings: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2.5 text-xs">
                 <button
                   id="btn-admin-download-template"
-                  onClick={generateTemplateExcel}
+                  onClick={() => generateTemplateExcel(venues)}
                   className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold transition"
                 >
                   <Download className="w-3.5 h-3.5 text-amber-400" />
