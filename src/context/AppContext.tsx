@@ -133,6 +133,8 @@ interface AppContextType {
   addVenue: (venue: Omit<WorkshopVenue, 'id'>) => WorkshopVenue;
   updateVenue: (id: string, data: Partial<WorkshopVenue>) => void;
   deleteVenue: (id: string) => void;
+  /** 匯入後調整單堂課的工場／教室 */
+  updateSessionVenue: (sessionId: string, venueId: string) => boolean;
   addTeacher: (teacher: Omit<Teacher, 'id' | 'weeklyActualPeriods'>) => Teacher;
   updateTeacher: (id: string, data: Partial<Teacher>) => void;
   deleteTeacher: (id: string) => void;
@@ -2215,6 +2217,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setVenues((prev) => prev.filter((v) => v.id !== id));
   };
 
+  const updateSessionVenue = (sessionId: string, venueId: string): boolean => {
+    const venue = venues.find((v) => v.id === venueId);
+    if (!venue) return false;
+    let found = false;
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId) return s;
+        found = true;
+        return { ...s, venueId: venue.id, venueName: venue.name };
+      })
+    );
+    return found;
+  };
+
   const addTeacher = (teacherData: Omit<Teacher, 'id' | 'weeklyActualPeriods'>): Teacher => {
     const newTeacher: Teacher = {
       ...teacherData,
@@ -2557,6 +2573,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addVenue,
         updateVenue,
         deleteVenue,
+        updateSessionVenue,
         addTeacher,
         updateTeacher,
         deleteTeacher,

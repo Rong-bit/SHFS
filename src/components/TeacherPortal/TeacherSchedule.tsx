@@ -29,6 +29,7 @@ import { ModalShell } from '../Common/ModalShell';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
 import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyCounselingPeriods, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
 import { nonTeachingDateSet } from '../../utils/holidays';
+import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -260,7 +261,7 @@ export const TeacherSchedule: React.FC = () => {
 
           <div className="mt-4 pt-3 border-t border-slate-700/80 flex items-center justify-between">
             <span className="text-xs text-slate-400">
-              點選課表任一課堂可即時發起【調課 / 移課 / 請假派代】
+              點選課堂可調課／派代；工場名稱可直接下拉改選（匯入後對應用）
             </span>
             <button
               id="btn-add-request-hero"
@@ -516,12 +517,15 @@ export const TeacherSchedule: React.FC = () => {
                                   )}
                                 </div>
 
-                                <div className="mt-1.5 pt-1 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600">
-                                  <span className="truncate flex items-center gap-1 font-mono">
+                                <div className="mt-1.5 pt-1 border-t border-slate-200/60 flex flex-col gap-1 text-[11px] text-slate-600">
+                                  <div
+                                    className="flex items-center gap-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
                                     <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
-                                    {session.venueName.split(' ')[0]}
-                                  </span>
-                                  <span className="text-amber-700 opacity-0 group-hover:opacity-100 font-bold text-[10px] transition shrink-0">
+                                    <SessionVenueSelect session={session} />
+                                  </div>
+                                  <span className="text-amber-700 opacity-0 group-hover:opacity-100 font-bold text-[10px] transition self-end">
                                     調課 ➔
                                   </span>
                                 </div>

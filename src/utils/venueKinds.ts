@@ -90,3 +90,28 @@ export function autoVenueCodePrefix(name: string): string {
 export function practicalVenueMissingWarn(workshopName: string): string {
   return `實習／實作課未填「實習工場／教室」，將暫用「${workshopName}」。建議改填具體工場（如配線實習工場、電工實習工場）後再匯入。`;
 }
+
+/** 課表編輯工場：同科工場優先排序 */
+export function venuesForSessionEdit<
+  T extends { id: string; name: string; department: string }
+>(
+  session: { venueId: string; venueName: string },
+  venues: T[],
+  department?: string | null
+): T[] {
+  const dept = department || '';
+  const scored = venues.map((v) => {
+    let score = 0;
+    if (v.id === session.venueId || v.name === session.venueName) score += 100;
+    if (dept && v.department === dept) score += 20;
+    if (classifyVenueKind(v.name) === 'workshop') score += 5;
+    if (classifyVenueKind(v.name) === 'homeroom') score -= 2;
+    return { v, score };
+  });
+  return scored
+    .sort(
+      (a, b) =>
+        b.score - a.score || a.v.name.localeCompare(b.v.name, 'zh-Hant')
+    )
+    .map((x) => x.v);
+}

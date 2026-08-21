@@ -24,6 +24,7 @@ import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { ModalShell } from '../Common/ModalShell';
+import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { 
   UserCheck, 
   User, 
@@ -1358,9 +1359,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               <div className="text-xs font-bold text-slate-800 mt-1">
                                 {s.className} ｜ {s.subjectName}
                               </div>
-                              <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                                <Building2 className="w-3 h-3 text-slate-400" />
-                                <span>{s.venueName}</span>
+                              <div
+                                className="text-[11px] text-slate-500 mt-1 flex items-center gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                                <SessionVenueSelect session={s} />
                               </div>
                             </div>
                           );
@@ -1411,9 +1415,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             <div className="text-xs font-bold text-slate-800 mt-1">
                               {s.className} ｜ {s.subjectName}
                             </div>
-                            <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                              <Building2 className="w-3 h-3 text-slate-400" />
-                              <span>{s.venueName}</span>
+                            <div
+                              className="text-[11px] text-slate-500 mt-1 flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                              <SessionVenueSelect session={s} />
                             </div>
                           </div>
                         );

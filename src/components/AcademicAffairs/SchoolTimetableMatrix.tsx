@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 
 export const SchoolTimetableMatrix: React.FC = () => {
   const { sessions, teachers, venues, systemConfig, setIsImportModalOpen } = useApp();
@@ -75,7 +76,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
               <span>全校總課表與實習工場排課檢視矩陣</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              可隨時依【實習工場/專業教室】、【班級】、【教師】或【科別】進行多視角排課檢閱
+              可依工場／班級／教師／科別檢視；格子內工場名稱可下拉改選（匯入後對應用，同科標 ★）
             </p>
           </div>
 
@@ -303,13 +304,11 @@ export const SchoolTimetableMatrix: React.FC = () => {
                                   </div>
                                 </div>
 
-                                <div className="mt-1 pt-1 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600">
-                                  <span className="font-medium text-slate-800">
+                                <div className="mt-1 pt-1 border-t border-slate-200/60 space-y-1 text-[11px] text-slate-600">
+                                  <div className="font-medium text-slate-800 truncate">
                                     {session.teacherName}
-                                  </span>
-                                  <span className="text-[10px] text-slate-500 truncate max-w-[80px]">
-                                    {session.venueName.split(' ')[0]}
-                                  </span>
+                                  </div>
+                                  <SessionVenueSelect session={session} />
                                 </div>
 
                                 {session.notes && (
