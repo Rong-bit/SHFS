@@ -533,6 +533,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
         alert('請選擇移課目標工場／教室。');
         return;
       }
+      if (!venues.some((v) => v.id === targetVenueId)) {
+        alert('所選移課場地無效或不存在，請重新選擇目標工場／教室。');
+        return;
+      }
     }
 
     if (requestType === 'swap') {

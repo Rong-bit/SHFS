@@ -445,7 +445,8 @@ export const AdminSettings: React.FC = () => {
       isOpen: true,
       title: '確認刪除教師資料',
       message: `確定要自全校師資名冊中刪除「${t.name} (${t.title})」嗎？`,
-      warningMessage: '此操作將同時移除其授課節數與相關標準配置。',
+      warningMessage:
+        '將一併移除該教師的週課表節次，以及尚未核准的相關調代課申請。若尚有已核准案件則無法刪除。',
       onConfirm: () => {
         deleteTeacher(t.id);
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));

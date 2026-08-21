@@ -707,7 +707,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const remote = await pullSharedSchoolData(cloudSyncSettings);
       const remoteAt = remote?.updatedAt ?? lastCloudSyncAtRef.current;
-      lastCloudSyncAtRef.current = remoteAt;
+      // 不可在寫入成功前推進 lastCloudSyncAtRef，否則推送失敗後會跳過套用較新遠端
       const now = Date.now();
       let result = await pushSharedSchoolData(
         cloudSyncSettings,
@@ -1600,6 +1600,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const prepared: SubstituteRequest[] = [];
 
     items.forEach((data, index) => {
+      if (data.requestType === 'reschedule' && !data.targetReschedule) {
+        throw new Error('移課須指定目標時段／場地');
+      }
+      if (data.requestType === 'swap' && !data.swapTargetSession) {
+        throw new Error('相互調課須指定對調課堂');
+      }
       if (
         data.requestType === 'substitute' &&
         data.autoApprove !== false &&
@@ -2186,7 +2192,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTeacher = (id: string) => {
-    setTeachers((prev) => prev.filter((t) => t.id !== id));
+    const relatedApproved = requests.filter(
+      (r) =>
+        r.status === 'approved' &&
+        (r.applicantTeacherId === id ||
+          r.substituteTeacherId === id ||
+          r.swapTargetTeacherId === id)
+    );
+    if (relatedApproved.length > 0) {
+      window.alert(
+        `無法刪除：尚有 ${relatedApproved.length} 筆已核准調代課與該教師相關。請先駁回或取消後再刪除師資。`
+      );
+      return;
+    }
+
+    setSessions((prev) => prev.filter((s) => s.teacherId !== id));
+    setRequests((prev) =>
+      prev.filter(
+        (r) =>
+          r.applicantTeacherId !== id &&
+          r.substituteTeacherId !== id &&
+          r.swapTargetTeacherId !== id
+      )
+    );
+    setTeachers((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      if (currentTeacherId === id && next.length > 0) {
+        setCurrentTeacherId(next[0].id);
+      }
+      return next;
+    });
   };
 
   const addAcademicStaff = (staffData: Omit<AcademicStaff, 'id'>): AcademicStaff => {
