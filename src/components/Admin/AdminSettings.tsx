@@ -9,6 +9,12 @@ import {
   mergeTemporaryScheduleMoves,
   mergePartialNonTeachingDays,
 } from '../../utils/calendarSettlement';
+import {
+  classifyVenueKind,
+  venueKindBadgeClass,
+  venueKindLabel,
+  type VenueKind,
+} from '../../utils/venueKinds';
 import { 
   Settings, 
   Coins, 
@@ -208,6 +214,7 @@ export const AdminSettings: React.FC = () => {
   // Search/Filters for tables
   const [venueSearch, setVenueSearch] = useState('');
   const [venueDeptFilter, setVenueDeptFilter] = useState('ALL');
+  const [venueKindFilter, setVenueKindFilter] = useState<'ALL' | VenueKind>('ALL');
   const [teacherSearch, setTeacherSearch] = useState('');
   const [teacherDeptFilter, setTeacherDeptFilter] = useState('ALL');
   const [passwordResetTeacher, setPasswordResetTeacher] = useState<Teacher | null>(null);
@@ -458,9 +465,16 @@ export const AdminSettings: React.FC = () => {
   const filteredVenues = venues.filter((v) => {
     const matchSearch = v.name.toLowerCase().includes(venueSearch.toLowerCase()) || v.code.toLowerCase().includes(venueSearch.toLowerCase());
     const matchDept = venueDeptFilter === 'ALL' || v.department === venueDeptFilter;
-    return matchSearch && matchDept;
+    const kind = classifyVenueKind(v.name);
+    const matchKind = venueKindFilter === 'ALL' || kind === venueKindFilter;
+    return matchSearch && matchDept && matchKind;
   });
 
+  const venueKindCounts = {
+    homeroom: venues.filter((v) => classifyVenueKind(v.name) === 'homeroom').length,
+    workshop: venues.filter((v) => classifyVenueKind(v.name) === 'workshop').length,
+    classroom: venues.filter((v) => classifyVenueKind(v.name) === 'classroom').length,
+  };
   const filteredTeachers = teachers.filter((t) => {
     const matchSearch = t.name.toLowerCase().includes(teacherSearch.toLowerCase()) || t.title.includes(teacherSearch);
     const matchDept = teacherDeptFilter === 'ALL' || t.department === teacherDeptFilter;
@@ -574,7 +588,7 @@ export const AdminSettings: React.FC = () => {
             }`}
           >
             <Building2 className="w-4 h-4 text-amber-400" />
-            <span>實習工場與教室維護 ({venues.length})</span>
+            <span>工場與教室維護 ({venues.length})</span>
           </button>
 
           <button
@@ -1601,8 +1615,19 @@ export const AdminSettings: React.FC = () => {
                 ))}
                 <option value="通用教室">通用教室</option>
               </select>
-            </div>
 
+              <select
+                value={venueKindFilter}
+                onChange={(e) => setVenueKindFilter(e.target.value as 'ALL' | VenueKind)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
+                title="原班教室＝匯入未填教室時依班級自動建立；實習工場＝課表填寫的工場名稱"
+              >
+                <option value="ALL">全部類型</option>
+                <option value="workshop">實習工場 ({venueKindCounts.workshop})</option>
+                <option value="homeroom">原班教室 ({venueKindCounts.homeroom})</option>
+                <option value="classroom">一般教室 ({venueKindCounts.classroom})</option>
+              </select>
+            </div>
             <button
               id="btn-admin-add-venue"
               onClick={handleOpenAddVenue}
@@ -1614,14 +1639,23 @@ export const AdminSettings: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between">
+            <div className="bg-slate-900 text-white px-6 py-3.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center space-x-2">
                 <Building2 className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-sm">全校專業實習工場與教室清冊</h3>
+                <h3 className="font-bold text-sm">全校工場與教室清冊</h3>
               </div>
               <span className="text-xs text-slate-400">
-                共 <strong className="text-amber-400">{filteredVenues.length}</strong> 個專業場域
+                工場 <strong className="text-amber-400">{venueKindCounts.workshop}</strong>
+                <span className="mx-1.5 text-slate-600">｜</span>
+                原班教室 <strong className="text-slate-200">{venueKindCounts.homeroom}</strong>
+                <span className="mx-1.5 text-slate-600">｜</span>
+                一般教室 <strong className="text-sky-300">{venueKindCounts.classroom}</strong>
               </span>
+            </div>
+
+            <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-900">
+              「○○ 原班普通教室」是匯入課表<strong>未填教室欄</strong>時依班級自動建立的班級教室，不是實習工場。
+              配線實習、電工實習等須在 Excel「實習工場／教室」欄分別填寫工場名稱。
             </div>
 
             <div className="divide-y divide-slate-100 text-xs">
@@ -1630,14 +1664,20 @@ export const AdminSettings: React.FC = () => {
               ) : (
                 filteredVenues.map((v) => {
                   const sessionCount = sessions.filter((s) => s.venueId === v.id).length;
+                  const kind = classifyVenueKind(v.name);
                   return (
                     <div key={v.id} className="p-4 flex flex-wrap items-center justify-between gap-3 hover:bg-slate-50 transition">
                       <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-2 py-0.5 rounded border">
                             {v.code}
                           </span>
                           <span className="font-bold text-slate-900 text-sm">{v.name}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded font-bold text-[11px] border ${venueKindBadgeClass(kind)}`}
+                          >
+                            {venueKindLabel(kind)}
+                          </span>
                           <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-semibold text-[11px]">
                             {v.department}
                           </span>
@@ -1655,7 +1695,6 @@ export const AdminSettings: React.FC = () => {
                           <span className="font-semibold text-slate-700">設備配置與安全規範：</span> {v.equipmentNote || '標準實習防護規格'}
                         </p>
                       </div>
-
                       <div className="flex items-center space-x-4">
                         <div className="text-right">
                           <div className="text-xs text-slate-500">容納容量：<strong className="text-slate-800">{v.capacity} 人</strong></div>

@@ -25,6 +25,7 @@ import {
 import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
 import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
+import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -1999,18 +2000,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (mode === 'overwrite') {
       importedVenueNames.forEach((name, idx) => {
         const existing = venues.find((v) => v.name.trim() === name);
-        const isWorkshop = name.includes('工場') || name.includes('實習') || name.includes('教室');
 
         const venueObj: WorkshopVenue = existing
           ? existing
           : {
               id: `v-imp-${Date.now()}-${idx}`,
               name,
-              code: `IMP-${100 + idx}`,
+              code: `${autoVenueCodePrefix(name)}-${100 + idx}`,
               department: getVenueDept(name),
               capacity: 40,
-              safetyLevel: isWorkshop ? '標準' : '標準',
-              equipmentNote: '匯入課表時自動登記建立之教學場地',
+              safetyLevel: '標準',
+              equipmentNote: autoVenueEquipmentNote(name),
             };
         updatedVenues.push(venueObj);
         venueMap.set(name, venueObj);
@@ -2022,16 +2022,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       importedVenueNames.forEach((name, idx) => {
         if (!venueMap.has(name)) {
-          const isWorkshop = name.includes('工場') || name.includes('實習') || name.includes('教室');
-
           const newVenue: WorkshopVenue = {
             id: `v-imp-${Date.now()}-${idx}`,
             name,
-            code: `IMP-${100 + idx}`,
+            code: `${autoVenueCodePrefix(name)}-${100 + idx}`,
             department: getVenueDept(name),
             capacity: 40,
-            safetyLevel: isWorkshop ? '標準' : '標準',
-            equipmentNote: '匯入課表時自動登記建立之教學場地',
+            safetyLevel: '標準',
+            equipmentNote: autoVenueEquipmentNote(name),
           };
           updatedVenues.push(newVenue);
           venueMap.set(name, newVenue);

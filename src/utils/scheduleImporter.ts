@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
 import { departmentFromClassName, departmentFromLabel, isInternshipCourse } from './schoolDepartments';
+import { PRACTICAL_VENUE_REQUIRED_MSG } from './venueKinds';
 
 export interface ParsedImportRow {
   rowNumber: number;
@@ -320,12 +321,38 @@ export const parseScheduleFile = async (
         newTeachersSet.add(teacherVal);
       }
 
+      const probePractical = inferIsPractical(
+        subjectVal,
+        venueVal || `${classVal} 原班普通教室`,
+        practicalVal
+      );
+      if (probePractical && !venueVal) {
+        invalidRows.push({
+          rowNumber,
+          dayOfWeek: 1,
+          period: 1,
+          className: classVal,
+          subjectName: subjectVal,
+          teacherName: teacherVal,
+          department:
+            departmentFromClassName(classVal) ||
+            (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + classVal)),
+          venueName: `${classVal} 原班普通教室`,
+          isPractical: true,
+          isConcurrent: parseConcurrentFlag(concurrentVal),
+          notes: notesVal,
+          errors: [PRACTICAL_VENUE_REQUIRED_MSG],
+          warnings: [],
+        });
+        return;
+      }
+
       const finalVenue = venueVal || `${classVal} 原班普通教室`;
       if (!venueNameMap.has(finalVenue)) {
         newVenuesSet.add(finalVenue);
       }
 
-      const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
+      const isPractical = probePractical;
       const isConcurrent = parseConcurrentFlag(concurrentVal);
       const department: DepartmentType =
         departmentFromClassName(classVal) ||
@@ -643,10 +670,19 @@ export const parseScheduleFile = async (
     const finalVenue = venueVal || `${classVal} 原班普通教室`;
     if (!venueNameMap.has(finalVenue)) {
       newVenuesSet.add(finalVenue);
-      warnings.push(`場地「${finalVenue}」將自動註冊加入教學場地清冊`);
+      if (venueVal) {
+        warnings.push(`場地「${finalVenue}」將自動註冊加入教學場地清冊`);
+      } else {
+        warnings.push(
+          `未填教室，將使用「${finalVenue}」（原班教室，非實習工場）`
+        );
+      }
     }
 
     const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
+    if (isPractical && !venueVal) {
+      errors.push(PRACTICAL_VENUE_REQUIRED_MSG);
+    }
     if (isPractical) practicalCount++;
     const isConcurrent = parseConcurrentFlag(concurrentVal);
 
@@ -841,7 +877,7 @@ export const generateTemplateExcel = () => {
     ['科目名稱', '必填', '如：電工機械實習、數位邏輯、CNC銑床加工'],
     ['授課教師姓名', '必填', '填寫教師全名。如系統中尚無該教師，系統將自動建檔並標記科別'],
     ['教師科別', '選填', '電機科 / 資訊科 / 機械科 / 共同科目'],
-    ['實習工場/教室名稱', '選填', '填寫實習工場或教室。未填寫時預設為「班級普通教室」'],
+    ['實習工場/教室名稱', '實習課必填', '實習／實作課必須填工場名稱（如配線實習工場）。學科未填則預設為「班級 原班普通教室」'],
     ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定實習工場課程'],
     ['1.兼課2.', '選填', '填 1 代表此節為兼課，課表會顯示「兼課」標籤'],
     ['備註說明', '選填', '如：分組教學、協同教學、課輔節數等備註'],
