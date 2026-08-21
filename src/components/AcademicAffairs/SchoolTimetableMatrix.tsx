@@ -57,8 +57,10 @@ export const SchoolTimetableMatrix: React.FC = () => {
     return true;
   });
 
-  const getSessionAt = (day: DayOfWeek, period: number) => {
-    return filteredSessions.find((s) => s.dayOfWeek === day && s.period === period);
+  const getSessionsAt = (day: DayOfWeek, period: number) => {
+    return filteredSessions
+      .filter((s) => s.dayOfWeek === day && s.period === period)
+      .sort((a, b) => a.className.localeCompare(b.className, 'zh-Hant'));
   };
 
   const currentVenueObj = venues.find((v) => v.id === selectedVenueId);
@@ -209,7 +211,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
               {dimension === 'venue' && `🏢 ${currentVenueObj?.name || '指定工場'} 週課表`}
               {dimension === 'class' && `🎓 ${selectedClass} 班級週課表`}
               {dimension === 'teacher' && `👨‍🏫 ${currentTeacherObj?.name} 教師授課表`}
-              {dimension === 'department' && `🏛️ ${selectedDepartment} 全科排課彙整`}
+              {dimension === 'department' && `🏛️ ${selectedDepartment} 全科排課彙整（同節並行班級會一併列出）`}
             </span>
           </div>
           
@@ -270,52 +272,61 @@ export const SchoolTimetableMatrix: React.FC = () => {
                       </td>
 
                       {days.map((d) => {
-                        const session = getSessionAt(d.day, pDef.period);
+                        const cellSessions = getSessionsAt(d.day, pDef.period);
+                        const isStacked = cellSessions.length > 1;
                         return (
-                          <td key={d.day} className="p-2 align-top h-24">
-                            {session ? (
-                              <div
-                                className={`h-full p-2 rounded-xl border flex flex-col justify-between ${
-                                  isPracticalSession(session)
-                                    ? 'bg-amber-50 border-amber-300 text-amber-950 ring-1 ring-amber-400/20'
-                                    : session.isConcurrent
-                                      ? 'bg-violet-50 border-violet-300 text-violet-950 ring-1 ring-violet-400/20'
-                                      : 'bg-indigo-50/80 border-indigo-200 text-indigo-950'
-                                }`}
-                              >
-                                <div>
-                                  <div className="flex items-center justify-between font-bold text-xs gap-1">
-                                    <span>{session.className}</span>
-                                    <span className="flex items-center gap-0.5 shrink-0">
-                                      {session.isConcurrent && (
-                                        <span className="text-[10px] bg-violet-600 text-white px-1.5 py-0.2 rounded font-semibold">
-                                          兼課
+                          <td
+                            key={d.day}
+                            className={`p-2 align-top ${isStacked ? 'min-h-24' : 'h-24'}`}
+                          >
+                            {cellSessions.length > 0 ? (
+                              <div className={isStacked ? 'flex flex-col gap-1.5' : 'h-full'}>
+                                {cellSessions.map((session) => (
+                                  <div
+                                    key={session.id}
+                                    className={`${isStacked ? '' : 'h-full'} p-2 rounded-xl border flex flex-col justify-between ${
+                                      isPracticalSession(session)
+                                        ? 'bg-amber-50 border-amber-300 text-amber-950 ring-1 ring-amber-400/20'
+                                        : session.isConcurrent
+                                          ? 'bg-violet-50 border-violet-300 text-violet-950 ring-1 ring-violet-400/20'
+                                          : 'bg-indigo-50/80 border-indigo-200 text-indigo-950'
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className="flex items-center justify-between font-bold text-xs gap-1">
+                                        <span>{session.className}</span>
+                                        <span className="flex items-center gap-0.5 shrink-0">
+                                          {session.isConcurrent && (
+                                            <span className="text-[10px] bg-violet-600 text-white px-1.5 py-0.2 rounded font-semibold">
+                                              兼課
+                                            </span>
+                                          )}
+                                          {isPracticalSession(session) && (
+                                            <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.2 rounded font-semibold">
+                                              實習
+                                            </span>
+                                          )}
                                         </span>
-                                      )}
-                                      {isPracticalSession(session) && (
-                                        <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.2 rounded font-semibold">
-                                          實習
-                                        </span>
-                                      )}
-                                    </span>
-                                  </div>
-                                  <div className="font-semibold text-xs mt-0.5 line-clamp-1">
-                                    {session.subjectName}
-                                  </div>
-                                </div>
+                                      </div>
+                                      <div className="font-semibold text-xs mt-0.5 line-clamp-1">
+                                        {session.subjectName}
+                                      </div>
+                                    </div>
 
-                                <div className="mt-1 pt-1 border-t border-slate-200/60 space-y-1 text-[11px] text-slate-600">
-                                  <div className="font-medium text-slate-800 truncate">
-                                    {session.teacherName}
-                                  </div>
-                                  <SessionVenueSelect session={session} />
-                                </div>
+                                    <div className="mt-1 pt-1 border-t border-slate-200/60 space-y-1 text-[11px] text-slate-600">
+                                      <div className="font-medium text-slate-800 truncate">
+                                        {session.teacherName}
+                                      </div>
+                                      <SessionVenueSelect session={session} />
+                                    </div>
 
-                                {session.notes && (
-                                  <div className="text-[10px] text-indigo-700 font-bold mt-0.5 truncate">
-                                    {session.notes}
+                                    {session.notes && (
+                                      <div className="text-[10px] text-indigo-700 font-bold mt-0.5 truncate">
+                                        {session.notes}
+                                      </div>
+                                    )}
                                   </div>
-                                )}
+                                ))}
                               </div>
                             ) : (
                               <div className="h-full flex items-center justify-center text-slate-300 text-[11px]">
