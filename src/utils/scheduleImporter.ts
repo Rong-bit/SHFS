@@ -916,7 +916,7 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
     [
       '實習工場/教室名稱',
       '建議填寫',
-      '請從「場地清單」工作表複製名稱貼上。實習課建議填具體工場（如電機科配線實習工場）。上傳後亦可在預覽畫面用下拉選單改選。',
+      '請從「場地清單」工作表複製名稱貼上。實習課建議填具體工場（如電機科配線實習工場）。匯入後也可在課表格子直接下拉改選。',
     ],
     ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定實習工場課程'],
     ['1.兼課2.', '選填', '填 1 代表此節為兼課，課表會顯示「兼課」標籤'],
@@ -936,42 +936,6 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
   XLSX.utils.book_append_sheet(wb, wsGuide, '欄位填寫說明與安全指南');
 
   XLSX.writeFile(wb, '高職課表匯入範本_技術型高中標準.xlsx');
-};
-
-/** 匯入預覽：依班級／科別排序工場選項（同科工場優先） */
-export const venueOptionsForImportRow = (
-  row: Pick<ParsedImportRow, 'className' | 'department' | 'venueName' | 'isPractical'>,
-  venues: WorkshopVenue[]
-): string[] => {
-  const dept =
-    row.department ||
-    departmentFromClassName(row.className) ||
-    '共同科目';
-  const names = new Set<string>();
-  if (row.venueName?.trim()) names.add(row.venueName.trim());
-
-  const sameDept = venues.filter((v) => v.department === dept);
-  const sameDeptWorkshops = sameDept.filter((v) => classifyVenueKind(v.name) === 'workshop');
-  const sameDeptOther = sameDept.filter((v) => classifyVenueKind(v.name) !== 'workshop');
-  const otherWorkshops = venues.filter(
-    (v) => v.department !== dept && classifyVenueKind(v.name) === 'workshop'
-  );
-
-  for (const v of [...sameDeptWorkshops, ...sameDeptOther, ...otherWorkshops, ...venues]) {
-    if (v.name?.trim()) names.add(v.name.trim());
-  }
-
-  // 常用預設名稱（系統尚無該場地時仍可選，匯入會自動建檔）
-  if (row.isPractical && dept && dept !== '共同科目') {
-    names.add(`${dept}實習工場`);
-    names.add(`${dept}配線實習工場`);
-    names.add(`${dept}電工機械實習工場`);
-  }
-  if (row.className) {
-    names.add(`${row.className} 原班普通教室`);
-  }
-
-  return Array.from(names);
 };
 
 /**
