@@ -615,7 +615,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                       <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                         <span className="font-bold text-slate-900">🏢 實習工場：</span>
                         <span className="text-slate-500">
-                          建議填寫（如配線實習工場）。未填仍可匯入，會暫用「班級 原班普通教室」並警告
+                          有填→依名稱；實習課未填→xx科實習工場；學科未填→班級原班教室
                         </span>
                       </div>
                     </div>

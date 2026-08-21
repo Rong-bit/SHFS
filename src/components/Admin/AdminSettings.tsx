@@ -1654,8 +1654,8 @@ export const AdminSettings: React.FC = () => {
             </div>
 
             <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-900">
-              「○○ 原班普通教室」是匯入課表<strong>未填教室欄</strong>時依班級自動建立的班級教室，不是實習工場。
-              配線實習、電工實習等須在 Excel「實習工場／教室」欄分別填寫工場名稱。
+              匯入規則：學科未填教室→「班級 原班普通教室」；實習課未填工場→「xx科實習工場」（可再細分配線／電工等）；
+              有填名稱→依名稱建立／對應。篩選可分開檢視原班教室與實習工場。
             </div>
 
             <div className="divide-y divide-slate-100 text-xs">

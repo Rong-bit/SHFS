@@ -1,7 +1,10 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
 import { departmentFromClassName, departmentFromLabel, isInternshipCourse } from './schoolDepartments';
-import { PRACTICAL_VENUE_MISSING_WARN } from './venueKinds';
+import {
+  practicalVenueMissingWarn,
+  resolveImportVenueName,
+} from './venueKinds';
 
 export interface ParsedImportRow {
   rowNumber: number;
@@ -322,26 +325,27 @@ export const parseScheduleFile = async (
         newTeachersSet.add(teacherVal);
       }
 
-      const probePractical = inferIsPractical(
-        subjectVal,
-        venueVal || `${classVal} 原班普通教室`,
-        practicalVal
-      );
+      // 先判定是否實習（依科目／明確欄位），再決定預設場地
+      const isPractical = inferIsPractical(subjectVal, venueVal || '暫定', practicalVal);
+      const isConcurrent = parseConcurrentFlag(concurrentVal);
+      const department: DepartmentType =
+        departmentFromClassName(classVal) ||
+        (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + classVal));
 
-      const finalVenue = venueVal || `${classVal} 原班普通教室`;
+      const finalVenue = resolveImportVenueName({
+        venueVal,
+        isPractical,
+        className: classVal,
+        department,
+      });
       if (!venueNameMap.has(finalVenue)) {
         newVenuesSet.add(finalVenue);
       }
 
-      const isPractical = probePractical;
-      const isConcurrent = parseConcurrentFlag(concurrentVal);
       const courseWarnings: string[] = [];
       if (isPractical && !venueVal) {
-        courseWarnings.push(PRACTICAL_VENUE_MISSING_WARN);
+        courseWarnings.push(practicalVenueMissingWarn(finalVenue));
       }
-      const department: DepartmentType =
-        departmentFromClassName(classVal) ||
-        (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal));
 
       let parsedHours = parseFloat(String(hoursVal));
       if (isNaN(parsedHours) || parsedHours <= 0) {
@@ -665,28 +669,34 @@ export const parseScheduleFile = async (
       });
     }
 
-    const finalVenue = venueVal || `${classVal} 原班普通教室`;
+    const isPractical = inferIsPractical(subjectVal, venueVal || '暫定', practicalVal);
+    const isConcurrent = parseConcurrentFlag(concurrentVal);
+    const department: DepartmentType =
+      departmentFromClassName(classVal) ||
+      (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + classVal));
+
+    const finalVenue = resolveImportVenueName({
+      venueVal,
+      isPractical,
+      className: classVal,
+      department,
+    });
     if (!venueNameMap.has(finalVenue)) {
       newVenuesSet.add(finalVenue);
       if (venueVal) {
         warnings.push(`場地「${finalVenue}」將自動註冊加入教學場地清冊`);
+      } else if (isPractical) {
+        warnings.push(practicalVenueMissingWarn(finalVenue));
       } else {
         warnings.push(
           `未填教室，將使用「${finalVenue}」（原班教室，非實習工場）`
         );
       }
+    } else if (isPractical && !venueVal) {
+      warnings.push(practicalVenueMissingWarn(finalVenue));
     }
 
-    const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
-    if (isPractical && !venueVal) {
-      warnings.push(PRACTICAL_VENUE_MISSING_WARN);
-    }
     if (isPractical) practicalCount++;
-    const isConcurrent = parseConcurrentFlag(concurrentVal);
-
-    const department: DepartmentType =
-      departmentFromClassName(classVal) ||
-      (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal));
 
     // Collision check inside the imported batch
     if (dayOfWeek && period) {
@@ -875,7 +885,7 @@ export const generateTemplateExcel = () => {
     ['科目名稱', '必填', '如：電工機械實習、數位邏輯、CNC銑床加工'],
     ['授課教師姓名', '必填', '填寫教師全名。如系統中尚無該教師，系統將自動建檔並標記科別'],
     ['教師科別', '選填', '電機科 / 資訊科 / 機械科 / 共同科目'],
-    ['實習工場/教室名稱', '建議填寫', '實習課建議填工場名稱（如配線實習工場）。未填仍可匯入，會暫用「班級 原班普通教室」並顯示警告'],
+    ['實習工場/教室名稱', '建議填寫', '有填→依名稱建立工場；實習課未填→暫用「xx科實習工場」；學科未填→「班級 原班普通教室」'],
     ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定實習工場課程'],
     ['1.兼課2.', '選填', '填 1 代表此節為兼課，課表會顯示「兼課」標籤'],
     ['備註說明', '選填', '如：分組教學、協同教學、課輔節數等備註'],
