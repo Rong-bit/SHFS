@@ -2283,6 +2283,11 @@ export const AdminSettings: React.FC = () => {
                   placeholder="如：PLC自動控制實習工場"
                   required
                 />
+                {editingVenue && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    修改名稱後，課表與調代課單據上引用此場地的名稱會一併同步更新。
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
