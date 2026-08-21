@@ -27,13 +27,17 @@ import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { ModalShell } from '../Common/ModalShell';
 import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyCounselingPeriods, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
-import { nonTeachingDateSet } from '../../utils/holidays';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod } from '../../utils/schoolDepartments';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import {
   findApprovedTemporarySwapsForSession,
   formatTemporarySwapEffectLabel,
 } from '../../utils/temporarySwap';
+import {
+  isoDateForDayOfWeekInCurrentWeek,
+  leaveRangeCoversDate,
+  resolveLeaveDateEnd,
+} from '../../utils/leaveDates';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -46,7 +50,8 @@ export const TeacherSchedule: React.FC = () => {
     sessions, 
     teachers, 
     systemConfig, 
-    requests
+    requests,
+    calculateMonthlySettlement,
   } = useApp();
   const [selectedSessionForModal, setSelectedSessionForModal] = useState<CourseSession | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -83,43 +88,27 @@ export const TeacherSchedule: React.FC = () => {
       (Boolean(s.notes?.includes('[代課]')) &&
         Boolean(s.notes?.includes(`原任課 ${currentTeacher.name}`)))
   );
-  /** 我當代課老師的已核准單（週課表仍掛原任課，另以標註顯示代課任務） */
+  /** 我當代課老師的已核准單（僅本週對應星期落在請假區間內才標示） */
   const mySubstituteDuties = requests.filter(
     (r) =>
       r.status === 'approved' &&
       r.requestType === 'substitute' &&
-      r.substituteTeacherId === currentTeacher.id
+      r.substituteTeacherId === currentTeacher.id &&
+      leaveRangeCoversDate(
+        r.leaveDateStart,
+        r.leaveDateEnd,
+        isoDateForDayOfWeekInCurrentWeek(r.originalSession.dayOfWeek)
+      )
   );
   const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
   const basePeriods = currentTeacher.basePeriods;
   const overloadPeriods = overloadBreakdown.concurrent;
   const thisMonth = new Date().getMonth() + 1;
-  const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-  const calendarOpts = {
-    holidaySet,
-    temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-    partialStops: systemConfig.partialNonTeachingDays || [],
-  };
-  const monthlyOverloadAmount =
-    monthlyOverloadPeriods(
-      sessions,
-      currentTeacher,
-      thisMonth,
-      new Date(),
-      holidaySet,
-      systemConfig.academicYear,
-      calendarOpts
-    ) * systemConfig.dayHourlyRate;
-  const monthlyCounselingAmount =
-    monthlyCounselingPeriods(
-      sessions,
-      currentTeacher.id,
-      thisMonth,
-      new Date(),
-      holidaySet,
-      systemConfig.academicYear,
-      calendarOpts
-    ) * systemConfig.nightHourlyRate;
+  const monthSettlement = calculateMonthlySettlement(thisMonth).find(
+    (s) => s.teacherId === currentTeacher.id
+  );
+  const monthlyOverloadAmount = monthSettlement?.monthlyOverloadAmount ?? 0;
+  const monthlyCounselingAmount = monthSettlement?.monthlyCounselingAmount ?? 0;
   const isOverNineHours = overloadPeriods >= systemConfig.maxWeeklyOverloadPeriods;
 
   const days: { day: DayOfWeek; name: string }[] = [
@@ -145,11 +134,23 @@ export const TeacherSchedule: React.FC = () => {
         r.applicantTeacherId === currentTeacher.id &&
         (r.originalSession.id === session.id ||
           (r.originalSession.dayOfWeek === session.dayOfWeek &&
-            r.originalSession.period === session.period))
+            r.originalSession.period === session.period)) &&
+        leaveRangeCoversDate(
+          r.leaveDateStart,
+          r.leaveDateEnd,
+          isoDateForDayOfWeekInCurrentWeek(session.dayOfWeek)
+        )
     );
-    return hit
-      ? `[請假派代] 代課教師：${hit.substituteTeacherName || '已派代'}`
-      : null;
+    if (!hit) return null;
+    const range =
+      hit.leaveDateStart
+        ? ` ${hit.leaveDateStart}${
+            resolveLeaveDateEnd(hit.leaveDateStart, hit.leaveDateEnd) !== hit.leaveDateStart
+              ? `～${resolveLeaveDateEnd(hit.leaveDateStart, hit.leaveDateEnd)}`
+              : ''
+          }`
+        : '';
+    return `[請假派代${range}] 代課教師：${hit.substituteTeacherName || '已派代'}`;
   };
   const getTemporarySwapLabel = (session: CourseSession) => {
     const swaps = findApprovedTemporarySwapsForSession(session, requests);

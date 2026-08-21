@@ -16,6 +16,28 @@ export function resolveLeaveDateEnd(start?: string, end?: string): string | unde
   return end;
 }
 
+/** 請假區間是否涵蓋指定日（無起日視為舊案：一律涵蓋） */
+export function leaveRangeCoversDate(
+  leaveDateStart?: string,
+  leaveDateEnd?: string,
+  isoDate?: string
+): boolean {
+  if (!leaveDateStart) return true;
+  if (!isoDate) return true;
+  const end = resolveLeaveDateEnd(leaveDateStart, leaveDateEnd) || leaveDateStart;
+  return isoDate >= leaveDateStart && isoDate <= end;
+}
+
+/** 本週（以今天所在週一～五）對應星期幾的 YYYY-MM-DD */
+export function isoDateForDayOfWeekInCurrentWeek(dayOfWeek: DayOfWeek, now = new Date()): string {
+  const js = now.getDay();
+  const mondayOffset = js === 0 ? -6 : 1 - js;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
+  const target = new Date(monday);
+  target.setDate(monday.getDate() + (dayOfWeek - 1));
+  return dateToIsoLocal(target);
+}
+
 export type ExcludeDates = Set<string> | Iterable<string> | null | undefined;
 
 /** 結算用：半日停課／暫時移課等（與 calendarSettlement 對齊） */

@@ -151,15 +151,23 @@ export function temporarySwapPeriodDeltaInMonth(
       partner.dayOfWeek
     );
 
-    // 申請人：原日少上一節（若符合 match），對調日多上一節
-    if (r.applicantTeacherId === teacherId && matchSession(r.originalSession)) {
-      if (inMonth(applicantDate) && billable(applicantDate)) delta -= 1;
-      if (inMonth(partnerDate) && billable(partnerDate)) delta += 1;
+    // 申請人：原日依原課堂條件少計、對調日依對方課堂條件多計
+    if (r.applicantTeacherId === teacherId) {
+      if (matchSession(r.originalSession)) {
+        if (inMonth(applicantDate) && billable(applicantDate)) delta -= 1;
+      }
+      if (matchSession(partner)) {
+        if (inMonth(partnerDate) && billable(partnerDate)) delta += 1;
+      }
     }
-    // 對調教師：對稱
-    if (r.swapTargetTeacherId === teacherId && matchSession(partner)) {
-      if (inMonth(partnerDate) && billable(partnerDate)) delta -= 1;
-      if (inMonth(applicantDate) && billable(applicantDate)) delta += 1;
+    // 對調教師：對稱（原對調堂少計、改上申請人時段多計）
+    if (r.swapTargetTeacherId === teacherId) {
+      if (matchSession(partner)) {
+        if (inMonth(partnerDate) && billable(partnerDate)) delta -= 1;
+      }
+      if (matchSession(r.originalSession)) {
+        if (inMonth(applicantDate) && billable(applicantDate)) delta += 1;
+      }
     }
   }
   return delta;

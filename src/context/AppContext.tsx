@@ -22,9 +22,9 @@ import {
   INITIAL_ACADEMIC_STAFF,
   withMigratedAuthConfig,
 } from '../data/mockData';
-import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
+import { ParsedImportRow, inferIsPractical, splitTeacherNames } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
-import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
+import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
 import { temporarySwapPeriodDeltaInMonth, validateSwapRequestFields } from '../utils/temporarySwap';
 import {
@@ -60,7 +60,9 @@ import {
 import { isPlaceholderSession, resolveOriginalSession, resolveSwapTargetSession } from '../utils/resolveOriginalSession';
 import {
   collectSubstituteOccupancies,
+  countWeeklySubstituteOccupancySlots,
   teacherHasSubstituteOccupancy,
+  teacherWeeklyLoadTowardLimit,
 } from '../utils/substituteCandidates';
 
 interface AppContextType {
@@ -146,6 +148,8 @@ interface AppContextType {
     mode: 'overwrite' | 'append';
     newTeacherNames: string[];
     newVenueNames: string[];
+    /** 覆蓋模式是否清空調代課申請（預設 true） */
+    clearRequests?: boolean;
   }) => {
     success: boolean;
     addedCount: number;
@@ -292,7 +296,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const list: CourseSession[] = saved ? JSON.parse(saved) : INITIAL_SESSIONS;
     return list.map((s) => ({
       ...s,
-      isPractical: inferIsPractical(s.subjectName, s.venueName),
+      isPractical:
+        typeof s.isPractical === 'boolean'
+          ? s.isPractical
+          : inferIsPractical(s.subjectName, s.venueName),
     }));
   });
 
@@ -592,7 +599,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
     const remoteSessions = (merged.sessions || []).map((s) => ({
       ...s,
-      isPractical: inferIsPractical(s.subjectName, s.venueName),
+      isPractical:
+        typeof s.isPractical === 'boolean'
+          ? s.isPractical
+          : inferIsPractical(s.subjectName, s.venueName),
     }));
     const remoteStd = normalizeStandardBasePeriods(merged.systemConfig?.standardBasePeriods);
     setTeachers(
@@ -1152,7 +1162,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           period,
           collectSubstituteOccupancies(requestPool, {
             excludeRequestIds: params.excludeRequestIds,
-          })
+          }),
+          { leaveDateStart, leaveDateEnd }
         )
       ) {
         messages.push(
@@ -1262,7 +1273,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           applicantTeacherId,
           swapTargetSession.dayOfWeek,
           swapTargetSession.period,
-          occPool
+          occPool,
+          { leaveDateStart, leaveDateEnd }
         )
       ) {
         messages.push(
@@ -1275,7 +1287,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           swapTargetTeacherId,
           originalSession.dayOfWeek,
           originalSession.period,
-          occPool
+          occPool,
+          { leaveDateStart, leaveDateEnd }
         )
       ) {
         messages.push(
@@ -1397,11 +1410,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         severity = 'danger';
       }
 
-      // Overload check (9 periods limit)
+      // Overload check (9 periods limit：兼課 + 已派代／待簽核代課)
       if (subTeacher) {
-        const weeklyOverload = teacherWeeklyOverload(subTeacher, schedule);
+        const weeklyOverload = teacherWeeklyLoadTowardLimit(
+          subTeacher,
+          schedule,
+          requestPool,
+          { excludeRequestIds: params.excludeRequestIds }
+        );
         if (weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods) {
-          messages.push(`【法規防呆警示】${subTeacher.name} 本週兼任超鐘點已達 ${weeklyOverload} 節（法定上限為 ${systemConfig.maxWeeklyOverloadPeriods} 節），若再承擔代課將超過法規上限！`);
+          messages.push(`【法規防呆警示】${subTeacher.name} 本週兼課與代課合計已達 ${weeklyOverload} 節（法定上限為 ${systemConfig.maxWeeklyOverloadPeriods} 節），若再承擔代課將超過法規上限！`);
           if (severity !== 'danger') severity = 'warning';
         }
       }
@@ -1448,8 +1466,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         swapTargetSession: data.swapTargetSession,
         substituteTeacherId: data.substituteTeacherId,
         requestsOverride: progressiveRequests,
-        leaveDateStart: data.leaveDateStart,
-        leaveDateEnd: data.leaveDateEnd,
+        leaveDateStart: data.leaveDateStart || data.effectiveDate,
+        leaveDateEnd: data.leaveDateEnd || data.effectiveDate,
       });
       if (clashStatus.hasClash) {
         throw new Error(
@@ -1557,8 +1575,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sessionsOverride: workingSessions,
       requestsOverride: workingRequests,
       excludeRequestIds: [requestId],
-      leaveDateStart: targetReq.leaveDateStart,
-      leaveDateEnd: targetReq.leaveDateEnd,
+      leaveDateStart: targetReq.leaveDateStart || targetReq.effectiveDate,
+      leaveDateEnd: targetReq.leaveDateEnd || targetReq.effectiveDate,
     });
     if (clashStatus.hasClash) {
       return { ok: false, reason: clashStatus.messages[0] || '存在衝堂衝突' };
@@ -1828,8 +1846,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         substituteTeacherId: data.substituteTeacherId,
         sessionsOverride: progressiveSessions,
         requestsOverride: progressiveRequests,
-        leaveDateStart: data.leaveDateStart,
-        leaveDateEnd: data.leaveDateEnd,
+        leaveDateStart: data.leaveDateStart || data.effectiveDate,
+        leaveDateEnd: data.leaveDateEnd || data.effectiveDate,
       });
 
       if (data.autoApprove !== false && clashStatus.hasClash) {
@@ -2054,15 +2072,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     mode: 'overwrite' | 'append';
     newTeacherNames: string[];
     newVenueNames: string[];
+    clearRequests?: boolean;
   }) => {
-    const { validRows, mode } = params;
+    const { validRows, mode, clearRequests = true } = params;
 
-    // Collect all unique real teacher names in the imported file
+    // Collect all unique real teacher names（協同教師拆成個別姓名）
     const importedTeacherNames = Array.from(
       new Set(
-        validRows
-          .map((r) => r.teacherName.trim())
-          .filter((n) => n && n !== '未指派教師')
+        validRows.flatMap((r) => {
+          const parts = splitTeacherNames(r.teacherName);
+          if (parts.length) return parts;
+          const n = r.teacherName.trim();
+          return n && n !== '未指派教師' ? [n] : [];
+        })
       )
     );
 
@@ -2194,31 +2216,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // 3. Convert parsed rows into CourseSession objects
-    const newSessionsList: CourseSession[] = validRows.map((row, idx) => {
-      const teacherObj = teacherMap.get(row.teacherName.trim()) || {
-        id: `t-auto-${idx}`,
-        name: row.teacherName,
-      };
+    // 3. Convert parsed rows into CourseSession objects（協同教師各建一筆）
+    const newSessionsList: CourseSession[] = [];
+    let sessionIdx = 0;
+    validRows.forEach((row) => {
+      const teacherParts = splitTeacherNames(row.teacherName);
+      const names =
+        teacherParts.length > 0
+          ? teacherParts
+          : [row.teacherName.trim() || '未指派教師'];
       const venueObj = venueMap.get(row.venueName.trim()) || {
-        id: `v-auto-${idx}`,
+        id: `v-auto-${sessionIdx}`,
         name: row.venueName,
       };
-
-      return {
-        id: `s-imp-${Date.now()}-${idx}`,
-        dayOfWeek: row.dayOfWeek,
-        period: row.period,
-        className: row.className,
-        subjectName: row.subjectName,
-        teacherId: teacherObj.id,
-        teacherName: teacherObj.name,
-        venueId: venueObj.id,
-        venueName: venueObj.name,
-        isPractical: row.isPractical,
-        isConcurrent: Boolean(row.isConcurrent),
-        notes: row.notes,
-      };
+      names.forEach((tName) => {
+        const teacherObj = teacherMap.get(tName) || {
+          id: `t-auto-${sessionIdx}`,
+          name: tName,
+        };
+        newSessionsList.push({
+          id: `s-imp-${Date.now()}-${sessionIdx++}`,
+          dayOfWeek: row.dayOfWeek,
+          period: row.period,
+          className: row.className,
+          subjectName: row.subjectName,
+          teacherId: teacherObj.id,
+          teacherName: teacherObj.name,
+          venueId: venueObj.id,
+          venueName: venueObj.name,
+          isPractical: row.isPractical,
+          isConcurrent: Boolean(row.isConcurrent),
+          notes:
+            names.length > 1
+              ? [row.notes, `協同：${names.join('、')}`].filter(Boolean).join('｜')
+              : row.notes,
+        });
+      });
     });
 
     let finalSessions: CourseSession[] = [];
@@ -2228,18 +2261,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (mode === 'overwrite') {
       finalSessions = newSessionsList;
       addedCount = newSessionsList.length;
-      // Also clear old mock substitute requests when fully overwriting schedule
-      setRequests([]);
-      localStorage.removeItem(STORAGE_KEYS.REQUESTS);
+      if (clearRequests) {
+        setRequests([]);
+        localStorage.removeItem(STORAGE_KEYS.REQUESTS);
+      }
     } else {
-      // Append / Merge：同班同時段保留原 session id，避免舊申請失效
+      // Append / Merge：同班同時段同教師保留原 session id，避免舊申請失效
       const existingMap = new Map<string, CourseSession>();
       sessions.forEach((s) => {
-        existingMap.set(`${s.dayOfWeek}-${s.period}-${s.className}`, s);
+        existingMap.set(`${s.dayOfWeek}-${s.period}-${s.className}-${s.teacherId}`, s);
       });
 
       newSessionsList.forEach((s) => {
-        const key = `${s.dayOfWeek}-${s.period}-${s.className}`;
+        const key = `${s.dayOfWeek}-${s.period}-${s.className}-${s.teacherId}`;
         const existing = existingMap.get(key);
         if (existing) {
           existingMap.set(key, { ...s, id: existing.id });

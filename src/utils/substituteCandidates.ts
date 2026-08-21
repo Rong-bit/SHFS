@@ -26,7 +26,12 @@ function leaveRangesOverlap(
   bStart?: string,
   bEnd?: string
 ): boolean {
-  if (!aStart || !bStart) return true; // 缺日期舊案：保守視為佔用
+  // 雙方都無日期（舊案）：保守視為佔用
+  if (!aStart && !bStart) return true;
+  // 探測端無日期（永久移課／對調）：僅與「也無日期」的舊佔用衝突，不擋有請假區間的代課
+  if (!aStart) return false;
+  // 佔用端無日期：對有日期的探測保守擋下
+  if (!bStart) return true;
   const aE = resolveLeaveDateEnd(aStart, aEnd) || aStart;
   const bE = resolveLeaveDateEnd(bStart, bEnd) || bStart;
   return aStart <= bE && bStart <= aE;
@@ -105,6 +110,33 @@ export function teacherHasSubstituteOccupancy(
   });
 }
 
+/** 代課教師本週負荷：已派代／待簽核代課佔用的不重複（星期＋節次）數 */
+export function countWeeklySubstituteOccupancySlots(
+  requests: SubstituteRequest[],
+  teacherId: string,
+  options?: { excludeRequestIds?: string[] }
+): number {
+  const keys = new Set<string>();
+  for (const o of collectSubstituteOccupancies(requests, options)) {
+    if (o.teacherId !== teacherId) continue;
+    keys.add(`${o.dayOfWeek}-${o.period}`);
+  }
+  return keys.size;
+}
+
+/** 兼課節數 + 代課佔用節數，供法定兼代課上限檢核 */
+export function teacherWeeklyLoadTowardLimit(
+  teacher: Pick<Teacher, 'id' | 'weeklyActualPeriods' | 'dutyReductionPeriods' | 'basePeriods'>,
+  sessions: CourseSession[],
+  requests: SubstituteRequest[],
+  options?: { excludeRequestIds?: string[] }
+): number {
+  return (
+    teacherWeeklyOverload(teacher, sessions) +
+    countWeeklySubstituteOccupancySlots(requests, teacher.id, options)
+  );
+}
+
 /**
  * 智慧派代排序：
  * 1. 相同科目優先
@@ -169,7 +201,12 @@ export function rankSubstituteCandidates(params: {
       const isSameDept =
         Boolean(sessionDepartment && t.department === sessionDepartment) ||
         Boolean(applicantDepartment && t.department === applicantDepartment);
-      const weeklyOverload = teacherWeeklyOverload(t, sessions);
+      const weeklyOverload = teacherWeeklyLoadTowardLimit(
+        t,
+        sessions,
+        params.requests || [],
+        undefined
+      );
       const isNearLimit = weeklyOverload >= maxWeeklyOverloadPeriods;
 
       // 權重刻意拉開：科目 ≫ 科別 ≫ 空堂 ≫ 負荷

@@ -89,10 +89,10 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   nightHourlyRate: 500,
   maxWeeklyOverloadPeriods: 9,
   standardBasePeriods: {
-    head: 7,
+    head: 10,
     homeroom: 12,
     fulltime: 16,
-    sectionChief: 0,
+    sectionChief: 8,
     director: 0,
   },
   schoolName: '國立技術型高級中等學校',

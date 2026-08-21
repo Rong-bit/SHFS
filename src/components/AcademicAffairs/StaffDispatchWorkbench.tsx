@@ -444,13 +444,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
         swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
         substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
         leaveDateStart:
-          requestType === 'substitute' ? leaveDateStart || undefined : undefined,
+          requestType === 'substitute'
+            ? leaveDateStart || undefined
+            : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
+              ? swapEffectiveDate
+              : undefined,
         leaveDateEnd:
           requestType === 'substitute'
             ? leaveDateMode === 'range'
               ? leaveDateEnd || leaveDateStart || undefined
               : leaveDateStart || undefined
-            : undefined,
+            : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
+              ? swapEffectiveDate
+              : undefined,
       });
       const prefix =
         sessionsToCheck.length > 1 ? `第${originalSession.period}節：` : '';
@@ -486,6 +492,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
     leaveDateStart,
     leaveDateEnd,
     leaveDateMode,
+    swapMode,
+    swapEffectiveDate,
   ]);
 
   // Handle direct dispatch submission
@@ -586,13 +594,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
         swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
         substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
         leaveDateStart:
-          requestType === 'substitute' ? leaveDateStart || undefined : undefined,
+          requestType === 'substitute'
+            ? leaveDateStart || undefined
+            : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
+              ? swapEffectiveDate
+              : undefined,
         leaveDateEnd:
           requestType === 'substitute'
             ? leaveDateMode === 'range'
               ? leaveDateEnd || leaveDateStart || undefined
               : leaveDateStart || undefined
-            : undefined,
+            : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
+              ? swapEffectiveDate
+              : undefined,
       });
       if (clash.hasClash) {
         alert(

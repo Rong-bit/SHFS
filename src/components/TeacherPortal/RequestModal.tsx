@@ -458,6 +458,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,
       swapTargetSession: requestType === 'swap' ? swapTargetSession : undefined,
       substituteTeacherId: undefined,
+      leaveDateStart:
+        requestType === 'swap' && swapEffectiveDate ? swapEffectiveDate : undefined,
+      leaveDateEnd:
+        requestType === 'swap' && swapEffectiveDate ? swapEffectiveDate : undefined,
     });
   })();
 

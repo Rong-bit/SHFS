@@ -54,13 +54,18 @@ export const departmentFromClassName = (className: string): DepartmentType | nul
   return null;
 };
 
-/** 從班級名稱判斷年級，例如 電機一忠 → 1、資訊三乙 → 3 */
+/** 從班級名稱判斷年級：優先取科別字首後的一／二／三（電機二忠 → 2） */
 export const gradeYearFromClassName = (className: string): 1 | 2 | 3 | null => {
   const text = compactText(className);
   if (!text) return null;
+  const map: Record<string, 1 | 2 | 3> = { 一: 1, 二: 2, 三: 3, '1': 1, '2': 2, '3': 3 };
+  for (const [prefix] of CLASS_DEPT_PREFIXES) {
+    if (!text.startsWith(prefix)) continue;
+    const m = text.slice(prefix.length).match(/^[一二三123]/);
+    if (m) return map[m[0]] ?? null;
+  }
   const m = text.match(/[一二三123]/);
   if (!m) return null;
-  const map: Record<string, 1 | 2 | 3> = { 一: 1, 二: 2, 三: 3, '1': 1, '2': 2, '3': 3 };
   return map[m[0]] ?? null;
 };
 
@@ -451,9 +456,9 @@ export const teacherWeeklyOverload = (
 export const HOMEROOM_DEFAULT_DUTY_REDUCTION = 1;
 export const HOMEROOM_BASE_PERIODS = 12;
 export const HEAD_DEFAULT_DUTY_REDUCTION = 2;
-export const HEAD_BASE_PERIODS = 7;
+export const HEAD_BASE_PERIODS = 10;
 export const CHIEF_DEFAULT_DUTY_REDUCTION = 0;
-export const CHIEF_BASE_PERIODS = 0;
+export const CHIEF_BASE_PERIODS = 8;
 export const DIRECTOR_DEFAULT_DUTY_REDUCTION = 0;
 export const DIRECTOR_BASE_PERIODS = 0;
 export const FULLTIME_BASE_PERIODS = 16;

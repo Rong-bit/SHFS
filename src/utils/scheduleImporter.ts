@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
-import { departmentFromClassName, departmentFromLabel, isInternshipCourse } from './schoolDepartments';
+import { departmentFromClassName, departmentFromLabel, gradeYearFromClassName, isInternshipCourse } from './schoolDepartments';
 import {
   classifyVenueKind,
   practicalVenueMissingWarn,
@@ -52,41 +52,66 @@ export const parseDayOfWeek = (val: any): DayOfWeek | null => {
   return null;
 };
 
-// Convert period string to number (1-8), supports '週一 第1節', '第1節', '3', '1-2節' etc.
-export const parsePeriod = (val: any): number | null => {
-  if (val === undefined || val === null) return null;
-  const str = String(val).trim();
-  if (!str) return null;
+const periodTokenToNum = (raw: string): number | null => {
+  const chineseToNum: Record<string, number> = {
+    一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8,
+  };
+  if (chineseToNum[raw]) return chineseToNum[raw];
+  const n = parseInt(raw, 10);
+  if (n >= 1 && n <= 8) return n;
+  return null;
+};
 
-  // 1. Explicit "第1節", "第 2 節" pattern
-  const nthMatch = str.match(/第\s*([0-9一二三四五六七八])\s*節?/);
-  if (nthMatch) {
-    const raw = nthMatch[1];
-    const chineseToNum: Record<string, number> = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8 };
-    if (chineseToNum[raw]) return chineseToNum[raw];
-    const n = parseInt(raw, 10);
-    if (n >= 1 && n <= 8) return n;
+/** 支援單節或連堂範圍（如 1-3、第2～4節），回傳 1~8 的節次陣列 */
+export const parsePeriodList = (val: any): number[] => {
+  if (val === undefined || val === null) return [];
+  const str = String(val).trim();
+  if (!str) return [];
+
+  const rangeMatch = str.match(
+    /(?:第\s*)?([0-9一二三四五六七八])\s*[-~～—–到至]\s*(?:第\s*)?([0-9一二三四五六七八])/
+  );
+  if (rangeMatch) {
+    const a = periodTokenToNum(rangeMatch[1]);
+    const b = periodTokenToNum(rangeMatch[2]);
+    if (a != null && b != null) {
+      const lo = Math.min(a, b);
+      const hi = Math.max(a, b);
+      const out: number[] = [];
+      for (let p = lo; p <= hi; p++) out.push(p);
+      return out;
+    }
   }
 
-  // 2. Strip day prefixes like "週一", "星期二", "Mon" etc.
+  const nthMatch = str.match(/第\s*([0-9一二三四五六七八])\s*節?/);
+  if (nthMatch) {
+    const n = periodTokenToNum(nthMatch[1]);
+    if (n != null) return [n];
+  }
+
   const stripped = str
     .replace(/(?:週|星期|禮拜|\()[一二三四五六七日1-5\)]/gi, '')
     .replace(/Mon|Tue|Wed|Thu|Fri|Monday|Tuesday|Wednesday|Thursday|Friday/gi, '')
     .trim();
 
-  // 3. Match first digit 1-8
   const digitMatch = stripped.match(/\d+/);
   if (digitMatch) {
     const num = parseInt(digitMatch[0], 10);
-    if (num >= 1 && num <= 8) return num;
+    if (num >= 1 && num <= 8) return [num];
   }
 
   const chineseMap: Record<string, number> = {
-    '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8,
-    '第一節': 1, '第二節': 2, '第三節': 3, '第四節': 4, '第五節': 5, '第六節': 6, '第七節': 7, '第八節': 8,
+    一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8,
+    第一節: 1, 第二節: 2, 第三節: 3, 第四節: 4, 第五節: 5, 第六節: 6, 第七節: 7, 第八節: 8,
   };
-  if (chineseMap[stripped]) return chineseMap[stripped];
-  return null;
+  if (chineseMap[stripped]) return [chineseMap[stripped]];
+  return [];
+};
+
+// Convert period string to number (1-8); 連堂範圍時取第一節（完整範圍請用 parsePeriodList）
+export const parsePeriod = (val: any): number | null => {
+  const list = parsePeriodList(val);
+  return list.length ? list[0] : null;
 };
 
 // Infer practical class from subject name or venue name
@@ -156,6 +181,16 @@ export const cleanTeacherName = (val: string): string => {
   return cleanedList.join(' / ');
 };
 
+/** 將「蘇明福 / 宋正文」拆成個別教師姓名 */
+export const splitTeacherNames = (val: string): string[] => {
+  const cleaned = cleanTeacherName(val);
+  if (!cleaned || cleaned === '未指派教師') return [];
+  return cleaned
+    .split('/')
+    .map((s) => s.trim())
+    .filter((n) => n && n !== '未指派教師');
+};
+
 // Guess Department from class name first (電機一忠 → 電機科), then subject / venue keywords
 export const guessDepartment = (text: string): DepartmentType => {
   return departmentFromClassName(text) || departmentFromLabel(text) || '共同科目';
@@ -170,7 +205,7 @@ interface TeacherSlotHit {
 
 const normalizeClashText = (s: string) => s.replace(/\s+/g, '').toLowerCase();
 
-/** 忠/孝等同科同時段合班，或完全重複列，不視為教師衝堂 */
+/** 忠/孝等同科同年級同時段合班，或完全重複列，不視為教師衝堂 */
 const isCombinedOrDuplicateTeacherSlot = (
   prev: TeacherSlotHit,
   className: string,
@@ -181,7 +216,19 @@ const isCombinedOrDuplicateTeacherSlot = (
     (subjectName && normalizeClashText(prev.subjectName) === normalizeClashText(subjectName)) ||
     (subjectCode && prev.subjectCode && prev.subjectCode === subjectCode);
   if (!sameSubject) return false;
-  return true;
+  if (prev.className === className) return true;
+  const prevDept = departmentFromClassName(prev.className);
+  const nextDept = departmentFromClassName(className);
+  const prevGrade = gradeYearFromClassName(prev.className);
+  const nextGrade = gradeYearFromClassName(className);
+  return Boolean(
+    prevDept &&
+      nextDept &&
+      prevDept === nextDept &&
+      prevGrade &&
+      nextGrade &&
+      prevGrade === nextGrade
+  );
 };
 
 /**
@@ -380,10 +427,18 @@ export const parseScheduleFile = async (
     const occupiedTeacher = new Map<string, Set<string>>(); // "d-p" -> Set<teacherName>
     const occupiedVenue = new Map<string, Set<string>>(); // "d-p" -> Set<venueName>
 
+    const teacherNamesForSlot = (tName: string) => {
+      const parts = splitTeacherNames(tName);
+      if (parts.length) return parts;
+      return tName && tName !== '未指派教師' ? [tName.trim()] : [];
+    };
+
     const isSlotAvailable = (d: DayOfWeek, p: number, cName: string, tName: string, vName: string) => {
       const slotKey = `${d}-${p}`;
       if (occupiedClass.get(slotKey)?.has(cName)) return false;
-      if (tName && tName !== '未指派教師' && occupiedTeacher.get(slotKey)?.has(tName)) return false;
+      for (const t of teacherNamesForSlot(tName)) {
+        if (occupiedTeacher.get(slotKey)?.has(t)) return false;
+      }
       if (vName && !vName.includes('原班普通教室') && occupiedVenue.get(slotKey)?.has(vName)) return false;
       return true;
     };
@@ -393,9 +448,10 @@ export const parseScheduleFile = async (
       if (!occupiedClass.has(slotKey)) occupiedClass.set(slotKey, new Set());
       occupiedClass.get(slotKey)!.add(cName);
 
-      if (tName && tName !== '未指派教師') {
+      const teachersInSlot = teacherNamesForSlot(tName);
+      if (teachersInSlot.length) {
         if (!occupiedTeacher.has(slotKey)) occupiedTeacher.set(slotKey, new Set());
-        occupiedTeacher.get(slotKey)!.add(tName);
+        teachersInSlot.forEach((t) => occupiedTeacher.get(slotKey)!.add(t));
       }
 
       if (vName && !vName.includes('原班普通教室')) {
@@ -642,9 +698,11 @@ export const parseScheduleFile = async (
       errors.push(`星期無效 (需為 1~5 或 週一~週五，目前值: "${dayVal}")`);
     }
 
-    const period = parsePeriod(periodVal);
-    if (!period) {
-      errors.push(`節次無效 (需為 1~8 節，目前值: "${periodVal}")`);
+    const periods = parsePeriodList(periodVal);
+    if (periods.length === 0) {
+      errors.push(`節次無效 (需為 1~8 節或如 1-3 連堂，目前值: "${periodVal}")`);
+    } else if (periods.length > 1) {
+      warnings.push(`節次「${periodVal}」已展開為第 ${periods.join('、')} 節`);
     }
 
     if (!classVal) {
@@ -660,10 +718,9 @@ export const parseScheduleFile = async (
     if (!teacherVal || teacherVal === '未指派教師') {
       warnings.push('本堂課尚未指派授課教師，匯入後可於課表中手動指定');
     } else {
-      // Split co-teachers if any
-      const subTeachers = teacherVal.split('/').map((s) => s.trim()).filter(Boolean);
+      const subTeachers = splitTeacherNames(teacherVal);
       subTeachers.forEach((tName) => {
-        if (tName && tName !== '未指派教師' && !teacherNameMap.has(tName)) {
+        if (tName && !teacherNameMap.has(tName)) {
           newTeachersSet.add(tName);
           warnings.push(`教師「${tName}」將自動註冊加入師資名冊`);
         }
@@ -697,26 +754,31 @@ export const parseScheduleFile = async (
       warnings.push(practicalVenueMissingWarn(finalVenue));
     }
 
-    if (isPractical) practicalCount++;
+    if (isPractical) practicalCount += Math.max(1, periods.length);
 
-    // Collision check inside the imported batch
-    if (dayOfWeek && period) {
-      const timeKey = `d${dayOfWeek}-p${period}`;
-      
-      // Teacher clash (skip unassigned, 合班/同科同時段, and duplicate rows)
-      if (teacherVal && teacherVal !== '未指派教師') {
-        const subTeachers = teacherVal.split('/').map((s) => s.trim()).filter(Boolean);
-        subTeachers.forEach((tName) => {
-          if (tName && tName !== '未指派教師') {
-            const identity = teacherCodeRaw || tName;
-            const teacherKey = `${timeKey}-t:${identity}`;
+    const periodsToWrite = periods.length ? periods : [1];
+    periodsToWrite.forEach((period, pIdx) => {
+      const rowErrors = [...errors];
+      const rowWarnings = [...warnings];
+      if (periods.length > 1) {
+        rowWarnings.push(`連堂第 ${pIdx + 1}/${periods.length} 節`);
+      }
+
+      // Collision check inside the imported batch
+      if (dayOfWeek && periods.length > 0) {
+        const timeKey = `d${dayOfWeek}-p${period}`;
+
+        if (teacherVal && teacherVal !== '未指派教師') {
+          const subTeachers = splitTeacherNames(teacherVal);
+          subTeachers.forEach((tName) => {
+            const teacherKey = `${timeKey}-t:${tName}`;
             const prev = teacherTimeSlot.get(teacherKey);
             if (prev) {
               if (isCombinedOrDuplicateTeacherSlot(prev, classVal, subjectVal, subjectCodeVal)) {
                 return;
               }
               const msg = `第 ${rowNumber} 列與第 ${prev.rowNumber} 列衝突：教師「${tName}」在 週${dayOfWeek} 第${period}節 排定兩門課程`;
-              warnings.push(msg);
+              rowWarnings.push(msg);
               clashesInFile.push(msg);
             } else {
               teacherTimeSlot.set(teacherKey, {
@@ -726,57 +788,55 @@ export const parseScheduleFile = async (
                 subjectCode: subjectCodeVal,
               });
             }
+          });
+        }
+
+        if (classVal) {
+          const classKey = `${timeKey}-c:${classVal}`;
+          if (classTimeSlot.has(classKey)) {
+            const prevRow = classTimeSlot.get(classKey);
+            const msg = `第 ${rowNumber} 列與第 ${prevRow} 列提示：班級「${classVal}」在 週${dayOfWeek} 第${period}節 排有分組/實習連堂課`;
+            rowWarnings.push(msg);
+          } else {
+            classTimeSlot.set(classKey, rowNumber);
           }
-        });
-      }
+        }
 
-      // Class clash (allow split-group practical courses as warnings instead of blocking failures)
-      if (classVal) {
-        const classKey = `${timeKey}-c:${classVal}`;
-        if (classTimeSlot.has(classKey)) {
-          const prevRow = classTimeSlot.get(classKey);
-          const msg = `第 ${rowNumber} 列與第 ${prevRow} 列提示：班級「${classVal}」在 週${dayOfWeek} 第${period}節 排有分組/實習連堂課`;
-          warnings.push(msg);
-        } else {
-          classTimeSlot.set(classKey, rowNumber);
+        if (finalVenue && !finalVenue.includes('原班普通教室')) {
+          const venueKey = `${timeKey}-v:${finalVenue}`;
+          if (venueTimeSlot.has(venueKey)) {
+            const prevRow = venueTimeSlot.get(venueKey);
+            const msg = `第 ${rowNumber} 列與第 ${prevRow} 列衝堂：實習工場「${finalVenue}」在 週${dayOfWeek} 第${period}節 重複被借用`;
+            rowWarnings.push(msg);
+            clashesInFile.push(msg);
+          } else {
+            venueTimeSlot.set(venueKey, rowNumber);
+          }
         }
       }
 
-      // Venue clash (only for specialized workshop/lab venues)
-      if (finalVenue && !finalVenue.includes('原班普通教室')) {
-        const venueKey = `${timeKey}-v:${finalVenue}`;
-        if (venueTimeSlot.has(venueKey)) {
-          const prevRow = venueTimeSlot.get(venueKey);
-          const msg = `第 ${rowNumber} 列與第 ${prevRow} 列衝堂：實習工場「${finalVenue}」在 週${dayOfWeek} 第${period}節 重複被借用`;
-          warnings.push(msg);
-          clashesInFile.push(msg);
-        } else {
-          venueTimeSlot.set(venueKey, rowNumber);
-        }
+      const parsedRow: ParsedImportRow = {
+        rowNumber,
+        dayOfWeek: dayOfWeek || 1,
+        period: period || 1,
+        className: classVal || '未命名班級',
+        subjectName: subjectVal || '未命名科目',
+        teacherName: teacherVal || '未指派教師',
+        department,
+        venueName: finalVenue,
+        isPractical,
+        isConcurrent,
+        notes: notesVal || undefined,
+        errors: rowErrors,
+        warnings: rowWarnings,
+      };
+
+      if (rowErrors.length > 0) {
+        invalidRows.push(parsedRow);
+      } else {
+        validRows.push(parsedRow);
       }
-    }
-
-    const parsedRow: ParsedImportRow = {
-      rowNumber,
-      dayOfWeek: dayOfWeek || 1,
-      period: period || 1,
-      className: classVal || '未命名班級',
-      subjectName: subjectVal || '未命名科目',
-      teacherName: teacherVal || '未指派教師',
-      department,
-      venueName: finalVenue,
-      isPractical,
-      isConcurrent,
-      notes: notesVal || undefined,
-      errors,
-      warnings,
-    };
-
-    if (errors.length > 0) {
-      invalidRows.push(parsedRow);
-    } else {
-      validRows.push(parsedRow);
-    }
+    });
   });
 
   return {
