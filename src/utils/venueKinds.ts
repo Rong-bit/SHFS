@@ -52,5 +52,5 @@ export function autoVenueCodePrefix(name: string): string {
   return 'RM';
 }
 
-export const PRACTICAL_VENUE_REQUIRED_MSG =
-  '實習／實作課請填寫「實習工場／教室」欄（例如：配線實習工場、電工實習工場）。空白會被當成「原班普通教室」，無法區分不同工場。';
+export const PRACTICAL_VENUE_MISSING_WARN =
+  '實習／實作課未填「實習工場／教室」，將暫用「班級 原班普通教室」（非真正工場）。建議之後在 Excel 補上工場名稱再匯入，或於系統管理調整場地。';

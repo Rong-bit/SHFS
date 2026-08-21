@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
 import { departmentFromClassName, departmentFromLabel, isInternshipCourse } from './schoolDepartments';
-import { PRACTICAL_VENUE_REQUIRED_MSG } from './venueKinds';
+import { PRACTICAL_VENUE_MISSING_WARN } from './venueKinds';
 
 export interface ParsedImportRow {
   rowNumber: number;
@@ -252,6 +252,7 @@ export const parseScheduleFile = async (
       isPractical: boolean;
       isConcurrent: boolean;
       department: DepartmentType;
+      importWarnings: string[];
     }>>();
 
     rawRows.forEach((raw, idx) => {
@@ -326,26 +327,6 @@ export const parseScheduleFile = async (
         venueVal || `${classVal} 原班普通教室`,
         practicalVal
       );
-      if (probePractical && !venueVal) {
-        invalidRows.push({
-          rowNumber,
-          dayOfWeek: 1,
-          period: 1,
-          className: classVal,
-          subjectName: subjectVal,
-          teacherName: teacherVal,
-          department:
-            departmentFromClassName(classVal) ||
-            (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + classVal)),
-          venueName: `${classVal} 原班普通教室`,
-          isPractical: true,
-          isConcurrent: parseConcurrentFlag(concurrentVal),
-          notes: notesVal,
-          errors: [PRACTICAL_VENUE_REQUIRED_MSG],
-          warnings: [],
-        });
-        return;
-      }
 
       const finalVenue = venueVal || `${classVal} 原班普通教室`;
       if (!venueNameMap.has(finalVenue)) {
@@ -354,6 +335,10 @@ export const parseScheduleFile = async (
 
       const isPractical = probePractical;
       const isConcurrent = parseConcurrentFlag(concurrentVal);
+      const courseWarnings: string[] = [];
+      if (isPractical && !venueVal) {
+        courseWarnings.push(PRACTICAL_VENUE_MISSING_WARN);
+      }
       const department: DepartmentType =
         departmentFromClassName(classVal) ||
         (deptVal ? (deptVal as DepartmentType) : guessDepartment(subjectVal + ' ' + finalVenue + ' ' + classVal));
@@ -380,6 +365,7 @@ export const parseScheduleFile = async (
         isPractical,
         isConcurrent,
         department,
+        importWarnings: courseWarnings,
       });
     });
 
@@ -457,7 +443,10 @@ export const parseScheduleFile = async (
                   isConcurrent: item.isConcurrent,
                   notes: item.notes || `實習連堂 (${blockSize}節)`,
                   errors: [],
-                  warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+                  warnings: [
+                    ...(item.importWarnings || []),
+                    `💡 依開課清冊每週${item.hours}節自動排入`,
+                  ],
                 });
                 practicalCount++;
               }
@@ -491,7 +480,10 @@ export const parseScheduleFile = async (
                   isConcurrent: item.isConcurrent,
                   notes: item.notes || `實習連堂 (${aftBlock}節)`,
                   errors: [],
-                  warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+                  warnings: [
+                    ...(item.importWarnings || []),
+                    `💡 依開課清冊每週${item.hours}節自動排入`,
+                  ],
                 });
                 practicalCount++;
               }
@@ -521,7 +513,10 @@ export const parseScheduleFile = async (
                 isConcurrent: item.isConcurrent,
                 notes: item.notes,
                 errors: [],
-                warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+                warnings: [
+                  ...(item.importWarnings || []),
+                  `💡 依開課清冊每週${item.hours}節自動排入`,
+                ],
               });
               if (item.isPractical) practicalCount++;
               remainingHours--;
@@ -547,10 +542,13 @@ export const parseScheduleFile = async (
                   department: item.department,
                   venueName: item.venueName,
                   isPractical: item.isPractical,
-                isConcurrent: item.isConcurrent,
+                  isConcurrent: item.isConcurrent,
                   notes: item.notes,
                   errors: [],
-                  warnings: [`💡 依開課清冊每週${item.hours}節自動排入`],
+                  warnings: [
+                    ...(item.importWarnings || []),
+                    `💡 依開課清冊每週${item.hours}節自動排入`,
+                  ],
                 });
                 if (item.isPractical) practicalCount++;
                 remainingHours--;
@@ -681,7 +679,7 @@ export const parseScheduleFile = async (
 
     const isPractical = inferIsPractical(subjectVal, finalVenue, practicalVal);
     if (isPractical && !venueVal) {
-      errors.push(PRACTICAL_VENUE_REQUIRED_MSG);
+      warnings.push(PRACTICAL_VENUE_MISSING_WARN);
     }
     if (isPractical) practicalCount++;
     const isConcurrent = parseConcurrentFlag(concurrentVal);
@@ -877,7 +875,7 @@ export const generateTemplateExcel = () => {
     ['科目名稱', '必填', '如：電工機械實習、數位邏輯、CNC銑床加工'],
     ['授課教師姓名', '必填', '填寫教師全名。如系統中尚無該教師，系統將自動建檔並標記科別'],
     ['教師科別', '選填', '電機科 / 資訊科 / 機械科 / 共同科目'],
-    ['實習工場/教室名稱', '實習課必填', '實習／實作課必須填工場名稱（如配線實習工場）。學科未填則預設為「班級 原班普通教室」'],
+    ['實習工場/教室名稱', '建議填寫', '實習課建議填工場名稱（如配線實習工場）。未填仍可匯入，會暫用「班級 原班普通教室」並顯示警告'],
     ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定實習工場課程'],
     ['1.兼課2.', '選填', '填 1 代表此節為兼課，課表會顯示「兼課」標籤'],
     ['備註說明', '選填', '如：分組教學、協同教學、課輔節數等備註'],
