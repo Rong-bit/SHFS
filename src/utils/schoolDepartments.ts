@@ -54,6 +54,16 @@ export const departmentFromClassName = (className: string): DepartmentType | nul
   return null;
 };
 
+/** 從班級名稱判斷年級，例如 電機一忠 → 1、資訊三乙 → 3 */
+export const gradeYearFromClassName = (className: string): 1 | 2 | 3 | null => {
+  const text = compactText(className);
+  if (!text) return null;
+  const m = text.match(/[一二三123]/);
+  if (!m) return null;
+  const map: Record<string, 1 | 2 | 3> = { 一: 1, 二: 2, 三: 3, '1': 1, '2': 2, '3': 3 };
+  return map[m[0]] ?? null;
+};
+
 /** 從教室／科目等文字判斷科別（教室名不一定在開頭） */
 export const departmentFromLabel = (text: string): DepartmentType | null => {
   const compact = compactText(text);

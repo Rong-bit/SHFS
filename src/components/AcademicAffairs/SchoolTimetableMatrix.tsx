@@ -19,7 +19,7 @@ import {
   Download
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
-import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { displayTeacherTitle, gradeYearFromClassName, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import { classifyVenueKind, venueKindLabel } from '../../utils/venueKinds';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 
@@ -28,12 +28,14 @@ export const SchoolTimetableMatrix: React.FC = () => {
 
   type ViewDimension = 'venue' | 'class' | 'teacher' | 'department';
   type VenueListGroup = 'workshop' | 'classroom';
+  type DeptGradeFilter = 'all' | 1 | 2 | 3;
   const [dimension, setDimension] = useState<ViewDimension>('venue');
   
   // Selected filter targets
   const [selectedVenueId, setSelectedVenueId] = useState<string>(venues[0]?.id || '');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teachers[0]?.id || '');
   const [selectedDepartment, setSelectedDepartment] = useState<DepartmentType>('電機科');
+  const [deptGradeFilter, setDeptGradeFilter] = useState<DeptGradeFilter>('all');
   const [venueListGroup, setVenueListGroup] = useState<VenueListGroup>(() => {
     const first = venues[0];
     return first && classifyVenueKind(first.name) === 'workshop' ? 'workshop' : 'classroom';
@@ -82,10 +84,21 @@ export const SchoolTimetableMatrix: React.FC = () => {
     if (dimension === 'teacher') return s.teacherId === selectedTeacherId;
     if (dimension === 'department') {
       const teacher = teachers.find((t) => t.id === s.teacherId);
-      return teacher?.department === selectedDepartment;
+      if (teacher?.department !== selectedDepartment) return false;
+      if (deptGradeFilter === 'all') return true;
+      return gradeYearFromClassName(s.className) === deptGradeFilter;
     }
     return true;
   });
+
+  const deptGradeLabel =
+    deptGradeFilter === 'all'
+      ? '全年級'
+      : deptGradeFilter === 1
+        ? '一年級'
+        : deptGradeFilter === 2
+          ? '二年級'
+          : '三年級';
 
   const getSessionsAt = (day: DayOfWeek, period: number) => {
     return filteredSessions
@@ -277,22 +290,50 @@ export const SchoolTimetableMatrix: React.FC = () => {
 
           {/* If Department Dimension */}
           {dimension === 'department' && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-700">選擇高職科別：</span>
-              <div className="flex flex-wrap gap-1.5">
-                {SCHOOL_DEPARTMENTS.map((dept) => (
-                  <button
-                    key={dept}
-                    onClick={() => setSelectedDepartment(dept)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                      selectedDepartment === dept
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {dept}
-                  </button>
-                ))}
+            <div className="flex flex-wrap items-center gap-3 w-full">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700">選擇高職科別：</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {SCHOOL_DEPARTMENTS.map((dept) => (
+                    <button
+                      key={dept}
+                      onClick={() => setSelectedDepartment(dept)}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                        selectedDepartment === dept
+                          ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {dept}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700">年級：</span>
+                <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
+                  {(
+                    [
+                      { key: 'all' as const, label: '全部' },
+                      { key: 1 as const, label: '一年級' },
+                      { key: 2 as const, label: '二年級' },
+                      { key: 3 as const, label: '三年級' },
+                    ] as const
+                  ).map((g) => (
+                    <button
+                      key={String(g.key)}
+                      type="button"
+                      onClick={() => setDeptGradeFilter(g.key)}
+                      className={`px-2.5 py-1 rounded-md transition ${
+                        deptGradeFilter === g.key
+                          ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -311,7 +352,8 @@ export const SchoolTimetableMatrix: React.FC = () => {
               {dimension === 'venue' && `🏢 ${currentVenueObj?.name || '指定工場'} 週課表`}
               {dimension === 'class' && `🎓 ${selectedClass} 班級週課表`}
               {dimension === 'teacher' && `👨‍🏫 ${currentTeacherObj?.name} 教師授課表`}
-              {dimension === 'department' && `🏛️ ${selectedDepartment} 全科排課彙整（同節並行班級會一併列出）`}
+              {dimension === 'department' &&
+                `🏛️ ${selectedDepartment} ${deptGradeLabel}排課彙整（同節並行班級會一併列出）`}
             </span>
           </div>
           
