@@ -20,18 +20,24 @@ import {
 } from 'lucide-react';
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { classifyVenueKind, venueKindLabel } from '../../utils/venueKinds';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 
 export const SchoolTimetableMatrix: React.FC = () => {
   const { sessions, teachers, venues, systemConfig, setIsImportModalOpen } = useApp();
 
   type ViewDimension = 'venue' | 'class' | 'teacher' | 'department';
+  type VenueListGroup = 'workshop' | 'classroom';
   const [dimension, setDimension] = useState<ViewDimension>('venue');
   
   // Selected filter targets
   const [selectedVenueId, setSelectedVenueId] = useState<string>(venues[0]?.id || '');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teachers[0]?.id || '');
   const [selectedDepartment, setSelectedDepartment] = useState<DepartmentType>('電機科');
+  const [venueListGroup, setVenueListGroup] = useState<VenueListGroup>(() => {
+    const first = venues[0];
+    return first && classifyVenueKind(first.name) === 'workshop' ? 'workshop' : 'classroom';
+  });
   
   // Available classes derived from sessions
   const allClasses = Array.from(new Set(sessions.map((s) => s.className))).sort();
@@ -44,6 +50,30 @@ export const SchoolTimetableMatrix: React.FC = () => {
     { day: 4, name: '週四' },
     { day: 5, name: '週五' },
   ];
+
+  const workshopVenues = venues
+    .filter((v) => classifyVenueKind(v.name) === 'workshop')
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  const classroomVenues = venues
+    .filter((v) => classifyVenueKind(v.name) !== 'workshop')
+    .sort((a, b) => {
+      const ka = classifyVenueKind(a.name);
+      const kb = classifyVenueKind(b.name);
+      if (ka !== kb) return ka === 'homeroom' ? -1 : 1;
+      return a.name.localeCompare(b.name, 'zh-Hant');
+    });
+  const venuesInGroup = venueListGroup === 'workshop' ? workshopVenues : classroomVenues;
+
+  const selectVenueGroup = (group: VenueListGroup) => {
+    setVenueListGroup(group);
+    const list = group === 'workshop' ? workshopVenues : classroomVenues;
+    if (list.length === 0) {
+      setSelectedVenueId('');
+      return;
+    }
+    const stillInGroup = list.some((v) => v.id === selectedVenueId);
+    if (!stillInGroup) setSelectedVenueId(list[0].id);
+  };
 
   // Filter sessions according to current dimension and selection
   const filteredSessions = sessions.filter((s) => {
@@ -111,23 +141,93 @@ export const SchoolTimetableMatrix: React.FC = () => {
           {/* If Venue Dimension */}
           {dimension === 'venue' && (
             <div className="flex flex-wrap items-center gap-2 w-full">
-              <span className="text-xs font-bold text-slate-700">選擇實習工場/教室：</span>
+              <span className="text-xs font-bold text-slate-700">選擇場地：</span>
+              <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => selectVenueGroup('workshop')}
+                  className={`px-2.5 py-1 rounded-md transition ${
+                    venueListGroup === 'workshop'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  實習工場 ({workshopVenues.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectVenueGroup('classroom')}
+                  className={`px-2.5 py-1 rounded-md transition ${
+                    venueListGroup === 'classroom'
+                      ? 'bg-sky-600 text-white font-bold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  教室 ({classroomVenues.length})
+                </button>
+              </div>
               <select
                 id="select-matrix-venue"
-                value={selectedVenueId}
+                value={venuesInGroup.some((v) => v.id === selectedVenueId) ? selectedVenueId : ''}
                 onChange={(e) => setSelectedVenueId(e.target.value)}
-                className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-800 focus:ring-1 focus:ring-amber-500"
+                disabled={venuesInGroup.length === 0}
+                className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-800 focus:ring-1 focus:ring-amber-500 disabled:opacity-50"
               >
-                {venues.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} ({v.code} ｜ {v.department} ｜ 容量:{v.capacity}人)
+                {venuesInGroup.length === 0 ? (
+                  <option value="">
+                    {venueListGroup === 'workshop' ? '尚無實習工場' : '尚無教室'}
                   </option>
-                ))}
+                ) : venueListGroup === 'workshop' ? (
+                  workshopVenues.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.code} ｜ {v.department} ｜ 容量:{v.capacity}人)
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    {classroomVenues.some((v) => classifyVenueKind(v.name) === 'homeroom') && (
+                      <optgroup label="原班教室">
+                        {classroomVenues
+                          .filter((v) => classifyVenueKind(v.name) === 'homeroom')
+                          .map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.name} ({v.code} ｜ {v.department} ｜ 容量:{v.capacity}人)
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    {classroomVenues.some((v) => classifyVenueKind(v.name) === 'classroom') && (
+                      <optgroup label="一般教室">
+                        {classroomVenues
+                          .filter((v) => classifyVenueKind(v.name) === 'classroom')
+                          .map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.name} ({v.code} ｜ {v.department} ｜ 容量:{v.capacity}人)
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                  </>
+                )}
               </select>
 
               {currentVenueObj && (
-                <div className="text-xs text-slate-500 bg-amber-50/80 px-2.5 py-1 rounded-lg border border-amber-200">
-                  <span className="font-semibold text-amber-900">設備配置：</span>
+                <div
+                  className={`text-xs px-2.5 py-1 rounded-lg border ${
+                    classifyVenueKind(currentVenueObj.name) === 'workshop'
+                      ? 'text-slate-600 bg-amber-50/80 border-amber-200'
+                      : 'text-slate-600 bg-sky-50/80 border-sky-200'
+                  }`}
+                >
+                  <span
+                    className={`font-semibold ${
+                      classifyVenueKind(currentVenueObj.name) === 'workshop'
+                        ? 'text-amber-900'
+                        : 'text-sky-900'
+                    }`}
+                  >
+                    {venueKindLabel(classifyVenueKind(currentVenueObj.name))}｜設備配置：
+                  </span>
                   {currentVenueObj.equipmentNote}
                 </div>
               )}

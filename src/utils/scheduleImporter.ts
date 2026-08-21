@@ -93,7 +93,7 @@ export const parsePeriod = (val: any): number | null => {
 export const inferIsPractical = (subjectName: string, venueName: string, explicitVal?: any): boolean => {
   if (explicitVal !== undefined && explicitVal !== null && String(explicitVal).trim() !== '') {
     const str = String(explicitVal).trim().toLowerCase();
-    if (['是', 'y', 'yes', 'true', '1', '實習', '實作'].includes(str)) return true;
+    if (['是', 'y', 'yes', 'true', '1', '實習', '實作', '實務導向', '實務導向學習'].includes(str)) return true;
     if (['否', 'n', 'no', 'false', '學科', '一般'].includes(str)) return false;
   }
   if (isInternshipCourse(subjectName)) return true;

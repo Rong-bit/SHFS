@@ -485,11 +485,11 @@ export const isAdminTeacherTitle = (title: string) => {
   return next === '組長' || next === '科主任' || next === '主任';
 };
 
-/** 真正的實習／實作課；團體活動、普通教室學科不算 */
+/** 真正的實習／實作課（含實務導向學習）；團體活動、普通教室學科不算 */
 export const isInternshipCourse = (subjectName: string) => {
   const name = subjectName || '';
   if (isGroupActivity(name)) return false;
-  return /實習|實作/.test(name);
+  return /實習|實作|實務導向/.test(name);
 };
 
 export const isPracticalSession = (session: {
