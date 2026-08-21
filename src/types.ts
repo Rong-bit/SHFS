@@ -170,6 +170,13 @@ export interface SystemConfig {
   weeksInMonth: number; // 4 週
   /** 不計鐘點之日（國定假日、校慶、彈性放假等），格式 YYYY-MM-DD */
   nonTeachingDays?: NonTeachingDay[];
+  /**
+   * 暫時移課／補課：把 sourceDate 當天的週課表（依該日星期）改在 targetDate 上計鐘點。
+   * 例：週四放假 → 週六或某週二補上「週四課表」；不永久改週模板。
+   */
+  temporaryScheduleMoves?: TemporaryScheduleMove[];
+  /** 半日／節次停課：該日指定節次不計鐘點（如上午仍上課、下午佈置考場） */
+  partialNonTeachingDays?: PartialNonTeachingDay[];
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
     defaultTeacherPassword: string; // 預設教師密碼雜湊（或遷移前明文）
@@ -183,6 +190,26 @@ export interface SystemConfig {
 export interface NonTeachingDay {
   date: string; // YYYY-MM-DD
   label: string;
+}
+
+/** 暫時移課／補課（單日對應，不改週課表模板） */
+export interface TemporaryScheduleMove {
+  id: string;
+  /** 原上課日 YYYY-MM-DD（通常為放假日；若未標放假，計費時仍會扣掉該日） */
+  sourceDate: string;
+  /** 實際補上日 YYYY-MM-DD（可為平日或週六） */
+  targetDate: string;
+  label?: string;
+  /** 只移這些節次；省略或空＝全日第 1～8 節 */
+  periods?: number[];
+}
+
+/** 半日／節次停課 */
+export interface PartialNonTeachingDay {
+  id: string;
+  date: string; // YYYY-MM-DD
+  periods: number[];
+  label?: string;
 }
 
 export interface MonthlyTeacherSettlement {

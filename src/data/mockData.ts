@@ -108,6 +108,8 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   currentMonth: new Date().getMonth() + 1,
   weeksInMonth: 4,
   nonTeachingDays: [],
+  temporaryScheduleMoves: [],
+  partialNonTeachingDays: [],
   authConfig: {
     requirePassword: true,
     defaultTeacherPassword: '1234',

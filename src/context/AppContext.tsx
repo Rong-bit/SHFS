@@ -303,6 +303,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         nonTeachingDays: Array.isArray(parsed.nonTeachingDays)
           ? parsed.nonTeachingDays
           : INITIAL_SYSTEM_CONFIG.nonTeachingDays || [],
+        temporaryScheduleMoves: Array.isArray(parsed.temporaryScheduleMoves)
+          ? parsed.temporaryScheduleMoves
+          : INITIAL_SYSTEM_CONFIG.temporaryScheduleMoves || [],
+        partialNonTeachingDays: Array.isArray(parsed.partialNonTeachingDays)
+          ? parsed.partialNonTeachingDays
+          : INITIAL_SYSTEM_CONFIG.partialNonTeachingDays || [],
         standardBasePeriods: normalizeStandardBasePeriods(
           parsed.standardBasePeriods || parsed.basePeriodsStandard
         ),
@@ -2228,11 +2234,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       systemConfig.academicYear
     );
     const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+    const calendarOpts = {
+      holidaySet,
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: systemConfig.partialNonTeachingDays || [],
+    };
     const weeks = settlementWeeksForMonth(
       settlementMonth,
       new Date(),
       holidaySet,
-      systemConfig.academicYear
+      systemConfig.academicYear,
+      calendarOpts
     );
 
     return teachers.map((teacher) => {
@@ -2246,7 +2258,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settlementMonth,
         new Date(),
         holidaySet,
-        systemConfig.academicYear
+        systemConfig.academicYear,
+        calendarOpts
       );
       // 請假日按日扣兼課：週課表 [請假派代] 不整月排除，只扣實際請假天數
       const leaveConcurrentDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
@@ -2275,7 +2288,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settlementMonth,
         new Date(),
         holidaySet,
-        systemConfig.academicYear
+        systemConfig.academicYear,
+        calendarOpts
       );
       const leaveCounselingDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
         requests,

@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, NonTeachingDay } from '../../types';
+import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, NonTeachingDay, TemporaryScheduleMove, PartialNonTeachingDay } from '../../types';
 import {
   mergeNonTeachingDays,
   suggestNationalHolidays,
 } from '../../utils/holidays';
+import {
+  mergeTemporaryScheduleMoves,
+  mergePartialNonTeachingDays,
+} from '../../utils/calendarSettlement';
 import { 
   Settings, 
   Coins, 
@@ -89,6 +93,8 @@ export const AdminSettings: React.FC = () => {
     currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
     weeksInMonth: systemConfig?.weeksInMonth ?? 4,
     nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
+    temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
+    partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
     authConfig: {
       requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
       // 表單不回填雜湊／明文，留空表示沿用既有密碼
@@ -101,6 +107,13 @@ export const AdminSettings: React.FC = () => {
 
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayLabel, setNewHolidayLabel] = useState('放假');
+  const [moveSourceDate, setMoveSourceDate] = useState('');
+  const [moveTargetDate, setMoveTargetDate] = useState('');
+  const [moveLabel, setMoveLabel] = useState('暫時移課／補課');
+  const [movePeriods, setMovePeriods] = useState<number[]>([]);
+  const [partialDate, setPartialDate] = useState('');
+  const [partialLabel, setPartialLabel] = useState('半日停課');
+  const [partialPeriods, setPartialPeriods] = useState<number[]>([5, 6, 7, 8]);
 
   // Sync if systemConfig changes
   useEffect(() => {
@@ -115,6 +128,8 @@ export const AdminSettings: React.FC = () => {
       currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
       nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
+      temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
+      partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
       authConfig: {
         requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
         defaultTeacherPassword: '',
@@ -819,8 +834,17 @@ export const AdminSettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                列入此處的日期（週一至週五）在超鐘點、課輔月結與代課費／自費扣款計算時一律不計節。週末本來就不計，無需登錄。請依人事行政總處與校曆公告維護。
+                列入此處的日期（週一至週五）在超鐘點、課輔月結與代課費／自費扣款計算時一律<strong>整天</strong>不計節。週末本來就不計，無需登錄。請依人事行政總處與校曆公告維護。
               </p>
+              <div className="text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed space-y-1">
+                <p className="font-bold text-amber-900">操作建議（三種常見情境）</p>
+                <p>
+                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。
+                </p>
+                <p>
+                  <strong>連假平日對調／週六補課</strong>：原日列入放假日，再用下方「暫時移課／補課」指定補課日（可選週六）。勿用教師端自行移課永久改週模板。
+                </p>
+              </div>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
@@ -909,6 +933,283 @@ export const AdminSettings: React.FC = () => {
                             ...formConfig,
                             nonTeachingDays: (formConfig.nonTeachingDays || []).filter(
                               (x) => x.date !== d.date
+                            ),
+                          })
+                        }
+                        className="p-1 text-slate-400 hover:text-rose-600"
+                        title="移除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 暫時移課／補課 */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-sky-500" />
+                  <span>暫時移課／補課（單日對應）</span>
+                </h3>
+                <span className="text-[11px] px-2 py-0.5 bg-sky-50 text-sky-700 rounded-full font-bold border border-sky-200">
+                  不改週課表模板
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                把「原日」的週課表（依該日是星期幾）加計到「補課日」。例：週四放假 → 週六補上＝原日選該週四、補課日選週六。原日請一併列入上方放假日。可選只移部分節次（空白＝全日 1～8 節）。
+              </p>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">原日（放假／停課）</label>
+                  <input
+                    type="date"
+                    value={moveSourceDate}
+                    onChange={(e) => setMoveSourceDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">補課日（可週六）</label>
+                  <input
+                    type="date"
+                    value={moveTargetDate}
+                    onChange={(e) => setMoveTargetDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex-1 min-w-[8rem]">
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                  <input
+                    type="text"
+                    value={moveLabel}
+                    onChange={(e) => setMoveLabel(e.target.value)}
+                    placeholder="例：連假補課"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!moveSourceDate || !moveTargetDate) {
+                      alert('請選擇原日與補課日');
+                      return;
+                    }
+                    const srcJs = new Date(moveSourceDate.replace(/-/g, '/') + ' 12:00:00').getDay();
+                    if (srcJs === 0 || srcJs === 6) {
+                      alert('原日須為平日（週一至週五），才能對應週課表模板。');
+                      return;
+                    }
+                    const next: TemporaryScheduleMove = {
+                      id: `move-${Date.now()}`,
+                      sourceDate: moveSourceDate,
+                      targetDate: moveTargetDate,
+                      label: moveLabel.trim() || '暫時移課／補課',
+                      periods: movePeriods.length > 0 ? [...movePeriods].sort((a, b) => a - b) : undefined,
+                    };
+                    setFormConfig({
+                      ...formConfig,
+                      temporaryScheduleMoves: mergeTemporaryScheduleMoves(
+                        formConfig.temporaryScheduleMoves,
+                        [next]
+                      ),
+                    });
+                    setMoveSourceDate('');
+                    setMoveTargetDate('');
+                    setMovePeriods([]);
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-bold hover:bg-sky-500"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  新增暫時移課
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-[11px] text-slate-500 mr-1">只移節次（可空白＝全日）：</span>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => {
+                  const on = movePeriods.includes(p);
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() =>
+                        setMovePeriods((prev) =>
+                          on ? prev.filter((x) => x !== p) : [...prev, p].sort((a, b) => a - b)
+                        )
+                      }
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                        on
+                          ? 'bg-sky-600 text-white border-sky-600'
+                          : 'bg-white text-slate-600 border-slate-300'
+                      }`}
+                    >
+                      第{p}節
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                {(formConfig.temporaryScheduleMoves || []).length === 0 ? (
+                  <p className="text-xs text-slate-400 p-3">尚未設定暫時移課。</p>
+                ) : (
+                  (formConfig.temporaryScheduleMoves || []).map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                    >
+                      <div>
+                        <span className="font-mono font-semibold text-slate-800">
+                          {m.sourceDate} → {m.targetDate}
+                        </span>
+                        <span className="text-slate-500 ml-2">{m.label}</span>
+                        {m.periods && m.periods.length > 0 && (
+                          <span className="text-sky-700 ml-2">
+                            第{m.periods.join('、')}節
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormConfig({
+                            ...formConfig,
+                            temporaryScheduleMoves: (formConfig.temporaryScheduleMoves || []).filter(
+                              (x) => x.id !== m.id
+                            ),
+                          })
+                        }
+                        className="p-1 text-slate-400 hover:text-rose-600"
+                        title="移除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 半日／節次停課 */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-amber-500" />
+                  <span>半日／節次停課</span>
+                </h3>
+                <span className="text-[11px] px-2 py-0.5 bg-amber-50 text-amber-800 rounded-full font-bold border border-amber-200">
+                  例：下午佈置考場
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                指定日期的部分節次不計超鐘點／課輔；其他節次仍計。預設勾選第 5～8 節（下午含課輔），可自行調整。
+              </p>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
+                  <input
+                    type="date"
+                    value={partialDate}
+                    onChange={(e) => setPartialDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex-1 min-w-[8rem]">
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                  <input
+                    type="text"
+                    value={partialLabel}
+                    onChange={(e) => setPartialLabel(e.target.value)}
+                    placeholder="例：佈置考場"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!partialDate) {
+                      alert('請選擇日期');
+                      return;
+                    }
+                    if (partialPeriods.length === 0) {
+                      alert('請至少勾選一節停課節次');
+                      return;
+                    }
+                    const next: PartialNonTeachingDay = {
+                      id: `partial-${Date.now()}`,
+                      date: partialDate,
+                      periods: [...partialPeriods].sort((a, b) => a - b),
+                      label: partialLabel.trim() || '半日停課',
+                    };
+                    setFormConfig({
+                      ...formConfig,
+                      partialNonTeachingDays: mergePartialNonTeachingDays(
+                        formConfig.partialNonTeachingDays,
+                        [next]
+                      ),
+                    });
+                    setPartialDate('');
+                    setPartialPeriods([5, 6, 7, 8]);
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  新增半日停課
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-[11px] text-slate-500 mr-1">停課節次：</span>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => {
+                  const on = partialPeriods.includes(p);
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() =>
+                        setPartialPeriods((prev) =>
+                          on ? prev.filter((x) => x !== p) : [...prev, p].sort((a, b) => a - b)
+                        )
+                      }
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                        on
+                          ? 'bg-amber-500 text-slate-950 border-amber-500'
+                          : 'bg-white text-slate-600 border-slate-300'
+                      }`}
+                    >
+                      第{p}節
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setPartialPeriods([5, 6, 7, 8])}
+                  className="ml-1 text-[11px] text-amber-800 font-semibold underline"
+                >
+                  下午（5–8）
+                </button>
+              </div>
+              <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                {(formConfig.partialNonTeachingDays || []).length === 0 ? (
+                  <p className="text-xs text-slate-400 p-3">尚未設定半日停課。</p>
+                ) : (
+                  (formConfig.partialNonTeachingDays || []).map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                    >
+                      <div>
+                        <span className="font-mono font-semibold text-slate-800">{m.date}</span>
+                        <span className="text-slate-500 ml-2">{m.label}</span>
+                        <span className="text-amber-800 ml-2">第{m.periods.join('、')}節</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormConfig({
+                            ...formConfig,
+                            partialNonTeachingDays: (formConfig.partialNonTeachingDays || []).filter(
+                              (x) => x.id !== m.id
                             ),
                           })
                         }

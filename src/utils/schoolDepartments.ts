@@ -1,4 +1,9 @@
 import { CourseSession, DepartmentType, Teacher, TeacherTitle } from '../types';
+import {
+  CalendarSettlementOptions,
+  slotOccurrenceCountsInMonth,
+  weekdayCountsFromSlotMap,
+} from './calendarSettlement';
 
 /** 本校課表會出現的科別（含示範資料用的餐飲／廣告） */
 export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
@@ -273,16 +278,6 @@ export const averageWeekdayWeeks = (
   return (c[1] + c[2] + c[3] + c[4] + c[5]) / 5;
 };
 
-export const settlementWeeksForMonth = (
-  month: number,
-  now = new Date(),
-  excludeDates?: Iterable<string> | Set<string> | null,
-  academicYear?: string | number
-) => {
-  const year = calendarYearForSettlementMonth(month, now, academicYear);
-  return averageWeekdayWeeks(year, month, excludeDates);
-};
-
 /** 該月實際正課節數：每堂課 × 該星期幾在當月出現次數（放假日已從次數扣除） */
 export const monthlyTeachingPeriods = (
   sessions: CourseSession[],
@@ -302,27 +297,38 @@ export const monthlyTeachingPeriods = (
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
-/** 該月兼課節數：每個有兼課的時段 × 該星期幾在當月出現次數（放假日不計） */
+/** 該月兼課節數：每個有兼課的時段 × 該「星期–節次」在當月應計次數（含暫時移課／半日停課） */
 export const monthlyConcurrentPeriods = (
   sessions: CourseSession[],
   teacherId: string,
   year: number,
   month: number,
-  excludeDates?: Iterable<string> | Set<string> | null
+  excludeDates?: Iterable<string> | Set<string> | null,
+  calendar?: CalendarSettlementOptions
 ) => {
-  const counts = weekdayOccurrencesInMonth(year, month, excludeDates);
+  const holidaySet =
+    calendar?.holidaySet ??
+    (excludeDates instanceof Set
+      ? excludeDates
+      : excludeDates
+      ? new Set(excludeDates)
+      : new Set<string>());
+  const slotCounts = slotOccurrenceCountsInMonth(year, month, {
+    holidaySet,
+    temporaryMoves: calendar?.temporaryMoves,
+    partialStops: calendar?.partialStops,
+  });
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
     if (!s.isConcurrent || isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period)) return;
     if (!isDaytimeSlot(s)) return;
-    if (isSubstituteCoverSession(s)) return; // 代課覆蓋：改由代課申請計費
+    if (isSubstituteCoverSession(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });
   let total = 0;
   slots.forEach((key) => {
-    const day = Number(key.split('-')[0]);
-    total += counts[day] || 0;
+    total += slotCounts.get(key) || 0;
   });
   return total;
 };
@@ -333,10 +339,22 @@ export const monthlyCounselingPeriods = (
   month: number,
   now = new Date(),
   excludeDates?: Iterable<string> | Set<string> | null,
-  academicYear?: string | number
+  academicYear?: string | number,
+  calendar?: CalendarSettlementOptions
 ) => {
   const year = calendarYearForSettlementMonth(month, now, academicYear);
-  const counts = weekdayOccurrencesInMonth(year, month, excludeDates);
+  const holidaySet =
+    calendar?.holidaySet ??
+    (excludeDates instanceof Set
+      ? excludeDates
+      : excludeDates
+      ? new Set(excludeDates)
+      : new Set<string>());
+  const slotCounts = slotOccurrenceCountsInMonth(year, month, {
+    holidaySet,
+    temporaryMoves: calendar?.temporaryMoves,
+    partialStops: calendar?.partialStops,
+  });
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId || !isCounselingSlot(s) || isSubstituteCoverSession(s)) return;
@@ -344,8 +362,7 @@ export const monthlyCounselingPeriods = (
   });
   let total = 0;
   slots.forEach((key) => {
-    const day = Number(key.split('-')[0]);
-    total += counts[day] || 0;
+    total += slotCounts.get(key) || 0;
   });
   return total;
 };
@@ -356,10 +373,49 @@ export const monthlyOverloadPeriods = (
   month: number,
   now = new Date(),
   excludeDates?: Iterable<string> | Set<string> | null,
-  academicYear?: string | number
+  academicYear?: string | number,
+  calendar?: CalendarSettlementOptions
 ) => {
   const year = calendarYearForSettlementMonth(month, now, academicYear);
-  return monthlyConcurrentPeriods(sessions, teacher.id, year, month, excludeDates);
+  return monthlyConcurrentPeriods(
+    sessions,
+    teacher.id,
+    year,
+    month,
+    excludeDates,
+    calendar
+  );
+};
+
+/** 折算週數：平日平均出現次數；有暫時移課／半日停課時以 slot 計次回推 */
+export const settlementWeeksForMonth = (
+  month: number,
+  now = new Date(),
+  excludeDates?: Iterable<string> | Set<string> | null,
+  academicYear?: string | number,
+  calendar?: CalendarSettlementOptions
+) => {
+  const year = calendarYearForSettlementMonth(month, now, academicYear);
+  if (
+    calendar?.temporaryMoves?.length ||
+    calendar?.partialStops?.length
+  ) {
+    const holidaySet =
+      calendar.holidaySet ??
+      (excludeDates instanceof Set
+        ? excludeDates
+        : excludeDates
+        ? new Set(excludeDates)
+        : new Set<string>());
+    const slotCounts = slotOccurrenceCountsInMonth(year, month, {
+      holidaySet,
+      temporaryMoves: calendar.temporaryMoves,
+      partialStops: calendar.partialStops,
+    });
+    const c = weekdayCountsFromSlotMap(slotCounts);
+    return (c[1] + c[2] + c[3] + c[4] + c[5]) / 5;
+  }
+  return averageWeekdayWeeks(year, month, excludeDates);
 };
 
 /** 每週超鐘點 = 課表標示兼課的節數 */

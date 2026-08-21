@@ -21,11 +21,18 @@ export const AccountingSettlement: React.FC = () => {
   const calendarMonth = new Date().getMonth() + 1;
   const [selectedMonth, setSelectedMonth] = useState<number>(calendarMonth);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const settlementHolidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+  const settlementCalendar = {
+    holidaySet: settlementHolidaySet,
+    temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+    partialStops: systemConfig.partialNonTeachingDays || [],
+  };
   const settlementWeeks = settlementWeeksForMonth(
     selectedMonth,
     new Date(),
-    nonTeachingDateSet(systemConfig.nonTeachingDays),
-    systemConfig.academicYear
+    settlementHolidaySet,
+    systemConfig.academicYear,
+    settlementCalendar
   );
   const settlementYear = calendarYearForSettlementMonth(
     selectedMonth,
@@ -188,6 +195,34 @@ export const AccountingSettlement: React.FC = () => {
             <FileSpreadsheet className="w-4 h-4" />
             <span>匯出主計清冊 (Excel)</span>
           </button>
+        </div>
+      </div>
+
+      {/* 行事曆情境計費說明 */}
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 leading-relaxed space-y-2">
+        <div className="flex items-start gap-2">
+          <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="space-y-2">
+            <p className="font-bold text-slate-900">月結算法與三種行事曆情境</p>
+            <p>
+              超鐘點／課輔＝週課表模板 × 各「星期–節次」月計次數（扣整天放假、半日停課；暫時移課會把原日課表加到補課日，含週六）。
+              再依請假日按日扣減。教師端「自行移課」仍會永久改週模板，連假補課請改用系統參數的暫時移課。
+            </p>
+            <ul className="list-disc pl-4 space-y-1.5 text-slate-600">
+              <li>
+                <strong className="text-slate-800">下午佈置考場無課：</strong>
+                系統參數 →「半日／節次停課」勾選下午節次，只扣那些節。
+              </li>
+              <li>
+                <strong className="text-slate-800">連假平日改某日補上：</strong>
+                原日列入放假日 +「暫時移課／補課」（原日→補課日）；勿用自行移課永久改模板。
+              </li>
+              <li>
+                <strong className="text-slate-800">週六補平日上課：</strong>
+                同上，補課日可選週六，系統會加計原平日課表。
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 
