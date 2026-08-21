@@ -26,6 +26,7 @@ import { ParsedImportRow, inferIsPractical } from '../utils/scheduleImporter';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
 import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherWeeklyOverload } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
+import { temporarySwapPeriodDeltaInMonth, validateSwapRequestFields } from '../utils/temporarySwap';
 import {
   CloudSyncSettings,
   loadCloudSyncSettings,
@@ -158,7 +159,12 @@ interface AppContextType {
     requestType: RequestType;
     applicantTeacherId: string;
     originalSession: CourseSession;
-    targetReschedule?: { dayOfWeek: DayOfWeek; period: number; venueId: string };
+    targetReschedule?: {
+      dayOfWeek: DayOfWeek;
+      period: number;
+      venueId: string;
+      exchangeSessionId?: string;
+    };
     swapTargetTeacherId?: string;
     swapTargetSession?: CourseSession;
     substituteTeacherId?: string;
@@ -922,7 +928,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     requestType: RequestType;
     applicantTeacherId: string;
     originalSession: CourseSession;
-    targetReschedule?: { dayOfWeek: DayOfWeek; period: number; venueId: string };
+    targetReschedule?: {
+      dayOfWeek: DayOfWeek;
+      period: number;
+      venueId: string;
+      exchangeSessionId?: string;
+    };
     swapTargetTeacherId?: string;
     swapTargetSession?: CourseSession;
     substituteTeacherId?: string;
@@ -952,8 +963,143 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const applicant = teachers.find((t) => t.id === applicantTeacherId);
 
     if (requestType === 'reschedule' && targetReschedule) {
-      const { dayOfWeek, period, venueId } = targetReschedule;
+      const { dayOfWeek, period, venueId, exchangeSessionId } = targetReschedule;
+      const exchangePartner = exchangeSessionId
+        ? schedule.find((s) => s.id === exchangeSessionId)
+        : undefined;
 
+      if (exchangeSessionId) {
+        if (!exchangePartner) {
+          return {
+            hasClash: true,
+            severity: 'danger',
+            messages: ['找不到要置換的目標課堂，請重新選擇時段'],
+          };
+        }
+        if (exchangePartner.id === originalSession.id) {
+          return {
+            hasClash: true,
+            severity: 'danger',
+            messages: ['不可與自己的課堂置換'],
+          };
+        }
+        if (
+          exchangePartner.dayOfWeek !== dayOfWeek ||
+          exchangePartner.period !== period
+        ) {
+          messages.push(
+            `【置換對象時段不符】所選置換課堂目前在週${exchangePartner.dayOfWeek}第${exchangePartner.period}節，與目標週${dayOfWeek}第${period}節不一致`
+          );
+          severity = 'danger';
+        }
+
+        // 申請人進入對方時段：不可另有其他課（對方課堂本身會被換走）
+        const applicantClash = schedule.find(
+          (s) =>
+            s.teacherId === applicantTeacherId &&
+            s.dayOfWeek === dayOfWeek &&
+            s.period === period &&
+            s.id !== originalSession.id &&
+            s.id !== exchangePartner.id
+        );
+        if (applicantClash) {
+          messages.push(
+            `【教師衝堂】置換後申請教師在週${dayOfWeek}第${period}節仍有「${applicantClash.className} ${applicantClash.subjectName}」`
+          );
+          severity = 'danger';
+        }
+
+        // 對方進入申請人原時段
+        const partnerClash = schedule.find(
+          (s) =>
+            s.teacherId === exchangePartner.teacherId &&
+            s.dayOfWeek === originalSession.dayOfWeek &&
+            s.period === originalSession.period &&
+            s.id !== exchangePartner.id &&
+            s.id !== originalSession.id
+        );
+        if (partnerClash) {
+          messages.push(
+            `【對方教師衝堂】${exchangePartner.teacherName} 置換到週${originalSession.dayOfWeek}第${originalSession.period}節後仍有「${partnerClash.className} ${partnerClash.subjectName}」`
+          );
+          severity = 'danger';
+        }
+
+        // 班級：雙方若不同班，檢查置換後班級是否重疊
+        if (originalSession.className !== exchangePartner.className) {
+          const classAtTarget = schedule.find(
+            (s) =>
+              s.className === originalSession.className &&
+              s.dayOfWeek === dayOfWeek &&
+              s.period === period &&
+              s.id !== originalSession.id &&
+              s.id !== exchangePartner.id
+          );
+          if (classAtTarget) {
+            messages.push(
+              `【班級衝堂】班級 ${originalSession.className} 在週${dayOfWeek}第${period}節另有「${classAtTarget.subjectName}」`
+            );
+            severity = 'danger';
+          }
+          const partnerClassAtOrig = schedule.find(
+            (s) =>
+              s.className === exchangePartner.className &&
+              s.dayOfWeek === originalSession.dayOfWeek &&
+              s.period === originalSession.period &&
+              s.id !== exchangePartner.id &&
+              s.id !== originalSession.id
+          );
+          if (partnerClassAtOrig) {
+            messages.push(
+              `【班級衝堂】班級 ${exchangePartner.className} 在週${originalSession.dayOfWeek}第${originalSession.period}節另有「${partnerClassAtOrig.subjectName}」`
+            );
+            severity = 'danger';
+          }
+        }
+
+        // 申請人指定場地在目標時段（排除對方原堂）
+        if (venueId) {
+          const venueClash = schedule.find(
+            (s) =>
+              s.venueId === venueId &&
+              s.dayOfWeek === dayOfWeek &&
+              s.period === period &&
+              s.id !== originalSession.id &&
+              s.id !== exchangePartner.id
+          );
+          if (venueClash) {
+            const venueObj = venues.find((v) => v.id === venueId);
+            messages.push(
+              `【工場教室衝堂】${venueObj?.name || '指定教室/工場'} 在週${dayOfWeek}第${period}節已被「${venueClash.className} ${venueClash.subjectName}」借用`
+            );
+            severity = 'danger';
+          }
+        }
+
+        // 對方場地帶回申請人原時段
+        if (exchangePartner.venueId) {
+          const partnerVenueClash = schedule.find(
+            (s) =>
+              s.venueId === exchangePartner.venueId &&
+              s.dayOfWeek === originalSession.dayOfWeek &&
+              s.period === originalSession.period &&
+              s.id !== exchangePartner.id &&
+              s.id !== originalSession.id
+          );
+          if (partnerVenueClash) {
+            messages.push(
+              `【工場教室衝堂】${exchangePartner.venueName} 置換到週${originalSession.dayOfWeek}第${originalSession.period}節後與「${partnerVenueClash.className} ${partnerVenueClash.subjectName}」衝突`
+            );
+            severity = 'danger';
+          }
+        }
+
+        if (messages.length === 0) {
+          messages.push(
+            `檢核通過：將與「${exchangePartner.teacherName}｜${exchangePartner.className} ${exchangePartner.subjectName}」永久置換時段（週${dayOfWeek}第${period}節 ⇄ 週${originalSession.dayOfWeek}第${originalSession.period}節）。`
+          );
+        }
+      } else {
       // 1. Check if applicant already teaches at target time
       const teacherClash = schedule.find(
         (s) =>
@@ -976,7 +1122,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.id !== originalSession.id
       );
       if (classClash) {
-        messages.push(`【班級衝堂】班級 ${originalSession.className} 在 週${dayOfWeek} 第${period}節 已排有「${classClash.subjectName}（${classClash.teacherName}）」`);
+        messages.push(
+          `【班級衝堂】班級 ${originalSession.className} 在 週${dayOfWeek} 第${period}節 已排有「${classClash.subjectName}（${classClash.teacherName}）」。同班對調請改用「同班對調」。`
+        );
         severity = 'danger';
       }
 
@@ -990,7 +1138,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       if (venueClash) {
         const venueObj = venues.find((v) => v.id === venueId);
-        messages.push(`【工場教室衝堂】${venueObj?.name || '指定教室/工場'} 在 週${dayOfWeek} 第${period}節 已被「${venueClash.className} ${venueClash.subjectName}」借用`);
+        messages.push(
+          `【工場教室衝堂】${venueObj?.name || '指定教室/工場'} 在 週${dayOfWeek} 第${period}節 已被「${venueClash.className} ${venueClash.subjectName}」借用。同班對調請改用「同班對調」。`
+        );
         severity = 'danger';
       }
 
@@ -1014,16 +1164,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (messages.length === 0) {
         messages.push(`檢核通過：目標時段（週${dayOfWeek} 第${period}節）教師空堂、班級空堂、教室工場無佔用，可順利移課。`);
       }
+      }
     } else if (requestType === 'swap') {
       if (!swapTargetTeacherId || !swapTargetSession) {
         return {
           hasClash: true,
           severity: 'warning',
-          messages: ['請選擇相互調課之對象教師與互換課堂'],
+          messages: ['請選擇同班對調之對象教師與互換課堂'],
         };
       }
 
-      // 相互調課：同一班級、不同老師對調時段；雙方教師皆不可因此衝堂
+      // 同班對調：同一班級、不同老師對調時段；雙方教師皆不可因此衝堂
       if (originalSession.teacherId && originalSession.teacherId !== applicantTeacherId) {
         return {
           hasClash: true,
@@ -1047,7 +1198,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           hasClash: true,
           severity: 'danger',
           messages: [
-            `【須同班互調】相互調課僅限同一班級。申請課堂為「${originalSession.className}」，對調課堂為「${swapTargetSession.className}」，請改選同班課程。`,
+            `【須同班對調】同班對調僅限同一班級。申請課堂為「${originalSession.className}」，對調課堂為「${swapTargetSession.className}」，請改選同班課程。`,
           ],
         };
       }
@@ -1056,7 +1207,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           hasClash: true,
           severity: 'danger',
-          messages: ['相互調課須與其他教師對調，不可選擇本人'],
+          messages: ['同班對調須與其他教師對調，不可選擇本人'],
         };
       }
 
@@ -1200,7 +1351,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (messages.length === 0) {
         messages.push(
-          `檢核通過：同班「${originalSession.className}」互調；雙方教師於對方時段皆為空堂，班級與工場／教室無衝突。`
+          `檢核通過：同班「${originalSession.className}」對調時段可行（教師／班級／工場無衝突）。暫時＝不改週模板；永久＝核准後改週課表。`
         );
       }
     } else if (requestType === 'substitute') {
@@ -1285,6 +1436,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const prepared: SubstituteRequest[] = [];
 
     items.forEach((data, index) => {
+      const swapErr = validateSwapRequestFields(data);
+      if (swapErr) throw new Error(swapErr);
+
       const clashStatus = checkClashes({
         requestType: data.requestType,
         applicantTeacherId: data.applicantTeacherId,
@@ -1351,8 +1505,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq.requestType === 'reschedule' && !targetReq.targetReschedule) {
       return { ok: false, reason: '移課申請缺少目標時段／場地' };
     }
-    if (targetReq.requestType === 'swap' && !targetReq.swapTargetSession) {
-      return { ok: false, reason: '相互調課缺少對調課堂' };
+    if (targetReq.requestType === 'swap') {
+      const swapErr = validateSwapRequestFields(targetReq);
+      if (swapErr) return { ok: false, reason: swapErr };
     }
 
     const resolvedOrig = resolveOriginalSession(targetReq, workingSessions);
@@ -1606,9 +1761,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.requestType === 'reschedule' && !data.targetReschedule) {
         throw new Error('移課須指定目標時段／場地');
       }
-      if (data.requestType === 'swap' && !data.swapTargetSession) {
-        throw new Error('相互調課須指定對調課堂');
-      }
+      const swapErr = validateSwapRequestFields(data);
+      if (swapErr) throw new Error(swapErr);
       if (
         data.requestType === 'substitute' &&
         data.autoApprove !== false &&
@@ -2406,7 +2560,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           partialStops: systemConfig.partialNonTeachingDays || [],
         }
       );
-      const monthlyOverload = Math.max(0, rawMonthlyOverload - leaveConcurrentDeduct);
+      const swapConcurrentDelta = temporarySwapPeriodDeltaInMonth(
+        requests,
+        teacher.id,
+        settlementMonth,
+        settlementYear,
+        (s) =>
+          Boolean(s.isConcurrent) &&
+          s.dayOfWeek >= 1 &&
+          s.dayOfWeek <= 5 &&
+          s.period >= 1 &&
+          s.period <= 7,
+        holidaySet
+      );
+      const monthlyOverload = Math.max(
+        0,
+        rawMonthlyOverload - leaveConcurrentDeduct + swapConcurrentDelta
+      );
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
       const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id);
       const rawMonthlyCounseling = monthlyCounselingPeriods(
@@ -2432,7 +2602,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           partialStops: systemConfig.partialNonTeachingDays || [],
         }
       );
-      const monthlyCounseling = Math.max(0, rawMonthlyCounseling - leaveCounselingDeduct);
+      const swapCounselingDelta = temporarySwapPeriodDeltaInMonth(
+        requests,
+        teacher.id,
+        settlementMonth,
+        settlementYear,
+        (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
+        holidaySet
+      );
+      const monthlyCounseling = Math.max(
+        0,
+        rawMonthlyCounseling - leaveCounselingDeduct + swapCounselingDelta
+      );
       const monthlyCounselingAmount = monthlyCounseling * counselingRate;
 
       // 2. Tally approved substitution requests for the selected month only

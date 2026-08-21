@@ -20,6 +20,10 @@ import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { isPlaceholderSession } from '../../utils/resolveOriginalSession';
+import {
+  formatTemporarySwapEffectLabel,
+  validateTemporarySwapEffectiveDate,
+} from '../../utils/temporarySwap';
 import { ModalShell } from '../Common/ModalShell';
 import { 
   X, 
@@ -82,16 +86,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const [requestMonth, setRequestMonth] = useState<number>(thisMonth);
   const [paymentType, setPaymentType] = useState<PaymentType>('private');
 
-  // For Reschedule (自行移課)
+  // For Reschedule (行政／自行移課＝僅移入空堂)
   const [targetDay, setTargetDay] = useState<DayOfWeek>(2);
   const [targetPeriod, setTargetPeriod] = useState<number>(4);
   const [targetVenueId, setTargetVenueId] = useState<string>(
     selectedSession ? selectedSession.venueId : venues[0]?.id || ''
   );
 
-  // For Swap (相互調課)
+  // For Swap (教師端同班對調＝僅暫時)
   const [swapTeacherId, setSwapTeacherId] = useState<string>('');
   const [swapSessionId, setSwapSessionId] = useState<string>('');
+  const [swapEffectiveDate, setSwapEffectiveDate] = useState<string>('');
 
   // For Substitute (請假派代)
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
@@ -597,15 +602,26 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     if (requestType === 'swap' && effectiveOriginalSession && swapTargetSession) {
       if (effectiveOriginalSession.className !== swapTargetSession.className) {
-        alert('相互調課僅限同一班級內、兩位教師對調時段，不可跨班。');
+        alert('同班對調僅限同一班級內、兩位教師對調時段，不可跨班。');
         return;
       }
       if (effectiveOriginalSession.teacherId === swapTargetSession.teacherId) {
-        alert('相互調課須與另一位教師對調，不可選自己的課。');
+        alert('同班對調須與另一位教師對調，不可選自己的課。');
         return;
       }
       if (swapTargetSession.teacherId !== swapTeacherId) {
         alert('對調課堂與所選對調教師不符，請重新選擇。');
+        return;
+      }
+      const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+      const dateErr = validateTemporarySwapEffectiveDate(
+        swapEffectiveDate,
+        effectiveOriginalSession.dayOfWeek,
+        swapTargetSession.dayOfWeek,
+        holidaySet
+      );
+      if (dateErr) {
+        alert(dateErr);
         return;
       }
     }
@@ -637,6 +653,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         swapTargetTeacherId: requestType === 'swap' ? swapTeacherId : undefined,
         swapTargetTeacherName: requestType === 'swap' ? swapPartner?.name : undefined,
         swapTargetSession: requestType === 'swap' ? swapTargetSession : undefined,
+        swapMode: requestType === 'swap' ? 'temporary' : undefined,
+        effectiveDate: requestType === 'swap' ? swapEffectiveDate : undefined,
         substituteTeacherId: undefined,
         substituteTeacherName: undefined,
       }, requestMonth);
@@ -807,7 +825,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   }`}
                 >
                   <ArrowLeftRight className={`w-5 h-5 mb-1 ${requestType === 'swap' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                  <span className="text-xs sm:text-sm">🔄 相互調課</span>
+                  <span className="text-xs sm:text-sm">🔄 同班對調</span>
                   <span className="text-[10px] text-slate-500 mt-0.5">雙方時段互換</span>
                 </button>
               )}
@@ -1258,12 +1276,36 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
               </>
             )}
 
-            {/* SWAP: 同班雙師對調時段；雙方教師調入後皆不可衝堂 */}
+            {/* SWAP: 教師端同班對調＝僅暫時 */}
             {requestType === 'swap' && (
               <div className="space-y-3">
-                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  相互調課＝同一班級內兩位教師對調時段。雙方調入對方時段後皆不可衝堂（教師課表／班級／工場）。
+                <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                  同班對調（教師端僅能申請<strong className="font-semibold">暫時</strong>）：選日期後與同班教師對調時段，
+                  <strong className="font-semibold">不改週課表</strong>；鐘點僅調整對調當日。永久對調請由教學組經辦。
                 </p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    暫時對調日期（必填）
+                  </label>
+                  <input
+                    type="date"
+                    id="input-swap-effective-date"
+                    value={swapEffectiveDate}
+                    onChange={(e) => setSwapEffectiveDate(e.target.value)}
+                    className="w-full sm:w-56 bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-indigo-500"
+                  />
+                  {swapEffectiveDate &&
+                    effectiveOriginalSession &&
+                    swapTargetSession && (
+                      <p className="text-[11px] text-indigo-700 mt-1.5">
+                        {formatTemporarySwapEffectLabel(
+                          swapEffectiveDate,
+                          effectiveOriginalSession.dayOfWeek,
+                          swapTargetSession.dayOfWeek
+                        )}
+                      </p>
+                    )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1324,67 +1366,73 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
               </div>
             )}
 
-            {/* RESCHEDULE: Target Day, Period, Venue */}
+            {/* RESCHEDULE: 僅移入空堂 */}
             {requestType === 'reschedule' && (
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    目標星期
-                  </label>
-                  <select
-                    id="select-target-day"
-                    value={targetDay}
-                    onChange={(e) => setTargetDay(Number(e.target.value) as DayOfWeek)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
-                  >
-                    <option value={1}>週一</option>
-                    <option value={2}>週二</option>
-                    <option value={3}>週三</option>
-                    <option value={4}>週四</option>
-                    <option value={5}>週五</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    目標節次
-                  </label>
-                  <select
-                    id="select-target-period"
-                    value={targetPeriod}
-                    onChange={(e) => setTargetPeriod(Number(e.target.value))}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
-                  >
-                    {PERIOD_DEFINITIONS.map((p) => (
-                      <option key={p.period} value={p.period}>
-                        {p.label} ({p.timeRange})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    上課工場 / 教室
-                  </label>
-                  {venues.length === 0 ? (
-                    <div className="p-2.5 text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded-lg">
-                      尚未維護工場／教室，無法移課。請先請管理員至系統參數新增場地。
-                    </div>
-                  ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                  行政／自行移課＝把課堂移進<strong className="font-semibold">空堂</strong>。
+                  若目標已有課、要與同班對調，請改用「同班對調」。
+                </p>
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      目標星期
+                    </label>
                     <select
-                      id="select-target-venue"
-                      value={targetVenueId}
-                      onChange={(e) => setTargetVenueId(e.target.value)}
+                      id="select-target-day"
+                      value={targetDay}
+                      onChange={(e) => setTargetDay(Number(e.target.value) as DayOfWeek)}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
                     >
-                      {venues.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}（{v.code}）
+                      <option value={1}>週一</option>
+                      <option value={2}>週二</option>
+                      <option value={3}>週三</option>
+                      <option value={4}>週四</option>
+                      <option value={5}>週五</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      目標節次
+                    </label>
+                    <select
+                      id="select-target-period"
+                      value={targetPeriod}
+                      onChange={(e) => setTargetPeriod(Number(e.target.value))}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
+                    >
+                      {PERIOD_DEFINITIONS.map((p) => (
+                        <option key={p.period} value={p.period}>
+                          {p.label} ({p.timeRange})
                         </option>
                       ))}
                     </select>
-                  )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      上課工場 / 教室
+                    </label>
+                    {venues.length === 0 ? (
+                      <div className="p-2.5 text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded-lg">
+                        尚未維護工場／教室，無法移課。請先請管理員至系統參數新增場地。
+                      </div>
+                    ) : (
+                      <select
+                        id="select-target-venue"
+                        value={targetVenueId}
+                        onChange={(e) => setTargetVenueId(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
+                      >
+                        {venues.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name}（{v.code}）
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

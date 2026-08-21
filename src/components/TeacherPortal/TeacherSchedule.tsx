@@ -30,6 +30,10 @@ import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../.
 import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod, monthlyCounselingPeriods, monthlyOverloadPeriods } from '../../utils/schoolDepartments';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
+import {
+  findApprovedTemporarySwapsForSession,
+  formatTemporarySwapEffectLabel,
+} from '../../utils/temporarySwap';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -146,6 +150,17 @@ export const TeacherSchedule: React.FC = () => {
     return hit
       ? `[請假派代] 代課教師：${hit.substituteTeacherName || '已派代'}`
       : null;
+  };
+  const getTemporarySwapLabel = (session: CourseSession) => {
+    const swaps = findApprovedTemporarySwapsForSession(session, requests);
+    if (swaps.length === 0) return null;
+    const r = swaps[0];
+    if (!r.effectiveDate || !r.swapTargetSession) return '同班對調';
+    return formatTemporarySwapEffectLabel(
+      r.effectiveDate,
+      r.originalSession.dayOfWeek,
+      r.swapTargetSession.dayOfWeek
+    );
   };
   const getSubDutyAt = (day: DayOfWeek, period: number) =>
     mySubstituteDuties.find(
@@ -455,6 +470,7 @@ export const TeacherSchedule: React.FC = () => {
                         const slotSessions = getSessionsAt(d.day, pDef.period);
                         const session = slotSessions[0];
                         const leaveLabel = session ? getLeaveCoverLabel(session) : null;
+                        const swapLabel = session ? getTemporarySwapLabel(session) : null;
                         const subDuty = !session ? getSubDutyAt(d.day, pDef.period) : null;
                         return (
                           <td
@@ -467,6 +483,8 @@ export const TeacherSchedule: React.FC = () => {
                                 className={`h-full p-2.5 rounded-xl border flex flex-col justify-between transition-all group-hover:shadow-sm ${
                                   leaveLabel
                                     ? 'bg-rose-50/90 border-rose-300 text-rose-950 ring-1 ring-rose-400/30'
+                                    : swapLabel
+                                    ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 ring-1 ring-indigo-400/30'
                                     : isPracticalSession(session)
                                     ? 'bg-amber-50/90 border-amber-300 text-amber-950 ring-1 ring-amber-400/30'
                                     : session.isConcurrent
@@ -481,6 +499,11 @@ export const TeacherSchedule: React.FC = () => {
                                       {leaveLabel && (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
                                           請假派代
+                                        </span>
+                                      )}
+                                      {!leaveLabel && swapLabel && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-indigo-600 text-white rounded font-medium">
+                                          同班對調
                                         </span>
                                       )}
                                       {slotSessions.length > 1 && (
@@ -513,6 +536,11 @@ export const TeacherSchedule: React.FC = () => {
                                   {leaveLabel && (
                                     <div className="text-[10px] text-rose-700 mt-0.5 line-clamp-2">
                                       {leaveLabel.replace(/^\[請假派代\]\s*/, '').replace(/^\[代課\]\s*/, '')}
+                                    </div>
+                                  )}
+                                  {!leaveLabel && swapLabel && (
+                                    <div className="text-[10px] text-indigo-700 mt-0.5 line-clamp-2">
+                                      {swapLabel}
                                     </div>
                                   )}
                                 </div>

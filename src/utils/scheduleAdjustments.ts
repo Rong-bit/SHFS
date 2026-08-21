@@ -4,11 +4,12 @@ import {
   resolveOriginalSession,
   resolveSwapTargetSession,
 } from './resolveOriginalSession';
+import { isTemporarySwap } from './temporarySwap';
 
 const SUBSTITUTE_NOTE = '[代課]';
 const LEAVE_COVER_NOTE = '[請假派代]';
 const RESCHEDULE_NOTE = '[已移課]';
-const SWAP_NOTE = '[相互調課]';
+const SWAP_NOTE = '[同班對調·永久]';
 
 function isLeaveCoverNote(notes?: string): boolean {
   return Boolean(notes?.includes(SUBSTITUTE_NOTE) || notes?.includes(LEAVE_COVER_NOTE));
@@ -98,6 +99,78 @@ export function applyRequestToSessionsDetailed(
         reason: '找不到欲移課的課堂於現行課表',
       };
     }
+
+    // 與目標節置換：雙方永久互換星期／節次
+    if (t.exchangeSessionId) {
+      const partner =
+        sessions.find((s) => s.id === t.exchangeSessionId) ||
+        (t.exchangeSession
+          ? sessions.find((s) => s.id === t.exchangeSession!.id)
+          : undefined);
+      if (!partner) {
+        return {
+          sessions,
+          applied: false,
+          reason: '找不到要置換的對方課堂',
+        };
+      }
+      const alreadyExchanged =
+        live.dayOfWeek === t.dayOfWeek &&
+        live.period === t.period &&
+        partner.dayOfWeek === snapOrig.dayOfWeek &&
+        partner.period === snapOrig.period;
+      if (alreadyExchanged) {
+        // 仍可更新申請人場地
+        if (t.venueId && live.venueId !== t.venueId) {
+          return {
+            sessions: sessions.map((s) =>
+              s.id === live.id
+                ? { ...s, venueId: t.venueId, venueName: t.venueName }
+                : s
+            ),
+            applied: true,
+          };
+        }
+        return { sessions, applied: true };
+      }
+      const atOriginal =
+        live.dayOfWeek === snapOrig.dayOfWeek &&
+        live.period === snapOrig.period &&
+        partner.dayOfWeek === t.dayOfWeek &&
+        partner.period === t.period;
+      if (!atOriginal) {
+        return {
+          sessions,
+          applied: false,
+          reason: '置換雙方現況已非申請時段，無法套用',
+        };
+      }
+      return {
+        sessions: sessions.map((s) => {
+          if (s.id === live.id) {
+            return {
+              ...s,
+              dayOfWeek: t.dayOfWeek,
+              period: t.period,
+              venueId: t.venueId || s.venueId,
+              venueName: t.venueName || s.venueName,
+              notes: `${RESCHEDULE_NOTE} 與 ${partner.teacherName} 置換（原週${snapOrig.dayOfWeek}第${snapOrig.period}節）`,
+            };
+          }
+          if (s.id === partner.id) {
+            return {
+              ...s,
+              dayOfWeek: snapOrig.dayOfWeek,
+              period: snapOrig.period,
+              notes: `${RESCHEDULE_NOTE} 與 ${reqResolved.applicantTeacherName} 置換（原週${t.dayOfWeek}第${t.period}節）`,
+            };
+          }
+          return s;
+        }),
+        applied: true,
+      };
+    }
+
     if (
       live.dayOfWeek === t.dayOfWeek &&
       live.period === t.period &&
@@ -133,7 +206,19 @@ export function applyRequestToSessionsDetailed(
       };
     }
 
-    // 目標態：A 在對方原時段、B 在申請人原時段（依申請快照）
+    // 暫時對調：不改週課表模板
+    if (isTemporarySwap(reqResolved)) {
+      if (!reqResolved.effectiveDate?.trim()) {
+        return {
+          sessions,
+          applied: false,
+          reason: '暫時同班對調缺少生效日期',
+        };
+      }
+      return { sessions, applied: true };
+    }
+
+    // 永久對調：改週課表模板
     const alreadySwapped =
       liveA.dayOfWeek === snapPartner.dayOfWeek &&
       liveA.period === snapPartner.period &&
@@ -141,7 +226,6 @@ export function applyRequestToSessionsDetailed(
       liveB.period === snapOrig.period;
     if (alreadySwapped) return { sessions, applied: true };
 
-    // 僅在「仍為申請當下原時段」時才對調，避免中間態誤翻
     const atOriginalSlots =
       liveA.dayOfWeek === snapOrig.dayOfWeek &&
       liveA.period === snapOrig.period &&
@@ -151,7 +235,7 @@ export function applyRequestToSessionsDetailed(
       return {
         sessions,
         applied: false,
-        reason: '互調課堂現況已非申請時段（之後可能又有異動），無法套用',
+        reason: '對調課堂現況已非申請時段（之後可能又有異動），無法套用',
       };
     }
 
@@ -162,7 +246,7 @@ export function applyRequestToSessionsDetailed(
             ...s,
             dayOfWeek: snapPartner.dayOfWeek,
             period: snapPartner.period,
-            notes: `${SWAP_NOTE} 與 ${reqResolved.swapTargetTeacherName} 對調`,
+            notes: `${SWAP_NOTE} 與 ${reqResolved.swapTargetTeacherName}`,
           };
         }
         if (s.id === partnerId) {
@@ -170,7 +254,7 @@ export function applyRequestToSessionsDetailed(
             ...s,
             dayOfWeek: snapOrig.dayOfWeek,
             period: snapOrig.period,
-            notes: `${SWAP_NOTE} 與 ${reqResolved.applicantTeacherName} 對調`,
+            notes: `${SWAP_NOTE} 與 ${reqResolved.applicantTeacherName}`,
           };
         }
         return s;
@@ -312,6 +396,21 @@ export function getRollbackBlockReason(
     const live = sessions.find((s) => s.id === req.originalSession.id);
     if (!live) return '找不到原課堂，無法回滾移課';
     const t = req.targetReschedule;
+
+    if (t.exchangeSessionId) {
+      const partner = sessions.find((s) => s.id === t.exchangeSessionId);
+      if (!partner) return '找不到置換對方課堂，無法回滾';
+      const aAtTarget =
+        live.dayOfWeek === t.dayOfWeek && live.period === t.period;
+      const bAtOrig =
+        partner.dayOfWeek === req.originalSession.dayOfWeek &&
+        partner.period === req.originalSession.period;
+      if (!aAtTarget || !bAtOrig) {
+        return '置換課堂之後又有異動，略過回滾以免覆寫較新課表';
+      }
+      return null;
+    }
+
     const matchesTarget =
       live.dayOfWeek === t.dayOfWeek &&
       live.period === t.period &&
@@ -323,9 +422,14 @@ export function getRollbackBlockReason(
   }
 
   if (req.requestType === 'swap' && req.swapTargetSession) {
+    if (isTemporarySwap(req)) {
+      // 暫時對調未改週模板，可隨時「回滾」（no-op）
+      return null;
+    }
+    // 永久對調：檢查是否仍在對調後狀態
     const a = sessions.find((s) => s.id === req.originalSession.id);
     const b = sessions.find((s) => s.id === req.swapTargetSession!.id);
-    if (!a || !b) return '找不到互調課堂，無法回滾';
+    if (!a || !b) return '找不到對調課堂，無法回滾';
     const aAtPartnerSlot =
       a.dayOfWeek === req.swapTargetSession.dayOfWeek &&
       a.period === req.swapTargetSession.period;
@@ -333,7 +437,7 @@ export function getRollbackBlockReason(
       b.dayOfWeek === req.originalSession.dayOfWeek &&
       b.period === req.originalSession.period;
     if (!aAtPartnerSlot || !bAtApplicantSlot) {
-      return '互調課堂之後又有異動，略過回滾以免覆寫較新課表';
+      return '對調課堂之後又有異動，略過回滾以免覆寫較新課表';
     }
     return null;
   }
@@ -386,6 +490,36 @@ export function rollbackRequestFromSessionsDetailed(
   }
 
   if (req.requestType === 'reschedule' && req.targetReschedule) {
+    const t = req.targetReschedule;
+    if (t.exchangeSessionId) {
+      const partnerSnap = t.exchangeSession;
+      return {
+        sessions: sessions.map((s) => {
+          if (s.id === req.originalSession.id) {
+            return {
+              ...s,
+              dayOfWeek: req.originalSession.dayOfWeek,
+              period: req.originalSession.period,
+              venueId: req.originalSession.venueId,
+              venueName: req.originalSession.venueName,
+              notes: undefined,
+            };
+          }
+          if (s.id === t.exchangeSessionId) {
+            return {
+              ...s,
+              dayOfWeek: t.dayOfWeek,
+              period: t.period,
+              venueId: partnerSnap?.venueId ?? s.venueId,
+              venueName: partnerSnap?.venueName ?? s.venueName,
+              notes: undefined,
+            };
+          }
+          return s;
+        }),
+        rolledBack: true,
+      };
+    }
     return {
       sessions: sessions.map((s) => {
         if (s.id !== req.originalSession.id) return s;
@@ -403,6 +537,10 @@ export function rollbackRequestFromSessionsDetailed(
   }
 
   if (req.requestType === 'swap' && req.swapTargetSession) {
+    if (isTemporarySwap(req)) {
+      return { sessions, rolledBack: true };
+    }
+    // 永久對調：還原時段
     return {
       sessions: sessions.map((s) => {
         if (s.id === req.originalSession.id) {

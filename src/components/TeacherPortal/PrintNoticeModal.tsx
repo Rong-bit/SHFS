@@ -5,6 +5,7 @@ import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
+import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
 
@@ -122,7 +123,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
 
   const getTypeName = (type: string) => {
-    if (type === 'swap') return '相互調課';
+    if (type === 'swap') return '同班對調';
     if (type === 'reschedule') return '自行移課';
     return '請假派代';
   };
@@ -413,13 +414,31 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 {request.requestType === 'swap' && request.swapTargetSession && (
                   <div>
                     <div>
-                      <span className="text-slate-600">對調教師：</span>
+                      <span className="text-slate-600">
+                        同班對調（{request.swapMode === 'permanent' || (!request.swapMode && !request.effectiveDate) ? '永久' : '暫時'}）對象：
+                      </span>
                       <strong className="text-indigo-800">{request.swapTargetTeacherName}</strong>
                     </div>
                     <div className="text-xs text-slate-600 mt-1">
                       對調課堂：{request.swapTargetSession.className} 《{request.swapTargetSession.subjectName}》
                       （{dayNames[request.swapTargetSession.dayOfWeek]} {getPeriodLabel(request.swapTargetSession.period)} @ {request.swapTargetSession.venueName}）
                     </div>
+                    {request.effectiveDate && (
+                      <div className="text-xs text-indigo-800 mt-1 font-medium">
+                        生效：
+                        {formatTemporarySwapEffectLabel(
+                          request.effectiveDate,
+                          request.originalSession.dayOfWeek,
+                          request.swapTargetSession.dayOfWeek
+                        )}
+                        （不改週課表模板）
+                      </div>
+                    )}
+                    {(request.swapMode === 'permanent' || (!request.swapMode && !request.effectiveDate)) && (
+                      <div className="text-xs text-emerald-800 mt-1 font-medium">
+                        永久對調：已／將改寫週課表模板
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

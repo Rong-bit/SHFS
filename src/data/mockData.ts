@@ -1039,6 +1039,8 @@ export const INITIAL_REQUESTS: SubstituteRequest[] = [
       venueName: '物聯網軟體實驗室 (電腦教室一)',
       isPractical: true,
     },
+    effectiveDate: '2026-10-13',
+    swapMode: 'temporary',
     status: 'approved',
     reviewedAt: '2026-10-15 11:20',
     reviewedBy: '陳雅筑 組長 (教學組)',
@@ -1046,7 +1048,7 @@ export const INITIAL_REQUESTS: SubstituteRequest[] = [
     clashStatus: {
       hasClash: false,
       severity: 'none',
-      messages: ['檢核通過：同班「資訊二甲」互調；雙方教師於對方時段皆為空堂，班級與工場／教室無衝突。'],
+      messages: ['檢核通過：同班「資訊二甲」對調時段可行。'],
     },
   },
   {

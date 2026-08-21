@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { ModalShell } from '../Common/ModalShell';
 import { 
   ClipboardCheck, 
@@ -186,7 +187,7 @@ export const PendingApprovals: React.FC = () => {
                       {req.requestType === 'substitute'
                         ? '👤 請假派代'
                         : req.requestType === 'swap'
-                        ? '🔄 相互調課'
+                        ? '🔄 同班對調'
                         : '⏱️ 自行移課'}
                     </span>
                     <span
@@ -285,12 +286,23 @@ export const PendingApprovals: React.FC = () => {
 
                     {req.requestType === 'swap' && req.swapTargetSession && (
                       <div className="text-slate-900 font-medium">
-                        <span>對調對象：</span>
+                        <span>
+                          同班對調（{req.swapMode === 'permanent' || (!req.swapMode && !req.effectiveDate) ? '永久' : '暫時'}）對象：
+                        </span>
                         <strong className="text-indigo-900 ml-1">{req.swapTargetTeacherName}</strong>
                         <span className="ml-2 text-slate-700">
                           {req.swapTargetSession.className} 《{req.swapTargetSession.subjectName}》
                           （{dayNames[req.swapTargetSession.dayOfWeek]} {getPeriodLabel(req.swapTargetSession.period)}）
                         </span>
+                        {req.effectiveDate && (
+                          <div className="text-xs text-indigo-700 mt-1">
+                            {formatTemporarySwapEffectLabel(
+                              req.effectiveDate,
+                              req.originalSession.dayOfWeek,
+                              req.swapTargetSession.dayOfWeek
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 

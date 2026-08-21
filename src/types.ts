@@ -123,18 +123,35 @@ export interface SubstituteRequest {
   // 原課堂資訊
   originalSession: CourseSession;
   
-  // 自行移課目標時段
+  // 自行／行政移課目標時段
   targetReschedule?: {
     dayOfWeek: DayOfWeek;
     period: number;
     venueId: string;
     venueName: string;
+    /**
+     * 與目標節既有課堂置換（兩邊互換時段，不必先有空堂）。
+     * 有值時核准會永久對調雙方星期／節次；申請人場地改為下方 venue。
+     */
+    exchangeSessionId?: string;
+    /** 置換對方課堂快照（回滾／顯示用） */
+    exchangeSession?: CourseSession;
   };
   
   // 相互調課目標對象與課堂
   swapTargetTeacherId?: string;
   swapTargetTeacherName?: string;
   swapTargetSession?: CourseSession;
+  /**
+   * 同班對調效期：temporary＝選日暫時（不改週模板）；permanent＝永久改週模板。
+   * 未填時：有 effectiveDate 視為暫時，否則視為永久（舊資料相容）。
+   */
+  swapMode?: 'temporary' | 'permanent';
+  /**
+   * 暫時對調生效錨定日 YYYY-MM-DD（swapMode=temporary 時必填）。
+   * 兩堂同星期＝當日；跨星期＝該日所屬週內雙方原上課日各一次。
+   */
+  effectiveDate?: string;
   
   // 請假派代指定的代課教師
   substituteTeacherId?: string;

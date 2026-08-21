@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { 
   Printer, 
   Trash2, 
@@ -128,7 +129,7 @@ export const TeacherRequestsList: React.FC = () => {
                     {req.requestType === 'substitute'
                       ? '👤 請假派代'
                       : req.requestType === 'swap'
-                      ? '🔄 相互調課'
+                      ? '🔄 同班對調'
                       : '⏱️ 自行移課'}
                   </span>
                   {req.paymentType === 'public' ? (
@@ -195,11 +196,23 @@ export const TeacherRequestsList: React.FC = () => {
 
                   {req.requestType === 'swap' && req.swapTargetSession && (
                     <div className="text-slate-800">
-                      <span>與 <strong>{req.swapTargetTeacherName}</strong> 對調：</span>
+                      <span>
+                        與 <strong>{req.swapTargetTeacherName}</strong> 同班對調
+                        （{req.swapMode === 'permanent' || (!req.swapMode && !req.effectiveDate) ? '永久' : '暫時'}）：
+                      </span>
                       <span className="ml-1 text-slate-700">
                         {req.swapTargetSession.className} 《{req.swapTargetSession.subjectName}》
                         （{dayNames[req.swapTargetSession.dayOfWeek]} {getPeriodLabel(req.swapTargetSession.period)}）
                       </span>
+                      {req.effectiveDate && (
+                        <div className="text-xs text-indigo-700 mt-0.5">
+                          {formatTemporarySwapEffectLabel(
+                            req.effectiveDate,
+                            req.originalSession.dayOfWeek,
+                            req.swapTargetSession.dayOfWeek
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 

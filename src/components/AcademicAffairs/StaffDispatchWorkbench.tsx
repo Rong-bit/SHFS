@@ -23,6 +23,10 @@ import {
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
+import {
+  formatTemporarySwapEffectLabel,
+  validateTemporarySwapEffectiveDate,
+} from '../../utils/temporarySwap';
 import { ModalShell } from '../Common/ModalShell';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { 
@@ -145,14 +149,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [rangePeriodEnd, setRangePeriodEnd] = useState<number>(7);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
 
-  // Reschedule specific
+  // Reschedule specific（僅移入空堂）
   const [targetDay, setTargetDay] = useState<DayOfWeek>(1);
   const [targetPeriod, setTargetPeriod] = useState<number>(5);
   const [targetVenueId, setTargetVenueId] = useState<string>(venues[0]?.id || '');
 
-  // Swap specific
+  // Swap specific（同班對調：暫時／永久）
   const [swapTargetTeacherId, setSwapTargetTeacherId] = useState<string>('');
   const [swapTargetSessionId, setSwapTargetSessionId] = useState<string>('');
+  const [swapMode, setSwapMode] = useState<'temporary' | 'permanent'>('temporary');
+  const [swapEffectiveDate, setSwapEffectiveDate] = useState<string>('');
 
   // Batch selection states in list view
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
@@ -545,6 +551,20 @@ export const StaffDispatchWorkbench: React.FC = () => {
         alert('請完整選擇對調教師與對調課堂');
         return;
       }
+      const swapSessionForDate = sessions.find((s) => s.id === swapTargetSessionId);
+      const origForDate = sessionsToDispatch[0];
+      if (swapMode === 'temporary' && origForDate && swapSessionForDate) {
+        const dateErr = validateTemporarySwapEffectiveDate(
+          swapEffectiveDate,
+          origForDate.dayOfWeek,
+          swapSessionForDate.dayOfWeek,
+          nonTeachingDateSet(systemConfig.nonTeachingDays)
+        );
+        if (dateErr) {
+          alert(dateErr);
+          return;
+        }
+      }
     }
 
     // 送出前再逐節衝堂（防預覽與送出之間狀態變化）
@@ -628,6 +648,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
           swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
           swapTargetTeacherName: requestType === 'swap' ? swapTeacher?.name : undefined,
           swapTargetSession: requestType === 'swap' ? swapSession : undefined,
+          swapMode: requestType === 'swap' ? swapMode : undefined,
+          effectiveDate:
+            requestType === 'swap' && swapMode === 'temporary' ? swapEffectiveDate : undefined,
           autoApprove,
         })),
         dispatchMonth,
@@ -967,8 +990,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { key: 'substitute', label: '👤 差假派代', desc: '公假公差、研習、事病假指定代課' },
-                    { key: 'reschedule', label: '⏱️ 行政移課', desc: '實習檢定、全校模擬考改期' },
-                    { key: 'swap', label: '🔄 同班雙師調課', desc: '同班兩位教師對調時段，雙方不可衝堂' },
+                    { key: 'reschedule', label: '⏱️ 行政移課', desc: '移入空堂（目標須空）；同班對調請用下方' },
+                    { key: 'swap', label: '🔄 同班對調', desc: '可選暫時（選日）或永久（改週課表）' },
                   ].map((t) => (
                     <button
                       type="button"
@@ -1509,7 +1532,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* If Reschedule: Destination period and venue */}
+              {/* If Reschedule: 僅移入空堂 */}
               {requestType === 'reschedule' && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
                   <div className="border-b border-slate-100 pb-3">
@@ -1517,6 +1540,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">3</span>
                       <span>指定移課目標時段與工場/教室</span>
                     </h3>
+                    <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mt-3">
+                      行政移課＝移進<strong className="font-semibold">空堂</strong>。目標已有課、要同班對調請改選「同班對調」。
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1568,18 +1594,68 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* If Swap: 同班雙師對調；雙方教師調入後皆不可衝堂 */}
+              {/* If Swap: 同班對調 暫時／永久 */}
               {requestType === 'swap' && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
                   <div className="border-b border-slate-100 pb-3">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                       <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">3</span>
-                      <span>指定同班對調教師與課堂</span>
+                      <span>同班對調：效期與對調課堂</span>
                     </h3>
-                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-3">
-                      相互調課＝同一班級內兩位教師對調時段。雙方調入對方時段後皆不可衝堂（教師課表／班級／工場）。
+                    <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 mt-3">
+                      暫時＝選日期、不改週模板（鐘點按日調整）；永久＝核准後改週課表（之後依新星期計）。
                     </p>
                   </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSwapMode('temporary')}
+                      className={`text-left p-2.5 rounded-xl border text-xs transition ${
+                        swapMode === 'temporary'
+                          ? 'border-indigo-600 bg-indigo-50 ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="font-bold text-slate-900">暫時</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">選日期；不改週模板</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSwapMode('permanent')}
+                      className={`text-left p-2.5 rounded-xl border text-xs transition ${
+                        swapMode === 'permanent'
+                          ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-500/20'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="font-bold text-slate-900">永久</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">核准後改週課表</div>
+                    </button>
+                  </div>
+
+                  {swapMode === 'temporary' && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">暫時對調日期（必填）：</label>
+                      <input
+                        type="date"
+                        value={swapEffectiveDate}
+                        onChange={(e) => setSwapEffectiveDate(e.target.value)}
+                        className="w-full sm:w-56 text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+                      />
+                      {swapEffectiveDate &&
+                        selectedOriginalSession &&
+                        sessions.find((s) => s.id === swapTargetSessionId) && (
+                          <p className="text-[11px] text-indigo-700 mt-1.5">
+                            {formatTemporarySwapEffectLabel(
+                              swapEffectiveDate,
+                              selectedOriginalSession.dayOfWeek,
+                              sessions.find((s) => s.id === swapTargetSessionId)!.dayOfWeek
+                            )}
+                          </p>
+                        )}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -1689,7 +1765,20 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     )}
                     {requestType === 'swap' && (
                       <div className="text-slate-200">
-                        對調對象：<strong>{teachers.find(t => t.id === swapTargetTeacherId)?.name || '未指定'}</strong>
+                        同班對調（{swapMode === 'permanent' ? '永久' : '暫時'}）：
+                        <strong>{teachers.find(t => t.id === swapTargetTeacherId)?.name || '未指定'}</strong>
+                        {swapMode === 'temporary' &&
+                          swapEffectiveDate &&
+                          selectedOriginalSession &&
+                          sessions.find((s) => s.id === swapTargetSessionId) && (
+                          <span className="block text-[11px] text-indigo-300 mt-0.5">
+                            {formatTemporarySwapEffectLabel(
+                              swapEffectiveDate,
+                              selectedOriginalSession.dayOfWeek,
+                              sessions.find((s) => s.id === swapTargetSessionId)!.dayOfWeek
+                            )}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1940,8 +2029,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             )}
                             {req.requestType === 'swap' && (
                               <div>
-                                <span className="text-slate-500">互調：</span>
+                                <span className="text-slate-500">
+                                  同班對調（{req.swapMode === 'permanent' || (!req.swapMode && !req.effectiveDate) ? '永久' : '暫時'}）：
+                                </span>
                                 <strong>{req.swapTargetTeacherName}</strong>
+                                {req.effectiveDate && req.swapTargetSession && (
+                                  <span className="block text-[11px] text-indigo-700 mt-0.5">
+                                    {formatTemporarySwapEffectLabel(
+                                      req.effectiveDate,
+                                      req.originalSession.dayOfWeek,
+                                      req.swapTargetSession.dayOfWeek
+                                    )}
+                                  </span>
+                                )}
                               </div>
                             )}
                             <div className="text-[11px] text-slate-500 truncate max-w-xs mt-0.5">
