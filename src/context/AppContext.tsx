@@ -2149,7 +2149,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateVenue = (id: string, data: Partial<WorkshopVenue>) => {
-    setVenues((prev) => prev.map((v) => (v.id === id ? { ...v, ...data } : v)));
+    const prev = venues.find((v) => v.id === id);
+    setVenues((list) => list.map((v) => (v.id === id ? { ...v, ...data } : v)));
+
+    // 課表／申請單另存 venueName：改名稱時一併同步
+    if (data.name !== undefined && prev && data.name.trim() !== prev.name.trim()) {
+      const newName = data.name.trim();
+      const oldName = prev.name.trim();
+      setSessions((list) =>
+        list.map((s) =>
+          s.venueId === id || s.venueName === oldName
+            ? { ...s, venueId: id, venueName: newName }
+            : s
+        )
+      );
+      setRequests((list) =>
+        list.map((r) => {
+          let changed = false;
+          let originalSession = r.originalSession;
+          let swapTargetSession = r.swapTargetSession;
+          let targetReschedule = r.targetReschedule;
+
+          if (
+            originalSession &&
+            (originalSession.venueId === id || originalSession.venueName === oldName)
+          ) {
+            originalSession = {
+              ...originalSession,
+              venueId: id,
+              venueName: newName,
+            };
+            changed = true;
+          }
+          if (
+            swapTargetSession &&
+            (swapTargetSession.venueId === id || swapTargetSession.venueName === oldName)
+          ) {
+            swapTargetSession = {
+              ...swapTargetSession,
+              venueId: id,
+              venueName: newName,
+            };
+            changed = true;
+          }
+          if (
+            targetReschedule &&
+            (targetReschedule.venueId === id || targetReschedule.venueName === oldName)
+          ) {
+            targetReschedule = {
+              ...targetReschedule,
+              venueId: id,
+              venueName: newName,
+            };
+            changed = true;
+          }
+          return changed
+            ? { ...r, originalSession, swapTargetSession, targetReschedule }
+            : r;
+        })
+      );
+    }
   };
 
   const deleteVenue = (id: string) => {
