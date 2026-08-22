@@ -16,6 +16,10 @@ import {
   validateSubstituteLeaveInput,
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
+import {
+  paymentTypeForLeaveType,
+  WELLNESS_LEAVE_LEGAL_NOTE,
+} from '../../utils/leaveTypes';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
@@ -326,11 +330,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // Auto-set paymentType based on leaveType
   useEffect(() => {
     if (requestType === 'substitute') {
-      if (['official', 'training', 'bereavement', 'maternity'].includes(leaveType)) {
-        setPaymentType('public');
-      } else {
-        setPaymentType('private');
-      }
+      setPaymentType(paymentTypeForLeaveType(leaveType));
     } else {
       setPaymentType('private');
     }
@@ -1106,10 +1106,16 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       <option value="training">📚 研習 / 評鑑 / 技能檢定監評 (公假)</option>
                       <option value="bereavement">🕊️ 喪假 (依規定公費派代)</option>
                       <option value="maternity">👶 產假 / 陪產檢及產假 (公費派代)</option>
+                      <option value="wellness">🧘 身心調適假 (公費派代 · 每學年3日 · 免證明)</option>
                       <option value="personal">💼 事假 (自費代課)</option>
                       <option value="sick">🩺 病假 (自費代課)</option>
                       <option value="other">📝 其他私事需求 (自費代課)</option>
                     </select>
+                    {leaveType === 'wellness' && (
+                      <p className="mt-1.5 text-[10px] text-teal-800 leading-snug bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5">
+                        {WELLNESS_LEAVE_LEGAL_NOTE}
+                      </p>
+                    )}
                   </div>
 
                   <div>

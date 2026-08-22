@@ -11,6 +11,11 @@ import {
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import {
+  defaultReasonForLeaveType,
+  paymentTypeForLeaveType,
+  WELLNESS_LEAVE_LEGAL_NOTE,
+} from '../../utils/leaveTypes';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import {
   countMatchingWeekdays,
@@ -391,25 +396,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // Auto-switch payment type default when leave type changes
   const handleLeaveTypeChange = (type: LeaveType) => {
     setLeaveType(type);
-    if (['official', 'bereavement', 'maternity', 'training'].includes(type)) {
-      setPaymentType('public');
-      setReason(
-        type === 'official'
-          ? '奉派代表學校出席公務會議/專業競賽 (公費派代)'
-          : type === 'training'
-          ? '奉派參加專業技術研習與檢定監評作業 (公費派代)'
-          : type === 'bereavement'
-          ? '依公務人員請假規則申請喪假 (公費派代)'
-          : '申請產假/陪產假 (公費派代)'
-      );
-    } else {
-      setPaymentType('private');
-      setReason(
-        type === 'sick'
-          ? '因突發病假就醫治療無法到校 (自費代課)'
-          : '個人事假申請代課 (自費代課)'
-      );
-    }
+    setPaymentType(paymentTypeForLeaveType(type));
+    setReason(defaultReasonForLeaveType(type));
   };
 
   // Preview clash check（連續節次：逐節檢核後合併）
@@ -1042,8 +1030,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           <option value="personal">💼 個人事假 (自費代課)</option>
                           <option value="bereavement">🕊️ 喪假 (公費派代)</option>
                           <option value="maternity">👶 產假 / 陪產假 (公費派代)</option>
+                          <option value="wellness">🧘 身心調適假 (公費派代 · 每學年3日 · 免證明)</option>
                           <option value="other">📌 其他專案指派</option>
                         </select>
+                        {leaveType === 'wellness' && (
+                          <p className="mt-1.5 text-[10px] text-teal-800 leading-snug bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5">
+                            {WELLNESS_LEAVE_LEGAL_NOTE}
+                          </p>
+                        )}
                       </div>
 
                       <div>

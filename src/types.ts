@@ -93,6 +93,7 @@ export type LeaveType =
   | 'bereavement' // 喪假 (公費派代)
   | 'maternity' // 產假/陪產假 (公費派代)
   | 'training' // 研習/評鑑/監評 (公費派代)
+  | 'wellness' // 身心調適假 (公費派代，教師請假規則第3條)
   | 'other'; // 其他
 
 export type PaymentType = 'public' | 'private'; // 公費派代 | 自費代課

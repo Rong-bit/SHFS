@@ -4,6 +4,7 @@ import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { leaveTypeLabel } from '../../utils/leaveTypes';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
@@ -154,24 +155,8 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     ? `${printGroup[0].requestNumber}～${printGroup[printGroup.length - 1].requestNumber}（合併 ${printGroup.length} 節）`
     : request.requestNumber;
 
-  const getLeaveTypeName = (leave?: string) => {
-    switch (leave) {
-      case 'official':
-        return '公假 / 公差 (檢附公文派令)';
-      case 'training':
-        return '教師專業研習 / 競賽監評';
-      case 'personal':
-        return '事假';
-      case 'sick':
-        return '病假 (檢附就醫收據/證明)';
-      case 'bereavement':
-        return '喪假';
-      case 'maternity':
-        return '產假 / 陪產檢假';
-      default:
-        return '其他業務需求';
-    }
-  };
+  const getLeaveTypeName = (leave?: string) =>
+    leaveTypeLabel(leave as SubstituteRequest['leaveType']);
 
   const handlePrint = () => {
     window.print();

@@ -109,6 +109,13 @@ export const isExcludedGroupActivity = (
   return /團體活動|社團/.test(name);
 };
 
+/** 不計入每週正課／兼課（團體活動、社團） */
+export const isExcludedFromTeachingPeriods = (
+  subjectName: string,
+  dayOfWeek?: number,
+  period?: number
+) => isExcludedGroupActivity(subjectName, dayOfWeek, period);
+
 /** 課表上的團體活動時間（含班會）：用來判斷導師 */
 export const isGroupActivity = (subjectName: string) =>
   isHomeroomActivity(subjectName) || /團體活動|社團/.test(subjectName || '');
@@ -161,7 +168,9 @@ export const breakdownWeeklyOverloadPeriods = (
   const clubOnlySlots: Array<{ key: string; list: CourseSession[] }> = [];
 
   slotMap.forEach((list, key) => {
-    const teaching = list.filter((s) => !isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period));
+    const teaching = list.filter(
+      (s) => !isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)
+    );
     if (teaching.length === 0) {
       clubOnlySlots.push({ key, list });
       return;
@@ -307,7 +316,7 @@ export const monthlyTeachingPeriods = (
       (s) =>
         s.teacherId === teacherId &&
         isDaytimeSlot(s) &&
-        !isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period)
+        !isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)
     )
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
@@ -336,7 +345,7 @@ export const monthlyConcurrentPeriods = (
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
-    if (!s.isConcurrent || isExcludedGroupActivity(s.subjectName, s.dayOfWeek, s.period)) return;
+    if (!s.isConcurrent || isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)) return;
     if (!isDaytimeSlot(s)) return;
     if (isSubstituteCoverSession(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
