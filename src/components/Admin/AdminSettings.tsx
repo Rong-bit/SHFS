@@ -74,6 +74,7 @@ import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadSystemManual } from '../../utils/generateManual';
 import { isPasswordHash } from '../../utils/passwordCrypto';
 import { ModalShell } from '../Common/ModalShell';
+import { DraftNumberInput } from '../Common/DraftNumberInput';
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -782,14 +783,12 @@ export const AdminSettings: React.FC = () => {
                     日間部標準鐘點費 (元/節)
                   </label>
                   <div className="relative">
-                    <input
+                    <DraftNumberInput
                       id="input-admin-day-rate"
-                      type="number"
                       value={formConfig.dayHourlyRate}
-                      onChange={(e) =>
-                        setFormConfig({ ...formConfig, dayHourlyRate: Number(e.target.value) })
-                      }
+                      onChange={(dayHourlyRate) => setFormConfig({ ...formConfig, dayHourlyRate })}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                      min={0}
                       required
                     />
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 節</span>
@@ -804,14 +803,12 @@ export const AdminSettings: React.FC = () => {
                     進修部 / 第八節課輔鐘點費 (元/節)
                   </label>
                   <div className="relative">
-                    <input
+                    <DraftNumberInput
                       id="input-admin-night-rate"
-                      type="number"
                       value={formConfig.nightHourlyRate}
-                      onChange={(e) =>
-                        setFormConfig({ ...formConfig, nightHourlyRate: Number(e.target.value) })
-                      }
+                      onChange={(nightHourlyRate) => setFormConfig({ ...formConfig, nightHourlyRate })}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                      min={0}
                       required
                     />
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 節</span>
@@ -826,13 +823,11 @@ export const AdminSettings: React.FC = () => {
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       全月折算週數基準
                     </label>
-                    <input
-                      type="number"
+                    <DraftNumberInput
                       value={formConfig.weeksInMonth}
-                      onChange={(e) =>
-                        setFormConfig({ ...formConfig, weeksInMonth: Number(e.target.value) })
-                      }
+                      onChange={(weeksInMonth) => setFormConfig({ ...formConfig, weeksInMonth })}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
+                      min={1}
                       required
                     />
                     <span className="text-[10px] text-slate-400">結算依該月週一至週五實際日數（並扣除下方放假日）</span>
@@ -842,16 +837,13 @@ export const AdminSettings: React.FC = () => {
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       每週兼代課法定上限 (節)
                     </label>
-                    <input
-                      type="number"
+                    <DraftNumberInput
                       value={formConfig.maxWeeklyOverloadPeriods}
-                      onChange={(e) =>
-                        setFormConfig({
-                          ...formConfig,
-                          maxWeeklyOverloadPeriods: Number(e.target.value),
-                        })
+                      onChange={(maxWeeklyOverloadPeriods) =>
+                        setFormConfig({ ...formConfig, maxWeeklyOverloadPeriods })
                       }
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
+                      min={1}
                       required
                     />
                     <span className="text-[10px] text-slate-400">法規上限 9 節（兼4+代5）</span>
@@ -1337,16 +1329,15 @@ export const AdminSettings: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       專任教師基本鐘點 (節/週)
                     </label>
-                    <input
-                      type="number"
+                    <DraftNumberInput
                       min={0}
                       value={formConfig.standardBasePeriods.fulltime}
-                      onChange={(e) =>
+                      onChange={(fulltime) =>
                         setFormConfig({
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            fulltime: Math.max(0, Number(e.target.value) || 0),
+                            fulltime,
                           },
                         })
                       }
@@ -1359,16 +1350,15 @@ export const AdminSettings: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       導師基本鐘點
                     </label>
-                    <input
-                      type="number"
+                    <DraftNumberInput
                       min={0}
                       value={formConfig.standardBasePeriods.homeroom}
-                      onChange={(e) =>
+                      onChange={(homeroom) =>
                         setFormConfig({
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            homeroom: Math.max(0, Number(e.target.value) || 0),
+                            homeroom,
                           },
                         })
                       }
@@ -1381,16 +1371,15 @@ export const AdminSettings: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       組長基本鐘點
                     </label>
-                    <input
-                      type="number"
+                    <DraftNumberInput
                       min={0}
                       value={formConfig.standardBasePeriods.sectionChief}
-                      onChange={(e) =>
+                      onChange={(sectionChief) =>
                         setFormConfig({
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            sectionChief: Math.max(0, Number(e.target.value) || 0),
+                            sectionChief,
                           },
                         })
                       }
@@ -1403,16 +1392,15 @@ export const AdminSettings: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       科主任基本鐘點
                     </label>
-                    <input
-                      type="number"
+                    <DraftNumberInput
                       min={0}
                       value={formConfig.standardBasePeriods.head}
-                      onChange={(e) =>
+                      onChange={(head) =>
                         setFormConfig({
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            head: Math.max(0, Number(e.target.value) || 0),
+                            head,
                           },
                         })
                       }
@@ -1425,16 +1413,15 @@ export const AdminSettings: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       主任基本鐘點
                     </label>
-                    <input
-                      type="number"
+                    <DraftNumberInput
                       min={0}
                       value={formConfig.standardBasePeriods.director}
-                      onChange={(e) =>
+                      onChange={(director) =>
                         setFormConfig({
                           ...formConfig,
                           standardBasePeriods: {
                             ...formConfig.standardBasePeriods,
-                            director: Math.max(0, Number(e.target.value) || 0),
+                            director,
                           },
                         })
                       }
@@ -2037,15 +2024,13 @@ export const AdminSettings: React.FC = () => {
                             </span>
                           </td>
                           <td className="p-3.5 text-center">
-                            <input
-                              type="number"
+                            <DraftNumberInput
                               min={0}
                               max={formConfig.standardBasePeriods.fulltime}
                               value={t.dutyReductionPeriods ?? 0}
-                              onChange={(e) =>
-                                updateTeacher(t.id, {
-                                  dutyReductionPeriods: Math.max(0, Number(e.target.value) || 0),
-                                })
+                              immediate
+                              onChange={(dutyReductionPeriods) =>
+                                updateTeacher(t.id, { dutyReductionPeriods })
                               }
                               className="w-16 text-center bg-white border border-slate-300 rounded-lg py-1 font-mono font-bold text-slate-900"
                               title="任務減授節數（每人不同）"
@@ -2462,11 +2447,11 @@ export const AdminSettings: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">容納人數</label>
-                  <input
-                    type="number"
+                  <DraftNumberInput
                     value={venueFormData.capacity}
-                    onChange={(e) => setVenueFormData({ ...venueFormData, capacity: Number(e.target.value) })}
+                    onChange={(capacity) => setVenueFormData({ ...venueFormData, capacity })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono"
+                    min={1}
                     required
                   />
                 </div>
@@ -2601,19 +2586,17 @@ export const AdminSettings: React.FC = () => {
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">任務減授（節）</label>
-                  <input
-                    type="number"
+                  <DraftNumberInput
                     min={0}
                     max={formConfig.standardBasePeriods.fulltime}
                     value={teacherFormData.dutyReductionPeriods}
-                    onChange={(e) => {
-                      const dutyReductionPeriods = Math.max(0, Number(e.target.value) || 0);
+                    onChange={(dutyReductionPeriods) =>
                       setTeacherFormData({
                         ...teacherFormData,
                         dutyReductionPeriods,
                         basePeriods: calcTeacherFormBase(),
-                      });
-                    }}
+                      })
+                    }
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold"
                     required
                   />
