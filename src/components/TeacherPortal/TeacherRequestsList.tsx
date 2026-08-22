@@ -111,7 +111,7 @@ export const TeacherRequestsList: React.FC = () => {
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400">
           <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
           <p className="text-sm font-medium">目前暫無符合條件之調代課申請單據</p>
-          <p className="text-xs text-slate-400 mt-1">您可隨時於課表或右上角點選「+ 新增調代課申請」</p>
+          <p className="text-xs text-slate-400 mt-1">您可隨時於課表或右上角點選「新增調代課申請」</p>
         </div>
       ) : (
         <div className="space-y-3">

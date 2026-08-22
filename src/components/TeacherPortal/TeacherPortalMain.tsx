@@ -47,7 +47,7 @@ export const TeacherPortalMain: React.FC = () => {
             }`}
           >
             <Calendar className="w-4 h-4 text-amber-400" />
-            <span>📅 我的個人每週課表</span>
+            <span>我的個人每週課表</span>
           </button>
 
           <button
@@ -60,7 +60,7 @@ export const TeacherPortalMain: React.FC = () => {
             }`}
           >
             <FileText className="w-4 h-4 text-indigo-400" />
-            <span>📋 調代課申請紀錄與列印</span>
+            <span>調代課申請紀錄與列印</span>
             {myPendingCount > 0 && (
               <span className="ml-1 px-1.5 py-0.2 bg-amber-500 text-slate-950 text-[11px] font-extrabold rounded-full">
                 {myPendingCount}
@@ -78,13 +78,13 @@ export const TeacherPortalMain: React.FC = () => {
                 () => {
                   setIsTopRequestModalOpen(true);
                 },
-                '+ 新增調代課申請'
+                '新增調代課申請'
               );
             }}
             className="flex items-center space-x-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4 text-slate-950" />
-            <span>+ 新增調代課申請</span>
+            <span>新增調代課申請</span>
           </button>
         )}
       </div>

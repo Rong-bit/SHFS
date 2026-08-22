@@ -181,7 +181,7 @@ export const TeacherSchedule: React.FC = () => {
         }
         setIsModalOpen(true);
       },
-      '+ 新增調代課申請'
+      '新增調代課申請'
     );
   };
 
@@ -285,7 +285,7 @@ export const TeacherSchedule: React.FC = () => {
               className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>+ 新增調代課申請</span>
+              <span>新增調代課申請</span>
             </button>
           </div>
         </div>
