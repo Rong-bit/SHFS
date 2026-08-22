@@ -16,6 +16,7 @@ import {
 } from '../../utils/substitutePayrollRegister';
 import { exportSubstitutePayrollExcel } from '../../utils/payrollRegisterExcel';
 import { PayrollRegisterPrintStyles } from './PayrollRegisterPrintStyles';
+import { PayrollRegisterSignatureBlock } from './PayrollRegisterSignatureBlock';
 import type { MonthlyTeacherSettlement } from '../../types';
 
 interface SubstitutePayrollRegisterModalProps {
@@ -206,23 +207,9 @@ export const SubstitutePayrollRegisterModal: React.FC<SubstitutePayrollRegisterM
                 </tbody>
               </table>
 
-              <div className="payroll-register-print-signature mt-8 print:mt-8 grid grid-cols-4 gap-4 text-xs text-center text-slate-700 relative">
-                <div>
-                  <div className="border-t border-slate-400 pt-1 mt-10">教學組長</div>
-                </div>
-                <div>
-                  <div className="border-t border-slate-400 pt-1 mt-10">出納組</div>
-                </div>
-                <div>
-                  <div className="border-t border-slate-400 pt-1 mt-10">會計室</div>
-                </div>
-                <div>
-                  <div className="border-t border-slate-400 pt-1 mt-10">校長</div>
-                </div>
-              </div>
-              <div className="mt-4 text-xs text-slate-600 print:mt-6 relative">
-                <span className="inline-block border-t border-slate-400 pt-1 pr-16">教務主任</span>
-              </div>
+              {pageIdx === pages.length - 1 && (
+                <PayrollRegisterSignatureBlock className="relative" />
+              )}
             </div>
           ))
         )}

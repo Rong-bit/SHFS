@@ -9,7 +9,9 @@ const blank = (): Aoa => [['']];
 
 const pushSignatureBlock = (rows: Aoa) => {
   rows.push(['']);
+  rows.push(['']);
   rows.push(['教學組長', '', '', '出納組', '', '', '會計室', '', '', '校長']);
+  rows.push(['']);
   rows.push(['']);
   rows.push(['教務主任']);
 };
