@@ -195,6 +195,10 @@ export interface SystemConfig {
   temporaryScheduleMoves?: TemporaryScheduleMove[];
   /** 半日／節次停課：該日指定節次不計鐘點（如上午仍上課、下午佈置考場） */
   partialNonTeachingDays?: PartialNonTeachingDay[];
+  /** 教師薪資編號（teacherId → 薪資編號）— 舊版；請改用 teacherSalaryCodesByName */
+  teacherSalaryCodes?: Record<string, string>;
+  /** 教師薪資編號（姓名 → 薪資編號），課表匯入後仍有效 */
+  teacherSalaryCodesByName?: Record<string, string>;
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
     defaultTeacherPassword: string; // 預設教師密碼雜湊（或遷移前明文）
@@ -261,4 +265,26 @@ export interface MonthlyTeacherSettlement {
   
   // 總應發/結算金額
   netPayableAmount: number; // 超鐘點費 + 第八節課輔費 + 公費代課 + 受代領取 - 事病假代課扣款
+
+  /** 兼課鐘點費印領清冊：課表兼課月節數（扣假、移課前） */
+  monthlyConcurrentBasePeriods: number;
+  /** 應加兼課（代課兼課、暫時互調增加等） */
+  concurrentAddPeriods: number;
+  /** 應減兼課（請假兼課、暫時互調減少等） */
+  concurrentSubtractPeriods: number;
+  /** 實得兼課節數 */
+  monthlyConcurrentPeriods: number;
+  /** 兼課鐘點費實發金額（實得兼課 × 日間費率） */
+  concurrentPayrollAmount: number;
+
+  /** 輔導課（第8節）月節數（扣假、移課前） */
+  monthlyCounselingBasePeriods: number;
+  /** 增加節數（暫時互調增加等） */
+  counselingAddPeriods: number;
+  /** 減少節數（請假、半日停課、段考等） */
+  counselingSubtractPeriods: number;
+  /** 實上節數 */
+  monthlyCounselingPeriods: number;
+  /** 輔導課鐘點費實發金額 */
+  counselingPayrollAmount: number;
 }

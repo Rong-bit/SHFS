@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { calendarYearForSettlementMonth, displayTeacherTitle, expectedRocAcademicYear, SCHOOL_DEPARTMENTS, settlementWeeksForMonth } from '../../utils/schoolDepartments';
 import { nonTeachingDateSet } from '../../utils/holidays';
+import { countSalaryCodes } from '../../utils/salaryCodes';
 import * as XLSX from 'xlsx';
 import { 
   Calculator, 
@@ -13,14 +14,21 @@ import {
   Building, 
   Info,
   Calendar,
-  Filter
+  Filter,
+  Printer,
 } from 'lucide-react';
+import { OverloadPayrollRegisterModal } from './OverloadPayrollRegisterModal';
+import { SubstitutePayrollRegisterModal } from './SubstitutePayrollRegisterModal';
+import { CounselingPayrollRegisterModal } from './CounselingPayrollRegisterModal';
 
 export const AccountingSettlement: React.FC = () => {
   const { systemConfig, calculateMonthlySettlement } = useApp();
   const calendarMonth = new Date().getMonth() + 1;
   const [selectedMonth, setSelectedMonth] = useState<number>(calendarMonth);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [showPayrollRegister, setShowPayrollRegister] = useState(false);
+  const [showSubstitutePayrollRegister, setShowSubstitutePayrollRegister] = useState(false);
+  const [showCounselingPayrollRegister, setShowCounselingPayrollRegister] = useState(false);
   const settlementHolidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
   const settlementCalendar = {
     holidaySet: settlementHolidaySet,
@@ -62,6 +70,7 @@ export const AccountingSettlement: React.FC = () => {
   );
   const totalNetPayable = filteredSettlements.reduce((acc, curr) => acc + curr.netPayableAmount, 0);
   const warningCount = filteredSettlements.filter((s) => s.isOverLimit).length;
+  const salaryCodeCount = countSalaryCodes(systemConfig);
 
   // Export to Excel (.xlsx) using SheetJS
   const handleExportExcel = () => {
@@ -188,6 +197,33 @@ export const AccountingSettlement: React.FC = () => {
           </div>
 
           <button
+            type="button"
+            onClick={() => setShowCounselingPayrollRegister(true)}
+            className="flex items-center space-x-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-lg border border-slate-300 shadow-sm transition active:scale-95"
+          >
+            <Printer className="w-4 h-4 text-indigo-600" />
+            <span>課輔印領清冊</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowSubstitutePayrollRegister(true)}
+            className="flex items-center space-x-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-lg border border-slate-300 shadow-sm transition active:scale-95"
+          >
+            <Printer className="w-4 h-4 text-blue-600" />
+            <span>代課印領清冊</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPayrollRegister(true)}
+            className="flex items-center space-x-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-lg border border-slate-300 shadow-sm transition active:scale-95"
+          >
+            <Printer className="w-4 h-4 text-slate-600" />
+            <span>兼課印領清冊</span>
+          </button>
+
+          <button
             id="btn-export-accounting-excel"
             onClick={handleExportExcel}
             className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-sm transition active:scale-95"
@@ -197,6 +233,12 @@ export const AccountingSettlement: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {salaryCodeCount === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-amber-900">
+          印領清冊的「薪資編號」請由<strong>系統管理員 → 師資名冊</strong>匯入；匯入後會永久保存，課表重新匯入不會清除。
+        </div>
+      )}
 
       {/* 行事曆情境計費說明 */}
       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 leading-relaxed space-y-2">
@@ -473,6 +515,30 @@ export const AccountingSettlement: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {showCounselingPayrollRegister && (
+        <CounselingPayrollRegisterModal
+          month={selectedMonth}
+          settlements={filteredSettlements}
+          onClose={() => setShowCounselingPayrollRegister(false)}
+        />
+      )}
+
+      {showSubstitutePayrollRegister && (
+        <SubstitutePayrollRegisterModal
+          month={selectedMonth}
+          settlements={filteredSettlements}
+          onClose={() => setShowSubstitutePayrollRegister(false)}
+        />
+      )}
+
+      {showPayrollRegister && (
+        <OverloadPayrollRegisterModal
+          month={selectedMonth}
+          settlements={filteredSettlements}
+          onClose={() => setShowPayrollRegister(false)}
+        />
+      )}
 
     </div>
   );

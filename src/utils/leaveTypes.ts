@@ -39,6 +39,28 @@ export const leaveTypeLabel = (leaveType?: LeaveType): string => {
   }
 };
 
+export const leaveTypeRemarkShort = (leaveType?: LeaveType, reason?: string): string => {
+  if (reason && /婚假/.test(reason)) return '婚假';
+  switch (leaveType) {
+    case 'wellness':
+      return '身心假';
+    case 'personal':
+      return '事假';
+    case 'sick':
+      return '病假';
+    case 'official':
+      return '公假';
+    case 'training':
+      return '研習';
+    case 'bereavement':
+      return '喪假';
+    case 'maternity':
+      return '產假';
+    default:
+      return '請假';
+  }
+};
+
 export const defaultReasonForLeaveType = (leaveType: LeaveType): string => {
   switch (leaveType) {
     case 'official':

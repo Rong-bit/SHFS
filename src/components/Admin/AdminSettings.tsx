@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, NonTeachingDay, TemporaryScheduleMove, PartialNonTeachingDay } from '../../types';
 import {
@@ -52,6 +52,20 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/scheduleImporter';
+import {
+  downloadSalaryCodeTemplate,
+  exportSalaryCodesToExcel,
+  parseSalaryCodeWorkbook,
+  readSalaryCodeFile,
+} from '../../utils/salaryCodeImporter';
+import {
+  countSalaryCodes,
+  mergeSalaryCodesByName,
+  migrateSalaryCodesToName,
+  removeTeacherSalaryCodeByName,
+  resolveTeacherSalaryCode,
+  setTeacherSalaryCodeByName,
+} from '../../utils/salaryCodes';
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
@@ -220,12 +234,74 @@ export const AdminSettings: React.FC = () => {
   const [passwordResetTeacher, setPasswordResetTeacher] = useState<Teacher | null>(null);
   const [adminSetPassword, setAdminSetPassword] = useState('');
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
+  const salaryFileRef = useRef<HTMLInputElement>(null);
+  const salaryMigratedRef = useRef(false);
+  const [salaryCodeNotice, setSalaryCodeNotice] = useState('');
+
+  const salaryCodesByName = systemConfig.teacherSalaryCodesByName || {};
+  const salaryCodeCount = countSalaryCodes(systemConfig);
+
+  useEffect(() => {
+    if (salaryMigratedRef.current) return;
+    const legacy = systemConfig.teacherSalaryCodes;
+    if (!legacy || Object.keys(legacy).length === 0) {
+      salaryMigratedRef.current = true;
+      return;
+    }
+    if (Object.keys(systemConfig.teacherSalaryCodesByName || {}).length > 0) {
+      salaryMigratedRef.current = true;
+      return;
+    }
+    const migrated = migrateSalaryCodesToName(teachers, systemConfig);
+    if (Object.keys(migrated).length > 0) {
+      updateSystemConfig({ teacherSalaryCodesByName: migrated });
+    }
+    salaryMigratedRef.current = true;
+  }, [teachers, systemConfig, updateSystemConfig]);
+
+  const handleSalaryCodeImport = async (file: File) => {
+    try {
+      const workbook = await readSalaryCodeFile(file);
+      const result = parseSalaryCodeWorkbook(workbook, teachers);
+      updateSystemConfig({
+        teacherSalaryCodesByName: mergeSalaryCodesByName(
+          systemConfig.teacherSalaryCodesByName,
+          result.codesByName
+        ),
+      });
+      const unmatchedNote =
+        result.unmatched.length > 0
+          ? `；名冊尚無 ${result.unmatched.length} 人（已保留，課表匯入後自動對上）`
+          : '';
+      setSalaryCodeNotice(
+        `已匯入／更新 ${result.imported} 筆薪資編號（名冊可對 ${result.matchedInRoster} 人）${unmatchedNote}`
+      );
+    } catch (err) {
+      setSalaryCodeNotice(err instanceof Error ? err.message : '薪資編號匯入失敗');
+    }
+  };
+
+  const handleClearAllSalaryCodes = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '清除全部薪資編號？',
+      message: '將刪除所有已匯入的薪資編號對照，印領清冊將無法帶出編號。',
+      warningMessage: '此操作不影響課表與師資名冊，可再次匯入 Excel 恢復。',
+      onConfirm: () => {
+        updateSystemConfig({ teacherSalaryCodesByName: {}, teacherSalaryCodes: {} });
+        setSalaryCodeNotice('已清除全部薪資編號');
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
 
   const handleConfigSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const nextConfig = {
       ...formConfig,
       standardBasePeriods: normalizeStandardBasePeriods(formConfig.standardBasePeriods),
+      teacherSalaryCodesByName: systemConfig.teacherSalaryCodesByName,
+      teacherSalaryCodes: systemConfig.teacherSalaryCodes,
     };
     setFormConfig(nextConfig);
     updateSystemConfig(nextConfig);
@@ -1656,6 +1732,7 @@ export const AdminSettings: React.FC = () => {
             <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-900">
               匯入規則：學科未填教室→「班級 原班普通教室」；實習課未填工場→「xx科實習工場」（可再細分配線／電工等）；
               有填名稱→依名稱建立／對應。篩選可分開檢視原班教室與實習工場。
+              <strong className="block mt-1">手動新增或編輯的工場／教室不會因課表覆蓋匯入而消失，僅能於此頁修改或刪除。</strong>
             </div>
 
             <div className="divide-y divide-slate-100 text-xs">
@@ -1730,6 +1807,79 @@ export const AdminSettings: React.FC = () => {
       {/* TAB 3: 全校師資名冊與節數 */}
       {activeTab === 'teachers' && (
         <div className="space-y-4">
+          <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4 text-indigo-600" />
+                  薪資編號管理（出納印領清冊用）
+                </h3>
+                <p className="text-[11px] text-indigo-800 mt-1 leading-relaxed max-w-2xl">
+                  以<strong>教師姓名</strong>保存，課表重新匯入<strong>不會清除</strong>；僅在重新匯入薪資編號或手動刪除時變更。
+                  兼課／代課／課輔三份印領清冊共用。
+                </p>
+                {salaryCodeNotice && (
+                  <p className="text-[11px] text-indigo-900 mt-2 font-medium">{salaryCodeNotice}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadSalaryCodeTemplate()}
+                  className="px-3 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-indigo-800 hover:bg-indigo-100"
+                >
+                  下載範本
+                </button>
+                <button
+                  type="button"
+                  onClick={() => salaryFileRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  匯入薪資編號
+                </button>
+                <input
+                  ref={salaryFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleSalaryCodeImport(file);
+                    e.target.value = '';
+                  }}
+                />
+                {salaryCodeCount > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        exportSalaryCodesToExcel(
+                          systemConfig.teacherSalaryCodesByName ||
+                            migrateSalaryCodesToName(teachers, systemConfig)
+                        )
+                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-indigo-800 hover:bg-indigo-100"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      匯出對照表
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAllSalaryCodes}
+                      className="px-3 py-1.5 bg-white border border-rose-300 rounded-lg text-xs font-bold text-rose-700 hover:bg-rose-50"
+                    >
+                      清除全部
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-indigo-700">
+              已保存 <strong>{salaryCodeCount}</strong> 筆；可在下方名冊「薪資編號」欄個別修改或刪除。
+            </p>
+          </div>
+
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3 flex-1">
               <div className="relative min-w-[220px]">
@@ -1808,6 +1958,7 @@ export const AdminSettings: React.FC = () => {
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-3.5">教師姓名</th>
+                    <th className="p-3.5 w-[100px]">薪資編號</th>
                     <th className="p-3.5">職稱</th>
                     <th className="p-3.5">群科科別</th>
                     <th className="p-3.5 text-center">任務減授</th>
@@ -1822,7 +1973,7 @@ export const AdminSettings: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {filteredTeachers.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-slate-400">
+                      <td colSpan={11} className="p-8 text-center text-slate-400">
                         查無符合條件的教師資料
                       </td>
                     </tr>
@@ -1843,6 +1994,24 @@ export const AdminSettings: React.FC = () => {
                             ) : (
                               <span className="ml-1.5 text-[10px] text-slate-400">使用預設密碼</span>
                             )}
+                          </td>
+                          <td className="p-3.5">
+                            <input
+                              type="text"
+                              defaultValue={resolveTeacherSalaryCode(t, systemConfig)}
+                              key={`${t.id}-${resolveTeacherSalaryCode(t, systemConfig)}`}
+                              onBlur={(e) => {
+                                const next = setTeacherSalaryCodeByName(
+                                  systemConfig.teacherSalaryCodesByName,
+                                  t.name,
+                                  e.target.value
+                                );
+                                updateSystemConfig({ teacherSalaryCodesByName: next });
+                              }}
+                              placeholder="—"
+                              className="w-[88px] font-mono text-center bg-white border border-slate-300 rounded-lg py-1 text-[11px]"
+                              title="出納印領清冊薪資編號"
+                            />
                           </td>
                           <td className="p-3.5">
                             <select

@@ -2165,56 +2165,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // 2. Process venues
-    let updatedVenues: WorkshopVenue[] = [];
+    // 2. Process venues — 保留既有工場／教室清冊，僅追加課表中新出現的名稱（覆蓋／追加模式相同）
+    let updatedVenues: WorkshopVenue[] = [...venues];
     let newVenuesCount = 0;
     const venueMap = new Map<string, WorkshopVenue>();
+    venues.forEach((v) => venueMap.set(v.name.trim(), v));
 
     const getVenueDept = (vName: string): DepartmentType | '通用教室' => {
       if (!vName.trim() || vName.includes('通用')) return '通用教室';
       return departmentFromLabel(vName) || '共同科目';
     };
 
-    if (mode === 'overwrite') {
-      importedVenueNames.forEach((name, idx) => {
-        const existing = venues.find((v) => v.name.trim() === name);
-
-        const venueObj: WorkshopVenue = existing
-          ? existing
-          : {
-              id: `v-imp-${Date.now()}-${idx}`,
-              name,
-              code: `${autoVenueCodePrefix(name)}-${100 + idx}`,
-              department: getVenueDept(name),
-              capacity: 40,
-              safetyLevel: '標準',
-              equipmentNote: autoVenueEquipmentNote(name),
-            };
-        updatedVenues.push(venueObj);
-        venueMap.set(name, venueObj);
-        if (!existing) newVenuesCount++;
-      });
-    } else {
-      updatedVenues = [...venues];
-      venues.forEach((v) => venueMap.set(v.name.trim(), v));
-
-      importedVenueNames.forEach((name, idx) => {
-        if (!venueMap.has(name)) {
-          const newVenue: WorkshopVenue = {
-            id: `v-imp-${Date.now()}-${idx}`,
-            name,
-            code: `${autoVenueCodePrefix(name)}-${100 + idx}`,
-            department: getVenueDept(name),
-            capacity: 40,
-            safetyLevel: '標準',
-            equipmentNote: autoVenueEquipmentNote(name),
-          };
-          updatedVenues.push(newVenue);
-          venueMap.set(name, newVenue);
-          newVenuesCount++;
-        }
-      });
-    }
+    importedVenueNames.forEach((name, idx) => {
+      if (!venueMap.has(name)) {
+        const newVenue: WorkshopVenue = {
+          id: `v-imp-${Date.now()}-${idx}`,
+          name,
+          code: `${autoVenueCodePrefix(name)}-${100 + idx}`,
+          department: getVenueDept(name),
+          capacity: 40,
+          safetyLevel: '標準',
+          equipmentNote: autoVenueEquipmentNote(name),
+        };
+        updatedVenues.push(newVenue);
+        venueMap.set(name, newVenue);
+        newVenuesCount++;
+      }
+    });
 
     // 3. Convert parsed rows into CourseSession objects（協同教師各建一筆）
     const newSessionsList: CourseSession[] = [];
@@ -2649,11 +2626,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rawMonthlyCounseling - leaveCounselingDeduct + swapCounselingDelta
       );
       const monthlyCounselingAmount = monthlyCounseling * counselingRate;
+      const counselingAddPeriods = Math.max(0, swapCounselingDelta);
+      const counselingSubtractPeriods = leaveCounselingDeduct + Math.max(0, -swapCounselingDelta);
+      const monthlyCounselingBasePeriods = rawMonthlyCounseling;
+      const counselingPayrollAmount = monthlyCounselingAmount;
 
       // 2. Tally approved substitution requests for the selected month only
       let publicSubstitutePeriods = 0;
       let privateLeaveDeductionPeriods = 0;
       let privateSubstituteEarnPeriods = 0;
+      let concurrentSubstituteAddPeriods = 0;
       let publicSubstituteAmount = 0;
       let privateLeaveDeductionAmount = 0;
       let privateSubstituteEarnAmount = 0;
@@ -2701,6 +2683,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               privateSubstituteEarnPeriods += periods;
               privateSubstituteEarnAmount += rate * periods;
             }
+            if (
+              r.originalSession?.isConcurrent &&
+              r.originalSession.period >= 1 &&
+              r.originalSession.period <= 7
+            ) {
+              concurrentSubstituteAddPeriods += periods;
+            }
           }
           if (r.applicantTeacherId === teacher.id) {
             if (r.paymentType === 'private') {
@@ -2709,6 +2698,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
         });
+
+      const swapConcurrentAdd = Math.max(0, swapConcurrentDelta);
+      const swapConcurrentSubtract = Math.max(0, -swapConcurrentDelta);
+      const monthlyConcurrentBasePeriods = rawMonthlyOverload;
+      const concurrentSubtractPeriods = leaveConcurrentDeduct + swapConcurrentSubtract;
+      const concurrentAddPeriods = concurrentSubstituteAddPeriods + swapConcurrentAdd;
+      const monthlyConcurrentPeriods = Math.max(
+        0,
+        monthlyConcurrentBasePeriods - leaveConcurrentDeduct + swapConcurrentDelta + concurrentSubstituteAddPeriods
+      );
+      const concurrentPayrollAmount = monthlyConcurrentPeriods * hourlyRate;
 
       const netPayableAmount =
         monthlyOverloadAmount +
@@ -2748,6 +2748,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalSubstituteWeeklyEstimated,
         isOverLimit,
         netPayableAmount,
+        monthlyConcurrentBasePeriods,
+        concurrentAddPeriods,
+        concurrentSubtractPeriods,
+        monthlyConcurrentPeriods,
+        concurrentPayrollAmount,
+        monthlyCounselingBasePeriods,
+        counselingAddPeriods,
+        counselingSubtractPeriods,
+        monthlyCounselingPeriods: monthlyCounseling,
+        counselingPayrollAmount,
       };
     });
   };

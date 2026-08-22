@@ -1089,6 +1089,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                           </div>
                           <p className="text-slate-500 text-[11px] mt-0.5">
                             清除舊有課堂，完全套用此份最新課表，並重新統計全體教師基本與超鐘點節數。
+                            工場／教室清冊仍保留，僅追加課表中新出現的名稱。
                           </p>
                           {importMode === 'overwrite' && (
                             <label className="mt-2 flex items-start gap-2 text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5 cursor-pointer">
