@@ -90,13 +90,19 @@ function setupSheet(ws: ExcelJS.Worksheet, colCount: number, colWidths: number[]
       footer: 0.1,
     },
   };
-  ws.views = [{ state: 'normal', showGridLines: false }];
+  // 開啟分頁預覽，方便看到小計後的換頁線
+  ws.views = [{ state: 'normal', showGridLines: false, style: 'pageBreakPreview' }];
   colWidths.forEach((w, i) => {
     ws.getColumn(i + 1).width = w;
   });
   for (let c = 1; c <= colCount; c++) {
     if (!ws.getColumn(c).width) ws.getColumn(c).width = 12;
   }
+}
+
+/** 在指定列之後插入列印換頁（對齊畫面／瀏覽器列印：小計後換頁） */
+function addPageBreakAfterRow(ws: ExcelJS.Worksheet, rowNumber: number) {
+  ws.getRow(rowNumber).addPageBreak();
 }
 
 function addTitleRow(ws: ExcelJS.Worksheet, title: string, colCount: number): number {
@@ -181,10 +187,6 @@ export async function exportOverloadPayrollExcel(
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
-    if (idx > 0) {
-      ws.addRow([]);
-      ws.addRow([]);
-    }
     addTitleRow(ws, title, colCount);
     addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
@@ -205,7 +207,7 @@ export async function exportOverloadPayrollExcel(
       ]);
     });
     const st = page.subtotal;
-    addTotalRow(ws, [
+    const subtotalRow = addTotalRow(ws, [
       '小計',
       '',
       st.weeklyConcurrent,
@@ -229,6 +231,8 @@ export async function exportOverloadPayrollExcel(
         '',
       ]);
       addSignatureBlock(ws, colCount);
+    } else {
+      addPageBreakAfterRow(ws, subtotalRow);
     }
   });
 
@@ -252,10 +256,6 @@ export async function exportSubstitutePayrollExcel(
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
-    if (idx > 0) {
-      ws.addRow([]);
-      ws.addRow([]);
-    }
     addTitleRow(ws, title, colCount);
     addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
@@ -272,7 +272,7 @@ export async function exportSubstitutePayrollExcel(
         r.remarks,
       ]);
     });
-    addTotalRow(ws, [
+    const subtotalRow = addTotalRow(ws, [
       '小計',
       '',
       page.subtotal.substitutePeriods,
@@ -290,6 +290,8 @@ export async function exportSubstitutePayrollExcel(
         '',
       ]);
       addSignatureBlock(ws, colCount);
+    } else {
+      addPageBreakAfterRow(ws, subtotalRow);
     }
   });
 
@@ -325,10 +327,6 @@ export async function exportCounselingPayrollExcel(
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
-    if (idx > 0) {
-      ws.addRow([]);
-      ws.addRow([]);
-    }
     addTitleRow(ws, title, colCount);
     addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
@@ -349,7 +347,7 @@ export async function exportCounselingPayrollExcel(
         r.remarks,
       ]);
     });
-    addTotalRow(ws, [
+    const subtotalRow = addTotalRow(ws, [
       '小計',
       '',
       page.subtotal.weeklyHours,
@@ -375,6 +373,8 @@ export async function exportCounselingPayrollExcel(
         '',
       ]);
       addSignatureBlock(ws, colCount);
+    } else {
+      addPageBreakAfterRow(ws, subtotalRow);
     }
   });
 
