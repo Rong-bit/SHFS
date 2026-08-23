@@ -9,15 +9,15 @@ import { resolveTeacherSalaryCode } from './salaryCodes';
 
 /**
  * 中間頁資料列（含空白補列）；非末頁小計後換頁。
- * Excel／畫面／列印共用。
+ * Excel／畫面／列印共用；44 為 A4 實測（緊湊列高）可容納量。
  */
-export const PAYROLL_ROWS_PER_PAGE = 42;
+export const PAYROLL_ROWS_PER_PAGE = 44;
 
 /**
- * 末頁空白補列上限（實際資料列仍最多 42）。
- * 僅在末頁資料不足一頁時少補幾列，預留合計＋簽核空間；不另拆頁。
+ * 末頁空白補列上限（實際資料列仍最多 44）。
+ * 略少補幾列以預留合計＋簽核；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 39;
+export const PAYROLL_ROWS_LAST_PAGE = 41;
 
 /** 空白列（補滿一頁用，不計入小計） */
 export function isBlankPayrollRow(teacherId: string): boolean {
