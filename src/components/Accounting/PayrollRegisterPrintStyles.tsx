@@ -154,14 +154,13 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: none !important;
   }
 
-  /* 列高需讓「45 資料列＋小計」落在一張 A4（約 287mm 可用高度）內，
-     否則瀏覽器會在約第 38 列自行斷頁，與 Excel／畫面分頁不一致 */
+  /* 每頁 38 資料列＋小計；列高預留備註換行，避免瀏覽器提早斷頁 */
   .payroll-register-print-table {
     display: table !important;
     width: 100% !important;
     table-layout: fixed;
-    font-size: 8pt;
-    line-height: 1.15;
+    font-size: 8.5pt;
+    line-height: 1.2;
     border-collapse: collapse;
   }
 
@@ -176,47 +175,47 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     overflow-wrap: break-word;
     word-break: break-word;
     border-color: #334155 !important;
-    padding: 1px 3px !important;
+    padding: 2px 4px !important;
     text-align: center !important;
     vertical-align: middle !important;
   }
 
   .payroll-register-print-table th {
-    padding: 2px 3px !important;
-    font-size: 8pt;
-    line-height: 1.15;
+    padding: 3px 4px !important;
+    font-size: 8.5pt;
+    line-height: 1.2;
   }
 
   .payroll-register-print-table tr.payroll-register-blank-row td {
-    height: 4.8mm;
-    max-height: 4.8mm;
+    height: 5.2mm;
+    max-height: 5.2mm;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
-    line-height: 4.8mm;
+    line-height: 5.2mm;
     white-space: nowrap;
-    font-size: 8pt;
+    font-size: 8.5pt;
   }
 
   .payroll-register-print-table .payroll-register-remarks-col {
     width: 35% !important;
     white-space: normal !important;
-    font-size: 7.5pt;
-    line-height: 1.15;
+    font-size: 8pt;
+    line-height: 1.2;
   }
 
   .payroll-register-print-title {
     display: block !important;
-    font-size: 11pt;
+    font-size: 12pt;
     font-weight: 700;
     text-align: center !important;
-    margin: 0 0 1.5mm 0;
+    margin: 0 0 2mm 0;
     writing-mode: horizontal-tb;
   }
 
   .payroll-register-print-signature {
     display: block !important;
-    margin-top: 4mm;
-    font-size: 8pt;
+    margin-top: 5mm;
+    font-size: 9pt;
     text-align: center !important;
   }
 

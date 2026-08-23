@@ -9,10 +9,9 @@ import { resolveTeacherSalaryCode } from './salaryCodes';
 
 /**
  * 每頁資料列（含空白補列）；非末頁小計後換頁，末頁小計＋合計＋簽核同頁。
- * Excel／畫面／列印共用此數；列印樣式需讓 45 列＋小計能塞進一張 A4，
- * 否則瀏覽器會提早斷頁（看起來像每頁只有約 38 列）。
+ * Excel／畫面／列印共用；38 對齊 A4 列印實測可容納量（含小計）。
  */
-export const PAYROLL_ROWS_PER_PAGE = 45;
+export const PAYROLL_ROWS_PER_PAGE = 38;
 
 /** 空白列（補滿一頁用，不計入小計） */
 export function isBlankPayrollRow(teacherId: string): boolean {
