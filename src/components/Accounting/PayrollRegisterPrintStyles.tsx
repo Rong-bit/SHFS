@@ -120,20 +120,21 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     height: auto !important;
     max-height: none !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     overflow: visible !important;
     background: white !important;
     display: block !important;
   }
 
+  /* 對齊 Excel horizontalCentered：整頁內容區塊在 A4 上左右置中 */
   .payroll-register-print-page {
     position: relative !important;
-    width: 100% !important;
-    max-width: none !important;
+    width: 200mm !important;
+    max-width: 100% !important;
     min-height: 0 !important;
     height: auto !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
     border: none !important;
     overflow: visible !important;
@@ -228,16 +229,18 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
 
   .payroll-register-print-title {
     display: block !important;
+    width: 100% !important;
     font-size: 11pt;
     font-weight: 700;
     text-align: center !important;
-    margin: 0 0 1.5mm 0;
+    margin: 0 auto 1.5mm auto !important;
     writing-mode: horizontal-tb;
   }
 
   .payroll-register-print-signature {
     display: block !important;
-    margin-top: 2mm !important;
+    width: 100% !important;
+    margin: 2mm auto 0 auto !important;
     font-size: 8pt;
     text-align: center !important;
   }
