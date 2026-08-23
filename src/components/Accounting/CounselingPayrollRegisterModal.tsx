@@ -156,7 +156,11 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
           <>
             {pages.map((page, pageIdx) => (
               <React.Fragment key={page.pageIndex}>
-                <div className="payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0">
+                <div
+                  className={`payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0${
+                    pageIdx < pages.length - 1 ? ' payroll-register-print-page--break-after' : ''
+                  }`}
+                >
                   <h1 className="payroll-register-print-title text-center text-base font-bold tracking-wide mb-3">
                     {title}
                   </h1>
@@ -259,7 +263,9 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
                   {pageIdx === pages.length - 1 && <PayrollRegisterSignatureBlock />}
                 </div>
                 {pageIdx < pages.length - 1 && (
-                  <div className="payroll-register-page-break" aria-hidden />
+                  <div className="payroll-register-page-break print:hidden" aria-hidden>
+                    換頁（小計後）
+                  </div>
                 )}
               </React.Fragment>
             ))}

@@ -144,7 +144,11 @@ export const SubstitutePayrollRegisterModal: React.FC<SubstitutePayrollRegisterM
           <>
             {pages.map((page, pageIdx) => (
               <React.Fragment key={page.pageIndex}>
-                <div className="payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0 relative">
+                <div
+                  className={`payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0 relative${
+                    pageIdx < pages.length - 1 ? ' payroll-register-print-page--break-after' : ''
+                  }`}
+                >
                   <div className="payroll-register-print-watermark pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.06] print:hidden">
                     <span className="text-6xl font-black text-slate-500">第 {page.pageIndex} 頁</span>
                   </div>
@@ -229,7 +233,9 @@ export const SubstitutePayrollRegisterModal: React.FC<SubstitutePayrollRegisterM
                   )}
                 </div>
                 {pageIdx < pages.length - 1 && (
-                  <div className="payroll-register-page-break" aria-hidden />
+                  <div className="payroll-register-page-break print:hidden" aria-hidden>
+                    換頁（小計後）
+                  </div>
                 )}
               </React.Fragment>
             ))}

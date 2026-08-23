@@ -32,6 +32,23 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
 .payroll-register-overload-table col:nth-child(8) { width: 10%; }
 .payroll-register-overload-table col:nth-child(9) { width: 35%; }
 
+.payroll-register-page-break {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1.25rem;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+}
+.payroll-register-page-break::before,
+.payroll-register-page-break::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed #cbd5e1;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -123,28 +140,28 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: block !important;
   }
 
-  /* 非末頁：小計後換頁 */
-  .payroll-register-page-break {
-    display: block !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
+  /* 非末頁：整頁區塊結束後強制換頁（勿用 height:0 元素，瀏覽器會忽略） */
+  .payroll-register-print-page--break-after {
     break-after: page !important;
     page-break-after: always !important;
-    -webkit-column-break-after: always !important;
+  }
+
+  .payroll-register-page-break {
+    display: none !important;
   }
 
   .payroll-register-print-watermark {
     display: none !important;
   }
 
+  /* 列高需讓「45 資料列＋小計」落在一張 A4（約 287mm 可用高度）內，
+     否則瀏覽器會在約第 38 列自行斷頁，與 Excel／畫面分頁不一致 */
   .payroll-register-print-table {
     display: table !important;
     width: 100% !important;
     table-layout: fixed;
-    font-size: 9pt;
-    line-height: 1.35;
+    font-size: 8pt;
+    line-height: 1.15;
     border-collapse: collapse;
   }
 
@@ -159,40 +176,47 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     overflow-wrap: break-word;
     word-break: break-word;
     border-color: #334155 !important;
-    padding: 4px 6px !important;
+    padding: 1px 3px !important;
     text-align: center !important;
     vertical-align: middle !important;
   }
 
+  .payroll-register-print-table th {
+    padding: 2px 3px !important;
+    font-size: 8pt;
+    line-height: 1.15;
+  }
+
   .payroll-register-print-table tr.payroll-register-blank-row td {
-    height: 5.2mm;
+    height: 4.8mm;
+    max-height: 4.8mm;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
-    line-height: 5.2mm;
+    line-height: 4.8mm;
     white-space: nowrap;
-    font-size: 9pt;
+    font-size: 8pt;
   }
 
   .payroll-register-print-table .payroll-register-remarks-col {
     width: 35% !important;
     white-space: normal !important;
-    font-size: 8.5pt;
-    line-height: 1.3;
+    font-size: 7.5pt;
+    line-height: 1.15;
   }
 
   .payroll-register-print-title {
     display: block !important;
-    font-size: 12pt;
+    font-size: 11pt;
     font-weight: 700;
     text-align: center !important;
-    margin: 0 0 3mm 0;
+    margin: 0 0 1.5mm 0;
     writing-mode: horizontal-tb;
   }
 
   .payroll-register-print-signature {
     display: block !important;
-    margin-top: 6mm;
-    font-size: 9pt;
+    margin-top: 4mm;
+    font-size: 8pt;
     text-align: center !important;
   }
 

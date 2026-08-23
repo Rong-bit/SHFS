@@ -146,7 +146,11 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
           <>
             {pages.map((page, pageIdx) => (
               <React.Fragment key={page.pageIndex}>
-                <div className="payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0">
+                <div
+                  className={`payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0${
+                    pageIdx < pages.length - 1 ? ' payroll-register-print-page--break-after' : ''
+                  }`}
+                >
                   <h1 className="payroll-register-print-title text-center text-base font-bold tracking-wide mb-3">
                     {title}
                   </h1>
@@ -238,9 +242,11 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
                   </table>
                   {pageIdx === pages.length - 1 && <PayrollRegisterSignatureBlock />}
                 </div>
-                {/* 非末頁：小計後換頁；末頁小計＋合計＋簽核同頁 */}
+                {/* 非末頁：畫面顯示換頁分隔；列印靠 page--break-after */}
                 {pageIdx < pages.length - 1 && (
-                  <div className="payroll-register-page-break" aria-hidden />
+                  <div className="payroll-register-page-break print:hidden" aria-hidden>
+                    換頁（小計後）
+                  </div>
                 )}
               </React.Fragment>
             ))}
