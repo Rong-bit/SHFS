@@ -48,10 +48,10 @@ const TotalsCells: React.FC<{
     <td className="border border-slate-400 px-2 py-1.5 text-center font-mono">
       {rateLabel || ''}
     </td>
-    <td className="border border-slate-400 px-2 py-1.5 text-right font-mono">
+    <td className="border border-slate-400 px-2 py-1.5 text-center font-mono align-middle">
       {totals.amount.toLocaleString()}
     </td>
-    <td className="border border-slate-400 px-2 py-1.5 text-right text-[10px] text-slate-600">
+    <td className="border border-slate-400 px-2 py-1.5 text-center text-[10px] text-slate-600 align-middle">
       {pageLabel || ''}
     </td>
   </tr>
@@ -229,10 +229,10 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
                       <td className="border border-slate-300 px-2 py-1 text-center font-mono">
                         {blank ? '' : row.ratePerPeriod.toLocaleString()}
                       </td>
-                      <td className="border border-slate-300 px-2 py-1 text-right font-mono">
+                      <td className="border border-slate-300 px-2 py-1 text-center font-mono align-middle">
                         {blank ? '' : row.amount.toLocaleString()}
                       </td>
-                      <td className="border border-slate-300 px-2 py-1 text-[10px] leading-snug align-top payroll-register-remarks-col">
+                      <td className="border border-slate-300 px-2 py-1 text-[10px] leading-snug text-center align-middle payroll-register-remarks-col">
                         {blank ? '' : row.remarks}
                       </td>
                     </tr>
