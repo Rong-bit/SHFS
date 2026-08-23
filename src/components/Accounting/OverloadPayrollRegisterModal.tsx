@@ -11,6 +11,7 @@ import {
   buildOverloadPayrollRows,
   formatPayrollMonthRangeLabel,
   formatRocYear,
+  isBlankPayrollRow,
   paginateOverloadPayroll,
   type OverloadPayrollTotals,
 } from '../../utils/overloadPayrollRegister';
@@ -91,9 +92,9 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
 
   const handlePrint = () => window.print();
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (pages.length === 0) return;
-    exportOverloadPayrollExcel(
+    await exportOverloadPayrollExcel(
       title,
       monthRangeLabel,
       weekRound,
@@ -106,8 +107,8 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
   return (
     <ModalShell
       scroll="none"
-      panelClassName="bg-white rounded-xl shadow-2xl max-w-6xl w-full border border-slate-200 overflow-hidden my-2 max-h-[95vh] flex flex-col print:shadow-none print:rounded-none print:max-w-none print:w-full print:border-0 print:my-0"
-      backdropClassName="bg-slate-900/70 backdrop-blur-xs print:hidden"
+      panelClassName="bg-white rounded-xl shadow-2xl max-w-6xl w-full border border-slate-200 overflow-hidden my-2 max-h-[95vh] flex flex-col print:shadow-none print:rounded-none print:max-w-none print:w-full print:border-0 print:my-0 print:max-h-none print:overflow-visible print:h-auto"
+      backdropClassName="bg-slate-900/70 backdrop-blur-xs"
     >
       <div className="print:hidden bg-slate-800 text-white px-5 py-3.5 flex items-center justify-between shrink-0">
         <span className="font-semibold text-sm">兼課鐘點費印領清冊（每頁小計 · 末頁合計 · 可列印／匯出 Excel）</span>
@@ -151,21 +152,32 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
               </h1>
 
               <table className="payroll-register-print-table w-full border-collapse text-xs">
+                <colgroup>
+                  <col className="w-[9%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[37%]" />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-50">
-                    <th className="border border-slate-400 px-2 py-1.5 w-[72px]">薪資編號</th>
-                    <th className="border border-slate-400 px-2 py-1.5 w-[80px]">教師姓名</th>
-                    <th className="border border-slate-400 px-2 py-1.5 w-[56px]">每週兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 w-[64px]">
+                    <th className="border border-slate-400 px-2 py-1.5">薪資編號</th>
+                    <th className="border border-slate-400 px-2 py-1.5">教師姓名</th>
+                    <th className="border border-slate-400 px-2 py-1.5">每週兼課</th>
+                    <th className="border border-slate-400 px-2 py-1.5">
                       ({weekRound}週)
                       <br />
                       兼課小計
                     </th>
-                    <th className="border border-slate-400 px-2 py-1.5 w-[52px]">應加兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 w-[52px]">應減兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 w-[56px]">實得兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 w-[72px]">實發金額</th>
-                    <th className="border border-slate-400 px-2 py-1.5 min-w-[140px]">
+                    <th className="border border-slate-400 px-2 py-1.5">應加兼課</th>
+                    <th className="border border-slate-400 px-2 py-1.5">應減兼課</th>
+                    <th className="border border-slate-400 px-2 py-1.5">實得兼課</th>
+                    <th className="border border-slate-400 px-2 py-1.5">實發金額</th>
+                    <th className="border border-slate-400 px-2 py-1.5 payroll-register-remarks-col">
                       備註
                       {pageIdx === 0 && (
                         <div className="font-normal text-[10px] mt-0.5 leading-tight">{monthRangeLabel}</div>
@@ -174,37 +186,40 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
                   </tr>
                 </thead>
                 <tbody>
-                  {page.rows.map((row) => (
-                    <tr key={row.teacherId} className="hover:bg-slate-50/50">
+                  {page.rows.map((row, rowIdx) => {
+                    const blank = isBlankPayrollRow(row.teacherId);
+                    return (
+                    <tr key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`} className="hover:bg-slate-50/50">
                       <td className="border border-slate-300 px-2 py-1 font-mono text-center">
-                        {row.salaryCode || '—'}
+                        {blank ? '\u00a0' : row.salaryCode || '—'}
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center font-medium">
-                        {row.teacherName}
+                        {blank ? '' : row.teacherName}
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center">
-                        {row.weeklyConcurrent || ''}
+                        {blank ? '' : row.weeklyConcurrent || ''}
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center">
-                        {row.baseMonthlyConcurrent}
+                        {blank ? '' : row.baseMonthlyConcurrent || ''}
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center">
-                        {row.addConcurrent || ''}
+                        {blank ? '' : row.addConcurrent || ''}
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center">
-                        {row.subtractConcurrent || ''}
+                        {blank ? '' : row.subtractConcurrent || ''}
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-center font-semibold">
-                        {row.actualConcurrent}
+                        {blank ? '' : row.actualConcurrent || ''}
                       </td>
                       <td className="border border-slate-300 px-2 py-1 text-right font-mono">
-                        {row.amount.toLocaleString()}
+                        {blank ? '' : row.amount.toLocaleString()}
                       </td>
-                      <td className="border border-slate-300 px-2 py-1 text-[10px] leading-snug align-top">
-                        {row.remarks}
+                      <td className="border border-slate-300 px-2 py-1 text-[10px] leading-snug align-top payroll-register-remarks-col">
+                        {blank ? '' : row.remarks}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   <TotalsCells
                     totals={page.subtotal}
                     label="小計"

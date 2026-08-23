@@ -7,7 +7,41 @@ import {
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 
-export const PAYROLL_ROWS_PER_PAGE = 25;
+export const PAYROLL_ROWS_PER_PAGE = 35;
+
+/** 空白列（補滿一頁用，不計入小計） */
+export function isBlankPayrollRow(teacherId: string): boolean {
+  return teacherId.startsWith('__blank-');
+}
+
+export function createBlankOverloadRow(index: number): OverloadPayrollRow {
+  return {
+    teacherId: `__blank-${index}`,
+    salaryCode: '',
+    teacherName: '',
+    weeklyConcurrent: 0,
+    baseMonthlyConcurrent: 0,
+    addConcurrent: 0,
+    subtractConcurrent: 0,
+    actualConcurrent: 0,
+    amount: 0,
+    remarks: '',
+  };
+}
+
+export function padPayrollRowsToPage<T>(
+  rows: T[],
+  createBlank: (index: number) => T,
+  pageSize = PAYROLL_ROWS_PER_PAGE
+): T[] {
+  if (rows.length >= pageSize) return rows;
+  const out = [...rows];
+  let i = 0;
+  while (out.length < pageSize) {
+    out.push(createBlank(i++));
+  }
+  return out;
+}
 
 export type OverloadPayrollRow = {
   teacherId: string;
@@ -204,7 +238,7 @@ export function paginateOverloadPayroll(rows: OverloadPayrollRow[]): {
     const slice = rows.slice(i, i + PAYROLL_ROWS_PER_PAGE);
     pages.push({
       pageIndex: pages.length + 1,
-      rows: slice,
+      rows: padPayrollRowsToPage(slice, createBlankOverloadRow),
       subtotal: sumTotals(slice),
     });
   }

@@ -16,10 +16,12 @@ import { resolveTeacherSalaryCode } from './salaryCodes';
 import {
   formatPayrollMonthRangeLabel,
   formatRocYear,
+  isBlankPayrollRow,
+  padPayrollRowsToPage,
   PAYROLL_ROWS_PER_PAGE,
 } from './overloadPayrollRegister';
 
-export { formatPayrollMonthRangeLabel, formatRocYear, PAYROLL_ROWS_PER_PAGE };
+export { formatPayrollMonthRangeLabel, formatRocYear, PAYROLL_ROWS_PER_PAGE, isBlankPayrollRow };
 
 export type CounselingPayrollRow = {
   teacherId: string;
@@ -278,7 +280,19 @@ export function paginateCounselingPayroll(rows: CounselingPayrollRow[]): {
     const slice = rows.slice(i, i + PAYROLL_ROWS_PER_PAGE);
     pages.push({
       pageIndex: pages.length + 1,
-      rows: slice,
+      rows: padPayrollRowsToPage(slice, (idx) => ({
+        teacherId: `__blank-${idx}`,
+        salaryCode: '',
+        teacherName: '',
+        weeklyHours: 0,
+        baseMonthlyHours: 0,
+        addPeriods: 0,
+        subtractPeriods: 0,
+        actualPeriods: 0,
+        ratePerPeriod: 0,
+        amount: 0,
+        remarks: '',
+      })),
       subtotal: sumTotals(slice),
       subtotalRateLabel: subtotalRateLabel(slice),
     });

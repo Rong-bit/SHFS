@@ -1,32 +1,164 @@
-import * as XLSX from 'xlsx';
+import type ExcelJS from 'exceljs';
 import type { CounselingPayrollPage } from './counselingPayrollRegister';
 import type { OverloadPayrollPage } from './overloadPayrollRegister';
+import { isBlankPayrollRow } from './overloadPayrollRegister';
 import type { SubstitutePayrollPage } from './substitutePayrollRegister';
 
-type Aoa = (string | number)[][];
+type CellValue = string | number;
 
-const blank = (): Aoa => [['']];
-
-const pushSignatureBlock = (rows: Aoa) => {
-  rows.push(['']);
-  rows.push(['']);
-  rows.push(['教學組長', '', '', '出納組', '', '', '會計室', '', '', '校長']);
-  rows.push(['']);
-  rows.push(['']);
-  rows.push(['教務主任']);
-};
-
-function writeWorkbook(fileName: string, sheetName: string, aoa: Aoa) {
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = aoa[0]?.map((_, i) => ({
-    wch: i === aoa[0].length - 1 ? 48 : 12,
-  }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
-  XLSX.writeFile(wb, fileName);
+async function loadExcelJS(): Promise<typeof ExcelJS> {
+  const mod = await import('exceljs');
+  return (mod as { default?: typeof ExcelJS }).default ?? (mod as typeof ExcelJS);
 }
 
-export function exportOverloadPayrollExcel(
+const thinBorder: Partial<ExcelJS.Borders> = {
+  top: { style: 'thin', color: { argb: 'FF334155' } },
+  left: { style: 'thin', color: { argb: 'FF334155' } },
+  bottom: { style: 'thin', color: { argb: 'FF334155' } },
+  right: { style: 'thin', color: { argb: 'FF334155' } },
+};
+
+const centerAlign: Partial<ExcelJS.Alignment> = {
+  horizontal: 'center',
+  vertical: 'middle',
+  wrapText: true,
+};
+
+function styleTitleCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 14, name: '微軟正黑體' };
+  cell.alignment = { ...centerAlign };
+}
+
+function styleHeaderCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 11, name: '微軟正黑體' };
+  cell.alignment = { ...centerAlign };
+  cell.border = thinBorder;
+  cell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFF1F5F9' },
+  };
+}
+
+function styleDataCell(cell: ExcelJS.Cell, opts?: { bold?: boolean; align?: 'left' | 'center' | 'right' }) {
+  cell.font = { bold: Boolean(opts?.bold), size: 11, name: '微軟正黑體' };
+  cell.alignment = {
+    horizontal: opts?.align || 'center',
+    vertical: 'middle',
+    wrapText: true,
+  };
+  cell.border = thinBorder;
+}
+
+function styleTotalCell(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, size: 11, name: '微軟正黑體' };
+  cell.alignment = { ...centerAlign };
+  cell.border = thinBorder;
+  cell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE2E8F0' },
+  };
+}
+
+async function downloadWorkbook(workbook: ExcelJS.Workbook, fileName: string) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function setupSheet(ws: ExcelJS.Worksheet, colCount: number, colWidths: number[]) {
+  ws.pageSetup = {
+    paperSize: 9, // A4
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    margins: {
+      left: 0.3,
+      right: 0.3,
+      top: 0.4,
+      bottom: 0.4,
+      header: 0.2,
+      footer: 0.2,
+    },
+  };
+  ws.views = [{ state: 'normal', showGridLines: false }];
+  colWidths.forEach((w, i) => {
+    ws.getColumn(i + 1).width = w;
+  });
+  for (let c = 1; c <= colCount; c++) {
+    if (!ws.getColumn(c).width) ws.getColumn(c).width = 12;
+  }
+}
+
+function addTitleRow(ws: ExcelJS.Worksheet, title: string, colCount: number): number {
+  const row = ws.addRow([title]);
+  const r = row.number;
+  ws.mergeCells(r, 1, r, colCount);
+  styleTitleCell(ws.getCell(r, 1));
+  row.height = 28;
+  return r;
+}
+
+function addHeaderRow(ws: ExcelJS.Worksheet, headers: string[]): number {
+  const row = ws.addRow(headers);
+  row.eachCell((cell) => styleHeaderCell(cell));
+  row.height = 32;
+  return row.number;
+}
+
+function addDataRow(
+  ws: ExcelJS.Worksheet,
+  values: CellValue[],
+  opts?: { remarkAlign?: 'left' | 'center' }
+) {
+  const row = ws.addRow(values);
+  row.eachCell((cell, colNumber) => {
+    const isLast = colNumber === values.length;
+    const isAmount = typeof values[colNumber - 1] === 'number' && colNumber >= values.length - 2;
+    styleDataCell(cell, {
+      align: isLast ? opts?.remarkAlign || 'left' : isAmount ? 'right' : 'center',
+    });
+  });
+  return row.number;
+}
+
+function addTotalRow(ws: ExcelJS.Worksheet, values: CellValue[], mergeLabelCols = 2) {
+  const row = ws.addRow(values);
+  const r = row.number;
+  if (mergeLabelCols > 1) {
+    ws.mergeCells(r, 1, r, mergeLabelCols);
+  }
+  for (let c = 1; c <= values.length; c++) {
+    styleTotalCell(ws.getCell(r, c));
+  }
+  return r;
+}
+
+function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
+  ws.addRow([]);
+  ws.addRow([]);
+  const sig = ws.addRow(['教學組長', '', '', '出納組', '', '', '會計室', '', '', '校長'].slice(0, colCount));
+  sig.eachCell((cell) => {
+    cell.font = { size: 11, name: '微軟正黑體' };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+  ws.addRow([]);
+  ws.addRow([]);
+  const dean = ws.addRow(['教務主任']);
+  dean.getCell(1).font = { size: 11, name: '微軟正黑體' };
+  dean.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+}
+
+export async function exportOverloadPayrollExcel(
   title: string,
   monthRangeLabel: string,
   weekRound: number,
@@ -34,6 +166,7 @@ export function exportOverloadPayrollExcel(
   grandTotal: OverloadPayrollPage['subtotal'],
   fileName: string
 ) {
+  const ExcelJS = await loadExcelJS();
   const headers = [
     '薪資編號',
     '教師姓名',
@@ -45,15 +178,25 @@ export function exportOverloadPayrollExcel(
     '實發金額',
     `備註 ${monthRangeLabel}`,
   ];
-  const rows: Aoa = [];
-  const totalPages = pages.length;
+  const colCount = headers.length;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('兼課印領清冊');
+  setupSheet(ws, colCount, [12, 12, 10, 12, 10, 10, 10, 12, 55]);
 
+  const totalPages = pages.length;
   pages.forEach((page, idx) => {
-    if (idx > 0) rows.push(...blank(), ...blank());
-    rows.push([title]);
-    rows.push(headers);
+    if (idx > 0) {
+      ws.addRow([]);
+      ws.addRow([]);
+    }
+    addTitleRow(ws, title, colCount);
+    addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
-      rows.push([
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''));
+        return;
+      }
+      addDataRow(ws, [
         r.salaryCode || '—',
         r.teacherName,
         r.weeklyConcurrent || '',
@@ -66,7 +209,7 @@ export function exportOverloadPayrollExcel(
       ]);
     });
     const st = page.subtotal;
-    rows.push([
+    addTotalRow(ws, [
       '小計',
       '',
       st.weeklyConcurrent,
@@ -78,7 +221,7 @@ export function exportOverloadPayrollExcel(
       `${page.pageIndex} of ${totalPages}`,
     ]);
     if (idx === pages.length - 1) {
-      rows.push([
+      addTotalRow(ws, [
         '合計',
         '',
         grandTotal.weeklyConcurrent,
@@ -89,14 +232,14 @@ export function exportOverloadPayrollExcel(
         grandTotal.amount,
         '',
       ]);
-      pushSignatureBlock(rows);
+      addSignatureBlock(ws, colCount);
     }
   });
 
-  writeWorkbook(fileName, '兼課印領清冊', rows);
+  await downloadWorkbook(wb, fileName);
 }
 
-export function exportSubstitutePayrollExcel(
+export async function exportSubstitutePayrollExcel(
   title: string,
   monthRangeLabel: string,
   pages: SubstitutePayrollPage[],
@@ -104,16 +247,27 @@ export function exportSubstitutePayrollExcel(
   grandTotalRateLabel: string,
   fileName: string
 ) {
+  const ExcelJS = await loadExcelJS();
   const headers = ['薪資編號', '教師姓名', '代課節數', '每節金額', '實發金額', `備註 ${monthRangeLabel}`];
-  const rows: Aoa = [];
-  const totalPages = pages.length;
+  const colCount = headers.length;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('代課印領清冊');
+  setupSheet(ws, colCount, [12, 12, 10, 10, 12, 58]);
 
+  const totalPages = pages.length;
   pages.forEach((page, idx) => {
-    if (idx > 0) rows.push(...blank(), ...blank());
-    rows.push([title]);
-    rows.push(headers);
+    if (idx > 0) {
+      ws.addRow([]);
+      ws.addRow([]);
+    }
+    addTitleRow(ws, title, colCount);
+    addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
-      rows.push([
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''));
+        return;
+      }
+      addDataRow(ws, [
         r.salaryCode || '—',
         r.teacherName,
         r.substitutePeriods,
@@ -122,7 +276,7 @@ export function exportSubstitutePayrollExcel(
         r.remarks,
       ]);
     });
-    rows.push([
+    addTotalRow(ws, [
       '小計',
       '',
       page.subtotal.substitutePeriods,
@@ -131,15 +285,22 @@ export function exportSubstitutePayrollExcel(
       `${page.pageIndex} of ${totalPages}`,
     ]);
     if (idx === pages.length - 1) {
-      rows.push(['合計', '', grandTotal.substitutePeriods, grandTotalRateLabel || '', grandTotal.amount, '']);
-      pushSignatureBlock(rows);
+      addTotalRow(ws, [
+        '合計',
+        '',
+        grandTotal.substitutePeriods,
+        grandTotalRateLabel || '',
+        grandTotal.amount,
+        '',
+      ]);
+      addSignatureBlock(ws, colCount);
     }
   });
 
-  writeWorkbook(fileName, '代課印領清冊', rows);
+  await downloadWorkbook(wb, fileName);
 }
 
-export function exportCounselingPayrollExcel(
+export async function exportCounselingPayrollExcel(
   title: string,
   monthRangeLabel: string,
   weekRound: number,
@@ -148,6 +309,7 @@ export function exportCounselingPayrollExcel(
   grandTotalRateLabel: string,
   fileName: string
 ) {
+  const ExcelJS = await loadExcelJS();
   const headers = [
     '薪資編號',
     '教師姓名',
@@ -160,15 +322,25 @@ export function exportCounselingPayrollExcel(
     '實發金額',
     `備註 ${monthRangeLabel}`,
   ];
-  const rows: Aoa = [];
-  const totalPages = pages.length;
+  const colCount = headers.length;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('課輔印領清冊');
+  setupSheet(ws, colCount, [12, 12, 12, 12, 10, 10, 10, 10, 12, 52]);
 
+  const totalPages = pages.length;
   pages.forEach((page, idx) => {
-    if (idx > 0) rows.push(...blank(), ...blank());
-    rows.push([title]);
-    rows.push(headers);
+    if (idx > 0) {
+      ws.addRow([]);
+      ws.addRow([]);
+    }
+    addTitleRow(ws, title, colCount);
+    addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
-      rows.push([
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''));
+        return;
+      }
+      addDataRow(ws, [
         r.salaryCode || '—',
         r.teacherName,
         r.weeklyHours || '',
@@ -181,7 +353,7 @@ export function exportCounselingPayrollExcel(
         r.remarks,
       ]);
     });
-    rows.push([
+    addTotalRow(ws, [
       '小計',
       '',
       page.subtotal.weeklyHours,
@@ -194,7 +366,7 @@ export function exportCounselingPayrollExcel(
       `${page.pageIndex} of ${totalPages}`,
     ]);
     if (idx === pages.length - 1) {
-      rows.push([
+      addTotalRow(ws, [
         '合計',
         '',
         grandTotal.weeklyHours,
@@ -206,9 +378,9 @@ export function exportCounselingPayrollExcel(
         grandTotal.amount,
         '',
       ]);
-      pushSignatureBlock(rows);
+      addSignatureBlock(ws, colCount);
     }
   });
 
-  writeWorkbook(fileName, '課輔印領清冊', rows);
+  await downloadWorkbook(wb, fileName);
 }
