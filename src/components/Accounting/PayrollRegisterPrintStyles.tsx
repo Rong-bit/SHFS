@@ -8,6 +8,15 @@ import React from 'react';
  * 改以 display:none 把非清冊節點移出列印流。
  */
 export const PAYROLL_REGISTER_PRINT_CSS = `
+/* 畫面預覽：空白補列維持短列高，資料列不壓縮 */
+.payroll-register-print-table tr.payroll-register-blank-row td {
+  height: 5.2mm;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 5.2mm;
+  white-space: nowrap;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -127,8 +136,8 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: table !important;
     width: 100% !important;
     table-layout: fixed;
-    font-size: 8.5pt;
-    line-height: 1.25;
+    font-size: 9pt;
+    line-height: 1.35;
     border-collapse: collapse;
   }
 
@@ -150,24 +159,26 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     overflow-wrap: break-word;
     word-break: break-word;
     border-color: #334155 !important;
-    padding: 1.5px 3px !important;
+    padding: 4px 6px !important;
     vertical-align: middle;
   }
 
+  /* 僅空白補列採短列高，資料列維持一般列高 */
   .payroll-register-print-table tr.payroll-register-blank-row td {
     height: 5.2mm;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
     line-height: 5.2mm;
     white-space: nowrap;
+    font-size: 9pt;
   }
 
   .payroll-register-print-table .payroll-register-remarks-col {
     width: 32% !important;
     text-align: left !important;
     white-space: normal !important;
-    font-size: 7.5pt;
-    line-height: 1.2;
+    font-size: 8.5pt;
+    line-height: 1.3;
   }
 
   .payroll-register-print-title {
