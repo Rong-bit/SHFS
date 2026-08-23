@@ -154,13 +154,13 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: none !important;
   }
 
-  /* 每頁 38 資料列＋小計；列高預留備註換行，避免瀏覽器提早斷頁 */
+  /* 每頁 42 資料列＋小計；略壓空白列高以善用 A4 剩餘空間 */
   .payroll-register-print-table {
     display: table !important;
     width: 100% !important;
     table-layout: fixed;
     font-size: 8.5pt;
-    line-height: 1.2;
+    line-height: 1.15;
     border-collapse: collapse;
   }
 
@@ -187,11 +187,11 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   }
 
   .payroll-register-print-table tr.payroll-register-blank-row td {
-    height: 5.2mm;
-    max-height: 5.2mm;
+    height: 5mm;
+    max-height: 5mm;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
-    line-height: 5.2mm;
+    line-height: 5mm;
     white-space: nowrap;
     font-size: 8.5pt;
   }
@@ -214,7 +214,7 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
 
   .payroll-register-print-signature {
     display: block !important;
-    margin-top: 5mm;
+    margin-top: 4mm;
     font-size: 9pt;
     text-align: center !important;
   }
