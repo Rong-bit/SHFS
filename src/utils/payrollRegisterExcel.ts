@@ -40,7 +40,7 @@ function styleHeaderCell(cell: ExcelJS.Cell) {
   };
 }
 
-function styleDataCell(cell: ExcelJS.Cell, opts?: { bold?: boolean; align?: 'left' | 'center' | 'right' }) {
+function styleDataCell(cell: ExcelJS.Cell, opts?: { bold?: boolean; align?: 'left' | 'center' | 'right'; numFmt?: string }) {
   cell.font = { bold: Boolean(opts?.bold), size: 11, name: '微軟正黑體' };
   cell.alignment = {
     horizontal: opts?.align || 'center',
@@ -48,6 +48,7 @@ function styleDataCell(cell: ExcelJS.Cell, opts?: { bold?: boolean; align?: 'lef
     wrapText: true,
   };
   cell.border = thinBorder;
+  if (opts?.numFmt) cell.numFmt = opts.numFmt;
 }
 
 function styleTotalCell(cell: ExcelJS.Cell) {
@@ -81,6 +82,8 @@ function setupSheet(ws: ExcelJS.Worksheet, colCount: number, colWidths: number[]
     fitToPage: true,
     fitToWidth: 1,
     fitToHeight: 0,
+    horizontalCentered: true,
+    showGridLines: false,
     margins: {
       left: 0.2,
       right: 0.2,
@@ -90,7 +93,6 @@ function setupSheet(ws: ExcelJS.Worksheet, colCount: number, colWidths: number[]
       footer: 0.1,
     },
   };
-  // 開啟分頁預覽，方便看到小計後的換頁線
   ws.views = [{ state: 'normal', showGridLines: false, style: 'pageBreakPreview' }];
   colWidths.forEach((w, i) => {
     ws.getColumn(i + 1).width = w;
@@ -124,23 +126,37 @@ function addHeaderRow(ws: ExcelJS.Worksheet, headers: string[]): number {
 function addDataRow(
   ws: ExcelJS.Worksheet,
   values: CellValue[],
-  _opts?: { remarkAlign?: 'left' | 'center' }
+  opts?: { blank?: boolean; amountCol?: number }
 ) {
   const row = ws.addRow(values);
-  row.eachCell((cell) => {
-    styleDataCell(cell, { align: 'center' });
+  row.height = opts?.blank ? 12 : 14;
+  row.eachCell((cell, colNumber) => {
+    const isAmount = opts?.amountCol === colNumber && typeof cell.value === 'number';
+    styleDataCell(cell, {
+      align: 'center',
+      numFmt: isAmount ? '#,##0' : undefined,
+    });
+    if (isAmount) {
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
+    }
   });
   return row.number;
 }
 
-function addTotalRow(ws: ExcelJS.Worksheet, values: CellValue[], mergeLabelCols = 2) {
+function addTotalRow(ws: ExcelJS.Worksheet, values: CellValue[], mergeLabelCols = 2, amountCol?: number) {
   const row = ws.addRow(values);
   const r = row.number;
+  row.height = 16;
   if (mergeLabelCols > 1) {
     ws.mergeCells(r, 1, r, mergeLabelCols);
   }
   for (let c = 1; c <= values.length; c++) {
-    styleTotalCell(ws.getCell(r, c));
+    const cell = ws.getCell(r, c);
+    styleTotalCell(cell);
+    if (amountCol === c && typeof cell.value === 'number') {
+      cell.numFmt = '#,##0';
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
+    }
   }
   return r;
 }
@@ -191,45 +207,59 @@ export async function exportOverloadPayrollExcel(
     addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
       if (isBlankPayrollRow(r.teacherId)) {
-        addDataRow(ws, Array(colCount).fill(''));
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
         return;
       }
-      addDataRow(ws, [
-        r.salaryCode || '—',
-        r.teacherName,
-        r.weeklyConcurrent || '',
-        r.baseMonthlyConcurrent,
-        r.addConcurrent || '',
-        r.subtractConcurrent || '',
-        r.actualConcurrent,
-        r.amount,
-        r.remarks,
-      ]);
+      addDataRow(
+        ws,
+        [
+          r.salaryCode || '—',
+          r.teacherName,
+          r.weeklyConcurrent || '',
+          r.baseMonthlyConcurrent,
+          r.addConcurrent || '',
+          r.subtractConcurrent || '',
+          r.actualConcurrent,
+          r.amount,
+          r.remarks,
+        ],
+        { amountCol: 8 }
+      );
     });
     const st = page.subtotal;
-    const subtotalRow = addTotalRow(ws, [
-      '小計',
-      '',
-      st.weeklyConcurrent,
-      st.baseMonthlyConcurrent,
-      st.addConcurrent || '',
-      st.subtractConcurrent || '',
-      st.actualConcurrent,
-      st.amount,
-      `${page.pageIndex} of ${totalPages}`,
-    ]);
+    const subtotalRow = addTotalRow(
+      ws,
+      [
+        '小計',
+        '',
+        st.weeklyConcurrent,
+        st.baseMonthlyConcurrent,
+        st.addConcurrent || '',
+        st.subtractConcurrent || '',
+        st.actualConcurrent,
+        st.amount,
+        `${page.pageIndex} of ${totalPages}`,
+      ],
+      2,
+      8
+    );
     if (idx === pages.length - 1) {
-      addTotalRow(ws, [
-        '合計',
-        '',
-        grandTotal.weeklyConcurrent,
-        grandTotal.baseMonthlyConcurrent,
-        grandTotal.addConcurrent || '',
-        grandTotal.subtractConcurrent || '',
-        grandTotal.actualConcurrent,
-        grandTotal.amount,
-        '',
-      ]);
+      addTotalRow(
+        ws,
+        [
+          '合計',
+          '',
+          grandTotal.weeklyConcurrent,
+          grandTotal.baseMonthlyConcurrent,
+          grandTotal.addConcurrent || '',
+          grandTotal.subtractConcurrent || '',
+          grandTotal.actualConcurrent,
+          grandTotal.amount,
+          '',
+        ],
+        2,
+        8
+      );
       addSignatureBlock(ws, colCount);
     } else {
       addPageBreakAfterRow(ws, subtotalRow);
@@ -260,35 +290,35 @@ export async function exportSubstitutePayrollExcel(
     addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
       if (isBlankPayrollRow(r.teacherId)) {
-        addDataRow(ws, Array(colCount).fill(''));
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
         return;
       }
-      addDataRow(ws, [
-        r.salaryCode || '—',
-        r.teacherName,
-        r.substitutePeriods,
-        r.ratePerPeriod,
-        r.amount,
-        r.remarks,
-      ]);
+      addDataRow(
+        ws,
+        [r.salaryCode || '—', r.teacherName, r.substitutePeriods, r.ratePerPeriod, r.amount, r.remarks],
+        { amountCol: 5 }
+      );
     });
-    const subtotalRow = addTotalRow(ws, [
-      '小計',
-      '',
-      page.subtotal.substitutePeriods,
-      page.subtotalRateLabel || '',
-      page.subtotal.amount,
-      `${page.pageIndex} of ${totalPages}`,
-    ]);
+    const subtotalRow = addTotalRow(
+      ws,
+      [
+        '小計',
+        '',
+        page.subtotal.substitutePeriods,
+        page.subtotalRateLabel || '',
+        page.subtotal.amount,
+        `${page.pageIndex} of ${totalPages}`,
+      ],
+      2,
+      5
+    );
     if (idx === pages.length - 1) {
-      addTotalRow(ws, [
-        '合計',
-        '',
-        grandTotal.substitutePeriods,
-        grandTotalRateLabel || '',
-        grandTotal.amount,
-        '',
-      ]);
+      addTotalRow(
+        ws,
+        ['合計', '', grandTotal.substitutePeriods, grandTotalRateLabel || '', grandTotal.amount, ''],
+        2,
+        5
+      );
       addSignatureBlock(ws, colCount);
     } else {
       addPageBreakAfterRow(ws, subtotalRow);
@@ -331,47 +361,61 @@ export async function exportCounselingPayrollExcel(
     addHeaderRow(ws, headers);
     page.rows.forEach((r) => {
       if (isBlankPayrollRow(r.teacherId)) {
-        addDataRow(ws, Array(colCount).fill(''));
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
         return;
       }
-      addDataRow(ws, [
-        r.salaryCode || '—',
-        r.teacherName,
-        r.weeklyHours || '',
-        r.baseMonthlyHours,
-        r.addPeriods || '',
-        r.subtractPeriods || '',
-        r.actualPeriods,
-        r.ratePerPeriod,
-        r.amount,
-        r.remarks,
-      ]);
+      addDataRow(
+        ws,
+        [
+          r.salaryCode || '—',
+          r.teacherName,
+          r.weeklyHours || '',
+          r.baseMonthlyHours,
+          r.addPeriods || '',
+          r.subtractPeriods || '',
+          r.actualPeriods,
+          r.ratePerPeriod,
+          r.amount,
+          r.remarks,
+        ],
+        { amountCol: 9 }
+      );
     });
-    const subtotalRow = addTotalRow(ws, [
-      '小計',
-      '',
-      page.subtotal.weeklyHours,
-      page.subtotal.baseMonthlyHours,
-      page.subtotal.addPeriods || '',
-      page.subtotal.subtractPeriods || '',
-      page.subtotal.actualPeriods,
-      page.subtotalRateLabel || '',
-      page.subtotal.amount,
-      `${page.pageIndex} of ${totalPages}`,
-    ]);
+    const subtotalRow = addTotalRow(
+      ws,
+      [
+        '小計',
+        '',
+        page.subtotal.weeklyHours,
+        page.subtotal.baseMonthlyHours,
+        page.subtotal.addPeriods || '',
+        page.subtotal.subtractPeriods || '',
+        page.subtotal.actualPeriods,
+        page.subtotalRateLabel || '',
+        page.subtotal.amount,
+        `${page.pageIndex} of ${totalPages}`,
+      ],
+      2,
+      9
+    );
     if (idx === pages.length - 1) {
-      addTotalRow(ws, [
-        '合計',
-        '',
-        grandTotal.weeklyHours,
-        grandTotal.baseMonthlyHours,
-        grandTotal.addPeriods || '',
-        grandTotal.subtractPeriods || '',
-        grandTotal.actualPeriods,
-        grandTotalRateLabel || '',
-        grandTotal.amount,
-        '',
-      ]);
+      addTotalRow(
+        ws,
+        [
+          '合計',
+          '',
+          grandTotal.weeklyHours,
+          grandTotal.baseMonthlyHours,
+          grandTotal.addPeriods || '',
+          grandTotal.subtractPeriods || '',
+          grandTotal.actualPeriods,
+          grandTotalRateLabel || '',
+          grandTotal.amount,
+          '',
+        ],
+        2,
+        9
+      );
       addSignatureBlock(ws, colCount);
     } else {
       addPageBreakAfterRow(ws, subtotalRow);

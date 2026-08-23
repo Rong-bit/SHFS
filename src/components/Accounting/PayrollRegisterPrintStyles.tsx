@@ -154,13 +154,13 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: none !important;
   }
 
-  /* 每頁 42 資料列＋小計；末頁空白補列最多 39（預留合計＋簽核） */
+  /* 列高對齊 Excel（資料列 14pt≈4.9mm、空白列 12pt≈4.2mm） */
   .payroll-register-print-table {
     display: table !important;
     width: 100% !important;
     table-layout: fixed;
-    font-size: 8.5pt;
-    line-height: 1.15;
+    font-size: 8pt;
+    line-height: 1.1;
     border-collapse: collapse;
   }
 
@@ -175,55 +175,83 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     overflow-wrap: break-word;
     word-break: break-word;
     border-color: #334155 !important;
-    padding: 2px 4px !important;
+    padding: 0 2px !important;
     text-align: center !important;
     vertical-align: middle !important;
   }
 
   .payroll-register-print-table th {
-    padding: 3px 4px !important;
-    font-size: 8.5pt;
-    line-height: 1.2;
+    height: 8mm;
+    max-height: 8mm;
+    padding: 1px 2px !important;
+    font-size: 8pt;
+    line-height: 1.1;
+  }
+
+  .payroll-register-print-table tbody tr:not(.payroll-register-blank-row):not(.font-bold) td {
+    height: 4.9mm;
+    max-height: 4.9mm;
+    font-size: 8pt;
+    line-height: 1.1;
   }
 
   .payroll-register-print-table tr.payroll-register-blank-row td {
-    height: 5mm;
-    max-height: 5mm;
+    height: 4.2mm;
+    max-height: 4.2mm;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
-    line-height: 5mm;
+    line-height: 4.2mm;
     white-space: nowrap;
-    font-size: 8.5pt;
+    font-size: 8pt;
+  }
+
+  .payroll-register-print-table tbody tr.font-bold td {
+    height: 5.6mm;
+    max-height: 5.6mm;
+    padding: 1px 2px !important;
+    font-size: 8pt;
+    line-height: 1.1;
+  }
+
+  .payroll-register-print-table .font-mono {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
   }
 
   .payroll-register-print-table .payroll-register-remarks-col {
     width: 35% !important;
     white-space: normal !important;
-    font-size: 8pt;
-    line-height: 1.2;
+    font-size: 7.5pt;
+    line-height: 1.1;
+    word-break: break-all;
   }
 
   .payroll-register-print-title {
     display: block !important;
-    font-size: 12pt;
+    font-size: 11pt;
     font-weight: 700;
     text-align: center !important;
-    margin: 0 0 2mm 0;
+    margin: 0 0 1.5mm 0;
     writing-mode: horizontal-tb;
   }
 
   .payroll-register-print-signature {
     display: block !important;
     margin-top: 2mm !important;
-    font-size: 8.5pt;
+    font-size: 8pt;
     text-align: center !important;
   }
 
-  /* 末頁：合計列與簽核盡量同頁 */
-  .payroll-register-print-page--last .payroll-register-print-table tr:last-child,
+  /* 末頁：小計／合計／簽核同頁 */
+  .payroll-register-print-page--last .payroll-register-print-table tbody tr:nth-last-child(-n+2),
   .payroll-register-print-page--last .payroll-register-print-footer {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+  }
+
+  .payroll-register-print-page--last .payroll-register-print-footer {
+    break-before: avoid !important;
+    page-break-before: avoid !important;
   }
 
   .print\\:hidden {

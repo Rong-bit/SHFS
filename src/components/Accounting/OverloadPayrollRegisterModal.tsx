@@ -32,7 +32,7 @@ const TotalsCells: React.FC<{ totals: OverloadPayrollTotals; label: string; page
   label,
   pageLabel,
 }) => (
-  <tr className="font-bold bg-slate-100 border-t-2 border-slate-400">
+  <tr className="font-bold bg-slate-100 border-t-2 border-slate-400 payroll-register-total-row">
     <td className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER} colSpan={2}>
       {label}
     </td>
