@@ -16,7 +16,7 @@ import {
   type OverloadPayrollTotals,
 } from '../../utils/overloadPayrollRegister';
 import { exportOverloadPayrollExcel } from '../../utils/payrollRegisterExcel';
-import { PayrollRegisterPrintStyles } from './PayrollRegisterPrintStyles';
+import { PayrollRegisterPrintStyles, CELL_CENTER } from './PayrollRegisterPrintStyles';
 import { PayrollRegisterSignatureBlock } from './PayrollRegisterSignatureBlock';
 
 import type { MonthlyTeacherSettlement } from '../../types';
@@ -33,18 +33,18 @@ const TotalsCells: React.FC<{ totals: OverloadPayrollTotals; label: string; page
   pageLabel,
 }) => (
   <tr className="font-bold bg-slate-100 border-t-2 border-slate-400">
-    <td className="border border-slate-400 px-2 py-1.5 text-center" colSpan={2}>
+    <td className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER} colSpan={2}>
       {label}
     </td>
-    <td className="border border-slate-400 px-2 py-1.5 text-center">{totals.weeklyConcurrent}</td>
-    <td className="border border-slate-400 px-2 py-1.5 text-center">{totals.baseMonthlyConcurrent}</td>
-    <td className="border border-slate-400 px-2 py-1.5 text-center">{totals.addConcurrent || ''}</td>
-    <td className="border border-slate-400 px-2 py-1.5 text-center">{totals.subtractConcurrent || ''}</td>
-    <td className="border border-slate-400 px-2 py-1.5 text-center">{totals.actualConcurrent}</td>
-    <td className="border border-slate-400 px-2 py-1.5 text-center font-mono">
+    <td className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>{totals.weeklyConcurrent}</td>
+    <td className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>{totals.baseMonthlyConcurrent}</td>
+    <td className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>{totals.addConcurrent || ''}</td>
+    <td className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>{totals.subtractConcurrent || ''}</td>
+    <td className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>{totals.actualConcurrent}</td>
+    <td className="border border-slate-400 px-2 py-1.5 font-mono" style={CELL_CENTER}>
       {totals.amount.toLocaleString()}
     </td>
-    <td className="border border-slate-400 px-2 py-1.5 text-center text-[10px] text-slate-600">
+    <td className="border border-slate-400 px-2 py-1.5 text-[10px] text-slate-600" style={CELL_CENTER}>
       {pageLabel || ''}
     </td>
   </tr>
@@ -137,110 +137,116 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
       </div>
 
       <div className="payroll-register-print-root overflow-y-auto flex-1 p-4 print:p-0 print:overflow-visible bg-slate-100 print:bg-white">
+        <PayrollRegisterPrintStyles />
         {pages.length === 0 ? (
           <div className="bg-white rounded-xl p-8 text-center text-slate-500 text-sm">
             本月無兼課鐘點費資料。請確認課表已標示兼課，或結算月份是否正確。
           </div>
         ) : (
-          pages.map((page, pageIdx) => (
-            <div
-              key={page.pageIndex}
-              className="payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0"
-            >
-              <h1 className="payroll-register-print-title text-center text-base font-bold tracking-wide mb-3">
-                {title}
-              </h1>
+          <>
+            {pages.map((page, pageIdx) => (
+              <React.Fragment key={page.pageIndex}>
+                <div className="payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0">
+                  <h1 className="payroll-register-print-title text-center text-base font-bold tracking-wide mb-3">
+                    {title}
+                  </h1>
 
-              <table className="payroll-register-print-table payroll-register-overload-table w-full border-collapse text-xs">
-                <colgroup>
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '6.5%' }} />
-                  <col style={{ width: '8.6%' }} />
-                  <col style={{ width: '6.5%' }} />
-                  <col style={{ width: '6.5%' }} />
-                  <col style={{ width: '6.5%' }} />
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '35%' }} />
-                </colgroup>
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">薪資編號</th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">教師姓名</th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">每週兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">
-                      ({weekRound}週)
-                      <br />
-                      兼課小計
-                    </th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">應加兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">應減兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">實得兼課</th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle">實發金額</th>
-                    <th className="border border-slate-400 px-2 py-1.5 text-center align-middle payroll-register-remarks-col">
-                      備註
-                      {pageIdx === 0 && (
-                        <div className="font-normal text-[10px] mt-0.5 leading-tight">{monthRangeLabel}</div>
+                  <table className="payroll-register-print-table payroll-register-overload-table w-full border-collapse text-xs">
+                    <colgroup>
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '6.5%' }} />
+                      <col style={{ width: '8.6%' }} />
+                      <col style={{ width: '6.5%' }} />
+                      <col style={{ width: '6.5%' }} />
+                      <col style={{ width: '6.5%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '35%' }} />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>薪資編號</th>
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>教師姓名</th>
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>每週兼課</th>
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>
+                          ({weekRound}週)
+                          <br />
+                          兼課小計
+                        </th>
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>應加兼課</th>
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>應減兼課</th>
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>實得兼課</th>
+                        <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>實發金額</th>
+                        <th className="border border-slate-400 px-2 py-1.5 payroll-register-remarks-col" style={CELL_CENTER}>
+                          備註
+                          {pageIdx === 0 && (
+                            <div className="font-normal text-[10px] mt-0.5 leading-tight">{monthRangeLabel}</div>
+                          )}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {page.rows.map((row, rowIdx) => {
+                        const blank = isBlankPayrollRow(row.teacherId);
+                        return (
+                          <tr
+                            key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`}
+                            className={`hover:bg-slate-50/50 ${blank ? 'payroll-register-blank-row' : ''}`}
+                          >
+                            <td className="border border-slate-300 px-2 py-1 font-mono" style={CELL_CENTER}>
+                              {blank ? '\u00a0' : row.salaryCode || '—'}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-1 font-medium" style={CELL_CENTER}>
+                              {blank ? '' : row.teacherName}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
+                              {blank ? '' : row.weeklyConcurrent || ''}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
+                              {blank ? '' : row.baseMonthlyConcurrent || ''}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
+                              {blank ? '' : row.addConcurrent || ''}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
+                              {blank ? '' : row.subtractConcurrent || ''}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-1 font-semibold" style={CELL_CENTER}>
+                              {blank ? '' : row.actualConcurrent || ''}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-1 font-mono" style={CELL_CENTER}>
+                              {blank ? '' : row.amount.toLocaleString()}
+                            </td>
+                            <td
+                              className="border border-slate-300 px-2 py-1 text-[10px] leading-snug payroll-register-remarks-col"
+                              style={CELL_CENTER}
+                            >
+                              {blank ? '' : row.remarks}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <TotalsCells
+                        totals={page.subtotal}
+                        label="小計"
+                        pageLabel={`${page.pageIndex} of ${totalPages}`}
+                      />
+                      {pageIdx === pages.length - 1 && (
+                        <TotalsCells totals={grandTotal} label="合計" />
                       )}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {page.rows.map((row, rowIdx) => {
-                    const blank = isBlankPayrollRow(row.teacherId);
-                    return (
-                    <tr
-                      key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`}
-                      className={`hover:bg-slate-50/50 ${blank ? 'payroll-register-blank-row' : ''}`}
-                    >
-                      <td className="border border-slate-300 px-2 py-1 font-mono text-center">
-                        {blank ? '\u00a0' : row.salaryCode || '—'}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-center font-medium">
-                        {blank ? '' : row.teacherName}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-center">
-                        {blank ? '' : row.weeklyConcurrent || ''}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-center">
-                        {blank ? '' : row.baseMonthlyConcurrent || ''}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-center">
-                        {blank ? '' : row.addConcurrent || ''}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-center">
-                        {blank ? '' : row.subtractConcurrent || ''}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-center font-semibold">
-                        {blank ? '' : row.actualConcurrent || ''}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-center font-mono align-middle">
-                        {blank ? '' : row.amount.toLocaleString()}
-                      </td>
-                      <td className="border border-slate-300 px-2 py-1 text-[10px] leading-snug text-center align-middle payroll-register-remarks-col">
-                        {blank ? '' : row.remarks}
-                      </td>
-                    </tr>
-                    );
-                  })}
-                  <TotalsCells
-                    totals={page.subtotal}
-                    label="小計"
-                    pageLabel={`${page.pageIndex} of ${totalPages}`}
-                  />
-                  {pageIdx === pages.length - 1 && (
-                    <TotalsCells totals={grandTotal} label="合計" />
-                  )}
-                </tbody>
-              </table>
-
-              {pageIdx === pages.length - 1 && <PayrollRegisterSignatureBlock />}
-            </div>
-          ))
+                    </tbody>
+                  </table>
+                  {pageIdx === pages.length - 1 && <PayrollRegisterSignatureBlock />}
+                </div>
+                {/* 非末頁：小計後換頁；末頁小計＋合計＋簽核同頁 */}
+                {pageIdx < pages.length - 1 && (
+                  <div className="payroll-register-page-break" aria-hidden />
+                )}
+              </React.Fragment>
+            ))}
+          </>
         )}
       </div>
-
-      <PayrollRegisterPrintStyles />
     </ModalShell>
   );
 };

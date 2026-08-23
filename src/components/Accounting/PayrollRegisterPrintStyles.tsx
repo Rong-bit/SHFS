@@ -3,16 +3,15 @@ import React from 'react';
 /**
  * 印領清冊列印：A4 直向、橫書、窄邊界
  *
- * 重要：不可只用 visibility:hidden —— 隱形元素仍佔高度，
- * 會先印出整站空白頁，清冊才出現在「最後幾頁」。
+ * 重要：不可只用 visibility:hidden —— 隱形元素仍佔高度。
  * 改以 display:none 把非清冊節點移出列印流。
  */
 export const PAYROLL_REGISTER_PRINT_CSS = `
-/* 畫面預覽：空白補列維持短列高；儲存格水平／垂直置中 */
+/* 畫面預覽：空白補列短列高；儲存格強制置中 */
 .payroll-register-print-table th,
 .payroll-register-print-table td {
-  text-align: center;
-  vertical-align: middle;
+  text-align: center !important;
+  vertical-align: middle !important;
 }
 
 .payroll-register-print-table tr.payroll-register-blank-row td {
@@ -49,15 +48,11 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     print-color-adjust: exact;
   }
 
-  /*
-   * 隱藏「不是清冊、不是清冊子孫、也不是清冊祖先」的節點。
-   * 祖先靠 :has(.payroll-register-print-root) 保留，才不會把 Modal 殼藏掉。
-   */
-  body *:not(:has(.payroll-register-print-root)):not(.payroll-register-print-root):not(.payroll-register-print-root *) {
+  /* 勿隱藏 <style>，否則列印樣式可能失效 */
+  body *:not(style):not(:has(.payroll-register-print-root)):not(.payroll-register-print-root):not(.payroll-register-print-root *) {
     display: none !important;
   }
 
-  /* 清冊祖先取消 min-h-screen／flex 佔高，避免多出空白首頁 */
   body *:has(.payroll-register-print-root) {
     min-height: 0 !important;
     height: auto !important;
@@ -86,29 +81,20 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     margin: 0 !important;
   }
 
-  .fixed.inset-0 > div {
+  .fixed.inset-0 > div,
+  .fixed.inset-0 > div > div {
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
+    max-width: none !important;
+    width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
     display: block !important;
-    align-items: stretch !important;
-    justify-content: flex-start !important;
-  }
-
-  .fixed.inset-0 > div > div {
-    max-width: none !important;
-    max-height: none !important;
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
     overflow: visible !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    display: block !important;
   }
 
   .payroll-register-print-root {
@@ -135,13 +121,18 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     border: none !important;
     overflow: visible !important;
     display: block !important;
-    break-after: page;
-    page-break-after: always;
   }
 
-  .payroll-register-print-page:last-child {
-    break-after: auto;
-    page-break-after: auto;
+  /* 非末頁：小計後換頁 */
+  .payroll-register-page-break {
+    display: block !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    break-after: page !important;
+    page-break-after: always !important;
+    -webkit-column-break-after: always !important;
   }
 
   .payroll-register-print-watermark {
@@ -157,20 +148,13 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     border-collapse: collapse;
   }
 
-  .payroll-register-print-table thead {
-    display: table-header-group !important;
-  }
-
-  .payroll-register-print-table tbody {
-    display: table-row-group !important;
-  }
-
-  .payroll-register-print-table tr {
-    display: table-row !important;
-  }
+  .payroll-register-print-table thead { display: table-header-group !important; }
+  .payroll-register-print-table tbody { display: table-row-group !important; }
+  .payroll-register-print-table tr { display: table-row !important; }
 
   .payroll-register-print-table th,
-  .payroll-register-print-table td {
+  .payroll-register-print-table td,
+  .payroll-register-print-table .payroll-register-remarks-col {
     display: table-cell !important;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -180,7 +164,6 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     vertical-align: middle !important;
   }
 
-  /* 僅空白補列採短列高，資料列維持一般列高 */
   .payroll-register-print-table tr.payroll-register-blank-row td {
     height: 5.2mm;
     padding-top: 0 !important;
@@ -192,8 +175,6 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
 
   .payroll-register-print-table .payroll-register-remarks-col {
     width: 35% !important;
-    text-align: center !important;
-    vertical-align: middle !important;
     white-space: normal !important;
     font-size: 8.5pt;
     line-height: 1.3;
@@ -203,7 +184,7 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: block !important;
     font-size: 12pt;
     font-weight: 700;
-    text-align: center;
+    text-align: center !important;
     margin: 0 0 3mm 0;
     writing-mode: horizontal-tb;
   }
@@ -212,14 +193,19 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: block !important;
     margin-top: 6mm;
     font-size: 9pt;
+    text-align: center !important;
   }
 
-  /* 確保工具列等 print:hidden 仍隱藏（即使落在祖先內） */
   .print\\:hidden {
     display: none !important;
   }
 }
 `;
+
+export const CELL_CENTER: React.CSSProperties = {
+  textAlign: 'center',
+  verticalAlign: 'middle',
+};
 
 export const PayrollRegisterPrintStyles: React.FC = () => (
   <style dangerouslySetInnerHTML={{ __html: PAYROLL_REGISTER_PRINT_CSS }} />
