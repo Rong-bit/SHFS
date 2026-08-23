@@ -14,37 +14,10 @@ import { resolveTeacherSalaryCode } from './salaryCodes';
 export const PAYROLL_ROWS_PER_PAGE = 42;
 
 /**
- * 末頁資料列（含空白補列）上限；需預留合計列＋簽核欄在同一張 A4。
+ * 末頁空白補列上限（實際資料列仍最多 42）。
+ * 僅在末頁資料不足一頁時少補幾列，預留合計＋簽核空間；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 36;
-
-/** 依中間頁／末頁容量切分資料列 */
-export function slicePayrollPages<T>(rows: T[]): { slice: T[]; padSize: number }[] {
-  const chunks: { slice: T[]; padSize: number }[] = [];
-  let i = 0;
-  while (i < rows.length) {
-    const remaining = rows.length - i;
-    if (remaining <= PAYROLL_ROWS_LAST_PAGE) {
-      chunks.push({ slice: rows.slice(i), padSize: PAYROLL_ROWS_LAST_PAGE });
-      break;
-    }
-    if (remaining <= PAYROLL_ROWS_PER_PAGE) {
-      const midCount = remaining - PAYROLL_ROWS_LAST_PAGE;
-      if (midCount > 0) {
-        chunks.push({ slice: rows.slice(i, i + midCount), padSize: PAYROLL_ROWS_PER_PAGE });
-        i += midCount;
-      }
-      chunks.push({ slice: rows.slice(i), padSize: PAYROLL_ROWS_LAST_PAGE });
-      break;
-    }
-    chunks.push({
-      slice: rows.slice(i, i + PAYROLL_ROWS_PER_PAGE),
-      padSize: PAYROLL_ROWS_PER_PAGE,
-    });
-    i += PAYROLL_ROWS_PER_PAGE;
-  }
-  return chunks;
-}
+export const PAYROLL_ROWS_LAST_PAGE = 39;
 
 /** 空白列（補滿一頁用，不計入小計） */
 export function isBlankPayrollRow(teacherId: string): boolean {
@@ -271,7 +244,10 @@ export function paginateOverloadPayroll(rows: OverloadPayrollRow[]): {
   }
 
   const pages: OverloadPayrollPage[] = [];
-  for (const { slice, padSize } of slicePayrollPages(rows)) {
+  for (let i = 0; i < rows.length; i += PAYROLL_ROWS_PER_PAGE) {
+    const slice = rows.slice(i, i + PAYROLL_ROWS_PER_PAGE);
+    const isLastPage = i + PAYROLL_ROWS_PER_PAGE >= rows.length;
+    const padSize = isLastPage ? PAYROLL_ROWS_LAST_PAGE : PAYROLL_ROWS_PER_PAGE;
     pages.push({
       pageIndex: pages.length + 1,
       rows: padPayrollRowsToPage(slice, createBlankOverloadRow, padSize),

@@ -154,7 +154,7 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: none !important;
   }
 
-  /* 每頁 42 資料列＋小計；末頁 36 列＋小計＋合計＋簽核 */
+  /* 每頁 42 資料列＋小計；末頁空白補列最多 39（預留合計＋簽核） */
   .payroll-register-print-table {
     display: table !important;
     width: 100% !important;

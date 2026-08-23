@@ -13,8 +13,8 @@ import {
   formatRocYear,
   isBlankPayrollRow,
   padPayrollRowsToPage,
+  PAYROLL_ROWS_LAST_PAGE,
   PAYROLL_ROWS_PER_PAGE,
-  slicePayrollPages,
 } from './overloadPayrollRegister';
 
 export { formatPayrollMonthRangeLabel, formatRocYear, PAYROLL_ROWS_PER_PAGE, isBlankPayrollRow };
@@ -227,18 +227,22 @@ export function paginateSubstitutePayroll(rows: SubstitutePayrollRow[]): {
   }
 
   const pages: SubstitutePayrollPage[] = [];
-  for (const { slice, padSize } of slicePayrollPages(rows)) {
+  const createBlank = (idx: number) => ({
+    teacherId: `__blank-${idx}`,
+    salaryCode: '',
+    teacherName: '',
+    substitutePeriods: 0,
+    ratePerPeriod: 0,
+    amount: 0,
+    remarks: '',
+  });
+  for (let i = 0; i < rows.length; i += PAYROLL_ROWS_PER_PAGE) {
+    const slice = rows.slice(i, i + PAYROLL_ROWS_PER_PAGE);
+    const isLastPage = i + PAYROLL_ROWS_PER_PAGE >= rows.length;
+    const padSize = isLastPage ? PAYROLL_ROWS_LAST_PAGE : PAYROLL_ROWS_PER_PAGE;
     pages.push({
       pageIndex: pages.length + 1,
-      rows: padPayrollRowsToPage(slice, (idx) => ({
-        teacherId: `__blank-${idx}`,
-        salaryCode: '',
-        teacherName: '',
-        substitutePeriods: 0,
-        ratePerPeriod: 0,
-        amount: 0,
-        remarks: '',
-      }), padSize),
+      rows: padPayrollRowsToPage(slice, createBlank, padSize),
       subtotal: sumTotals(slice),
       subtotalRateLabel: subtotalRateLabel(slice),
     });
