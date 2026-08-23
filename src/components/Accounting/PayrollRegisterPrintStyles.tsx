@@ -154,7 +154,7 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: none !important;
   }
 
-  /* 每頁 42 資料列＋小計；略壓空白列高以善用 A4 剩餘空間 */
+  /* 每頁 42 資料列＋小計；末頁 36 列＋小計＋合計＋簽核 */
   .payroll-register-print-table {
     display: table !important;
     width: 100% !important;
@@ -214,9 +214,16 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
 
   .payroll-register-print-signature {
     display: block !important;
-    margin-top: 4mm;
-    font-size: 9pt;
+    margin-top: 2mm !important;
+    font-size: 8.5pt;
     text-align: center !important;
+  }
+
+  /* 末頁：合計列與簽核盡量同頁 */
+  .payroll-register-print-page--last .payroll-register-print-table tr:last-child,
+  .payroll-register-print-page--last .payroll-register-print-footer {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .print\\:hidden {

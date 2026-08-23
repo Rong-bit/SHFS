@@ -159,7 +159,7 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
                 <div
                   className={`payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0${
                     pageIdx < pages.length - 1 ? ' payroll-register-print-page--break-after' : ''
-                  }`}
+                  }${pageIdx === pages.length - 1 ? ' payroll-register-print-page--last' : ''}`}
                 >
                   <h1 className="payroll-register-print-title text-center text-base font-bold tracking-wide mb-3">
                     {title}

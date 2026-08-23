@@ -8,10 +8,43 @@ import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 
 /**
- * 每頁資料列（含空白補列）；非末頁小計後換頁，末頁小計＋合計＋簽核同頁。
- * Excel／畫面／列印共用；42 為 A4 實測可容納量（含小計，略留備註換行空間）。
+ * 中間頁資料列（含空白補列）；非末頁小計後換頁。
+ * Excel／畫面／列印共用。
  */
 export const PAYROLL_ROWS_PER_PAGE = 42;
+
+/**
+ * 末頁資料列（含空白補列）上限；需預留合計列＋簽核欄在同一張 A4。
+ */
+export const PAYROLL_ROWS_LAST_PAGE = 36;
+
+/** 依中間頁／末頁容量切分資料列 */
+export function slicePayrollPages<T>(rows: T[]): { slice: T[]; padSize: number }[] {
+  const chunks: { slice: T[]; padSize: number }[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    const remaining = rows.length - i;
+    if (remaining <= PAYROLL_ROWS_LAST_PAGE) {
+      chunks.push({ slice: rows.slice(i), padSize: PAYROLL_ROWS_LAST_PAGE });
+      break;
+    }
+    if (remaining <= PAYROLL_ROWS_PER_PAGE) {
+      const midCount = remaining - PAYROLL_ROWS_LAST_PAGE;
+      if (midCount > 0) {
+        chunks.push({ slice: rows.slice(i, i + midCount), padSize: PAYROLL_ROWS_PER_PAGE });
+        i += midCount;
+      }
+      chunks.push({ slice: rows.slice(i), padSize: PAYROLL_ROWS_LAST_PAGE });
+      break;
+    }
+    chunks.push({
+      slice: rows.slice(i, i + PAYROLL_ROWS_PER_PAGE),
+      padSize: PAYROLL_ROWS_PER_PAGE,
+    });
+    i += PAYROLL_ROWS_PER_PAGE;
+  }
+  return chunks;
+}
 
 /** 空白列（補滿一頁用，不計入小計） */
 export function isBlankPayrollRow(teacherId: string): boolean {
@@ -238,11 +271,10 @@ export function paginateOverloadPayroll(rows: OverloadPayrollRow[]): {
   }
 
   const pages: OverloadPayrollPage[] = [];
-  for (let i = 0; i < rows.length; i += PAYROLL_ROWS_PER_PAGE) {
-    const slice = rows.slice(i, i + PAYROLL_ROWS_PER_PAGE);
+  for (const { slice, padSize } of slicePayrollPages(rows)) {
     pages.push({
       pageIndex: pages.length + 1,
-      rows: padPayrollRowsToPage(slice, createBlankOverloadRow),
+      rows: padPayrollRowsToPage(slice, createBlankOverloadRow, padSize),
       subtotal: sumTotals(slice),
     });
   }

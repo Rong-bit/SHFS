@@ -14,6 +14,7 @@ import {
   isBlankPayrollRow,
   padPayrollRowsToPage,
   PAYROLL_ROWS_PER_PAGE,
+  slicePayrollPages,
 } from './overloadPayrollRegister';
 
 export { formatPayrollMonthRangeLabel, formatRocYear, PAYROLL_ROWS_PER_PAGE, isBlankPayrollRow };
@@ -226,8 +227,7 @@ export function paginateSubstitutePayroll(rows: SubstitutePayrollRow[]): {
   }
 
   const pages: SubstitutePayrollPage[] = [];
-  for (let i = 0; i < rows.length; i += PAYROLL_ROWS_PER_PAGE) {
-    const slice = rows.slice(i, i + PAYROLL_ROWS_PER_PAGE);
+  for (const { slice, padSize } of slicePayrollPages(rows)) {
     pages.push({
       pageIndex: pages.length + 1,
       rows: padPayrollRowsToPage(slice, (idx) => ({
@@ -238,7 +238,7 @@ export function paginateSubstitutePayroll(rows: SubstitutePayrollRow[]): {
         ratePerPeriod: 0,
         amount: 0,
         remarks: '',
-      })),
+      }), padSize),
       subtotal: sumTotals(slice),
       subtotalRateLabel: subtotalRateLabel(slice),
     });
