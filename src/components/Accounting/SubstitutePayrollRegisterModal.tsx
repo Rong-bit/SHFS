@@ -145,7 +145,7 @@ export const SubstitutePayrollRegisterModal: React.FC<SubstitutePayrollRegisterM
               key={page.pageIndex}
               className="payroll-register-print-page bg-white mb-6 print:mb-0 shadow-sm border border-slate-200 print:border-0 print:shadow-none p-4 print:p-0 relative"
             >
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.06] print:opacity-[0.08]">
+              <div className="payroll-register-print-watermark pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.06] print:hidden">
                 <span className="text-6xl font-black text-slate-500">第 {page.pageIndex} 頁</span>
               </div>
 
@@ -181,7 +181,10 @@ export const SubstitutePayrollRegisterModal: React.FC<SubstitutePayrollRegisterM
                   {page.rows.map((row, rowIdx) => {
                     const blank = isBlankPayrollRow(row.teacherId);
                     return (
-                    <tr key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`} className="hover:bg-slate-50/50">
+                    <tr
+                      key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`}
+                      className={`hover:bg-slate-50/50 ${blank ? 'payroll-register-blank-row' : ''}`}
+                    >
                       <td className="border border-slate-300 px-2 py-1 font-mono text-center">
                         {blank ? '\u00a0' : row.salaryCode || '—'}
                       </td>

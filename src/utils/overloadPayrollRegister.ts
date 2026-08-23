@@ -7,7 +7,7 @@ import {
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 
-export const PAYROLL_ROWS_PER_PAGE = 35;
+export const PAYROLL_ROWS_PER_PAGE = 28;
 
 /** 空白列（補滿一頁用，不計入小計） */
 export function isBlankPayrollRow(teacherId: string): boolean {

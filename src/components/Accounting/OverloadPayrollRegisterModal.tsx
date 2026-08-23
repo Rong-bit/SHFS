@@ -189,7 +189,10 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
                   {page.rows.map((row, rowIdx) => {
                     const blank = isBlankPayrollRow(row.teacherId);
                     return (
-                    <tr key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`} className="hover:bg-slate-50/50">
+                    <tr
+                      key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`}
+                      className={`hover:bg-slate-50/50 ${blank ? 'payroll-register-blank-row' : ''}`}
+                    >
                       <td className="border border-slate-300 px-2 py-1 font-mono text-center">
                         {blank ? '\u00a0' : row.salaryCode || '—'}
                       </td>
