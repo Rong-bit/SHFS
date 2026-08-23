@@ -82,12 +82,12 @@ function setupSheet(ws: ExcelJS.Worksheet, colCount: number, colWidths: number[]
     fitToWidth: 1,
     fitToHeight: 0,
     margins: {
-      left: 0.3,
-      right: 0.3,
-      top: 0.4,
-      bottom: 0.4,
-      header: 0.2,
-      footer: 0.2,
+      left: 0.2,
+      right: 0.2,
+      top: 0.25,
+      bottom: 0.25,
+      header: 0.1,
+      footer: 0.1,
     },
   };
   ws.views = [{ state: 'normal', showGridLines: false }];
@@ -118,15 +118,11 @@ function addHeaderRow(ws: ExcelJS.Worksheet, headers: string[]): number {
 function addDataRow(
   ws: ExcelJS.Worksheet,
   values: CellValue[],
-  opts?: { remarkAlign?: 'left' | 'center' }
+  _opts?: { remarkAlign?: 'left' | 'center' }
 ) {
   const row = ws.addRow(values);
-  row.eachCell((cell, colNumber) => {
-    const isLast = colNumber === values.length;
-    const isAmount = typeof values[colNumber - 1] === 'number' && colNumber >= values.length - 2;
-    styleDataCell(cell, {
-      align: isLast ? opts?.remarkAlign || 'left' : isAmount ? 'right' : 'center',
-    });
+  row.eachCell((cell) => {
+    styleDataCell(cell, { align: 'center' });
   });
   return row.number;
 }
@@ -181,7 +177,7 @@ export async function exportOverloadPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('兼課印領清冊');
-  setupSheet(ws, colCount, [12, 12, 10, 12, 10, 10, 10, 12, 55]);
+  setupSheet(ws, colCount, [10, 10, 6.5, 8.6, 6.5, 6.5, 6.5, 10, 35]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {

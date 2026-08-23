@@ -7,8 +7,8 @@ import {
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 
-/** 每頁資料列（含空白補列）。末頁另有小計＋合計，合計約 65 列（63+1+1） */
-export const PAYROLL_ROWS_PER_PAGE = 63;
+/** 每頁資料列（含空白補列）；其後接小計再換頁 */
+export const PAYROLL_ROWS_PER_PAGE = 48;
 
 /** 空白列（補滿一頁用，不計入小計） */
 export function isBlankPayrollRow(teacherId: string): boolean {

@@ -1,14 +1,20 @@
 import React from 'react';
 
 /**
- * 印領清冊列印：A4 直向、橫書、8mm 邊距
+ * 印領清冊列印：A4 直向、橫書、窄邊界
  *
  * 重要：不可只用 visibility:hidden —— 隱形元素仍佔高度，
  * 會先印出整站空白頁，清冊才出現在「最後幾頁」。
  * 改以 display:none 把非清冊節點移出列印流。
  */
 export const PAYROLL_REGISTER_PRINT_CSS = `
-/* 畫面預覽：空白補列維持短列高，資料列不壓縮 */
+/* 畫面預覽：空白補列維持短列高；儲存格水平／垂直置中 */
+.payroll-register-print-table th,
+.payroll-register-print-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
 .payroll-register-print-table tr.payroll-register-blank-row td {
   height: 5.2mm;
   padding-top: 0 !important;
@@ -17,10 +23,20 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   white-space: nowrap;
 }
 
+.payroll-register-overload-table col:nth-child(1) { width: 10%; }
+.payroll-register-overload-table col:nth-child(2) { width: 10%; }
+.payroll-register-overload-table col:nth-child(3) { width: 6.5%; }
+.payroll-register-overload-table col:nth-child(4) { width: 8.6%; }
+.payroll-register-overload-table col:nth-child(5) { width: 6.5%; }
+.payroll-register-overload-table col:nth-child(6) { width: 6.5%; }
+.payroll-register-overload-table col:nth-child(7) { width: 6.5%; }
+.payroll-register-overload-table col:nth-child(8) { width: 10%; }
+.payroll-register-overload-table col:nth-child(9) { width: 35%; }
+
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm;
+    margin: 5mm;
   }
 
   html, body {
@@ -160,7 +176,8 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     word-break: break-word;
     border-color: #334155 !important;
     padding: 4px 6px !important;
-    vertical-align: middle;
+    text-align: center !important;
+    vertical-align: middle !important;
   }
 
   /* 僅空白補列採短列高，資料列維持一般列高 */
@@ -174,8 +191,9 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   }
 
   .payroll-register-print-table .payroll-register-remarks-col {
-    width: 32% !important;
-    text-align: left !important;
+    width: 35% !important;
+    text-align: center !important;
+    vertical-align: middle !important;
     white-space: normal !important;
     font-size: 8.5pt;
     line-height: 1.3;
