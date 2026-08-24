@@ -256,8 +256,7 @@ function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const labels = ['教學組長', '出納組', '會計室', '校長'];
   const ranges = signatureQuartersByWidth(ws, n);
 
-  // 表格與簽核之間多空一行，再留簽名書寫空間
-  ws.addRow(Array(n).fill(null)).height = 18;
+  // 簽名書寫留白
   const spacer = ws.addRow(Array(n).fill(null));
   spacer.height = 28;
 
@@ -269,8 +268,9 @@ function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
     color: 'FF334155',
   });
 
+  // 教務主任上方列高 1cm（Excel 列高單位為 point，1cm ≈ 28.35pt）
   const mid = ws.addRow(Array(n).fill(null));
-  mid.height = 22;
+  mid.height = 28.35;
 
   const dean = ws.addRow(Array(n).fill(null));
   dean.height = 16;

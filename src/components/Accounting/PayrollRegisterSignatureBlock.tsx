@@ -23,9 +23,10 @@ export const PayrollRegisterSignatureBlock: React.FC<{ className?: string }> = (
         <div className="border-t border-slate-400 pt-1 mt-10 print:mt-3">校長</div>
       </div>
     </div>
-    <div className="mt-4 print:mt-2 grid grid-cols-4 gap-4 print:gap-2 text-center">
+    <div className="mt-6 print:mt-5 grid grid-cols-4 gap-4 print:gap-2 text-center">
       <div>
-        <div className="h-5 print:h-3" aria-hidden />
+        {/* 教務主任簽名區往下多留一行 */}
+        <div className="h-8 print:h-6" aria-hidden />
         <div className="border-t border-slate-400 pt-1">教務主任</div>
       </div>
     </div>
