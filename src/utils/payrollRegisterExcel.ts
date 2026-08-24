@@ -264,15 +264,17 @@ function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const widths = sheetColWidths(ws, n);
   const totalW = widths.reduce((a, b) => a + b, 0);
   const labels = ['教學組長', '出納組', '會計室', '校長'];
+  // Excel 列高單位為 point；1.5cm ≈ 42.52pt
+  const sigSpacePt = 42.52;
 
   const spacer = ws.addRow(Array(n).fill(null));
-  spacer.height = 28;
+  spacer.height = sigSpacePt;
 
   addMergedLabelRow(ws, n, buildPrintEqualLabels(labels, totalW), 16);
 
-  // 教務主任上方列高 1cm
+  // 教務主任上方簽名留白同樣 1.5cm
   const mid = ws.addRow(Array(n).fill(null));
-  mid.height = 28.35;
+  mid.height = sigSpacePt;
 
   addMergedLabelRow(ws, n, buildPrintEqualLabels(['教務主任'], totalW), 16);
 }
