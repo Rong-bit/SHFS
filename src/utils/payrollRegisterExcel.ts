@@ -174,99 +174,176 @@ function colLetters(col: number): string {
   return s;
 }
 
-/** 估算字串佔用的 Excel 欄寬單位（CJK ≈ 2，其餘 ≈ 1） */
+function sheetColWidths(ws: ExcelJS.Worksheet, colCount: number): number[] {
+  const n = Math.max(colCount, 1);
+  return Array.from({ length: n }, (_, i) => {
+    const w = Number(ws.getColumn(i + 1).width);
+    return Number.isFinite(w) && w > 0 ? w : 10;
+  });
+}
+
 function excelTextWidth(text: string): number {
   let w = 0;
   for (const ch of text) {
-    const cp = ch.codePointAt(0) || 0;
-    w += cp > 0xff ? 2 : 1;
+    w += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
   }
   return w;
 }
 
-function sheetTotalColWidth(ws: ExcelJS.Worksheet, colCount: number): number {
-  const n = Math.max(colCount, 1);
-  let total = 0;
-  for (let c = 1; c <= n; c++) {
-    const w = Number(ws.getColumn(c).width);
-    total += Number.isFinite(w) && w > 0 ? w : 10;
-  }
-  return total;
-}
-
 /**
- * 左右邊距相等、職稱之間空隙等寬（全形空白撐寬），總寬不超過表寬以免裁切。
+ * 對齊瀏覽器列印（2.pdf）：四職稱中心約在 12.5%／37.5%／62.5%／87.5%。
+ * 全形空白撐寬；總寬不超過欄寬總和以免裁切。
  */
-function buildEvenSpacedSignatureLine(labels: string[], totalColWidth: number): string {
+function buildPrintAlignedSignatureLine(labels: string[], totalColWidth: number): string {
   const lineUnits = Math.max(48, Math.round(totalColWidth));
-  const labelWidths = labels.map(excelTextWidth);
-  const labelsTotal = labelWidths.reduce((a, b) => a + b, 0);
-  const gaps = Math.max(1, labels.length - 1);
-  const free = Math.max(0, lineUnits - labelsTotal);
-  // 左右邊距各約 6%，其餘三等分給職稱間空隙 → 視覺等距
-  let edge = Math.max(2, Math.round(free * 0.06));
-  let gapBudget = free - edge * 2;
-  if (gapBudget < gaps * 2) {
-    edge = Math.max(1, Math.floor((free - gaps * 2) / 2));
-    gapBudget = Math.max(gaps * 2, free - edge * 2);
-  }
-  const gapBase = Math.floor(gapBudget / gaps);
-  const gapRem = gapBudget - gapBase * gaps;
-
-  const pad = (units: number) => {
-    const nFw = Math.floor(Math.max(0, units) / 2);
-    const nSp = Math.max(0, units) % 2;
-    return `${'　'.repeat(nFw)}${' '.repeat(nSp)}`;
-  };
-
-  let out = pad(edge);
-  labels.forEach((label, i) => {
-    out += label;
-    if (i < gaps) out += pad(gapBase + (i < gapRem ? 1 : 0));
+  type Place = { label: string; start: number; end: number };
+  const placements: Place[] = labels.map((label, i) => {
+    const lw = excelTextWidth(label);
+    const center = ((i + 0.5) / labels.length) * lineUnits;
+    let start = Math.round(center - lw / 2);
+    start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
+    return { label, start, end: start + lw };
   });
-  out += pad(edge);
+  for (let i = 1; i < placements.length; i++) {
+    const minStart = placements[i - 1].end + 2;
+    if (placements[i].start < minStart) {
+      const lw = placements[i].end - placements[i].start;
+      placements[i].start = Math.min(minStart, Math.max(0, lineUnits - lw));
+      placements[i].end = placements[i].start + lw;
+    }
+  }
+
+  let out = '';
+  let u = 0;
+  while (u < lineUnits) {
+    const hit = placements.find((p) => p.start === u);
+    if (hit) {
+      out += hit.label;
+      u = hit.end;
+      continue;
+    }
+    if (u + 1 < lineUnits && !placements.some((p) => p.start === u + 1)) {
+      out += '　';
+      u += 2;
+    } else {
+      out += ' ';
+      u += 1;
+    }
+  }
   return out;
 }
 
-/** 教務主任對齊左側（與教學組長同側邊距） */
-function buildDeanSignatureLine(totalColWidth: number): string {
+function buildPrintAlignedDeanLine(totalColWidth: number): string {
   const lineUnits = Math.max(48, Math.round(totalColWidth));
-  const labelsTotal = excelTextWidth('教學組長') + excelTextWidth('出納組') + excelTextWidth('會計室') + excelTextWidth('校長');
-  const free = Math.max(0, lineUnits - labelsTotal);
-  const edge = Math.max(2, Math.round(free * 0.06));
-  const pad = (units: number) => {
-    const nFw = Math.floor(Math.max(0, units) / 2);
-    const nSp = Math.max(0, units) % 2;
-    return `${'　'.repeat(nFw)}${' '.repeat(nSp)}`;
-  };
-  return `${pad(edge)}教務主任`;
+  const label = '教務主任';
+  const lw = excelTextWidth(label);
+  const center = (0.5 / 4) * lineUnits; // 與教學組長同四分點
+  let start = Math.round(center - lw / 2);
+  start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
+  let out = '';
+  let u = 0;
+  while (u < start) {
+    if (start - u >= 2) {
+      out += '　';
+      u += 2;
+    } else {
+      out += ' ';
+      u += 1;
+    }
+  }
+  return out + label;
 }
 
-/** 末頁簽核：整列合併後以等距字串定位四職稱（不受各欄寬不均影響） */
+/** 依欄寬切四段（簽核底線用），對齊列印四欄 */
+function signatureLineRangesByWidth(
+  ws: ExcelJS.Worksheet,
+  colCount: number
+): Array<{ start: number; end: number }> {
+  const widths = sheetColWidths(ws, colCount);
+  const n = widths.length;
+  const cum: number[] = [0];
+  for (const w of widths) cum.push(cum[cum.length - 1] + w);
+  const total = cum[n] || 1;
+  const nearestEnd = (frac: number, minEnd: number, maxEnd: number) => {
+    const target = total * frac;
+    let best = minEnd;
+    let bestD = Infinity;
+    for (let end = minEnd; end <= maxEnd; end++) {
+      const d = Math.abs(cum[end] - target);
+      if (d < bestD) {
+        bestD = d;
+        best = end;
+      }
+    }
+    return best;
+  };
+  const e1 = nearestEnd(0.25, 1, n - 3);
+  const e2 = nearestEnd(0.5, e1 + 1, n - 2);
+  const e3 = nearestEnd(0.75, e2 + 1, n - 1);
+  return [
+    { start: 1, end: e1 },
+    { start: e1 + 1, end: e2 },
+    { start: e2 + 1, end: e3 },
+    { start: e3 + 1, end: n },
+  ];
+}
+
+/**
+ * 末頁簽核：對齊列印結果（2.pdf）
+ * - 上一列：四段底線（簽名線）
+ * - 下一列：四職稱等分置中（字串對齊 12.5/37.5/62.5/87.5%）
+ * - 教務主任在教學組長下方
+ */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
-  ws.addRow([]);
-  ws.addRow([]);
-
   const n = Math.max(colCount, 4);
-  const totalW = sheetTotalColWidth(ws, n);
-  const labels = ['教學組長', '出納組', '會計室', '校長'];
+  const widths = sheetColWidths(ws, n);
+  const totalW = widths.reduce((a, b) => a + b, 0);
+  const lineRanges = signatureLineRangesByWidth(ws, n);
 
+  // 簽名線列（對齊列印 border-t）
+  ws.addRow([]);
+  const lineRow = ws.addRow(Array(n).fill(null));
+  lineRow.height = 18;
+  lineRanges.forEach(({ start, end }) => {
+    if (end > start) {
+      ws.mergeCells(`${colLetters(start)}${lineRow.number}:${colLetters(end)}${lineRow.number}`);
+    }
+    const cell = ws.getCell(lineRow.number, start);
+    cell.border = {
+      bottom: { style: 'thin', color: { argb: 'FF64748B' } },
+    };
+  });
+
+  // 職稱列
   const sig = ws.addRow(Array(n).fill(null));
-  sig.height = 22;
+  sig.height = 20;
   ws.mergeCells(`${colLetters(1)}${sig.number}:${colLetters(n)}${sig.number}`);
   const sigCell = ws.getCell(sig.number, 1);
-  sigCell.value = buildEvenSpacedSignatureLine(labels, totalW);
+  sigCell.value = buildPrintAlignedSignatureLine(
+    ['教學組長', '出納組', '會計室', '校長'],
+    totalW
+  );
   sigCell.font = { size: 11, name: '微軟正黑體' };
   sigCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
 
   ws.addRow([]);
-  ws.addRow([]);
+
+  // 教務主任簽名線 + 文字
+  const deanLine = ws.addRow(Array(n).fill(null));
+  deanLine.height = 18;
+  const first = lineRanges[0];
+  if (first.end > first.start) {
+    ws.mergeCells(`${colLetters(first.start)}${deanLine.number}:${colLetters(first.end)}${deanLine.number}`);
+  }
+  ws.getCell(deanLine.number, first.start).border = {
+    bottom: { style: 'thin', color: { argb: 'FF64748B' } },
+  };
 
   const dean = ws.addRow(Array(n).fill(null));
-  dean.height = 22;
+  dean.height = 20;
   ws.mergeCells(`${colLetters(1)}${dean.number}:${colLetters(n)}${dean.number}`);
   const deanCell = ws.getCell(dean.number, 1);
-  deanCell.value = buildDeanSignatureLine(totalW);
+  deanCell.value = buildPrintAlignedDeanLine(totalW);
   deanCell.font = { size: 11, name: '微軟正黑體' };
   deanCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
 }
