@@ -175,27 +175,60 @@ function colLetters(col: number): string {
 }
 
 /**
- * 將第 1～n 欄依欄數均分成 4 段（合併用起迄，1-based inclusive）。
- * 餘數優先分給左右兩側，讓四段都盡量有「合併區塊」感（例：6 欄 → 2+1+1+2）。
+ * 依各欄實際寬度，在累計 25%／50%／75% 處切成 4 段（整欄不可切開）。
+ * 備註欄若佔比過大，末段會較寬；此時「校長」改靠右，較接近頁面右側四分點。
  */
-function signatureMergeRanges(colCount: number): Array<{ start: number; end: number }> {
+function signatureMergeRanges(
+  ws: ExcelJS.Worksheet,
+  colCount: number
+): Array<{ start: number; end: number }> {
   const n = Math.max(colCount, 4);
-  const base = Math.floor(n / 4);
-  const extra = n % 4;
-  const spans = Array.from({ length: 4 }, () => base);
-  // 餘數先補兩側，再補中間：6→[2,1,1,2]、7→[2,2,1,2]、9→[3,2,2,2]
-  const extraOrder = [0, 3, 1, 2];
-  for (let i = 0; i < extra; i++) spans[extraOrder[i]] += 1;
+  const widths = Array.from({ length: n }, (_, i) => {
+    const w = Number(ws.getColumn(i + 1).width);
+    return Number.isFinite(w) && w > 0 ? w : 10;
+  });
+  const cum: number[] = [0];
+  for (const w of widths) cum.push(cum[cum.length - 1] + w);
+  const total = cum[n] || 1;
 
-  const ranges: Array<{ start: number; end: number }> = [];
-  let col = 1;
-  for (const span of spans) {
-    const start = col;
-    const end = col + Math.max(1, span) - 1;
-    ranges.push({ start, end });
-    col = end + 1;
+  const nearestEnd = (frac: number, minEnd: number, maxEnd: number) => {
+    const target = total * frac;
+    let best = minEnd;
+    let bestD = Infinity;
+    for (let end = minEnd; end <= maxEnd; end++) {
+      const d = Math.abs(cum[end] - target);
+      if (d < bestD) {
+        bestD = d;
+        best = end;
+      }
+    }
+    return best;
+  };
+
+  // end 欄（1-based）須滿足 1 ≤ e1 < e2 < e3 < n
+  const e1 = nearestEnd(0.25, 1, n - 3);
+  const e2 = nearestEnd(0.5, e1 + 1, n - 2);
+  const e3 = nearestEnd(0.75, e2 + 1, n - 1);
+
+  return [
+    { start: 1, end: e1 },
+    { start: e1 + 1, end: e2 },
+    { start: e2 + 1, end: e3 },
+    { start: e3 + 1, end: n },
+  ];
+}
+
+function segmentWidth(
+  ws: ExcelJS.Worksheet,
+  start: number,
+  end: number
+): number {
+  let w = 0;
+  for (let c = start; c <= end; c++) {
+    const cw = Number(ws.getColumn(c).width);
+    w += Number.isFinite(cw) && cw > 0 ? cw : 10;
   }
-  return ranges;
+  return w;
 }
 
 function mergeSignatureSegment(
@@ -203,7 +236,8 @@ function mergeSignatureSegment(
   row: number,
   start: number,
   end: number,
-  label: string
+  label: string,
+  align: 'left' | 'center' | 'right' = 'center'
 ) {
   if (end > start) {
     ws.mergeCells(`${colLetters(start)}${row}:${colLetters(end)}${row}`);
@@ -211,24 +245,28 @@ function mergeSignatureSegment(
   const cell = ws.getCell(row, start);
   cell.value = label;
   cell.font = { size: 11, name: '微軟正黑體' };
-  cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
+  cell.alignment = { horizontal: align, vertical: 'middle', wrapText: false };
 }
 
-/** 末頁簽核：首欄至末欄合併成四段並置中；教務主任在教學組長段下方 */
+/** 末頁簽核：依欄寬四分切點合併；末段過寬時校長靠右以接近視覺等距 */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   ws.addRow([]);
   ws.addRow([]);
 
   const labels = ['教學組長', '出納組', '會計室', '校長'] as const;
-  const ranges = signatureMergeRanges(colCount);
+  const ranges = signatureMergeRanges(ws, colCount);
   const n = Math.max(colCount, 4);
+  const totalW = segmentWidth(ws, 1, n);
+  const last = ranges[3];
+  const lastWide = segmentWidth(ws, last.start, last.end) > totalW * 0.3;
 
-  // 先建立列，再以 A1 位址字串合併（比數字參數較不易漏合）
   const sig = ws.addRow(Array(n).fill(null));
   sig.height = 22;
   labels.forEach((label, i) => {
     const { start, end } = ranges[i];
-    mergeSignatureSegment(ws, sig.number, start, end, label);
+    const align =
+      i === 3 && lastWide ? 'right' : i === 0 && segmentWidth(ws, start, end) < totalW * 0.15 ? 'left' : 'center';
+    mergeSignatureSegment(ws, sig.number, start, end, label, align);
   });
 
   ws.addRow([]);
@@ -237,7 +275,9 @@ function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const dean = ws.addRow(Array(n).fill(null));
   dean.height = 22;
   const first = ranges[0];
-  mergeSignatureSegment(ws, dean.number, first.start, first.end, '教務主任');
+  const firstAlign =
+    segmentWidth(ws, first.start, first.end) < totalW * 0.15 ? 'left' : 'center';
+  mergeSignatureSegment(ws, dean.number, first.start, first.end, '教務主任', firstAlign);
 }
 
 export async function exportOverloadPayrollExcel(
