@@ -439,7 +439,7 @@ export async function exportOverloadPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('兼課印領清冊');
-  setupSheet(ws, colCount, [12, 12, 8, 10, 8, 8, 8, 14, 22]);
+  setupSheet(ws, colCount, [12, 12, 4, 12, 12, 4, 22, 4, 22]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
@@ -522,7 +522,7 @@ export async function exportSubstitutePayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('代課印領清冊');
-  setupSheet(ws, colCount, [14, 14, 12, 12, 14, 38]);
+  setupSheet(ws, colCount, [20, 7, 20, 7, 20, 20]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
@@ -593,7 +593,7 @@ export async function exportCounselingPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('課輔印領清冊');
-  setupSheet(ws, colCount, [12, 12, 12, 12, 11, 11, 11, 11, 14, 36]);
+  setupSheet(ws, colCount, [11, 11, 4, 11, 11, 4, 11, 11, 4, 24]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
@@ -685,7 +685,7 @@ export async function exportActingHomeroomPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('代導師印領清冊');
-  setupSheet(ws, colCount, [14, 14, 12, 12, 14, 38]);
+  setupSheet(ws, colCount, [20, 7, 20, 7, 20, 20]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
