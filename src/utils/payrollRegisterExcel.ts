@@ -195,52 +195,54 @@ function sheetTotalColWidth(ws: ExcelJS.Worksheet, colCount: number): number {
 }
 
 /**
- * 在約等於表寬的一行字串中，把多個職稱拉開到接近左右兩端並等距。
- * 空隙用全形空白，較接近 Excel 中文寬度，避免整段偏左。
+ * 在表寬內把職稱中心放到等分點（略向兩端拉開），保證四個都進得去、不被裁切。
  */
 function buildEvenSpacedSignatureLine(labels: string[], totalColWidth: number): string {
-  // 略大於名義欄寬總和，讓字串撐滿合併儲存格可視寬度
-  const lineUnits = Math.max(56, Math.round(totalColWidth * 1.12));
-  const labelWidths = labels.map(excelTextWidth);
-  const labelsTotal = labelWidths.reduce((a, b) => a + b, 0);
-  const gaps = Math.max(1, labels.length - 1);
-  // 左右各留約 2%，其餘分給三個間隙 → 四職稱更拉開
-  const edgePad = Math.max(1, Math.round(lineUnits * 0.02));
-  const inner = Math.max(gaps * 4, lineUnits - edgePad * 2 - labelsTotal);
-  const gapBase = Math.floor(inner / gaps);
-  const gapRem = inner - gapBase * gaps;
+  // 不可超過名義欄寬，否則 Excel 合併儲存格右側會裁掉（校長消失）
+  const lineUnits = Math.max(48, Math.round(totalColWidth));
+  const unitToChar: (string | null)[] = Array.from({ length: lineUnits }, () => null);
 
-  const gapStr = (units: number) => {
-    // 全形空白 ≈ 2 單位；不足用半形補
-    const nFw = Math.floor(Math.max(0, units) / 2);
-    const nSp = Math.max(0, units) % 2;
-    return `${'　'.repeat(nFw)}${' '.repeat(nSp)}`;
-  };
-
-  let out = gapStr(edgePad);
   labels.forEach((label, i) => {
-    out += label;
-    if (i < gaps) {
-      out += gapStr(gapBase + (i < gapRem ? 1 : 0));
+    const lw = excelTextWidth(label);
+    // 0.10 / 0.37 / 0.63 / 0.90：比正中四分點更靠兩端，又留邊距
+    const t = labels.length <= 1 ? 0.5 : 0.1 + (0.8 * i) / (labels.length - 1);
+    const center = t * lineUnits;
+    let start = Math.round(center - lw / 2);
+    start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
+
+    let u = start;
+    for (const ch of label) {
+      if (u >= lineUnits) break;
+      unitToChar[u] = ch;
+      u += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
     }
   });
-  out += gapStr(edgePad);
+
+  let out = '';
+  let u = 0;
+  while (u < lineUnits) {
+    const ch = unitToChar[u];
+    if (ch != null) {
+      out += ch;
+      u += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
+    } else {
+      out += ' ';
+      u += 1;
+    }
+  }
+  // 保留尾端空白撐滿寬度，但勿再加長超過 lineUnits
   return out;
 }
 
-/** 教務主任對齊左側第一區（與教學組長同側） */
+/** 教務主任對齊教學組長（左側第一點） */
 function buildDeanSignatureLine(totalColWidth: number): string {
-  const lineUnits = Math.max(56, Math.round(totalColWidth * 1.12));
+  const lineUnits = Math.max(48, Math.round(totalColWidth));
   const label = '教務主任';
   const lw = excelTextWidth(label);
-  const edgePad = Math.max(1, Math.round(lineUnits * 0.02));
-  // 約落在左起第一個四分點
-  const center = edgePad + (lineUnits - edgePad * 2) * 0.125;
+  const center = 0.1 * lineUnits;
   let start = Math.round(center - lw / 2);
   start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
-  const nFw = Math.floor(start / 2);
-  const nSp = start % 2;
-  return `${'　'.repeat(nFw)}${' '.repeat(nSp)}${label}`;
+  return `${' '.repeat(start)}${label}`;
 }
 
 /** 末頁簽核：整列合併後以等距字串定位四職稱（不受各欄寬不均影響） */
@@ -295,7 +297,7 @@ export async function exportOverloadPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('兼課印領清冊');
-  setupSheet(ws, colCount, [10, 10, 6.5, 8.6, 6.5, 6.5, 6.5, 10, 35]);
+  setupSheet(ws, colCount, [10, 10, 6.5, 8.6, 6.5, 6.5, 6.5, 12, 35]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
