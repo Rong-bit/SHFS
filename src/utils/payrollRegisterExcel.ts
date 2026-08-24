@@ -183,44 +183,50 @@ function sheetColWidths(ws: ExcelJS.Worksheet, colCount: number): number[] {
 }
 
 /**
- * 簽核列：依欄寬累計把欄位分到四等分（不改動資料欄寬）。
- * Excel 無法穩定畫出與列印一致的分段底線，故只放職稱、不畫底線。
+ * 簽核列：依表寬切成四段連續欄位（不改動資料欄寬、不重疊）。
+ * 舊算法在「備註」過寬的 6 欄表會讓第 4 季落空，退回 1:1 覆蓋「教學組長」成「校長」。
  */
 function signatureQuartersByWidth(
   ws: ExcelJS.Worksheet,
   colCount: number
 ): Array<{ start: number; end: number }> {
   const widths = sheetColWidths(ws, colCount);
-  const n = widths.length;
+  const n = Math.max(widths.length, 4);
   const cum: number[] = [0];
-  for (const w of widths) cum.push(cum[cum.length - 1] + w);
+  for (let i = 0; i < n; i++) {
+    cum.push(cum[cum.length - 1] + (widths[i] ?? 10));
+  }
   const total = cum[n] || 1;
 
-  const groups: number[][] = [[], [], [], []];
-  for (let c = 1; c <= n; c++) {
-    const mid = (cum[c - 1] + cum[c]) / 2;
-    const q = Math.min(3, Math.floor((mid / total) * 4));
-    groups[q].push(c);
-  }
-
-  for (let q = 0; q < 4; q++) {
-    if (groups[q].length > 0) continue;
-    const donor =
-      q > 0 && groups[q - 1].length > 1 ? q - 1 : q < 3 && groups[q + 1].length > 1 ? q + 1 : -1;
-    if (donor < 0) continue;
-    if (donor < q) {
-      const col = groups[donor].pop()!;
-      groups[q].unshift(col);
-    } else {
-      const col = groups[donor].shift()!;
-      groups[q].push(col);
+  // 在 25%／50%／75% 處切欄，並保證四段皆至少 1 欄、互不重疊
+  const ends: number[] = [];
+  let prevEnd = 0;
+  for (let i = 1; i <= 3; i++) {
+    const target = (i / 4) * total;
+    const minEnd = prevEnd + 1;
+    const maxEnd = n - (4 - i); // 留給後面每一季至少一欄
+    let best = minEnd;
+    let bestD = Infinity;
+    for (let c = minEnd; c <= maxEnd; c++) {
+      const d = Math.abs(cum[c] - target);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
     }
+    ends.push(best);
+    prevEnd = best;
   }
+  ends.push(n);
 
-  return groups.map((cols) => {
-    if (cols.length === 0) return { start: 1, end: 1 };
-    return { start: cols[0], end: cols[cols.length - 1] };
-  });
+  const ranges: Array<{ start: number; end: number }> = [];
+  let prev = 0;
+  for (const end of ends) {
+    const start = prev + 1;
+    ranges.push({ start, end: Math.max(start, end) });
+    prev = end;
+  }
+  return ranges;
 }
 
 function applyQuarterCells(
