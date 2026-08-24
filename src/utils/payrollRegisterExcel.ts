@@ -174,110 +174,101 @@ function colLetters(col: number): string {
   return s;
 }
 
-/**
- * 依各欄實際寬度，在累計 25%／50%／75% 處切成 4 段（整欄不可切開）。
- * 備註欄若佔比過大，末段會較寬；此時「校長」改靠右，較接近頁面右側四分點。
- */
-function signatureMergeRanges(
-  ws: ExcelJS.Worksheet,
-  colCount: number
-): Array<{ start: number; end: number }> {
-  const n = Math.max(colCount, 4);
-  const widths = Array.from({ length: n }, (_, i) => {
-    const w = Number(ws.getColumn(i + 1).width);
-    return Number.isFinite(w) && w > 0 ? w : 10;
-  });
-  const cum: number[] = [0];
-  for (const w of widths) cum.push(cum[cum.length - 1] + w);
-  const total = cum[n] || 1;
-
-  const nearestEnd = (frac: number, minEnd: number, maxEnd: number) => {
-    const target = total * frac;
-    let best = minEnd;
-    let bestD = Infinity;
-    for (let end = minEnd; end <= maxEnd; end++) {
-      const d = Math.abs(cum[end] - target);
-      if (d < bestD) {
-        bestD = d;
-        best = end;
-      }
-    }
-    return best;
-  };
-
-  // end 欄（1-based）須滿足 1 ≤ e1 < e2 < e3 < n
-  const e1 = nearestEnd(0.25, 1, n - 3);
-  const e2 = nearestEnd(0.5, e1 + 1, n - 2);
-  const e3 = nearestEnd(0.75, e2 + 1, n - 1);
-
-  return [
-    { start: 1, end: e1 },
-    { start: e1 + 1, end: e2 },
-    { start: e2 + 1, end: e3 },
-    { start: e3 + 1, end: n },
-  ];
-}
-
-function segmentWidth(
-  ws: ExcelJS.Worksheet,
-  start: number,
-  end: number
-): number {
+/** 估算字串佔用的 Excel 欄寬單位（CJK ≈ 2，其餘 ≈ 1） */
+function excelTextWidth(text: string): number {
   let w = 0;
-  for (let c = start; c <= end; c++) {
-    const cw = Number(ws.getColumn(c).width);
-    w += Number.isFinite(cw) && cw > 0 ? cw : 10;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0) || 0;
+    w += cp > 0xff ? 2 : 1;
   }
   return w;
 }
 
-function mergeSignatureSegment(
-  ws: ExcelJS.Worksheet,
-  row: number,
-  start: number,
-  end: number,
-  label: string,
-  align: 'left' | 'center' | 'right' = 'center'
-) {
-  if (end > start) {
-    ws.mergeCells(`${colLetters(start)}${row}:${colLetters(end)}${row}`);
+function sheetTotalColWidth(ws: ExcelJS.Worksheet, colCount: number): number {
+  const n = Math.max(colCount, 1);
+  let total = 0;
+  for (let c = 1; c <= n; c++) {
+    const w = Number(ws.getColumn(c).width);
+    total += Number.isFinite(w) && w > 0 ? w : 10;
   }
-  const cell = ws.getCell(row, start);
-  cell.value = label;
-  cell.font = { size: 11, name: '微軟正黑體' };
-  cell.alignment = { horizontal: align, vertical: 'middle', wrapText: false };
+  return total;
 }
 
-/** 末頁簽核：依欄寬四分切點合併；末段過寬時校長靠右以接近視覺等距 */
+/**
+ * 在約等於表寬的一行字串中，把多個職稱中心對齊到等分點，
+ * 避開「依欄合併」受備註欄過寬影響而左挤右飛。
+ */
+function buildEvenSpacedSignatureLine(labels: string[], totalColWidth: number): string {
+  const lineUnits = Math.max(48, Math.round(totalColWidth * 0.92));
+  const unitToChar: (string | null)[] = Array.from({ length: lineUnits }, () => null);
+
+  labels.forEach((label, i) => {
+    const lw = excelTextWidth(label);
+    const center = ((i + 0.5) / labels.length) * lineUnits;
+    let start = Math.round(center - lw / 2);
+    start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
+
+    let u = start;
+    for (const ch of label) {
+      if (u >= lineUnits) break;
+      unitToChar[u] = ch;
+      u += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
+    }
+  });
+
+  let out = '';
+  let u = 0;
+  while (u < lineUnits) {
+    const ch = unitToChar[u];
+    if (ch != null) {
+      out += ch;
+      u += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
+    } else {
+      out += ' ';
+      u += 1;
+    }
+  }
+  return out.trimEnd();
+}
+
+/** 教務主任對齊第一個四分點（約與教學組長同左區） */
+function buildDeanSignatureLine(totalColWidth: number): string {
+  const lineUnits = Math.max(48, Math.round(totalColWidth * 0.92));
+  const label = '教務主任';
+  const lw = excelTextWidth(label);
+  const center = (0.5 / 4) * lineUnits;
+  let start = Math.round(center - lw / 2);
+  start = Math.max(0, Math.min(start, lineUnits - lw));
+  return `${' '.repeat(start)}${label}`;
+}
+
+/** 末頁簽核：整列合併後以等距字串定位四職稱（不受各欄寬不均影響） */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   ws.addRow([]);
   ws.addRow([]);
 
-  const labels = ['教學組長', '出納組', '會計室', '校長'] as const;
-  const ranges = signatureMergeRanges(ws, colCount);
   const n = Math.max(colCount, 4);
-  const totalW = segmentWidth(ws, 1, n);
-  const last = ranges[3];
-  const lastWide = segmentWidth(ws, last.start, last.end) > totalW * 0.3;
+  const totalW = sheetTotalColWidth(ws, n);
+  const labels = ['教學組長', '出納組', '會計室', '校長'];
 
   const sig = ws.addRow(Array(n).fill(null));
   sig.height = 22;
-  labels.forEach((label, i) => {
-    const { start, end } = ranges[i];
-    const align =
-      i === 3 && lastWide ? 'right' : i === 0 && segmentWidth(ws, start, end) < totalW * 0.15 ? 'left' : 'center';
-    mergeSignatureSegment(ws, sig.number, start, end, label, align);
-  });
+  ws.mergeCells(`${colLetters(1)}${sig.number}:${colLetters(n)}${sig.number}`);
+  const sigCell = ws.getCell(sig.number, 1);
+  sigCell.value = buildEvenSpacedSignatureLine(labels, totalW);
+  sigCell.font = { size: 11, name: '微軟正黑體' };
+  sigCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
 
   ws.addRow([]);
   ws.addRow([]);
 
   const dean = ws.addRow(Array(n).fill(null));
   dean.height = 22;
-  const first = ranges[0];
-  const firstAlign =
-    segmentWidth(ws, first.start, first.end) < totalW * 0.15 ? 'left' : 'center';
-  mergeSignatureSegment(ws, dean.number, first.start, first.end, '教務主任', firstAlign);
+  ws.mergeCells(`${colLetters(1)}${dean.number}:${colLetters(n)}${dean.number}`);
+  const deanCell = ws.getCell(dean.number, 1);
+  deanCell.value = buildDeanSignatureLine(totalW);
+  deanCell.font = { size: 11, name: '微軟正黑體' };
+  deanCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
 }
 
 export async function exportOverloadPayrollExcel(
