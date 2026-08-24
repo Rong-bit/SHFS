@@ -195,42 +195,53 @@ function sheetTotalColWidth(ws: ExcelJS.Worksheet, colCount: number): number {
 }
 
 /**
- * 在表寬內把職稱中心放到等分點（略向兩端拉開），保證四個都進得去、不被裁切。
+ * 在表寬內等距放置職稱。空隙用全形空白（≈2 單位），避免半形空白過窄導致整段偏左；
+ * 總寬度不超過欄寬總和，避免校長被裁切。
  */
 function buildEvenSpacedSignatureLine(labels: string[], totalColWidth: number): string {
-  // 不可超過名義欄寬，否則 Excel 合併儲存格右側會裁掉（校長消失）
   const lineUnits = Math.max(48, Math.round(totalColWidth));
-  const unitToChar: (string | null)[] = Array.from({ length: lineUnits }, () => null);
-
-  labels.forEach((label, i) => {
+  type Place = { label: string; start: number; end: number };
+  const placements: Place[] = labels.map((label, i) => {
     const lw = excelTextWidth(label);
-    // 0.10 / 0.37 / 0.63 / 0.90：比正中四分點更靠兩端，又留邊距
-    const t = labels.length <= 1 ? 0.5 : 0.1 + (0.8 * i) / (labels.length - 1);
+    // 略向兩端拉開：約 8% → 92%
+    const t = labels.length <= 1 ? 0.5 : 0.08 + (0.84 * i) / (labels.length - 1);
     const center = t * lineUnits;
     let start = Math.round(center - lw / 2);
     start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
-
-    let u = start;
-    for (const ch of label) {
-      if (u >= lineUnits) break;
-      unitToChar[u] = ch;
-      u += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
-    }
+    return { label, start, end: start + lw };
   });
+
+  // 避免重疊
+  for (let i = 1; i < placements.length; i++) {
+    const minStart = placements[i - 1].end + 2;
+    if (placements[i].start < minStart) {
+      const lw = placements[i].end - placements[i].start;
+      placements[i].start = Math.min(minStart, Math.max(0, lineUnits - lw));
+      placements[i].end = placements[i].start + lw;
+    }
+  }
 
   let out = '';
   let u = 0;
   while (u < lineUnits) {
-    const ch = unitToChar[u];
-    if (ch != null) {
-      out += ch;
-      u += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
+    const hit = placements.find((p) => p.start === u);
+    if (hit) {
+      out += hit.label;
+      u = hit.end;
+      continue;
+    }
+    // 優先塞全形空白（2 單位），視覺寬度才接近 Excel 欄寬
+    const nextLabel = placements.find((p) => p.start > u);
+    const until = nextLabel ? nextLabel.start : lineUnits;
+    const gap = until - u;
+    if (gap >= 2) {
+      out += '　';
+      u += 2;
     } else {
       out += ' ';
       u += 1;
     }
   }
-  // 保留尾端空白撐滿寬度，但勿再加長超過 lineUnits
   return out;
 }
 
@@ -239,10 +250,21 @@ function buildDeanSignatureLine(totalColWidth: number): string {
   const lineUnits = Math.max(48, Math.round(totalColWidth));
   const label = '教務主任';
   const lw = excelTextWidth(label);
-  const center = 0.1 * lineUnits;
+  const center = 0.08 * lineUnits;
   let start = Math.round(center - lw / 2);
   start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
-  return `${' '.repeat(start)}${label}`;
+  let out = '';
+  let u = 0;
+  while (u < start) {
+    if (start - u >= 2) {
+      out += '　';
+      u += 2;
+    } else {
+      out += ' ';
+      u += 1;
+    }
+  }
+  return out + label;
 }
 
 /** 末頁簽核：整列合併後以等距字串定位四職稱（不受各欄寬不均影響） */
