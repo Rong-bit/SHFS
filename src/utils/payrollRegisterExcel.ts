@@ -165,10 +165,20 @@ function addTotalRow(ws: ExcelJS.Worksheet, values: CellValue[], mergeLabelCols 
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   ws.addRow([]);
   ws.addRow([]);
-  const sig = ws.addRow(['教學組長', '', '', '出納組', '', '', '會計室', '', '', '校長'].slice(0, colCount));
-  sig.eachCell((cell) => {
+  const labels = ['教學組長', '出納組', '會計室', '校長'];
+  const cols = Math.max(colCount, labels.length);
+  const base = Math.floor(cols / labels.length);
+  const extra = cols % labels.length;
+  const sig = ws.addRow(Array(cols).fill(''));
+  let col = 1;
+  labels.forEach((label, i) => {
+    const span = Math.max(1, base + (i < extra ? 1 : 0));
+    const cell = sig.getCell(col);
+    cell.value = label;
     cell.font = { size: 11, name: '微軟正黑體' };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    if (span > 1) ws.mergeCells(sig.number, col, sig.number, col + span - 1);
+    col += span;
   });
   ws.addRow([]);
   ws.addRow([]);
