@@ -162,33 +162,38 @@ function addTotalRow(ws: ExcelJS.Worksheet, values: CellValue[], mergeLabelCols 
   return r;
 }
 
-/** 末頁簽核：在資料表欄寬內均分四欄（對齊畫面／列印），教務主任在教學組長下方 */
+/**
+ * 末頁簽核欄位置（1-based）。
+ * 六欄清冊備註欄很寬，不可依「欄數均分合併」，否則前三個挤左、校長飛到右。
+ * 改為選定四個欄位放置，視覺上接近列印版四等分。
+ */
+function signatureLabelColumns(colCount: number): [number, number, number, number] {
+  const n = Math.max(colCount, 4);
+  if (n >= 10) return [1, 4, 7, 10];
+  if (n >= 9) return [1, 4, 7, 9];
+  if (n >= 8) return [1, 3, 6, 8];
+  if (n >= 7) return [1, 3, 5, 7];
+  // 代導師／代課六欄：薪資編號、代課天數旁、實發金額、備註
+  if (n >= 6) return [1, 3, 5, 6];
+  if (n >= 5) return [1, 2, 4, 5];
+  return [1, 2, 3, 4];
+}
+
+/** 末頁簽核：四欄橫向拉開，教務主任在教學組長正下方 */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   ws.addRow([]);
   ws.addRow([]);
 
-  const labels = ['教學組長', '出納組', '會計室', '校長'];
-  const n = Math.max(colCount, labels.length);
-  // 儘量左右對稱分配欄寬（例：6 欄 → 2,1,1,2）
-  const base = Math.floor(n / labels.length);
-  const extra = n % labels.length;
-  const spans = Array.from({ length: labels.length }, () => base);
-  const extraOrder = [0, labels.length - 1, 1, 2];
-  for (let i = 0; i < extra; i++) spans[extraOrder[i]] += 1;
-
+  const labels = ['教學組長', '出納組', '會計室', '校長'] as const;
+  const cols = signatureLabelColumns(colCount);
+  const n = Math.max(colCount, 4);
   const sig = ws.addRow(Array(n).fill(''));
   sig.height = 22;
-  let col = 1;
   labels.forEach((label, i) => {
-    const span = Math.max(1, spans[i]);
-    const start = col;
-    const end = col + span - 1;
-    if (span > 1) ws.mergeCells(sig.number, start, sig.number, end);
-    const cell = sig.getCell(start);
+    const cell = sig.getCell(cols[i]);
     cell.value = label;
     cell.font = { size: 11, name: '微軟正黑體' };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    col = end + 1;
   });
 
   ws.addRow([]);
@@ -196,9 +201,7 @@ function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
 
   const dean = ws.addRow(Array(n).fill(''));
   dean.height = 22;
-  const deanSpan = Math.max(1, spans[0]);
-  if (deanSpan > 1) ws.mergeCells(dean.number, 1, dean.number, deanSpan);
-  const deanCell = dean.getCell(1);
+  const deanCell = dean.getCell(cols[0]);
   deanCell.value = '教務主任';
   deanCell.font = { size: 11, name: '微軟正黑體' };
   deanCell.alignment = { horizontal: 'center', vertical: 'middle' };
