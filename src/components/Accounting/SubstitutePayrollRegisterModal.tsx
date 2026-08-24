@@ -16,6 +16,7 @@ import {
   type SubstitutePayrollTotals,
 } from '../../utils/substitutePayrollRegister';
 import { exportSubstitutePayrollExcel } from '../../utils/payrollRegisterExcel';
+import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
 import { PayrollRegisterPrintStyles, CELL_CENTER } from './PayrollRegisterPrintStyles';
 import { PayrollRegisterSignatureBlock } from './PayrollRegisterSignatureBlock';
 import type { MonthlyTeacherSettlement } from '../../types';
@@ -88,7 +89,10 @@ export const SubstitutePayrollRegisterModal: React.FC<SubstitutePayrollRegisterM
 
   const title = `${systemConfig.schoolName}日校${rocYear}年${month}月份代課鐘點費印領清冊`;
 
-  const handlePrint = () => window.print();
+  const handlePrint = () =>
+    printWithDocumentTitle(
+      `${systemConfig.schoolName}_${rocYear}年${month}月_代課鐘點費印領清冊`
+    );
 
   const handleExportExcel = async () => {
     if (pages.length === 0) return;

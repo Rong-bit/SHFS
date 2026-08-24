@@ -182,109 +182,99 @@ function sheetColWidths(ws: ExcelJS.Worksheet, colCount: number): number[] {
   });
 }
 
+function excelTextWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) {
+    w += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
+  }
+  return w;
+}
+
 /**
- * 簽核列：依表寬切成四段連續欄位（不改動資料欄寬、不重疊）。
- * 舊算法在「備註」過寬的 6 欄表會讓第 4 季落空，退回 1:1 覆蓋「教學組長」成「校長」。
+ * 對齊瀏覽器列印簽核：四職稱中心約在 12.5%／37.5%／62.5%／87.5%。
+ * 不依資料欄寬切分（6 欄備註過寬時會計室／校長會偏左）。
+ * 全形空白撐位；略放大單位以補償 Excel 欄寬≠字寬造成的左擠。
  */
-function signatureQuartersByWidth(
-  ws: ExcelJS.Worksheet,
-  colCount: number
-): Array<{ start: number; end: number }> {
-  const widths = sheetColWidths(ws, colCount);
-  const n = Math.max(widths.length, 4);
-  const cum: number[] = [0];
-  for (let i = 0; i < n; i++) {
-    cum.push(cum[cum.length - 1] + (widths[i] ?? 10));
-  }
-  const total = cum[n] || 1;
+function buildPrintEqualLabels(labels: string[], totalColWidth: number): string {
+  const raw = Math.max(64, Math.round(totalColWidth * 1.22));
+  const lineUnits = raw % 2 === 0 ? raw : raw + 1;
 
-  // 在 25%／50%／75% 處切欄，並保證四段皆至少 1 欄、互不重疊
-  const ends: number[] = [];
-  let prevEnd = 0;
-  for (let i = 1; i <= 3; i++) {
-    const target = (i / 4) * total;
-    const minEnd = prevEnd + 1;
-    const maxEnd = n - (4 - i); // 留給後面每一季至少一欄
-    let best = minEnd;
-    let bestD = Infinity;
-    for (let c = minEnd; c <= maxEnd; c++) {
-      const d = Math.abs(cum[c] - target);
-      if (d < bestD) {
-        bestD = d;
-        best = c;
-      }
-    }
-    ends.push(best);
-    prevEnd = best;
-  }
-  ends.push(n);
-
-  const ranges: Array<{ start: number; end: number }> = [];
-  let prev = 0;
-  for (const end of ends) {
-    const start = prev + 1;
-    ranges.push({ start, end: Math.max(start, end) });
-    prev = end;
-  }
-  return ranges;
-}
-
-function applyQuarterCells(
-  ws: ExcelJS.Worksheet,
-  rowNumber: number,
-  ranges: Array<{ start: number; end: number }>,
-  values: Array<string | null>,
-  opts: { center?: boolean; size?: number; color?: string } = {}
-) {
-  ranges.forEach(({ start, end }, i) => {
-    if (end > start) {
-      ws.mergeCells(`${colLetters(start)}${rowNumber}:${colLetters(end)}${rowNumber}`);
-    }
-    const cell = ws.getCell(rowNumber, start);
-    const val = values[i];
-    if (val) {
-      cell.value = val;
-      cell.font = {
-        size: opts.size ?? 9,
-        name: '微軟正黑體',
-        color: { argb: opts.color ?? 'FF334155' },
-      };
-    }
-    if (opts.center) {
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
-    }
+  type Place = { start: number; text: string; tw: number };
+  const paints: Place[] = [];
+  labels.forEach((label, i) => {
+    if (!label) return;
+    const tw = excelTextWidth(label);
+    const center = ((i + 0.5) / 4) * lineUnits;
+    let start = Math.round(center - tw / 2);
+    if (start % 2 === 1) start -= 1;
+    start = Math.max(0, Math.min(start, Math.max(0, lineUnits - tw)));
+    if (start % 2 === 1) start += 1;
+    paints.push({ start, text: label, tw });
   });
+  paints.sort((a, b) => a.start - b.start);
+  for (let i = 1; i < paints.length; i++) {
+    const minStart = paints[i - 1].start + paints[i - 1].tw + 2;
+    if (paints[i].start < minStart) {
+      let s = minStart;
+      if (s % 2 === 1) s += 1;
+      paints[i].start = Math.min(s, Math.max(0, lineUnits - paints[i].tw));
+    }
+  }
+
+  let out = '';
+  let u = 0;
+  for (const p of paints) {
+    while (u < p.start) {
+      out += '　';
+      u += 2;
+    }
+    out += p.text;
+    u = p.start + p.tw;
+  }
+  while (u < lineUnits) {
+    out += '　';
+    u += 2;
+  }
+  // 降低 Excel／PDF 裁掉尾隨空白導致整列左移
+  return `${out}\u200B`;
 }
 
-/** 末頁簽核：四職稱等分置中 + 教務主任；不畫底線（避免欄寬／字型失真） */
+function addMergedLabelRow(
+  ws: ExcelJS.Worksheet,
+  colCount: number,
+  value: string,
+  height: number
+) {
+  const row = ws.addRow(Array(colCount).fill(null));
+  row.height = height;
+  ws.mergeCells(`${colLetters(1)}${row.number}:${colLetters(colCount)}${row.number}`);
+  const cell = ws.getCell(row.number, 1);
+  cell.value = value;
+  cell.font = { size: 9, name: '微軟正黑體', color: { argb: 'FF334155' } };
+  cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
+  return row;
+}
+
+/**
+ * 末頁簽核：對齊列印 PDF 四等分位置；不畫底線。
+ * 教務主任對齊教學組長（左四分位）。
+ */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const n = Math.max(colCount, 4);
+  const widths = sheetColWidths(ws, n);
+  const totalW = widths.reduce((a, b) => a + b, 0);
   const labels = ['教學組長', '出納組', '會計室', '校長'];
-  const ranges = signatureQuartersByWidth(ws, n);
 
-  // 簽名書寫留白
   const spacer = ws.addRow(Array(n).fill(null));
   spacer.height = 28;
 
-  const sigRow = ws.addRow(Array(n).fill(null));
-  sigRow.height = 16;
-  applyQuarterCells(ws, sigRow.number, ranges, labels, {
-    center: true,
-    size: 9,
-    color: 'FF334155',
-  });
+  addMergedLabelRow(ws, n, buildPrintEqualLabels(labels, totalW), 16);
 
-  // 教務主任上方列高 1cm（Excel 列高單位為 point，1cm ≈ 28.35pt）
+  // 教務主任上方列高 1cm
   const mid = ws.addRow(Array(n).fill(null));
   mid.height = 28.35;
 
-  const dean = ws.addRow(Array(n).fill(null));
-  dean.height = 16;
-  applyQuarterCells(ws, dean.number, [ranges[0]], ['教務主任'], {
-    center: true,
-    size: 9,
-    color: 'FF334155',
-  });
+  addMergedLabelRow(ws, n, buildPrintEqualLabels(['教務主任'], totalW), 16);
 }
 
 export async function exportOverloadPayrollExcel(
