@@ -1,4 +1,10 @@
-import { DayOfWeek, PartialNonTeachingDay, SubstituteRequest, TemporaryScheduleMove } from '../types';
+import {
+  CourseSession,
+  DayOfWeek,
+  PartialNonTeachingDay,
+  SubstituteRequest,
+  TemporaryScheduleMove,
+} from '../types';
 import { dateToIsoLocal, isNonTeachingDate } from './holidays';
 
 /** YYYY-MM-DD → 週一=1 … 週五=5；週末回傳 null */
@@ -36,6 +42,71 @@ export function isoDateForDayOfWeekInCurrentWeek(dayOfWeek: DayOfWeek, now = new
   const target = new Date(monday);
   target.setDate(monday.getDate() + (dayOfWeek - 1));
   return dateToIsoLocal(target);
+}
+
+export function isLeaveCoverNote(notes?: string): boolean {
+  return Boolean(notes?.includes('[請假派代]') || notes?.includes('[代課]'));
+}
+
+type LeaveCoverDisplayRequest = Pick<
+  SubstituteRequest,
+  | 'status'
+  | 'requestType'
+  | 'applicantTeacherId'
+  | 'leaveDateStart'
+  | 'leaveDateEnd'
+  | 'originalSession'
+  | 'substituteTeacherName'
+>;
+
+/** 課表格：本週對應日是否仍有已核准請假派代（過週不顯示，即使 notes 仍留永久註記） */
+export function findActiveLeaveCoverRequestForSession(
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId'>,
+  requests: LeaveCoverDisplayRequest[],
+  now = new Date()
+): LeaveCoverDisplayRequest | undefined {
+  const weekDate = isoDateForDayOfWeekInCurrentWeek(session.dayOfWeek, now);
+  return requests.find(
+    (r) =>
+      r.status === 'approved' &&
+      r.requestType === 'substitute' &&
+      (r.originalSession.id === session.id ||
+        (r.originalSession.dayOfWeek === session.dayOfWeek &&
+          r.originalSession.period === session.period &&
+          r.applicantTeacherId === session.teacherId)) &&
+      leaveRangeCoversDate(r.leaveDateStart, r.leaveDateEnd, weekDate)
+  );
+}
+
+/**
+ * 課表格子請假派代表籤。
+ * 核准時 notes 會永久寫入，顯示必須再依本週日期過濾，過週恢復平常課表。
+ */
+export function leaveCoverLabelForSessionDisplay(
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'notes'>,
+  requests: LeaveCoverDisplayRequest[],
+  now = new Date()
+): string | null {
+  const hit = findActiveLeaveCoverRequestForSession(session, requests, now);
+  if (!hit) return null;
+  if (isLeaveCoverNote(session.notes)) return session.notes || null;
+  const end = resolveLeaveDateEnd(hit.leaveDateStart, hit.leaveDateEnd);
+  const range =
+    hit.leaveDateStart
+      ? ` ${hit.leaveDateStart}${end && end !== hit.leaveDateStart ? `～${end}` : ''}`
+      : '';
+  return `[請假派代${range}] 代課教師：${hit.substituteTeacherName || '已派代'}`;
+}
+
+/** 全校課表等：非請假註記照常顯示；請假派代僅本週涵蓋日才顯示 */
+export function sessionNotesForCurrentWeekDisplay(
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'notes'>,
+  requests: LeaveCoverDisplayRequest[],
+  now = new Date()
+): string | null {
+  if (!session.notes) return null;
+  if (!isLeaveCoverNote(session.notes)) return session.notes;
+  return findActiveLeaveCoverRequestForSession(session, requests, now) ? session.notes : null;
 }
 
 export type ExcludeDates = Set<string> | Iterable<string> | null | undefined;

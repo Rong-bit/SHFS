@@ -22,9 +22,10 @@ import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { displayTeacherTitle, gradeYearFromClassName, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import { classifyVenueKind, venueKindLabel } from '../../utils/venueKinds';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
+import { sessionNotesForCurrentWeekDisplay } from '../../utils/leaveDates';
 
 export const SchoolTimetableMatrix: React.FC = () => {
-  const { sessions, teachers, venues, systemConfig, setIsImportModalOpen } = useApp();
+  const { sessions, teachers, venues, systemConfig, setIsImportModalOpen, requests } = useApp();
 
   type ViewDimension = 'venue' | 'class' | 'teacher' | 'department';
   type VenueListGroup = 'workshop' | 'classroom';
@@ -462,11 +463,17 @@ export const SchoolTimetableMatrix: React.FC = () => {
                                       <SessionVenueSelect session={session} />
                                     </div>
 
-                                    {session.notes && (
-                                      <div className="text-[10px] text-indigo-700 font-bold mt-0.5 truncate">
-                                        {session.notes}
-                                      </div>
-                                    )}
+                                    {(() => {
+                                      const notes = sessionNotesForCurrentWeekDisplay(
+                                        session,
+                                        requests
+                                      );
+                                      return notes ? (
+                                        <div className="text-[10px] text-indigo-700 font-bold mt-0.5 truncate">
+                                          {notes}
+                                        </div>
+                                      ) : null;
+                                    })()}
                                   </div>
                                 ))}
                               </div>

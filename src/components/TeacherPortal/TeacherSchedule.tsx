@@ -35,8 +35,8 @@ import {
 } from '../../utils/temporarySwap';
 import {
   isoDateForDayOfWeekInCurrentWeek,
+  leaveCoverLabelForSessionDisplay,
   leaveRangeCoversDate,
-  resolveLeaveDateEnd,
 } from '../../utils/leaveDates';
 
 export const TeacherSchedule: React.FC = () => {
@@ -123,35 +123,8 @@ export const TeacherSchedule: React.FC = () => {
   const getSessionsAt = (day: DayOfWeek, period: number) =>
     teacherSessions.filter((s) => s.dayOfWeek === day && s.period === period);
   const getSessionAt = (day: DayOfWeek, period: number) => getSessionsAt(day, period)[0];
-  const getLeaveCoverLabel = (session: CourseSession) => {
-    if (session.notes?.includes('[請假派代]') || session.notes?.includes('[代課]')) {
-      return session.notes;
-    }
-    const hit = requests.find(
-      (r) =>
-        r.status === 'approved' &&
-        r.requestType === 'substitute' &&
-        r.applicantTeacherId === currentTeacher.id &&
-        (r.originalSession.id === session.id ||
-          (r.originalSession.dayOfWeek === session.dayOfWeek &&
-            r.originalSession.period === session.period)) &&
-        leaveRangeCoversDate(
-          r.leaveDateStart,
-          r.leaveDateEnd,
-          isoDateForDayOfWeekInCurrentWeek(session.dayOfWeek)
-        )
-    );
-    if (!hit) return null;
-    const range =
-      hit.leaveDateStart
-        ? ` ${hit.leaveDateStart}${
-            resolveLeaveDateEnd(hit.leaveDateStart, hit.leaveDateEnd) !== hit.leaveDateStart
-              ? `～${resolveLeaveDateEnd(hit.leaveDateStart, hit.leaveDateEnd)}`
-              : ''
-          }`
-        : '';
-    return `[請假派代${range}] 代課教師：${hit.substituteTeacherName || '已派代'}`;
-  };
+  const getLeaveCoverLabel = (session: CourseSession) =>
+    leaveCoverLabelForSessionDisplay(session, requests);
   const getTemporarySwapLabel = (session: CourseSession) => {
     const swaps = findApprovedTemporarySwapsForSession(session, requests);
     if (swaps.length === 0) return null;
