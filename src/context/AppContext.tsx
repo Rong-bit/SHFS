@@ -23,6 +23,7 @@ import {
   withMigratedAuthConfig,
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical, splitTeacherNames } from '../utils/scheduleImporter';
+import { formatLocalDateTime } from '../utils/dateTime';
 import { ensureSchoolEmail } from '../utils/schoolEmail';
 import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
@@ -1448,7 +1449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const month = requestMonth ?? new Date().getMonth() + 1;
     const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, month);
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = formatLocalDateTime();
 
     let progressiveRequests = requests.slice();
     const prepared: SubstituteRequest[] = [];
@@ -1582,7 +1583,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { ok: false, reason: clashStatus.messages[0] || '存在衝堂衝突' };
     }
 
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = formatLocalDateTime();
     // 保留申請快照之時段；resolve 僅用於衝堂／找現行 id，不可寫回單據蓋掉原時段
     const approvedReq: SubstituteRequest = {
       ...targetReq,
@@ -1755,7 +1756,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const month = requestMonth ?? systemConfig.currentMonth;
     const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, month);
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = formatLocalDateTime();
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const staffName = (() => {
       const staff =
@@ -1958,7 +1959,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     setSessions(rolled.sessions);
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = formatLocalDateTime();
     const ids = new Set(group.map((r) => r.id));
     setRequests((prev) =>
       prev.map((r) =>
