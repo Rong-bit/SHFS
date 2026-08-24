@@ -182,55 +182,45 @@ function sheetColWidths(ws: ExcelJS.Worksheet, colCount: number): number[] {
   });
 }
 
-function excelTextWidth(text: string): number {
-  let w = 0;
-  for (const ch of text) {
-    w += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
-  }
-  return w;
-}
-
 /**
- * 列印版簽核：四等分欄位合併 + 底框（真線段、段間空欄），避免字元底線被字型縮短左擠。
- * 欄數 < 7 時無法留 3 個空隙，改以全形「＿」字元並加大密度以撐滿表寬。
+ * 簽核列：依欄寬累計把欄位分到四等分（不改動資料欄寬）。
+ * Excel 無法穩定畫出與列印一致的分段底線，故只放職稱、不畫底線。
  */
-function signatureQuarterRanges(colCount: number): Array<{ start: number; end: number }> | null {
-  const n = Math.max(colCount, 1);
-  // 6 欄：盡量空出 2 個空隙（末兩段會相鄰，仍優於全連線）
-  if (n === 6) {
-    return [
-      { start: 1, end: 1 },
-      { start: 3, end: 3 },
-      { start: 5, end: 5 },
-      { start: 6, end: 6 },
-    ];
+function signatureQuartersByWidth(
+  ws: ExcelJS.Worksheet,
+  colCount: number
+): Array<{ start: number; end: number }> {
+  const widths = sheetColWidths(ws, colCount);
+  const n = widths.length;
+  const cum: number[] = [0];
+  for (const w of widths) cum.push(cum[cum.length - 1] + w);
+  const total = cum[n] || 1;
+
+  const groups: number[][] = [[], [], [], []];
+  for (let c = 1; c <= n; c++) {
+    const mid = (cum[c - 1] + cum[c]) / 2;
+    const q = Math.min(3, Math.floor((mid / total) * 4));
+    groups[q].push(c);
   }
-  if (n < 7) return null; // 4 段 + 3 空欄
-  const usable = n - 3;
-  const base = Math.floor(usable / 4);
-  let rem = usable % 4;
-  const sizes = Array.from({ length: 4 }, () => {
-    const s = base + (rem > 0 ? 1 : 0);
-    if (rem > 0) rem -= 1;
-    return Math.max(1, s);
-  });
-  const ranges: Array<{ start: number; end: number }> = [];
-  let c = 1;
-  for (let i = 0; i < 4; i++) {
-    const startCol = c;
-    const endCol = c + sizes[i] - 1;
-    if (endCol > n) return null;
-    ranges.push({ start: startCol, end: endCol });
-    c = endCol + 2; // 跳過 1 欄空隙
-  }
-  ranges[3].end = n;
-  for (let i = 1; i < 4; i++) {
-    if (ranges[i].start <= ranges[i - 1].end + 1) {
-      ranges[i].start = ranges[i - 1].end + 2;
-      if (ranges[i].start > ranges[i].end) return null;
+
+  for (let q = 0; q < 4; q++) {
+    if (groups[q].length > 0) continue;
+    const donor =
+      q > 0 && groups[q - 1].length > 1 ? q - 1 : q < 3 && groups[q + 1].length > 1 ? q + 1 : -1;
+    if (donor < 0) continue;
+    if (donor < q) {
+      const col = groups[donor].pop()!;
+      groups[q].unshift(col);
+    } else {
+      const col = groups[donor].shift()!;
+      groups[q].push(col);
     }
   }
-  return ranges;
+
+  return groups.map((cols) => {
+    if (cols.length === 0) return { start: 1, end: 1 };
+    return { start: cols[0], end: cols[cols.length - 1] };
+  });
 }
 
 function applyQuarterCells(
@@ -238,179 +228,53 @@ function applyQuarterCells(
   rowNumber: number,
   ranges: Array<{ start: number; end: number }>,
   values: Array<string | null>,
-  opts: { bottomBorder?: boolean; center?: boolean; size?: number } = {}
+  opts: { center?: boolean; size?: number; color?: string } = {}
 ) {
   ranges.forEach(({ start, end }, i) => {
     if (end > start) {
       ws.mergeCells(`${colLetters(start)}${rowNumber}:${colLetters(end)}${rowNumber}`);
     }
     const cell = ws.getCell(rowNumber, start);
-    if (values[i]) {
-      cell.value = values[i];
-      cell.font = { size: opts.size ?? 9, name: '微軟正黑體', color: { argb: 'FF334155' } };
+    const val = values[i];
+    if (val) {
+      cell.value = val;
+      cell.font = {
+        size: opts.size ?? 9,
+        name: '微軟正黑體',
+        color: { argb: opts.color ?? 'FF334155' },
+      };
     }
     if (opts.center) {
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
     }
-    if (opts.bottomBorder) {
-      cell.border = {
-        bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
-      };
-    }
   });
 }
 
-/** 欄數不足時：全形低線＿（比 ─ 更接近全形寬），四段＋空隙 */
-function buildFallbackUnderline(totalColWidth: number, segmentIndexes: number[]): string {
-  // Excel 欄寬單位 ≠ 字元寬；略放大密度避免左擠（8.pdf 實測約短 19%）
-  const lineUnits = Math.max(72, Math.round(totalColWidth * 1.22));
-  const gap = Math.max(2, Math.round(lineUnits * 0.012));
-  const seg = Math.max(10, Math.floor((lineUnits - 3 * gap) / 4));
-  const segments: Array<{ start: number; end: number }> = [];
-  let x = 0;
-  for (let i = 0; i < 4; i++) {
-    segments.push({ start: x, end: x + seg });
-    x += seg + gap;
-  }
-  let out = '';
-  let u = 0;
-  const target = segments[3].end;
-  const paint = new Set(segmentIndexes);
-  for (let i = 0; i < 4; i++) {
-    const { start, end } = segments[i];
-    while (u < start) {
-      out += '　';
-      u += 2;
-    }
-    if (paint.has(i)) {
-      const chars = Math.max(5, Math.floor((end - start) / 2));
-      out += '＿'.repeat(chars);
-      u = start + chars * 2;
-    }
-  }
-  while (u < target) {
-    out += '　';
-    u += 2;
-  }
-  return out;
-}
-
-function buildFallbackLabels(totalColWidth: number, labels: string[]): string {
-  const lineUnits = Math.max(72, Math.round(totalColWidth * 1.22));
-  const gap = Math.max(2, Math.round(lineUnits * 0.012));
-  const seg = Math.max(10, Math.floor((lineUnits - 3 * gap) / 4));
-  let out = '';
-  let u = 0;
-  let x = 0;
-  for (let i = 0; i < 4; i++) {
-    const start = x;
-    const end = x + seg;
-    const center = (start + end) / 2;
-    const label = labels[i] || '';
-    const lw = excelTextWidth(label);
-    let ls = label ? Math.round(center - lw / 2) : start;
-    ls = Math.max(start, Math.min(ls, end - lw));
-    while (u < ls) {
-      out += '　';
-      u += 2;
-    }
-    if (label) {
-      out += label;
-      u = ls + lw;
-    }
-    x = end + gap;
-  }
-  const target = x - gap;
-  while (u < target) {
-    out += '　';
-    u += 2;
-  }
-  // 末端加不可裁切標記，降低 Excel 去掉尾隨空白導致左擠
-  return out + '\u200B';
-}
-
-function addMergedTextRow(
-  ws: ExcelJS.Worksheet,
-  colCount: number,
-  value: string,
-  opts: { height?: number; size?: number; color?: string } = {}
-) {
-  const row = ws.addRow(Array(colCount).fill(null));
-  row.height = opts.height ?? 16;
-  ws.mergeCells(`${colLetters(1)}${row.number}:${colLetters(colCount)}${row.number}`);
-  const cell = ws.getCell(row.number, 1);
-  cell.value = value;
-  cell.font = {
-    size: opts.size ?? 9,
-    name: '微軟正黑體',
-    color: opts.color ? { argb: opts.color } : { argb: 'FF334155' },
-  };
-  cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
-  return row;
-}
-
-/**
- * 末頁簽核：對齊列印版（2.pdf）
- * 優先：四段合併儲存格底框（段間空欄）+ 職稱置中
- */
+/** 末頁簽核：四職稱等分置中 + 教務主任；不畫底線（避免欄寬／字型失真） */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const n = Math.max(colCount, 4);
   const labels = ['教學組長', '出納組', '會計室', '校長'];
-  const ranges = signatureQuarterRanges(n);
+  const ranges = signatureQuartersByWidth(ws, n);
 
+  // 簽名書寫留白
   const spacer = ws.addRow(Array(n).fill(null));
-  spacer.height = 22;
+  spacer.height = 28;
 
-  if (ranges) {
-    const lineRow = ws.addRow(Array(n).fill(null));
-    lineRow.height = 14;
-    applyQuarterCells(ws, lineRow.number, ranges, [null, null, null, null], {
-      bottomBorder: true,
-    });
-
-    const sigRow = ws.addRow(Array(n).fill(null));
-    sigRow.height = 16;
-    applyQuarterCells(ws, sigRow.number, ranges, labels, { center: true, size: 9 });
-
-    const mid = ws.addRow(Array(n).fill(null));
-    mid.height = 14;
-    const deanSpacer = ws.addRow(Array(n).fill(null));
-    deanSpacer.height = 18;
-
-    const deanLine = ws.addRow(Array(n).fill(null));
-    deanLine.height = 14;
-    applyQuarterCells(ws, deanLine.number, [ranges[0]], [null], { bottomBorder: true });
-
-    const dean = ws.addRow(Array(n).fill(null));
-    dean.height = 16;
-    applyQuarterCells(ws, dean.number, [ranges[0]], ['教務主任'], { center: true, size: 9 });
-    return;
-  }
-
-  // 6 欄表：字元後備
-  const widths = sheetColWidths(ws, n);
-  const totalW = widths.reduce((a, b) => a + b, 0);
-  addMergedTextRow(ws, n, buildFallbackUnderline(totalW, [0, 1, 2, 3]), {
-    height: 12,
-    size: 9,
-    color: 'FF94A3B8',
-  });
-  addMergedTextRow(ws, n, buildFallbackLabels(totalW, labels), {
-    height: 16,
+  const sigRow = ws.addRow(Array(n).fill(null));
+  sigRow.height = 16;
+  applyQuarterCells(ws, sigRow.number, ranges, labels, {
+    center: true,
     size: 9,
     color: 'FF334155',
   });
+
   const mid = ws.addRow(Array(n).fill(null));
-  mid.height = 14;
-  const deanSpacer = ws.addRow(Array(n).fill(null));
-  deanSpacer.height = 18;
-  addMergedTextRow(ws, n, buildFallbackUnderline(totalW, [0]), {
-    height: 12,
-    size: 9,
-    color: 'FF94A3B8',
-  });
-  addMergedTextRow(ws, n, buildFallbackLabels(totalW, ['教務主任', '', '', '']), {
-    height: 16,
+  mid.height = 22;
+
+  const dean = ws.addRow(Array(n).fill(null));
+  dean.height = 16;
+  applyQuarterCells(ws, dean.number, [ranges[0]], ['教務主任'], {
+    center: true,
     size: 9,
     color: 'FF334155',
   });
@@ -439,7 +303,7 @@ export async function exportOverloadPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('兼課印領清冊');
-  setupSheet(ws, colCount, [12, 12, 4, 12, 12, 4, 22, 4, 22]);
+  setupSheet(ws, colCount, [10, 10, 6.5, 8.6, 6.5, 6.5, 6.5, 12, 35]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
@@ -522,7 +386,7 @@ export async function exportSubstitutePayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('代課印領清冊');
-  setupSheet(ws, colCount, [20, 7, 20, 7, 20, 20]);
+  setupSheet(ws, colCount, [12, 12, 10, 10, 12, 58]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
@@ -593,7 +457,7 @@ export async function exportCounselingPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('課輔印領清冊');
-  setupSheet(ws, colCount, [11, 11, 4, 11, 11, 4, 11, 11, 4, 24]);
+  setupSheet(ws, colCount, [12, 12, 12, 12, 10, 10, 10, 10, 12, 52]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
@@ -685,7 +549,7 @@ export async function exportActingHomeroomPayrollExcel(
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('代導師印領清冊');
-  setupSheet(ws, colCount, [20, 7, 20, 7, 20, 20]);
+  setupSheet(ws, colCount, [12, 12, 10, 10, 12, 58]);
 
   const totalPages = pages.length;
   pages.forEach((page, idx) => {
