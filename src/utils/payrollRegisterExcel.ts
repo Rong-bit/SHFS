@@ -162,15 +162,31 @@ function addTotalRow(ws: ExcelJS.Worksheet, values: CellValue[], mergeLabelCols 
   return r;
 }
 
+/** 欄號（1-based）→ Excel 欄位字母 */
+function colLetters(col: number): string {
+  let n = col;
+  let s = '';
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 /**
  * 將第 1～n 欄依欄數均分成 4 段（合併用起迄，1-based inclusive）。
- * 例：6 欄 → 2+2+1+1；9 欄 → 3+2+2+2；10 欄 → 3+3+2+2
+ * 餘數優先分給左右兩側，讓四段都盡量有「合併區塊」感（例：6 欄 → 2+1+1+2）。
  */
 function signatureMergeRanges(colCount: number): Array<{ start: number; end: number }> {
   const n = Math.max(colCount, 4);
   const base = Math.floor(n / 4);
   const extra = n % 4;
-  const spans = Array.from({ length: 4 }, (_, i) => base + (i < extra ? 1 : 0));
+  const spans = Array.from({ length: 4 }, () => base);
+  // 餘數先補兩側，再補中間：6→[2,1,1,2]、7→[2,2,1,2]、9→[3,2,2,2]
+  const extraOrder = [0, 3, 1, 2];
+  for (let i = 0; i < extra; i++) spans[extraOrder[i]] += 1;
+
   const ranges: Array<{ start: number; end: number }> = [];
   let col = 1;
   for (const span of spans) {
@@ -182,7 +198,23 @@ function signatureMergeRanges(colCount: number): Array<{ start: number; end: num
   return ranges;
 }
 
-/** 末頁簽核：首欄至末欄合併成四等分並置中；教務主任在教學組長段下方 */
+function mergeSignatureSegment(
+  ws: ExcelJS.Worksheet,
+  row: number,
+  start: number,
+  end: number,
+  label: string
+) {
+  if (end > start) {
+    ws.mergeCells(`${colLetters(start)}${row}:${colLetters(end)}${row}`);
+  }
+  const cell = ws.getCell(row, start);
+  cell.value = label;
+  cell.font = { size: 11, name: '微軟正黑體' };
+  cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
+}
+
+/** 末頁簽核：首欄至末欄合併成四段並置中；教務主任在教學組長段下方 */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   ws.addRow([]);
   ws.addRow([]);
@@ -191,28 +223,21 @@ function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const ranges = signatureMergeRanges(colCount);
   const n = Math.max(colCount, 4);
 
-  const sig = ws.addRow(Array(n).fill(''));
+  // 先建立列，再以 A1 位址字串合併（比數字參數較不易漏合）
+  const sig = ws.addRow(Array(n).fill(null));
   sig.height = 22;
   labels.forEach((label, i) => {
     const { start, end } = ranges[i];
-    if (end > start) ws.mergeCells(sig.number, start, sig.number, end);
-    const cell = sig.getCell(start);
-    cell.value = label;
-    cell.font = { size: 11, name: '微軟正黑體' };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    mergeSignatureSegment(ws, sig.number, start, end, label);
   });
 
   ws.addRow([]);
   ws.addRow([]);
 
-  const dean = ws.addRow(Array(n).fill(''));
+  const dean = ws.addRow(Array(n).fill(null));
   dean.height = 22;
   const first = ranges[0];
-  if (first.end > first.start) ws.mergeCells(dean.number, first.start, dean.number, first.end);
-  const deanCell = dean.getCell(first.start);
-  deanCell.value = '教務主任';
-  deanCell.font = { size: 11, name: '微軟正黑體' };
-  deanCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  mergeSignatureSegment(ws, dean.number, first.start, first.end, '教務主任');
 }
 
 export async function exportOverloadPayrollExcel(
