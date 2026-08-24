@@ -162,29 +162,46 @@ function addTotalRow(ws: ExcelJS.Worksheet, values: CellValue[], mergeLabelCols 
   return r;
 }
 
+/** 末頁簽核：在資料表欄寬內均分四欄（對齊畫面／列印），教務主任在教學組長下方 */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   ws.addRow([]);
   ws.addRow([]);
+
   const labels = ['教學組長', '出納組', '會計室', '校長'];
-  const cols = Math.max(colCount, labels.length);
-  const base = Math.floor(cols / labels.length);
-  const extra = cols % labels.length;
-  const sig = ws.addRow(Array(cols).fill(''));
+  const n = Math.max(colCount, labels.length);
+  // 儘量左右對稱分配欄寬（例：6 欄 → 2,1,1,2）
+  const base = Math.floor(n / labels.length);
+  const extra = n % labels.length;
+  const spans = Array.from({ length: labels.length }, () => base);
+  const extraOrder = [0, labels.length - 1, 1, 2];
+  for (let i = 0; i < extra; i++) spans[extraOrder[i]] += 1;
+
+  const sig = ws.addRow(Array(n).fill(''));
+  sig.height = 22;
   let col = 1;
   labels.forEach((label, i) => {
-    const span = Math.max(1, base + (i < extra ? 1 : 0));
-    const cell = sig.getCell(col);
+    const span = Math.max(1, spans[i]);
+    const start = col;
+    const end = col + span - 1;
+    if (span > 1) ws.mergeCells(sig.number, start, sig.number, end);
+    const cell = sig.getCell(start);
     cell.value = label;
     cell.font = { size: 11, name: '微軟正黑體' };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    if (span > 1) ws.mergeCells(sig.number, col, sig.number, col + span - 1);
-    col += span;
+    col = end + 1;
   });
+
   ws.addRow([]);
   ws.addRow([]);
-  const dean = ws.addRow(['教務主任']);
-  dean.getCell(1).font = { size: 11, name: '微軟正黑體' };
-  dean.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  const dean = ws.addRow(Array(n).fill(''));
+  dean.height = 22;
+  const deanSpan = Math.max(1, spans[0]);
+  if (deanSpan > 1) ws.mergeCells(dean.number, 1, dean.number, deanSpan);
+  const deanCell = dean.getCell(1);
+  deanCell.value = '教務主任';
+  deanCell.font = { size: 11, name: '微軟正黑體' };
+  deanCell.alignment = { horizontal: 'center', vertical: 'middle' };
 }
 
 export async function exportOverloadPayrollExcel(
