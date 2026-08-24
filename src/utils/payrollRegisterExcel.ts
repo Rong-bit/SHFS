@@ -31,7 +31,7 @@ function styleTitleCell(cell: ExcelJS.Cell) {
 }
 
 function styleHeaderCell(cell: ExcelJS.Cell) {
-  cell.font = { bold: true, size: 11, name: '微軟正黑體' };
+  cell.font = { bold: true, size: 12, name: '微軟正黑體' };
   cell.alignment = { ...centerAlign };
   cell.border = thinBorder;
   cell.fill = {
@@ -42,7 +42,7 @@ function styleHeaderCell(cell: ExcelJS.Cell) {
 }
 
 function styleDataCell(cell: ExcelJS.Cell, opts?: { bold?: boolean; align?: 'left' | 'center' | 'right'; numFmt?: string }) {
-  cell.font = { bold: Boolean(opts?.bold), size: 11, name: '微軟正黑體' };
+  cell.font = { bold: Boolean(opts?.bold), size: 12, name: '微軟正黑體' };
   cell.alignment = {
     horizontal: opts?.align || 'center',
     vertical: 'middle',
@@ -53,7 +53,7 @@ function styleDataCell(cell: ExcelJS.Cell, opts?: { bold?: boolean; align?: 'lef
 }
 
 function styleTotalCell(cell: ExcelJS.Cell) {
-  cell.font = { bold: true, size: 11, name: '微軟正黑體' };
+  cell.font = { bold: true, size: 12, name: '微軟正黑體' };
   cell.alignment = { ...centerAlign };
   cell.border = thinBorder;
   cell.fill = {
@@ -250,7 +250,7 @@ function addMergedLabelRow(
   ws.mergeCells(`${colLetters(1)}${row.number}:${colLetters(colCount)}${row.number}`);
   const cell = ws.getCell(row.number, 1);
   cell.value = value;
-  cell.font = { size: 9, name: '微軟正黑體', color: { argb: 'FF334155' } };
+  cell.font = { size: 12, name: '微軟正黑體', color: { argb: 'FF334155' } };
   cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
   return row;
 }
