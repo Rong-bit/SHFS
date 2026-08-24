@@ -191,161 +191,144 @@ function excelTextWidth(text: string): number {
 }
 
 /**
- * 對齊瀏覽器列印（2.pdf）：四職稱中心約在 12.5%／37.5%／62.5%／87.5%。
- * 全形空白撐寬；總寬不超過欄寬總和以免裁切。
+ * 對齊瀏覽器列印（2.pdf）簽核幾何：
+ * - 表寬內四段底線，各約 24.1%、段間空隙約 1.2%（列印 border-t + gap-2）
+ * - 職稱置中於各段；教務主任對齊第一段
  */
-function buildPrintAlignedSignatureLine(labels: string[], totalColWidth: number): string {
-  const lineUnits = Math.max(48, Math.round(totalColWidth));
-  type Place = { label: string; start: number; end: number };
-  const placements: Place[] = labels.map((label, i) => {
-    const lw = excelTextWidth(label);
-    const center = ((i + 0.5) / labels.length) * lineUnits;
-    let start = Math.round(center - lw / 2);
-    start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
-    return { label, start, end: start + lw };
-  });
-  for (let i = 1; i < placements.length; i++) {
-    const minStart = placements[i - 1].end + 2;
-    if (placements[i].start < minStart) {
-      const lw = placements[i].end - placements[i].start;
-      placements[i].start = Math.min(minStart, Math.max(0, lineUnits - lw));
-      placements[i].end = placements[i].start + lw;
-    }
-  }
+type PrintSigSegment = { start: number; end: number; center: number };
+type PrintSigLayout = { lineUnits: number; segments: PrintSigSegment[] };
 
+function printSignatureLayout(totalColWidth: number): PrintSigLayout {
+  const lineUnits = Math.max(64, Math.round(totalColWidth));
+  const gap = Math.max(2, Math.round(lineUnits * 0.012));
+  const seg = Math.max(8, Math.floor((lineUnits - 3 * gap) / 4));
+  const segments: PrintSigSegment[] = [];
+  let x = 0;
+  for (let i = 0; i < 4; i++) {
+    const start = x;
+    const end = Math.min(lineUnits, x + seg);
+    segments.push({ start, end, center: (start + end) / 2 });
+    x = end + gap;
+  }
+  return { lineUnits, segments };
+}
+
+/** 將 placements（單位寬度座標）鋪成全形空白＋內容字串 */
+function paintUnitString(
+  lineUnits: number,
+  paints: Array<{ start: number; text: string; textUnits: number }>
+): string {
+  const sorted = [...paints].sort((a, b) => a.start - b.start);
   let out = '';
   let u = 0;
-  while (u < lineUnits) {
-    const hit = placements.find((p) => p.start === u);
-    if (hit) {
-      out += hit.label;
-      u = hit.end;
-      continue;
+  const advancePad = (to: number) => {
+    while (u < to) {
+      if (to - u >= 2) {
+        out += '　';
+        u += 2;
+      } else {
+        out += ' ';
+        u += 1;
+      }
     }
-    if (u + 1 < lineUnits && !placements.some((p) => p.start === u + 1)) {
-      out += '　';
-      u += 2;
-    } else {
-      out += ' ';
-      u += 1;
-    }
+  };
+  for (const p of sorted) {
+    const start = Math.max(0, Math.min(p.start, lineUnits));
+    advancePad(start);
+    out += p.text;
+    u = start + p.textUnits;
   }
+  advancePad(lineUnits);
   return out;
 }
 
-function buildPrintAlignedDeanLine(totalColWidth: number): string {
-  const lineUnits = Math.max(48, Math.round(totalColWidth));
-  const label = '教務主任';
-  const lw = excelTextWidth(label);
-  const center = (0.5 / 4) * lineUnits; // 與教學組長同四分點
-  let start = Math.round(center - lw / 2);
-  start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
-  let out = '';
-  let u = 0;
-  while (u < start) {
-    if (start - u >= 2) {
-      out += '　';
-      u += 2;
-    } else {
-      out += ' ';
-      u += 1;
-    }
-  }
-  return out + label;
+function buildPrintUnderline(layout: PrintSigLayout, segmentIndexes: number[]): string {
+  const paints = segmentIndexes.map((i) => {
+    const seg = layout.segments[i];
+    const units = Math.max(2, seg.end - seg.start);
+    // ─ 約佔 2 單位寬；字數取半以貼近列印實線，且不超出段寬
+    const chars = Math.max(4, Math.floor(units / 2));
+    return { start: seg.start, text: '─'.repeat(chars), textUnits: chars * 2 };
+  });
+  return paintUnitString(layout.lineUnits, paints);
 }
 
-/** 依欄寬切四段（簽核底線用），對齊列印四欄 */
-function signatureLineRangesByWidth(
+function buildPrintLabels(layout: PrintSigLayout, labels: string[]): string {
+  const paints = labels
+    .map((label, i) => {
+      if (!label) return null;
+      const lw = excelTextWidth(label);
+      const center = layout.segments[i]?.center ?? ((i + 0.5) / 4) * layout.lineUnits;
+      let start = Math.round(center - lw / 2);
+      start = Math.max(0, Math.min(start, Math.max(0, layout.lineUnits - lw)));
+      return { start, text: label, textUnits: lw };
+    })
+    .filter((p): p is { start: number; text: string; textUnits: number } => p != null);
+  return paintUnitString(layout.lineUnits, paints);
+}
+
+function addMergedTextRow(
   ws: ExcelJS.Worksheet,
-  colCount: number
-): Array<{ start: number; end: number }> {
-  const widths = sheetColWidths(ws, colCount);
-  const n = widths.length;
-  const cum: number[] = [0];
-  for (const w of widths) cum.push(cum[cum.length - 1] + w);
-  const total = cum[n] || 1;
-  const nearestEnd = (frac: number, minEnd: number, maxEnd: number) => {
-    const target = total * frac;
-    let best = minEnd;
-    let bestD = Infinity;
-    for (let end = minEnd; end <= maxEnd; end++) {
-      const d = Math.abs(cum[end] - target);
-      if (d < bestD) {
-        bestD = d;
-        best = end;
-      }
-    }
-    return best;
+  colCount: number,
+  value: string,
+  opts: { height?: number; size?: number; color?: string } = {}
+) {
+  const row = ws.addRow(Array(colCount).fill(null));
+  row.height = opts.height ?? 16;
+  ws.mergeCells(`${colLetters(1)}${row.number}:${colLetters(colCount)}${row.number}`);
+  const cell = ws.getCell(row.number, 1);
+  cell.value = value;
+  cell.font = {
+    size: opts.size ?? 9,
+    name: '微軟正黑體',
+    color: opts.color ? { argb: opts.color } : { argb: 'FF334155' },
   };
-  const e1 = nearestEnd(0.25, 1, n - 3);
-  const e2 = nearestEnd(0.5, e1 + 1, n - 2);
-  const e3 = nearestEnd(0.75, e2 + 1, n - 1);
-  return [
-    { start: 1, end: e1 },
-    { start: e1 + 1, end: e2 },
-    { start: e2 + 1, end: e3 },
-    { start: e3 + 1, end: n },
-  ];
+  cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
+  return row;
 }
 
 /**
- * 末頁簽核：對齊列印結果（2.pdf）
- * - 上一列：四段底線（簽名線）
- * - 下一列：四職稱等分置中（字串對齊 12.5/37.5/62.5/87.5%）
- * - 教務主任在教學組長下方
+ * 末頁簽核：對齊列印版（2.pdf）
+ * 簽名空白 → 四段底線 → 職稱 → 空白 → 教務主任底線 → 教務主任
  */
 function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const n = Math.max(colCount, 4);
   const widths = sheetColWidths(ws, n);
   const totalW = widths.reduce((a, b) => a + b, 0);
-  const lineRanges = signatureLineRangesByWidth(ws, n);
+  const layout = printSignatureLayout(totalW);
+  const labels = ['教學組長', '出納組', '會計室', '校長'];
 
-  // 簽名線列（對齊列印 border-t）
-  ws.addRow([]);
-  const lineRow = ws.addRow(Array(n).fill(null));
-  lineRow.height = 18;
-  lineRanges.forEach(({ start, end }) => {
-    if (end > start) {
-      ws.mergeCells(`${colLetters(start)}${lineRow.number}:${colLetters(end)}${lineRow.number}`);
-    }
-    const cell = ws.getCell(lineRow.number, start);
-    cell.border = {
-      bottom: { style: 'thin', color: { argb: 'FF64748B' } },
-    };
+  // 簽名書寫空間（列印 h-3 / mt-3）
+  const spacer = ws.addRow(Array(n).fill(null));
+  spacer.height = 22;
+
+  addMergedTextRow(ws, n, buildPrintUnderline(layout, [0, 1, 2, 3]), {
+    height: 12,
+    size: 9,
+    color: 'FF94A3B8',
+  });
+  addMergedTextRow(ws, n, buildPrintLabels(layout, labels), {
+    height: 16,
+    size: 9,
+    color: 'FF334155',
   });
 
-  // 職稱列
-  const sig = ws.addRow(Array(n).fill(null));
-  sig.height = 20;
-  ws.mergeCells(`${colLetters(1)}${sig.number}:${colLetters(n)}${sig.number}`);
-  const sigCell = ws.getCell(sig.number, 1);
-  sigCell.value = buildPrintAlignedSignatureLine(
-    ['教學組長', '出納組', '會計室', '校長'],
-    totalW
-  );
-  sigCell.font = { size: 11, name: '微軟正黑體' };
-  sigCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
+  const mid = ws.addRow(Array(n).fill(null));
+  mid.height = 14;
 
-  ws.addRow([]);
+  const deanSpacer = ws.addRow(Array(n).fill(null));
+  deanSpacer.height = 18;
 
-  // 教務主任簽名線 + 文字
-  const deanLine = ws.addRow(Array(n).fill(null));
-  deanLine.height = 18;
-  const first = lineRanges[0];
-  if (first.end > first.start) {
-    ws.mergeCells(`${colLetters(first.start)}${deanLine.number}:${colLetters(first.end)}${deanLine.number}`);
-  }
-  ws.getCell(deanLine.number, first.start).border = {
-    bottom: { style: 'thin', color: { argb: 'FF64748B' } },
-  };
-
-  const dean = ws.addRow(Array(n).fill(null));
-  dean.height = 20;
-  ws.mergeCells(`${colLetters(1)}${dean.number}:${colLetters(n)}${dean.number}`);
-  const deanCell = ws.getCell(dean.number, 1);
-  deanCell.value = buildPrintAlignedDeanLine(totalW);
-  deanCell.font = { size: 11, name: '微軟正黑體' };
-  deanCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
+  addMergedTextRow(ws, n, buildPrintUnderline(layout, [0]), {
+    height: 12,
+    size: 9,
+    color: 'FF94A3B8',
+  });
+  addMergedTextRow(ws, n, buildPrintLabels(layout, ['教務主任']), {
+    height: 16,
+    size: 9,
+    color: 'FF334155',
+  });
 }
 
 export async function exportOverloadPayrollExcel(
