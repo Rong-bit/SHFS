@@ -61,6 +61,36 @@ export const leaveTypeRemarkShort = (leaveType?: LeaveType, reason?: string): st
   }
 };
 
+/** 代導師清冊備註假別（對齊實務用詞：公差假、加班補休、陪產假等） */
+export const actingHomeroomLeaveRemarkShort = (
+  leaveType?: LeaveType,
+  reason?: string
+): string => {
+  const r = reason || '';
+  if (/加班補休|補休/.test(r)) return '加班補休';
+  if (/婚假/.test(r)) return '婚假';
+  if (/陪產/.test(r)) return '陪產假';
+  if (/公差/.test(r)) return '公差假';
+  switch (leaveType) {
+    case 'wellness':
+      return '身心調適假';
+    case 'personal':
+      return '事假';
+    case 'sick':
+      return '病假';
+    case 'official':
+      return '公假';
+    case 'training':
+      return '研習';
+    case 'bereavement':
+      return '喪假';
+    case 'maternity':
+      return '產假';
+    default:
+      return '請假';
+  }
+};
+
 export const defaultReasonForLeaveType = (leaveType: LeaveType): string => {
   switch (leaveType) {
     case 'official':

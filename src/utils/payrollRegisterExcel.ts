@@ -3,6 +3,7 @@ import type { CounselingPayrollPage } from './counselingPayrollRegister';
 import type { OverloadPayrollPage } from './overloadPayrollRegister';
 import { isBlankPayrollRow } from './overloadPayrollRegister';
 import type { SubstitutePayrollPage } from './substitutePayrollRegister';
+import type { ActingHomeroomPayrollPage } from './actingHomeroomPayrollRegister';
 
 type CellValue = string | number;
 
@@ -415,6 +416,72 @@ export async function exportCounselingPayrollExcel(
         ],
         2,
         9
+      );
+      addSignatureBlock(ws, colCount);
+    } else {
+      addPageBreakAfterRow(ws, subtotalRow);
+    }
+  });
+
+  await downloadWorkbook(wb, fileName);
+}
+
+export async function exportActingHomeroomPayrollExcel(
+  title: string,
+  monthRangeLabel: string,
+  pages: ActingHomeroomPayrollPage[],
+  grandTotal: ActingHomeroomPayrollPage['subtotal'],
+  grandTotalRateLabel: string,
+  fileName: string
+) {
+  const ExcelJS = await loadExcelJS();
+  const headers = [
+    '薪資編號',
+    '教師姓名',
+    '代課天數',
+    '每天金額',
+    '實發金額',
+    `備註 ${monthRangeLabel}`,
+  ];
+  const colCount = headers.length;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('代導師印領清冊');
+  setupSheet(ws, colCount, [12, 12, 10, 10, 12, 58]);
+
+  const totalPages = pages.length;
+  pages.forEach((page, idx) => {
+    addTitleRow(ws, title, colCount);
+    addHeaderRow(ws, headers);
+    page.rows.forEach((r) => {
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
+        return;
+      }
+      addDataRow(
+        ws,
+        [r.salaryCode || '—', r.teacherName, r.actingDays, r.dailyRate, r.amount, r.remarks],
+        { amountCol: 5 }
+      );
+    });
+    const subtotalRow = addTotalRow(
+      ws,
+      [
+        '小計',
+        '',
+        page.subtotal.actingDays,
+        page.subtotalRateLabel || '',
+        page.subtotal.amount,
+        `${page.pageIndex} of ${totalPages}`,
+      ],
+      2,
+      5
+    );
+    if (idx === pages.length - 1) {
+      addTotalRow(
+        ws,
+        ['合計', '', grandTotal.actingDays, grandTotalRateLabel || '', grandTotal.amount, ''],
+        2,
+        5
       );
       addSignatureBlock(ws, colCount);
     } else {

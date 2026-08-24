@@ -29,6 +29,8 @@ import {
   validateTemporarySwapEffectiveDate,
 } from '../../utils/temporarySwap';
 import { ModalShell } from '../Common/ModalShell';
+import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
+import { isHomeroomTeacher } from '../../utils/actingHomeroomPayrollRegister';
 import { 
   X, 
   ArrowLeftRight, 
@@ -104,6 +106,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   // For Substitute (請假派代)
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
+  const [actingHomeroomTeacherId, setActingHomeroomTeacherId] = useState<string>('');
   const [showAllTeachers, setShowAllTeachers] = useState(false);
   const [hasUserChosenSubstituteTeacher, setHasUserChosenSubstituteTeacher] = useState(false);
   const [manualTeacherQuery, setManualTeacherQuery] = useState('');
@@ -541,6 +544,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       }
 
       const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
+      const actingHomeroomTeacher = teachers.find((t) => t.id === actingHomeroomTeacherId);
       const resolvedLeaveEnd =
         leaveDateMode === 'range'
           ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
@@ -565,6 +569,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             batchGroupId,
             substituteTeacherId: substituteTeacherId || undefined,
             substituteTeacherName: subTeacher?.name,
+            actingHomeroomTeacherId: isHomeroomTeacher(currentTeacher)
+              ? actingHomeroomTeacherId || undefined
+              : undefined,
+            actingHomeroomTeacherName: isHomeroomTeacher(currentTeacher)
+              ? actingHomeroomTeacher?.name
+              : undefined,
           })),
           requestMonth,
           { idNoncePrefix: String(batchStamp) }
@@ -1283,6 +1293,24 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     </select>
                   </details>
                 </div>
+
+                {isHomeroomTeacher(currentTeacher) && (
+                  <div className="mt-3 p-3 bg-violet-50 border border-violet-200 rounded-xl space-y-2">
+                    <label className="block text-xs font-bold text-violet-900">
+                      代導師（領取代導師減授鐘點費，可與代課教師不同人）
+                    </label>
+                    <TeacherSearchCombobox
+                      teachers={teachers.filter((t) => t.id !== currentTeacher?.id)}
+                      currentTeacherId={actingHomeroomTeacherId}
+                      onSelectTeacher={setActingHomeroomTeacherId}
+                      placeholder="搜尋代導師姓名…"
+                      compact
+                    />
+                    <p className="text-[11px] text-violet-700 leading-relaxed">
+                      導師請假當日由代導師代理班級事務；出納「代導師印領清冊」依此按日計費。未填則不會列入清冊。
+                    </p>
+                  </div>
+                )}
               </>
             )}
 

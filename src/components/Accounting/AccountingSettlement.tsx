@@ -20,6 +20,7 @@ import {
 import { OverloadPayrollRegisterModal } from './OverloadPayrollRegisterModal';
 import { SubstitutePayrollRegisterModal } from './SubstitutePayrollRegisterModal';
 import { CounselingPayrollRegisterModal } from './CounselingPayrollRegisterModal';
+import { ActingHomeroomPayrollRegisterModal } from './ActingHomeroomPayrollRegisterModal';
 
 export const AccountingSettlement: React.FC = () => {
   const { systemConfig, calculateMonthlySettlement } = useApp();
@@ -29,6 +30,7 @@ export const AccountingSettlement: React.FC = () => {
   const [showPayrollRegister, setShowPayrollRegister] = useState(false);
   const [showSubstitutePayrollRegister, setShowSubstitutePayrollRegister] = useState(false);
   const [showCounselingPayrollRegister, setShowCounselingPayrollRegister] = useState(false);
+  const [showActingHomeroomPayrollRegister, setShowActingHomeroomPayrollRegister] = useState(false);
   const settlementHolidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
   const settlementCalendar = {
     holidaySet: settlementHolidaySet,
@@ -203,6 +205,15 @@ export const AccountingSettlement: React.FC = () => {
           >
             <Printer className="w-4 h-4 text-indigo-600" />
             <span>課輔印領清冊</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowActingHomeroomPayrollRegister(true)}
+            className="flex items-center space-x-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-lg border border-slate-300 shadow-sm transition active:scale-95"
+          >
+            <Printer className="w-4 h-4 text-violet-600" />
+            <span>代導師印領清冊</span>
           </button>
 
           <button
@@ -521,6 +532,13 @@ export const AccountingSettlement: React.FC = () => {
           month={selectedMonth}
           settlements={filteredSettlements}
           onClose={() => setShowCounselingPayrollRegister(false)}
+        />
+      )}
+
+      {showActingHomeroomPayrollRegister && (
+        <ActingHomeroomPayrollRegisterModal
+          month={selectedMonth}
+          onClose={() => setShowActingHomeroomPayrollRegister(false)}
         />
       )}
 

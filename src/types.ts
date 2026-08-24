@@ -158,6 +158,13 @@ export interface SubstituteRequest {
   substituteTeacherId?: string;
   substituteTeacherName?: string;
 
+  /**
+   * 代導師（領取代導師減授鐘點費者；可與代課教師不同人）。
+   * 申請人為導師且請假派代時填寫；按「日」計費，非按節。
+   */
+  actingHomeroomTeacherId?: string;
+  actingHomeroomTeacherName?: string;
+
   /** 連續節次批次派代共用群組 ID；有值時通知單合併列印 */
   batchGroupId?: string;
   
@@ -173,6 +180,11 @@ export interface SubstituteRequest {
 export interface SystemConfig {
   dayHourlyRate: number; // 日間部每節鐘點費 (420)
   nightHourlyRate: number; // 夜間部/課輔每節鐘點費 (500)
+  /**
+   * 代導師減授鐘點費每日金額（預設 404）。
+   * 法令參考：鐘點費×日數÷5×（專任基本−導師基本）；學校可改為固定日費。
+   */
+  actingHomeroomDailyRate: number;
   maxWeeklyOverloadPeriods: number; // 法定每週兼代課上限 (9)
   standardBasePeriods: {
     head: number; // 科主任基本鐘點（可設定）

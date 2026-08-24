@@ -317,6 +317,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return {
         ...INITIAL_SYSTEM_CONFIG,
         ...parsed,
+        actingHomeroomDailyRate:
+          typeof parsed.actingHomeroomDailyRate === 'number' &&
+          Number.isFinite(parsed.actingHomeroomDailyRate)
+            ? parsed.actingHomeroomDailyRate
+            : INITIAL_SYSTEM_CONFIG.actingHomeroomDailyRate,
         nonTeachingDays: Array.isArray(parsed.nonTeachingDays)
           ? parsed.nonTeachingDays
           : INITIAL_SYSTEM_CONFIG.nonTeachingDays || [],

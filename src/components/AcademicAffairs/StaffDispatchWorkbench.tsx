@@ -34,6 +34,8 @@ import {
 } from '../../utils/temporarySwap';
 import { ModalShell } from '../Common/ModalShell';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
+import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
+import { isHomeroomTeacher } from '../../utils/actingHomeroomPayrollRegister';
 import { 
   UserCheck, 
   User, 
@@ -143,6 +145,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Substitute specific
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
+  const [actingHomeroomTeacherId, setActingHomeroomTeacherId] = useState<string>('');
   const [hasUserChosenSubstituteTeacher, setHasUserChosenSubstituteTeacher] = useState(false);
   const [leaveDateMode, setLeaveDateMode] = useState<'single' | 'range'>('single');
   const [leaveDateStart, setLeaveDateStart] = useState<string>('');
@@ -509,6 +512,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
         alert('請假派代須指定代課教師。');
         return;
       }
+      if (isHomeroomTeacher(applicantTeacher) && !actingHomeroomTeacherId) {
+        alert('申請人為導師，請指定代導師（可與代課教師不同人），以便出納製作代導師清冊。');
+        return;
+      }
       const leaveCheck = validateSubstituteLeaveInput({
         leaveDateMode,
         leaveDateStart,
@@ -605,6 +612,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
 
     const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
+    const actingHomeroomTeacher = teachers.find((t) => t.id === actingHomeroomTeacherId);
     const swapTeacher = teachers.find((t) => t.id === swapTargetTeacherId);
     const swapSession = sessions.find((s) => s.id === swapTargetSessionId);
     const targetVenue = venues.find((v) => v.id === targetVenueId);
@@ -637,6 +645,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
           originalSession,
           substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
           substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
+          actingHomeroomTeacherId:
+            requestType === 'substitute' && isHomeroomTeacher(applicantTeacher)
+              ? actingHomeroomTeacherId || undefined
+              : undefined,
+          actingHomeroomTeacherName:
+            requestType === 'substitute' && isHomeroomTeacher(applicantTeacher)
+              ? actingHomeroomTeacher?.name
+              : undefined,
           batchGroupId,
           targetReschedule:
             requestType === 'reschedule' && targetVenue
@@ -1537,6 +1553,32 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       })}
                     </div>
                   </div>
+
+                  {isHomeroomTeacher(applicantTeacher) && (
+                    <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl space-y-2">
+                      <label className="block text-xs font-bold text-violet-900">
+                        代導師（必填 · 領取代導師減授鐘點費）
+                      </label>
+                      <TeacherSearchCombobox
+                        teachers={teachers.filter((t) => t.id !== applicantTeacher?.id)}
+                        currentTeacherId={actingHomeroomTeacherId}
+                        onSelectTeacher={setActingHomeroomTeacherId}
+                        placeholder="搜尋代導師姓名…"
+                        compact
+                      />
+                      <p className="text-[11px] text-violet-700">
+                        可與代課教師不同人。出納組「代導師印領清冊」依此按日計費（每日{' '}
+                        {systemConfig.actingHomeroomDailyRate ?? 404} 元）。
+                      </p>
+                      {actingHomeroomTeacherId &&
+                        substituteTeacherId &&
+                        actingHomeroomTeacherId === substituteTeacherId && (
+                          <p className="text-[11px] text-slate-600">
+                            目前代導師與代課教師為同一人。
+                          </p>
+                        )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1842,11 +1884,17 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   type="submit"
                   disabled={
                     clashPreview.hasClash ||
-                    (requestType === 'substitute' && !substituteTeacherId)
+                    (requestType === 'substitute' && !substituteTeacherId) ||
+                    (requestType === 'substitute' &&
+                      isHomeroomTeacher(applicantTeacher) &&
+                      !actingHomeroomTeacherId)
                   }
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 ${
                     clashPreview.hasClash ||
-                    (requestType === 'substitute' && !substituteTeacherId)
+                    (requestType === 'substitute' && !substituteTeacherId) ||
+                    (requestType === 'substitute' &&
+                      isHomeroomTeacher(applicantTeacher) &&
+                      !actingHomeroomTeacherId)
                       ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 active:scale-98'
                   }`}
@@ -1855,6 +1903,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   <span>
                     {requestType === 'substitute' && !substituteTeacherId
                       ? '請先指定代課教師'
+                      : requestType === 'substitute' &&
+                          isHomeroomTeacher(applicantTeacher) &&
+                          !actingHomeroomTeacherId
+                        ? '請先指定代導師'
                       : requestType === 'substitute' &&
                         sessionPickMode === 'periodRange' &&
                         batchSelectedSessions.length > 1

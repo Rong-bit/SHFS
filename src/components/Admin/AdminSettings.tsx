@@ -106,6 +106,7 @@ export const AdminSettings: React.FC = () => {
   const [formConfig, setFormConfig] = useState<SystemConfig>(() => ({
     dayHourlyRate: systemConfig?.dayHourlyRate ?? 420,
     nightHourlyRate: systemConfig?.nightHourlyRate ?? 500,
+    actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
     maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
     standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
     schoolName: systemConfig?.schoolName ?? '國立技術型高級中等學校',
@@ -141,6 +142,7 @@ export const AdminSettings: React.FC = () => {
     setFormConfig({
       dayHourlyRate: systemConfig?.dayHourlyRate ?? 420,
       nightHourlyRate: systemConfig?.nightHourlyRate ?? 500,
+      actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
       maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
       standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
       schoolName: systemConfig?.schoolName ?? '國立技術型高級中等學校',
@@ -739,7 +741,7 @@ export const AdminSettings: React.FC = () => {
         <div className="hidden lg:flex items-center space-x-3 text-xs text-slate-500">
           <span>學期：{formConfig.academicYear}-{formConfig.semester}</span>
           <span>•</span>
-          <span>公立鐘點費：日間 {formConfig.dayHourlyRate}／課輔 {formConfig.nightHourlyRate} 元/節</span>
+          <span>公立鐘點費：日間 {formConfig.dayHourlyRate}／課輔 {formConfig.nightHourlyRate} 元/節 · 代導師 {formConfig.actingHomeroomDailyRate ?? 404} 元/日</span>
         </div>
       </div>
 
@@ -815,6 +817,28 @@ export const AdminSettings: React.FC = () => {
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
                     第八節輔導課不計入日間超鐘點，改依此費率另計。
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    代導師減授鐘點費 (元/日)
+                  </label>
+                  <div className="relative">
+                    <DraftNumberInput
+                      id="input-admin-acting-homeroom-rate"
+                      value={formConfig.actingHomeroomDailyRate ?? 404}
+                      onChange={(actingHomeroomDailyRate) =>
+                        setFormConfig({ ...formConfig, actingHomeroomDailyRate })
+                      }
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                      min={0}
+                      required
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 日</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    出納「代導師印領清冊」用。可依法令公式（鐘點費×日數÷5×專任與導師基本差距）核算後填入固定日費；預設 404。
                   </p>
                 </div>
 
