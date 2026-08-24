@@ -195,76 +195,51 @@ function sheetTotalColWidth(ws: ExcelJS.Worksheet, colCount: number): number {
 }
 
 /**
- * 在表寬內等距放置職稱。空隙用全形空白（≈2 單位），避免半形空白過窄導致整段偏左；
- * 總寬度不超過欄寬總和，避免校長被裁切。
+ * 左右邊距相等、職稱之間空隙等寬（全形空白撐寬），總寬不超過表寬以免裁切。
  */
 function buildEvenSpacedSignatureLine(labels: string[], totalColWidth: number): string {
   const lineUnits = Math.max(48, Math.round(totalColWidth));
-  type Place = { label: string; start: number; end: number };
-  const placements: Place[] = labels.map((label, i) => {
-    const lw = excelTextWidth(label);
-    // 略向兩端拉開：約 8% → 92%
-    const t = labels.length <= 1 ? 0.5 : 0.08 + (0.84 * i) / (labels.length - 1);
-    const center = t * lineUnits;
-    let start = Math.round(center - lw / 2);
-    start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
-    return { label, start, end: start + lw };
+  const labelWidths = labels.map(excelTextWidth);
+  const labelsTotal = labelWidths.reduce((a, b) => a + b, 0);
+  const gaps = Math.max(1, labels.length - 1);
+  const free = Math.max(0, lineUnits - labelsTotal);
+  // 左右邊距各約 6%，其餘三等分給職稱間空隙 → 視覺等距
+  let edge = Math.max(2, Math.round(free * 0.06));
+  let gapBudget = free - edge * 2;
+  if (gapBudget < gaps * 2) {
+    edge = Math.max(1, Math.floor((free - gaps * 2) / 2));
+    gapBudget = Math.max(gaps * 2, free - edge * 2);
+  }
+  const gapBase = Math.floor(gapBudget / gaps);
+  const gapRem = gapBudget - gapBase * gaps;
+
+  const pad = (units: number) => {
+    const nFw = Math.floor(Math.max(0, units) / 2);
+    const nSp = Math.max(0, units) % 2;
+    return `${'　'.repeat(nFw)}${' '.repeat(nSp)}`;
+  };
+
+  let out = pad(edge);
+  labels.forEach((label, i) => {
+    out += label;
+    if (i < gaps) out += pad(gapBase + (i < gapRem ? 1 : 0));
   });
-
-  // 避免重疊
-  for (let i = 1; i < placements.length; i++) {
-    const minStart = placements[i - 1].end + 2;
-    if (placements[i].start < minStart) {
-      const lw = placements[i].end - placements[i].start;
-      placements[i].start = Math.min(minStart, Math.max(0, lineUnits - lw));
-      placements[i].end = placements[i].start + lw;
-    }
-  }
-
-  let out = '';
-  let u = 0;
-  while (u < lineUnits) {
-    const hit = placements.find((p) => p.start === u);
-    if (hit) {
-      out += hit.label;
-      u = hit.end;
-      continue;
-    }
-    // 優先塞全形空白（2 單位），視覺寬度才接近 Excel 欄寬
-    const nextLabel = placements.find((p) => p.start > u);
-    const until = nextLabel ? nextLabel.start : lineUnits;
-    const gap = until - u;
-    if (gap >= 2) {
-      out += '　';
-      u += 2;
-    } else {
-      out += ' ';
-      u += 1;
-    }
-  }
+  out += pad(edge);
   return out;
 }
 
-/** 教務主任對齊教學組長（左側第一點） */
+/** 教務主任對齊左側（與教學組長同側邊距） */
 function buildDeanSignatureLine(totalColWidth: number): string {
   const lineUnits = Math.max(48, Math.round(totalColWidth));
-  const label = '教務主任';
-  const lw = excelTextWidth(label);
-  const center = 0.08 * lineUnits;
-  let start = Math.round(center - lw / 2);
-  start = Math.max(0, Math.min(start, Math.max(0, lineUnits - lw)));
-  let out = '';
-  let u = 0;
-  while (u < start) {
-    if (start - u >= 2) {
-      out += '　';
-      u += 2;
-    } else {
-      out += ' ';
-      u += 1;
-    }
-  }
-  return out + label;
+  const labelsTotal = excelTextWidth('教學組長') + excelTextWidth('出納組') + excelTextWidth('會計室') + excelTextWidth('校長');
+  const free = Math.max(0, lineUnits - labelsTotal);
+  const edge = Math.max(2, Math.round(free * 0.06));
+  const pad = (units: number) => {
+    const nFw = Math.floor(Math.max(0, units) / 2);
+    const nSp = Math.max(0, units) % 2;
+    return `${'　'.repeat(nFw)}${' '.repeat(nSp)}`;
+  };
+  return `${pad(edge)}教務主任`;
 }
 
 /** 末頁簽核：整列合併後以等距字串定位四職稱（不受各欄寬不均影響） */
