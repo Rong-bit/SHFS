@@ -240,7 +240,8 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   .payroll-register-print-signature {
     display: block !important;
     width: 100% !important;
-    margin: 2mm auto 0 auto !important;
+    /* 表格與簽核之間多空一行，避免 PDF 過擠 */
+    margin: 6mm auto 0 auto !important;
     font-size: 8pt;
     text-align: center !important;
   }

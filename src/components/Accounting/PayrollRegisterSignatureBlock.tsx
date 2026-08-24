@@ -5,8 +5,9 @@ export const PayrollRegisterSignatureBlock: React.FC<{ className?: string }> = (
   className = '',
 }) => (
   <div
-    className={`payroll-register-print-signature payroll-register-print-footer mt-8 print:mt-2 text-xs text-slate-700 ${className}`}
+    className={`payroll-register-print-signature payroll-register-print-footer mt-8 print:mt-6 text-xs text-slate-700 ${className}`}
   >
+    <div className="h-4 print:h-5" aria-hidden />
     <div className="grid grid-cols-4 gap-4 print:gap-2 text-center">
       <div>
         <div className="h-5 print:h-3" aria-hidden />

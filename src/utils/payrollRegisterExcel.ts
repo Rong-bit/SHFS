@@ -256,7 +256,8 @@ function addSignatureBlock(ws: ExcelJS.Worksheet, colCount: number) {
   const labels = ['教學組長', '出納組', '會計室', '校長'];
   const ranges = signatureQuartersByWidth(ws, n);
 
-  // 簽名書寫留白
+  // 表格與簽核之間多空一行，再留簽名書寫空間
+  ws.addRow(Array(n).fill(null)).height = 18;
   const spacer = ws.addRow(Array(n).fill(null));
   spacer.height = 28;
 
