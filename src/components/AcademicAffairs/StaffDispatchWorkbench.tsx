@@ -1728,11 +1728,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             variant="light"
                             fullWidth
                             allowClear
-                            clearLabel="不指定代課教師（清除）"
+                            clearLabel="清除代課教師"
                           />
-                          <p className="text-[11px] text-slate-500">
-                            可直接輸入姓名搜尋，不限智慧推薦清單。點選推薦卡片或由此搜尋皆可指定。
-                          </p>
                           {substituteTeacherId && (
                             <button
                               type="button"
@@ -1745,6 +1742,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               清除代課教師
                             </button>
                           )}
+                          <p className="text-[11px] text-slate-500">
+                            可直接輸入姓名搜尋，不限智慧推薦清單。點選推薦卡片或由此搜尋皆可指定。
+                          </p>
                         </div>
                       </>
                     )}
@@ -1766,7 +1766,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         variant="light"
                         fullWidth
                         allowClear={!canActingHomeroomOnly}
-                        clearLabel="不指定代導師（清除）"
+                        clearLabel="清除代導師"
                       />
                       {actingHomeroomTeacherId && !canActingHomeroomOnly && (
                         <button
@@ -2649,14 +2649,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   variant="light"
                   fullWidth
                   allowClear={!isPlaceholderSession(editingRequest.originalSession)}
-                  clearLabel="不指定代導師（清除）"
+                  clearLabel="清除代導師"
                 />
                 {editActingHomeroomTeacherId &&
                   !isPlaceholderSession(editingRequest.originalSession) && (
                   <button
                     type="button"
                     onClick={() => setEditActingHomeroomTeacherId('')}
-                    className="mt-1 text-[11px] text-rose-600 font-semibold hover:underline"
+                    className="text-[11px] text-rose-600 font-semibold hover:underline"
                   >
                     清除代導師
                   </button>

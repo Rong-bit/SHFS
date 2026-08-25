@@ -1306,7 +1306,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       placeholder="搜尋代導師姓名…"
                       compact
                       allowClear
-                      clearLabel="不指定代導師（清除）"
+                      clearLabel="清除代導師"
                     />
                     {actingHomeroomTeacherId && (
                       <button
