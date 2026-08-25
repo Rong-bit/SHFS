@@ -12,7 +12,6 @@ import {
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import {
-  defaultReasonForLeaveType,
   paymentTypeForLeaveType,
   WELLNESS_LEAVE_LEGAL_NOTE,
 } from '../../utils/leaveTypes';
@@ -127,7 +126,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [requestType, setRequestType] = useState<RequestType>('substitute');
   const [leaveType, setLeaveType] = useState<LeaveType>('official');
   const [paymentType, setPaymentType] = useState<PaymentType>('public');
-  const [reason, setReason] = useState<string>('奉派參加教育部技術型高中專業群科專題競賽指導研習 (公假公費派代)');
+  const [reason, setReason] = useState<string>('');
 
   // 歸屬月份：本月、7 天內可選上月，以及系統管理員指定的補登月份
   const thisMonth = new Date().getMonth() + 1;
@@ -423,7 +422,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const handleLeaveTypeChange = (type: LeaveType) => {
     setLeaveType(type);
     setPaymentType(paymentTypeForLeaveType(type));
-    setReason(defaultReasonForLeaveType(type));
   };
 
   // Preview clash check（連續節次：逐節檢核後合併）
@@ -1252,7 +1250,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     type="text"
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    required
                     placeholder="請輸入事由（例：代表學校參加全國技能競賽指導研習，公文號 114-08992）"
                     className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                   />
