@@ -13,10 +13,17 @@ import {
   CloudOff,
   Loader2,
   KeyRound,
+  Type,
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
 import { StaffChangePasswordModal } from './Common/StaffChangePasswordModal';
+import {
+  persistUiFontScale,
+  readUiFontScale,
+  UI_FONT_SCALE_OPTIONS,
+  type UiFontScale,
+} from '../utils/uiFontScale';
 
 export const Header: React.FC = () => {
   const {
@@ -36,6 +43,7 @@ export const Header: React.FC = () => {
 
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
   const [isStaffPasswordOpen, setIsStaffPasswordOpen] = useState(false);
+  const [uiFontScale, setUiFontScale] = useState<UiFontScale>(() => readUiFontScale());
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
@@ -91,6 +99,28 @@ export const Header: React.FC = () => {
 
           {/* Right Actions: Sync */}
           <div className="flex items-center space-x-2 sm:space-x-3">
+            <label
+              className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-300 shrink-0"
+              title="僅本機畫面字級，不影響列印與 Excel"
+            >
+              <Type className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden sm:inline">字體</span>
+              <select
+                value={uiFontScale}
+                onChange={(e) => {
+                  const next = e.target.value as UiFontScale;
+                  setUiFontScale(next);
+                  persistUiFontScale(next);
+                }}
+                className="bg-slate-900 text-slate-100 font-medium px-1.5 py-1 rounded-md border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-[11px] sm:text-xs"
+              >
+                {UI_FONT_SCALE_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             {cloudSyncStatus === 'off' ? (
               <button
                 type="button"

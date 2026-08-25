@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+:root {
+  --ui-font-size: 16px;
+}
+
+html {
+  font-size: var(--ui-font-size);
+}
+
+@media print {
+  html {
+    font-size: 16px;
+  }
+}
