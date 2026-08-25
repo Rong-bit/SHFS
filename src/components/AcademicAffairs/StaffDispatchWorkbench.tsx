@@ -843,12 +843,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
       // Search term
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
-        const matchName = r.applicantTeacherName.toLowerCase().includes(term);
+        const matchName = (r.applicantTeacherName || '').toLowerCase().includes(term);
         const matchSub = (r.substituteTeacherName || '').toLowerCase().includes(term);
         const matchActing = (r.actingHomeroomTeacherName || '').toLowerCase().includes(term);
-        const matchClass = r.originalSession.className.toLowerCase().includes(term);
-        const matchSubject = r.originalSession.subjectName.toLowerCase().includes(term);
-        const matchNum = r.requestNumber.toLowerCase().includes(term);
+        const matchClass = (r.originalSession?.className || '').toLowerCase().includes(term);
+        const matchSubject = (r.originalSession?.subjectName || '').toLowerCase().includes(term);
+        const matchNum = (r.requestNumber || '').toLowerCase().includes(term);
         if (!matchName && !matchSub && !matchActing && !matchClass && !matchSubject && !matchNum) return false;
       }
 
@@ -1727,6 +1727,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             placeholder="輸入姓名或科別搜尋代課教師…"
                             variant="light"
                             fullWidth
+                            allowClear
+                            clearLabel="不指定代課教師（清除）"
                           />
                           <p className="text-[11px] text-slate-500">
                             可直接輸入姓名搜尋，不限智慧推薦清單。點選推薦卡片或由此搜尋皆可指定。
@@ -1763,7 +1765,18 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         placeholder="搜尋代導師姓名…"
                         variant="light"
                         fullWidth
+                        allowClear={!canActingHomeroomOnly}
+                        clearLabel="不指定代導師（清除）"
                       />
+                      {actingHomeroomTeacherId && !canActingHomeroomOnly && (
+                        <button
+                          type="button"
+                          onClick={() => setActingHomeroomTeacherId('')}
+                          className="text-[11px] text-rose-600 font-semibold hover:underline"
+                        >
+                          清除代導師
+                        </button>
+                      )}
                       <p className="text-[11px] text-violet-700">
                         {canActingHomeroomOnly
                           ? `當日無授課課堂，請指定代導師。出納清冊僅「未接班專任教師」領費（每日 ${systemConfig.actingHomeroomDailyRate ?? 404} 元）；導師／組長等可代理但不列領費。`
@@ -2635,6 +2648,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   placeholder="搜尋代導師…"
                   variant="light"
                   fullWidth
+                  allowClear={!isPlaceholderSession(editingRequest.originalSession)}
+                  clearLabel="不指定代導師（清除）"
                 />
                 {editActingHomeroomTeacherId &&
                   !isPlaceholderSession(editingRequest.originalSession) && (
@@ -2706,9 +2721,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  const t = requests.find((r) => r.id === deletingRequestId);
+                  const ids = t?.batchGroupId
+                    ? requests.filter((r) => r.batchGroupId === t.batchGroupId).map((r) => r.id)
+                    : [deletingRequestId];
                   deleteRequest(deletingRequestId);
                   setDeletingRequestId(null);
-                  setSelectedRequestIds((prev) => prev.filter((id) => id !== deletingRequestId));
+                  setSelectedRequestIds((prev) => prev.filter((id) => !ids.includes(id)));
                 }}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-xs transition"
               >

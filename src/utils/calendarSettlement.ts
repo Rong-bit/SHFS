@@ -108,8 +108,9 @@ export function slotOccurrenceCountsInMonth(
       }
     }
 
-    // 加到補課日：只要 target 落在結算月即可（含週六）；半日停課之節次不加回
+    // 加到補課日：只要 target 落在結算月即可（含週六）；整天放假／半日停課之節次不加回
     if (dateInYearMonth(move.targetDate, year, month)) {
+      if (holidaySet.has(move.targetDate)) continue;
       const blockedTarget = partialByDate.get(move.targetDate);
       for (const period of periods) {
         if (blockedTarget?.has(period)) continue;

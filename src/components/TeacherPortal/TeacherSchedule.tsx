@@ -62,6 +62,7 @@ export const TeacherSchedule: React.FC = () => {
   const [contactSavedNotice, setContactSavedNotice] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [passwordSavedNotice, setPasswordSavedNotice] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   if (!currentTeacher) {
     return (
@@ -201,6 +202,8 @@ export const TeacherSchedule: React.FC = () => {
                           currentTeacher.id,
                           () => {
                             setNewPassword(''); // 不回填雜湊／明文，留空表示重新設定
+                            setPasswordError('');
+                            setPasswordSavedNotice(false);
                             setIsChangePasswordOpen(true);
                           },
                           '設定登入密碼'
@@ -600,6 +603,7 @@ export const TeacherSchedule: React.FC = () => {
                 onClick={() => {
                   setIsChangePasswordOpen(false);
                   setPasswordSavedNotice(false);
+                  setPasswordError('');
                 }}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition"
               >
@@ -619,11 +623,21 @@ export const TeacherSchedule: React.FC = () => {
                 <input
                   type="text"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    setPasswordError('');
+                    setPasswordSavedNotice(false);
+                  }}
                   placeholder="請輸入新密碼 (如: 1234, 自訂生日等)..."
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm font-medium focus:outline-none"
                 />
               </div>
+
+              {passwordError && (
+                <div className="p-3 bg-rose-950/60 border border-rose-800 rounded-xl text-rose-300 text-xs">
+                  {passwordError}
+                </div>
+              )}
 
               {passwordSavedNotice && (
                 <div className="p-3 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-300 text-xs flex items-center space-x-2">
@@ -638,6 +652,7 @@ export const TeacherSchedule: React.FC = () => {
                   onClick={() => {
                     setIsChangePasswordOpen(false);
                     setPasswordSavedNotice(false);
+                    setPasswordError('');
                   }}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition"
                 >
@@ -646,7 +661,19 @@ export const TeacherSchedule: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    updateTeacherPassword(currentTeacher.id, newPassword.trim());
+                    const next = newPassword.trim();
+                    if (!next) {
+                      setPasswordError('請輸入新密碼（空白會改回全校預設密碼，此處不處理）。');
+                      setPasswordSavedNotice(false);
+                      return;
+                    }
+                    if (next.length < 4) {
+                      setPasswordError('新密碼至少 4 個字。');
+                      setPasswordSavedNotice(false);
+                      return;
+                    }
+                    updateTeacherPassword(currentTeacher.id, next);
+                    setPasswordError('');
                     setPasswordSavedNotice(true);
                     setTimeout(() => {
                       setIsChangePasswordOpen(false);

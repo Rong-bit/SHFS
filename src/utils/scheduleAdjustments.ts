@@ -699,6 +699,7 @@ export function remapRequestSessions(
 
   const resolve = (snap: CourseSession | undefined): CourseSession | undefined => {
     if (!snap) return snap;
+    if (isPlaceholderSession(snap)) return snap;
     if (byId.has(snap.id)) {
       const live = byId.get(snap.id)!;
       return { ...snap, ...pickLiveFields(live, snap) };
@@ -709,6 +710,9 @@ export function remapRequestSessions(
   };
 
   return requests.map((r) => {
+    if (isPlaceholderSession(r.originalSession)) {
+      return r;
+    }
     const originalSession = resolve(r.originalSession) || r.originalSession;
     const swapTargetSession = r.swapTargetSession
       ? resolve(r.swapTargetSession) || r.swapTargetSession

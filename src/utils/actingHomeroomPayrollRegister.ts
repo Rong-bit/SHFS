@@ -109,16 +109,6 @@ export function listActingHomeroomDaysInMonth(
     }
   };
   pushMatching(settlementYear);
-  if (dates.length === 0) {
-    const years = new Set<number>();
-    for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-      if (cur.getMonth() + 1 === settlementMonth) years.add(cur.getFullYear());
-    }
-    const alt = [...years].sort(
-      (a, b) => Math.abs(a - settlementYear) - Math.abs(b - settlementYear)
-    )[0];
-    if (alt != null && alt !== settlementYear) pushMatching(alt);
-  }
   return dates;
 }
 

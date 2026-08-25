@@ -709,12 +709,7 @@ export const applyTeacherHomeroomFromSessions = <
       return { ...t, title: '導師' as T['title'], homeroomClass };
     }
 
-    if (keepAdminTitle) {
-      return t.homeroomClass ? { ...t, homeroomClass: undefined } : t;
-    }
-    if (t.title === '導師' || t.homeroomClass) {
-      return { ...t, title: '專任教師' as T['title'], homeroomClass: undefined };
-    }
+    // 團體活動對不到姓名：保留既有導師班／職稱，避免誤降專任（代導師領費資格會錯）
     return t;
   });
 };

@@ -41,7 +41,7 @@ import {
   mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
-import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth, dateToDayOfWeek, resolveLeaveDateEnd, validateSubstituteLeaveInput } from '../utils/leaveDates';
+import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth, dateToDayOfWeek, legacyRequestBelongsToSettlement, resolveLeaveDateEnd, validateSubstituteLeaveInput } from '../utils/leaveDates';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -2183,10 +2183,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const oldSubId = primary.substituteTeacherId || '';
     const newSubId = nextSubId || '';
     const subChanged = oldSubId !== newSubId || (primary.substituteTeacherName || '') !== (nextSubName || '');
+    const leaveChanged =
+      (primary.leaveDateStart || '') !== (nextLeaveStart || '') ||
+      (primary.leaveDateEnd || '') !== (nextLeaveEnd || '');
     const approvedInGroup = group.filter((r) => r.status === 'approved');
     const needReschedule = approvedInGroup.length > 0 && subChanged;
 
     if (!needReschedule) {
+      if (newSubId && leaveChanged) {
+        const patched = requests.map((r) => (ids.has(r.id) ? applyPatch(r) : r));
+        for (const req of patched.filter((r) => ids.has(r.id))) {
+          const clash = checkClashes({
+            requestType: 'substitute',
+            applicantTeacherId: req.applicantTeacherId,
+            originalSession: resolveOriginalSession(req, sessions),
+            substituteTeacherId: req.substituteTeacherId,
+            sessionsOverride: sessions,
+            requestsOverride: patched,
+            excludeRequestIds: [req.id],
+            leaveDateStart: req.leaveDateStart,
+            leaveDateEnd: req.leaveDateEnd,
+          });
+          if (clash.hasClash) {
+            window.alert(
+              `無法延長／變更請假日（${req.requestNumber}）：\n${clash.messages.join('\n')}`
+            );
+            return false;
+          }
+        }
+      }
       setRequests((prev) => prev.map((r) => (ids.has(r.id) ? applyPatch(r) : r)));
       return true;
     }
@@ -2520,7 +2545,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setTeachers(updatedTeachers);
     setVenues(updatedVenues);
-    if (mode === 'append') {
+    if (mode === 'append' || (mode === 'overwrite' && !clearRequests)) {
       // remap 後由舊到新重套用已核准異動，避免匯入抹掉 [代課]／移課卻仍結算
       const remapped = remapRequestSessions(requests, finalSessions);
       const withCovers = reapplyApprovedRequestsOldestFirst(finalSessions, remapped);
@@ -2748,13 +2773,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem(STORAGE_KEYS.STAFF_LIST);
   };
 
-  const requestBelongsToMonth = (requestNumber: string, createdAt: string, month: number) => {
-    const m = requestNumber.match(/VOC-\d+-(\d+)-/i);
-    if (m) return Number(m[1]) === month;
-    const parsed = new Date(createdAt.replace(/-/g, '/'));
-    if (!Number.isNaN(parsed.getTime())) return parsed.getMonth() + 1 === month;
-    return false;
-  };
+  const requestBelongsToMonth = (
+    requestNumber: string,
+    createdAt: string,
+    month: number,
+    year: number
+  ) => legacyRequestBelongsToSettlement(requestNumber, createdAt, month, year);
 
   // Monthly settlement computation
   const calculateMonthlySettlement = (month?: number): MonthlyTeacherSettlement[] => {
@@ -2809,7 +2833,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             s.period >= 1 &&
             s.period <= 7,
           includeLegacyWithoutDates: (r) =>
-            requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth),
+            requestBelongsToMonth(
+              r.requestNumber,
+              r.createdAt,
+              settlementMonth,
+              settlementYear
+            ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: systemConfig.partialNonTeachingDays || [],
         }
@@ -2851,7 +2880,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           matchSession: (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
           includeLegacyWithoutDates: (r) =>
-            requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth),
+            requestBelongsToMonth(
+              r.requestNumber,
+              r.createdAt,
+              settlementMonth,
+              settlementYear
+            ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: systemConfig.partialNonTeachingDays || [],
         }
@@ -2903,7 +2937,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：依單號月份，且該月該星期須有上課日
           const periods =
             inMonthPeriods === null
-              ? requestBelongsToMonth(r.requestNumber, r.createdAt, settlementMonth)
+              ? requestBelongsToMonth(
+                  r.requestNumber,
+                  r.createdAt,
+                  settlementMonth,
+                  settlementYear
+                )
                 ? countLeaveSubstitutePeriods(r, holidaySet, {
                     settlementMonth,
                     settlementYear,

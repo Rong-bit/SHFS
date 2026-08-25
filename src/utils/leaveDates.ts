@@ -6,6 +6,7 @@ import {
   TemporaryScheduleMove,
 } from '../types';
 import { dateToIsoLocal, isNonTeachingDate } from './holidays';
+import { parseRequestSeq } from './requestNumbers';
 
 /** YYYY-MM-DD → 週一=1 … 週五=5；週末回傳 null */
 export function dateToDayOfWeek(isoDate: string): DayOfWeek | null {
@@ -66,17 +67,20 @@ export function findActiveLeaveCoverRequestForSession(
   now = new Date()
 ): LeaveCoverDisplayRequest | undefined {
   const weekDate = isoDateForDayOfWeekInCurrentWeek(session.dayOfWeek, now);
-  return requests.find(
-    (r) =>
+  return requests.find((r) => {
+    const orig = r.originalSession;
+    if (!orig) return false;
+    return (
       r.status === 'approved' &&
       r.requestType === 'substitute' &&
       Boolean(r.leaveDateStart) &&
-      (r.originalSession.id === session.id ||
-        (r.originalSession.dayOfWeek === session.dayOfWeek &&
-          r.originalSession.period === session.period &&
+      (orig.id === session.id ||
+        (orig.dayOfWeek === session.dayOfWeek &&
+          orig.period === session.period &&
           r.applicantTeacherId === session.teacherId)) &&
       leaveRangeCoversDate(r.leaveDateStart, r.leaveDateEnd, weekDate)
-  );
+    );
+  });
 }
 
 /**
@@ -284,31 +288,9 @@ export function countMatchingWeekdaysInMonth(
   return count;
 }
 
-/** 請假區間內、落在指定曆月的西元年（通常僅一年；跨年同月取最接近 settlementYear 者） */
-function resolveLeaveYearForSettlementMonth(
-  start: string,
-  end: string,
-  settlementMonth: number,
-  settlementYear?: number
-): number | undefined {
-  const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
-  const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return undefined;
-  const years = new Set<number>();
-  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-    if (cur.getMonth() + 1 === settlementMonth) years.add(cur.getFullYear());
-  }
-  if (years.size === 0) return undefined;
-  const list = Array.from(years);
-  if (settlementYear == null) return list[0];
-  return list.reduce((best, y) =>
-    Math.abs(y - settlementYear) < Math.abs(best - settlementYear) ? y : best
-  );
-}
-
 /**
- * 結算用：有請假日期則只計「落在結算月」且星期相符的天數。
- * 西元年優先用結算年；若結算年對不到（學年未換導致年偏）但請假區間確有該月，改以請假日期內之西元年計。
+ * 結算用：有請假日期則只計「落在結算月＋結算西元年」且星期相符的天數。
+ * 結算年對不到則計 0（不改用請假區間內其他年份，避免隔年同月重發）。
  * 無日期舊案回傳 null。
  */
 export function countLeaveSubstitutePeriodsInMonth(
@@ -319,41 +301,23 @@ export function countLeaveSubstitutePeriodsInMonth(
   billableOptions?: LeaveBillableOptions
 ): number | null {
   if (!request.leaveDateStart) return null;
+  const dayOfWeek = request.originalSession?.dayOfWeek;
+  if (dayOfWeek == null) return 0;
   const end =
     resolveLeaveDateEnd(request.leaveDateStart, request.leaveDateEnd) ||
     request.leaveDateStart;
-  const dayOfWeek = request.originalSession.dayOfWeek;
   const opts: LeaveBillableOptions = {
     period: billableOptions?.period ?? request.originalSession?.period,
     temporaryMoves: billableOptions?.temporaryMoves,
     partialStops: billableOptions?.partialStops,
   };
 
-  const withSettlementYear = countMatchingWeekdaysInMonth(
-    request.leaveDateStart,
-    end,
-    dayOfWeek,
-    settlementMonth,
-    settlementYear,
-    excludeDates,
-    opts
-  );
-  if (withSettlementYear > 0 || settlementYear == null) return withSettlementYear;
-
-  // 結算西元年與請假日期年不一致：改以請假區間內「該月」實際年份計（禁止無 year 全掃）
-  const leaveYear = resolveLeaveYearForSettlementMonth(
-    request.leaveDateStart,
-    end,
-    settlementMonth,
-    settlementYear
-  );
-  if (leaveYear == null) return 0;
   return countMatchingWeekdaysInMonth(
     request.leaveDateStart,
     end,
     dayOfWeek,
     settlementMonth,
-    leaveYear,
+    settlementYear,
     excludeDates,
     opts
   );
@@ -442,6 +406,37 @@ export function inferRequestMonth(
     if (!Number.isNaN(parsed.getTime())) return parsed.getMonth() + 1;
   }
   return fallbackMonth ?? new Date().getMonth() + 1;
+}
+
+/** 單號學年＋月份對應西元年（8–12 月＝學年＋1911；1–7 月＝學年＋1912） */
+export function inferRequestCalendarYear(
+  requestNumber?: string,
+  createdAt?: string
+): number | undefined {
+  const parsed = requestNumber ? parseRequestSeq(requestNumber) : null;
+  if (parsed) {
+    const ay = Number(parsed.academicYear);
+    if (Number.isFinite(ay) && ay > 90) {
+      return parsed.month >= 8 ? ay + 1911 : ay + 1912;
+    }
+  }
+  if (createdAt) {
+    const d = new Date(createdAt.replace(/-/g, '/'));
+    if (!Number.isNaN(d.getTime())) return d.getFullYear();
+  }
+  return undefined;
+}
+
+/** 無請假日期舊案是否屬於此結算月（月份＋西元年皆須相符，避免隔年同月重計） */
+export function legacyRequestBelongsToSettlement(
+  requestNumber: string | undefined,
+  createdAt: string | undefined,
+  settlementMonth: number,
+  settlementYear: number
+): boolean {
+  const month = inferRequestMonth(requestNumber, createdAt, 0);
+  if (month < 1 || month > 12 || month !== settlementMonth) return false;
+  return inferRequestCalendarYear(requestNumber, createdAt) === settlementYear;
 }
 
 /**
@@ -704,6 +699,26 @@ export function validateSubstituteLeaveInput(params: {
       return {
         ok: false,
         message: `請假區間內「${dayNames[s.dayOfWeek]}第${s.period}節」無可計節上課日（放假／半日停課／暫時移課），無法派代。請改日期或調整行事曆。`,
+      };
+    }
+  }
+
+  if (billedSessions.length === 0 && targetSessions.length > 0) {
+    let hasActingDay = false;
+    const rangeStart = new Date(leaveDateStart.replace(/-/g, '/') + ' 12:00:00');
+    const rangeEnd = new Date(resolvedLeaveEnd.replace(/-/g, '/') + ' 12:00:00');
+    for (let cur = new Date(rangeStart); cur <= rangeEnd; cur.setDate(cur.getDate() + 1)) {
+      const js = cur.getDay();
+      if (js < 1 || js > 5) continue;
+      if (!isNonTeachingDate(dateToIsoLocal(cur), holidaySet)) {
+        hasActingDay = true;
+        break;
+      }
+    }
+    if (!hasActingDay) {
+      return {
+        ok: false,
+        message: '請假區間內無實際上課日（可能皆為放假日），無法僅辦代導師。請改日期或調整行事曆。',
       };
     }
   }

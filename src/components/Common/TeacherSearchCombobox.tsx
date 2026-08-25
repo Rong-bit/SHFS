@@ -14,6 +14,10 @@ interface TeacherSearchComboboxProps {
   variant?: 'dark' | 'light';
   /** 撐滿容器寬度（表單用） */
   fullWidth?: boolean;
+  /** 允許清空已選教師（選填欄位：代導師等） */
+  allowClear?: boolean;
+  /** 下拉清單「不指定」列文字 */
+  clearLabel?: string;
 }
 
 export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
@@ -25,6 +29,8 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
   compact = false,
   variant = 'dark',
   fullWidth = false,
+  allowClear = false,
+  clearLabel = '不指定（清除）',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -79,6 +85,12 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
     setQuery('');
   };
 
+  const handleClear = () => {
+    onSelectTeacher('');
+    setIsOpen(false);
+    setQuery('');
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen) {
       if (e.key === 'ArrowDown' || e.key === 'Enter') {
@@ -111,11 +123,20 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
       : `${currentTeacher.name} (${currentTeacher.department})`
     : '';
 
+  const showSelectionClear = allowClear && Boolean(currentTeacher) && !(isOpen && query);
+  const rightPad = showSelectionClear
+    ? isLight
+      ? 'pr-16'
+      : 'pr-14'
+    : isLight
+      ? 'pr-8'
+      : 'pr-7';
+
   const inputClass = isLight
-    ? `w-full pl-9 pr-8 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
+    ? `w-full pl-9 ${rightPad} py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
         fullWidth ? '' : compact ? 'min-w-[160px] max-w-[220px]' : 'min-w-[200px] max-w-[280px]'
       }`
-    : `w-full pl-8 pr-7 py-1 rounded-lg text-xs font-semibold bg-slate-900 text-amber-300 placeholder:text-slate-500 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 transition shadow-inner ${
+    : `w-full pl-8 ${rightPad} py-1 rounded-lg text-xs font-semibold bg-slate-900 text-amber-300 placeholder:text-slate-500 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 transition shadow-inner ${
         fullWidth ? '' : compact ? 'min-w-[160px] max-w-[220px]' : 'min-w-[200px] max-w-[280px]'
       }`;
 
@@ -162,30 +183,52 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
             className={`absolute right-2 top-1/2 -translate-y-1/2 p-0.5 ${
               isLight ? 'text-slate-400 hover:text-slate-700' : 'text-slate-400 hover:text-white'
             }`}
+            title="清除搜尋"
           >
             <X className="w-3 h-3" />
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen((prev) => !prev);
-              if (!isOpen) {
-                setTimeout(() => inputRef.current?.focus(), 50);
-              }
-            }}
-            className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1 ${
-              isLight
-                ? 'text-slate-400 hover:text-indigo-600'
-                : 'text-slate-400 hover:text-amber-400'
-            }`}
-          >
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform duration-150 ${
-                isOpen ? `rotate-180 ${isLight ? 'text-indigo-600' : 'text-amber-400'}` : ''
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center">
+            {showSelectionClear && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleClear();
+                }}
+                className={`p-1 ${
+                  isLight
+                    ? 'text-slate-400 hover:text-rose-600'
+                    : 'text-slate-400 hover:text-rose-300'
+                }`}
+                title={clearLabel}
+                aria-label={clearLabel}
+              >
+                <X className={isLight ? 'w-3.5 h-3.5' : 'w-3 h-3'} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen((prev) => !prev);
+                if (!isOpen) {
+                  setTimeout(() => inputRef.current?.focus(), 50);
+                }
+              }}
+              className={`p-1 ${
+                isLight
+                  ? 'text-slate-400 hover:text-indigo-600'
+                  : 'text-slate-400 hover:text-amber-400'
               }`}
-            />
-          </button>
+            >
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                  isOpen ? `rotate-180 ${isLight ? 'text-indigo-600' : 'text-amber-400'}` : ''
+                }`}
+              />
+            </button>
+          </div>
         )}
       </div>
 
@@ -214,7 +257,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
 
           {filteredTeachers.length === 0 ? (
             <div
-              className={`p-4 text-center text-xs space-y-1 ${
+              className={`p-4 text-center text-xs space-y-2 ${
                 isLight ? 'text-slate-500' : 'text-slate-400'
               }`}
             >
@@ -222,9 +265,34 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
                 找不到名為「{query}」的教師
               </p>
               <p className="text-[11px]">請確認是否已在 Excel 課表中匯入此教師</p>
+              {allowClear && currentTeacher && (
+                <button
+                  type="button"
+                  onClick={() => handleClear()}
+                  className={`text-xs font-semibold ${
+                    isLight ? 'text-rose-600 hover:underline' : 'text-rose-300 hover:underline'
+                  }`}
+                >
+                  {clearLabel}
+                </button>
+              )}
             </div>
           ) : (
-            <ul ref={listRef} className={`divide-y py-1 ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
+            <>
+              {allowClear && (
+                <button
+                  type="button"
+                  onClick={() => handleClear()}
+                  className={`w-full text-left px-3 py-2 text-xs font-semibold border-b ${
+                    isLight
+                      ? 'text-rose-700 hover:bg-rose-50 border-slate-100'
+                      : 'text-rose-300 hover:bg-slate-800/60 border-slate-800/80'
+                  }`}
+                >
+                  {clearLabel}
+                </button>
+              )}
+              <ul ref={listRef} className={`divide-y py-1 ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
               {filteredTeachers.map((teacher, index) => {
                 const isSelected = teacher.id === currentTeacherId;
                 const isHighlighted = index === highlightedIndex;
@@ -296,6 +364,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
                 );
               })}
             </ul>
+            </>
           )}
         </div>
       )}

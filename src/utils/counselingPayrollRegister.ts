@@ -8,8 +8,8 @@ import { leaveTypeRemarkShort } from './leaveTypes';
 import {
   countLeaveSubstitutePeriods,
   countLeaveSubstitutePeriodsInMonth,
-  inferRequestMonth,
   isLeaveDatePeriodBillable,
+  legacyRequestBelongsToSettlement,
 } from './leaveDates';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
@@ -175,7 +175,12 @@ export function buildCounselingPayrollRemarks(
     );
     const periods =
       inMonth === null
-        ? inferRequestMonth(r.requestNumber, r.createdAt) === settlementMonth
+        ? legacyRequestBelongsToSettlement(
+            r.requestNumber,
+            r.createdAt,
+            settlementMonth,
+            settlementYear
+          )
           ? countLeaveSubstitutePeriods(r, holidaySet, {
               settlementMonth,
               settlementYear,

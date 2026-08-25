@@ -1264,8 +1264,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                           const q = manualTeacherQuery.trim().toLowerCase();
                           return (
                             t.name.toLowerCase().includes(q) ||
-                            t.department.toLowerCase().includes(q) ||
-                            t.title.toLowerCase().includes(q)
+                            (t.department || '').toLowerCase().includes(q) ||
+                            (t.title || '').toLowerCase().includes(q)
                           );
                         })
                         .map((t) => {
@@ -1305,7 +1305,18 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       onSelectTeacher={setActingHomeroomTeacherId}
                       placeholder="搜尋代導師姓名…"
                       compact
+                      allowClear
+                      clearLabel="不指定代導師（清除）"
                     />
+                    {actingHomeroomTeacherId && (
+                      <button
+                        type="button"
+                        onClick={() => setActingHomeroomTeacherId('')}
+                        className="text-[11px] text-rose-600 font-semibold hover:underline"
+                      >
+                        清除代導師
+                      </button>
+                    )}
                     <p className="text-[11px] text-violet-700 leading-relaxed">
                       可指定專任、導師或行政職代理。出納清冊僅「未接班專任教師」領費；未填則不列入清冊。
                     </p>

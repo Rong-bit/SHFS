@@ -566,9 +566,11 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 {isActingOnly ? '請假導師' : '申請任課教師'}
               </div>
               <div className="inline-block border border-red-400 text-red-600 px-3 py-1 font-serif text-sm rounded">
-                {request.applicantTeacherName.split(' ')[0]} 簽章
+                {request.applicantTeacherName?.split(' ')[0] || '申請人'} 簽章
               </div>
-              <div className="text-[10px] text-slate-400 mt-2">{request.createdAt.slice(0, 10)}</div>
+              <div className="text-[10px] text-slate-400 mt-2">
+                {(request.createdAt || '').slice(0, 10)}
+              </div>
             </div>
 
             {/* Substitute / Acting Stamp */}
@@ -586,7 +588,9 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 ).split(' ')[0]}{' '}
                 簽章
               </div>
-              <div className="text-[10px] text-slate-400 mt-2">{request.createdAt.slice(0, 10)}</div>
+              <div className="text-[10px] text-slate-400 mt-2">
+                {(request.createdAt || '').slice(0, 10)}
+              </div>
             </div>
 
             {/* Academic Affairs Section Chief */}
