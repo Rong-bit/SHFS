@@ -1307,7 +1307,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       compact
                     />
                     <p className="text-[11px] text-violet-700 leading-relaxed">
-                      導師請假當日由代導師代理班級事務；出納「代導師印領清冊」依此按日計費。未填則不會列入清冊。
+                      可指定專任、導師或行政職代理。出納清冊僅「未接班專任教師」領費；未填則不列入清冊。
                     </p>
                   </div>
                 )}

@@ -144,7 +144,7 @@ export const ActingHomeroomPayrollRegisterModal: React.FC<
           <div className="bg-white rounded-xl p-8 text-center text-slate-500 text-sm space-y-2">
             <p>本月無代導師減授鐘點費資料。</p>
             <p className="text-xs text-slate-400">
-              請確認：導師請假派代已核准、已指定「代導師」，且請假日落在本月（跨月補發尚不自動納入）。
+              請確認：導師請假派代已核准、已指定「代導師」，且代導師為「未接班專任教師」、請假日落在本月。
             </p>
           </div>
         ) : (

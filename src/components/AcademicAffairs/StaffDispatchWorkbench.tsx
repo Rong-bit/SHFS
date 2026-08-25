@@ -1665,8 +1665,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       />
                       <p className="text-[11px] text-violet-700">
                         {canActingHomeroomOnly
-                          ? `當日無授課課堂，請指定代導師。出納組「代導師印領清冊」按日計費（每日 ${systemConfig.actingHomeroomDailyRate ?? 404} 元）。`
-                          : `可與代課教師不同人。僅請上午等不需代理導師事務時可留空；填寫後才會列入代導師清冊（每日 ${systemConfig.actingHomeroomDailyRate ?? 404} 元）。`}
+                          ? `當日無授課課堂，請指定代導師。出納清冊僅「未接班專任教師」領費（每日 ${systemConfig.actingHomeroomDailyRate ?? 404} 元）；導師／組長等可代理但不列領費。`
+                          : `可指定專任、導師或行政職代理。僅請上午等不需代理時可留空。出納清冊僅「未接班專任教師」領費（每日 ${systemConfig.actingHomeroomDailyRate ?? 404} 元）。`}
                       </p>
                       {actingHomeroomTeacherId &&
                         substituteTeacherId &&

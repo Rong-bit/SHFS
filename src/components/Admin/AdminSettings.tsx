@@ -838,7 +838,7 @@ export const AdminSettings: React.FC = () => {
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 日</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    出納「代導師印領清冊」用。可依法令公式（鐘點費×日數÷5×專任與導師基本差距）核算後填入固定日費；預設 404。
+                    出納「代導師印領清冊」用。可指定任何人代理，但清冊僅「未接班專任教師」領費。可依法令公式（鐘點費×日數÷5×專任與導師基本差距）核算後填入固定日費；預設 404。
                   </p>
                 </div>
 

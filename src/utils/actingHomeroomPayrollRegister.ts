@@ -44,6 +44,18 @@ export function isHomeroomTeacher(
   return Boolean(teacher.homeroomClass) || teacher.title === '導師';
 }
 
+/**
+ * 可否列入代導師印領清冊領費。
+ * 法令原則：未兼任主管職務、且未接班之「專任教師」代理始支鐘點費。
+ * （已接導師／組長／科主任／主任可被指定代理，但不列入領費清冊。）
+ */
+export function canReceiveActingHomeroomFee(
+  teacher: Pick<Teacher, 'title' | 'homeroomClass'> | undefined | null
+): boolean {
+  if (!teacher) return false;
+  return teacher.title === '專任教師' && !isHomeroomTeacher(teacher);
+}
+
 const formatMd = (iso: string) => {
   const [, m, d] = iso.split('-');
   return `${Number(m)}/${Number(d)}`;
@@ -197,6 +209,10 @@ export function buildActingHomeroomPayrollRows(
 
     const applicant = teacherById.get(r.applicantTeacherId);
     if (!isHomeroomTeacher(applicant)) continue;
+
+    const actingTeacher = teacherById.get(r.actingHomeroomTeacherId);
+    // 有師資資料時：僅「未接班專任教師」列入領費；無資料者不列（避免誤發）
+    if (!canReceiveActingHomeroomFee(actingTeacher)) continue;
 
     const className =
       applicant?.homeroomClass?.trim() ||
