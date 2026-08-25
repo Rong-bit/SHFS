@@ -171,6 +171,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     originalSession.className?.trim() ||
     '—';
   const actingDailyRate = systemConfig.actingHomeroomDailyRate ?? 404;
+  const academicDirectorName = (systemConfig.academicDirectorName || '').trim();
   const noticeTitle = isActingOnly
     ? '導師請假 · 代導師職務代理通知單'
     : '教師調課 · 代課 · 補課聯絡通知單';
@@ -624,10 +625,27 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
 
             {/* Dean of Academic Affairs / Principal */}
             <div className="p-3">
-              <div className="text-slate-600 font-bold mb-6">教務主任 / 校長</div>
-              <div className="inline-block border-2 border-red-600 text-red-800 px-4 py-1 font-serif font-bold text-sm rounded">
-                教務處 決行
-              </div>
+              <div className="text-slate-600 font-bold mb-4">教務主任 / 校長</div>
+              {academicDirectorName ? (
+                <div className="inline-flex flex-col items-center">
+                  <div className="w-[5.75rem] border-2 border-red-600 text-red-800 px-2 py-1.5 font-serif font-bold text-sm rounded leading-tight space-y-0.5">
+                    <span className="flex w-full justify-between">
+                      {Array.from(academicDirectorName).map((ch, i) => (
+                        <span key={`d-${ch}-${i}`}>{ch}</span>
+                      ))}
+                    </span>
+                    <span className="flex w-full justify-between text-[11px] font-semibold">
+                      {Array.from('決行').map((ch, i) => (
+                        <span key={`a-${ch}-${i}`}>{ch}</span>
+                      ))}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="inline-block border-2 border-red-600 text-red-800 px-4 py-1 font-serif font-bold text-sm rounded">
+                  教務處 決行
+                </div>
+              )}
               <div className="text-[10px] text-slate-400 mt-2">存查建檔</div>
             </div>
           </div>

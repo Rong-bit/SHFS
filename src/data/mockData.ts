@@ -97,6 +97,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
     director: 0,
   },
   schoolName: '國立技術型高級中等學校',
+  academicDirectorName: '',
   // 8 月起為新學年：依本機日期推估民國學年度，避免預設停在舊年導致結算西元年偏移
   academicYear: String(
     (() => {

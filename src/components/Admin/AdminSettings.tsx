@@ -110,6 +110,7 @@ export const AdminSettings: React.FC = () => {
     maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
     standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
     schoolName: systemConfig?.schoolName ?? '國立技術型高級中等學校',
+    academicDirectorName: systemConfig?.academicDirectorName ?? '',
     academicYear: systemConfig?.academicYear ?? '114',
     semester: systemConfig?.semester ?? '1',
     currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
@@ -146,6 +147,7 @@ export const AdminSettings: React.FC = () => {
       maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
       standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
       schoolName: systemConfig?.schoolName ?? '國立技術型高級中等學校',
+      academicDirectorName: systemConfig?.academicDirectorName ?? '',
       academicYear: systemConfig?.academicYear ?? '114',
       semester: systemConfig?.semester ?? '1',
       currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
@@ -302,6 +304,7 @@ export const AdminSettings: React.FC = () => {
     e.preventDefault();
     const nextConfig = {
       ...formConfig,
+      academicDirectorName: (formConfig.academicDirectorName || '').trim(),
       standardBasePeriods: normalizeStandardBasePeriods(formConfig.standardBasePeriods),
       teacherSalaryCodesByName: systemConfig.teacherSalaryCodesByName,
       teacherSalaryCodes: systemConfig.teacherSalaryCodes,
@@ -763,6 +766,21 @@ export const AdminSettings: React.FC = () => {
               placeholder="如：國立○○高級工業職業學校"
             />
             <p className="text-[11px] text-indigo-600 mt-1.5">修改後將套用於代課通知單抬頭及匯出 Excel 課表標題。</p>
+            <label className="block text-sm font-bold text-indigo-900 mt-4 mb-2">
+              教務主任姓名（調代課通知單決行印章）
+            </label>
+            <input
+              type="text"
+              value={formConfig.academicDirectorName || ''}
+              onChange={(e) =>
+                setFormConfig({ ...formConfig, academicDirectorName: e.target.value })
+              }
+              className="w-full bg-white border border-indigo-300 rounded-xl p-3 text-base font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
+              placeholder="如：王大同"
+            />
+            <p className="text-[11px] text-indigo-600 mt-1.5">
+              填寫後通知單第四欄印章顯示「姓名＋決行」；空白則維持「教務處 決行」。
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
