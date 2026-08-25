@@ -2826,7 +2826,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let publicSubstitutePeriods = 0;
       let privateLeaveDeductionPeriods = 0;
       let privateSubstituteEarnPeriods = 0;
-      let concurrentSubstituteAddPeriods = 0;
       let publicSubstituteAmount = 0;
       let privateLeaveDeductionAmount = 0;
       let privateSubstituteEarnAmount = 0;
@@ -2874,13 +2873,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               privateSubstituteEarnPeriods += periods;
               privateSubstituteEarnAmount += rate * periods;
             }
-            if (
-              r.originalSession?.isConcurrent &&
-              r.originalSession.period >= 1 &&
-              r.originalSession.period <= 7
-            ) {
-              concurrentSubstituteAddPeriods += periods;
-            }
           }
           if (r.applicantTeacherId === teacher.id) {
             if (r.paymentType === 'private') {
@@ -2894,10 +2886,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const swapConcurrentSubtract = Math.max(0, -swapConcurrentDelta);
       const monthlyConcurrentBasePeriods = rawMonthlyOverload;
       const concurrentSubtractPeriods = leaveConcurrentDeduct + swapConcurrentSubtract;
-      const concurrentAddPeriods = concurrentSubstituteAddPeriods + swapConcurrentAdd;
+      // 應加僅計暫時互調增加；代課兼課堂次改由代課費／代課清冊支給，不重複計入兼課清冊
+      const concurrentAddPeriods = swapConcurrentAdd;
       const monthlyConcurrentPeriods = Math.max(
         0,
-        monthlyConcurrentBasePeriods - leaveConcurrentDeduct + swapConcurrentDelta + concurrentSubstituteAddPeriods
+        monthlyConcurrentBasePeriods - leaveConcurrentDeduct + swapConcurrentDelta
       );
       const concurrentPayrollAmount = monthlyConcurrentPeriods * hourlyRate;
 

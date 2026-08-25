@@ -119,7 +119,7 @@ const formatMd = (dateStr: string) => {
   return `${Number(m)}/${Number(d)}`;
 };
 
-/** 備註：代課應加、請假應減（兼課節次） */
+/** 備註：請假應減兼課；代課費另計於代課清冊（不重複加兼課） */
 export function buildConcurrentPayrollRemarks(
   teacherId: string,
   settlementMonth: number,
@@ -157,8 +157,9 @@ export function buildConcurrentPayrollRemarks(
 
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
-    if (!r.substituteTeacherId || !r.originalSession?.isConcurrent) continue;
+    if (!r.originalSession?.isConcurrent) continue;
     if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
+    if (r.applicantTeacherId !== teacherId) continue;
 
     const inMonth = countLeaveSubstitutePeriodsInMonth(
       r,
@@ -177,13 +178,7 @@ export function buildConcurrentPayrollRemarks(
         : inMonth;
     if (periods <= 0) continue;
 
-    if (r.substituteTeacherId === teacherId) {
-      const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
-      pushDates(r, periods, `代${r.applicantTeacherName}${leaveShort}`);
-    }
-    if (r.applicantTeacherId === teacherId) {
-      pushDates(r, periods, `請${leaveTypeRemarkShort(r.leaveType)}扣兼課`);
-    }
+    pushDates(r, periods, `請${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`);
   }
 
   return parts.join('；');
