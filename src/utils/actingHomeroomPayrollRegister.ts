@@ -97,14 +97,27 @@ export function listActingHomeroomDaysInMonth(
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return [];
 
   const dates: string[] = [];
-  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-    const js = cur.getDay();
-    if (js < 1 || js > 5) continue;
-    if (cur.getMonth() + 1 !== settlementMonth) continue;
-    if (cur.getFullYear() !== settlementYear) continue;
-    const iso = dateToIsoLocal(cur);
-    if (isNonTeachingDate(iso, holidaySet)) continue;
-    dates.push(iso);
+  const pushMatching = (year: number) => {
+    for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+      const js = cur.getDay();
+      if (js < 1 || js > 5) continue;
+      if (cur.getMonth() + 1 !== settlementMonth) continue;
+      if (cur.getFullYear() !== year) continue;
+      const iso = dateToIsoLocal(cur);
+      if (isNonTeachingDate(iso, holidaySet)) continue;
+      dates.push(iso);
+    }
+  };
+  pushMatching(settlementYear);
+  if (dates.length === 0) {
+    const years = new Set<number>();
+    for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+      if (cur.getMonth() + 1 === settlementMonth) years.add(cur.getFullYear());
+    }
+    const alt = [...years].sort(
+      (a, b) => Math.abs(a - settlementYear) - Math.abs(b - settlementYear)
+    )[0];
+    if (alt != null && alt !== settlementYear) pushMatching(alt);
   }
   return dates;
 }
@@ -218,7 +231,8 @@ export function buildActingHomeroomPayrollRows(
   settlementYear: number
 ): ActingHomeroomPayrollRow[] {
   const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-  const dailyRate = systemConfig.actingHomeroomDailyRate ?? 404;
+  const rawRate = systemConfig.actingHomeroomDailyRate;
+  const dailyRate = typeof rawRate === 'number' && Number.isFinite(rawRate) ? rawRate : 404;
   const teacherById = new Map(teachers.map((t) => [t.id, t]));
 
   /** actingTeacherId → date → covers */
@@ -238,8 +252,7 @@ export function buildActingHomeroomPayrollRows(
     const className =
       applicant?.homeroomClass?.trim() ||
       r.originalSession?.className?.trim() ||
-      '';
-    if (!className) continue;
+      '導師班';
 
     const leaveShort = actingHomeroomLeaveRemarkShort(r.leaveType, r.reason);
     const days = listActingHomeroomDaysInMonth(

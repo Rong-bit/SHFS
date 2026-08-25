@@ -262,15 +262,34 @@ export const PendingApprovals: React.FC = () => {
                     
                     {req.requestType === 'substitute' && (
                       <div className="text-slate-900 font-medium">
-                        <span>代課教師：</span>
-                        <strong className="text-indigo-900 text-base ml-1">
-                          {req.substituteTeacherName || '未指定（由教學組媒合）'}
-                        </strong>
-                        <span className="text-xs text-slate-600 ml-2">
-                          ({req.paymentType === 'public'
-                            ? `公費派代 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`
-                            : `自費代課 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`})
-                        </span>
+                        {isActingHomeroomOnlyRequest(req) ? (
+                          <>
+                            <span>代導師：</span>
+                            <strong className="text-violet-900 text-base ml-1">
+                              {req.actingHomeroomTeacherName || '尚未指定'}
+                            </strong>
+                            <span className="text-xs text-slate-600 ml-2">
+                              （當日無排課，僅辦代導師）
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span>代課教師：</span>
+                            <strong className="text-indigo-900 text-base ml-1">
+                              {req.substituteTeacherName || '未指定（由教學組媒合）'}
+                            </strong>
+                            <span className="text-xs text-slate-600 ml-2">
+                              ({req.paymentType === 'public'
+                                ? `公費派代 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`
+                                : `自費代課 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`})
+                            </span>
+                            {req.actingHomeroomTeacherName && (
+                              <div className="text-xs text-violet-800 mt-1">
+                                代導師：{req.actingHomeroomTeacherName}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
 

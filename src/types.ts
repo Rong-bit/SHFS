@@ -280,7 +280,7 @@ export interface MonthlyTeacherSettlement {
 
   /** 兼課鐘點費印領清冊：課表兼課月節數（扣假、移課前） */
   monthlyConcurrentBasePeriods: number;
-  /** 應加兼課（代課兼課、暫時互調增加等） */
+  /** 應加兼課（暫時互調增加等；代課兼課改由代課費／代課清冊支給） */
   concurrentAddPeriods: number;
   /** 應減兼課（請假兼課、暫時互調減少等） */
   concurrentSubtractPeriods: number;

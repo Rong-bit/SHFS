@@ -41,7 +41,7 @@ import {
   mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
-import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth, resolveLeaveDateEnd, validateSubstituteLeaveInput } from '../utils/leaveDates';
+import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth, dateToDayOfWeek, resolveLeaveDateEnd, validateSubstituteLeaveInput } from '../utils/leaveDates';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -61,6 +61,7 @@ import {
   rollbackRequestFromSessionsDetailed,
 } from '../utils/scheduleAdjustments';
 import { isPlaceholderSession, resolveOriginalSession, resolveSwapTargetSession } from '../utils/resolveOriginalSession';
+import { isActingHomeroomOnlyRequest } from '../utils/actingHomeroomPayrollRegister';
 import {
   collectSubstituteOccupancies,
   countWeeklySubstituteOccupancySlots,
@@ -645,6 +646,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,
       ...(merged.systemConfig || {}),
+      actingHomeroomDailyRate:
+        typeof merged.systemConfig?.actingHomeroomDailyRate === 'number' &&
+        Number.isFinite(merged.systemConfig.actingHomeroomDailyRate)
+          ? merged.systemConfig.actingHomeroomDailyRate
+          : INITIAL_SYSTEM_CONFIG.actingHomeroomDailyRate,
       standardBasePeriods: remoteStd,
       authConfig: withMigratedAuthConfig({
         ...INITIAL_SYSTEM_CONFIG.authConfig,
@@ -1540,7 +1546,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!targetReq) return { ok: false, reason: '找不到申請單' };
     if (targetReq.status === 'approved') return { ok: false, reason: '已核准' };
 
-    if (targetReq.requestType === 'substitute' && !targetReq.substituteTeacherId) {
+    const isActingHomeroomOnly = isActingHomeroomOnlyRequest(targetReq);
+
+    if (
+      targetReq.requestType === 'substitute' &&
+      !targetReq.substituteTeacherId &&
+      !isActingHomeroomOnly
+    ) {
       return { ok: false, reason: '尚未指定代課教師' };
     }
     if (targetReq.requestType === 'reschedule' && !targetReq.targetReschedule) {
@@ -1556,7 +1568,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetReq.requestType === 'swap'
         ? resolveSwapTargetSession(targetReq, workingSessions)
         : targetReq.swapTargetSession;
-    if (targetReq.requestType === 'substitute' && isPlaceholderSession(resolvedOrig)) {
+    if (
+      targetReq.requestType === 'substitute' &&
+      isPlaceholderSession(resolvedOrig) &&
+      !isActingHomeroomOnly
+    ) {
       return { ok: false, reason: '找不到對應課表課堂（佔位資料）' };
     }
     if (targetReq.requestType === 'swap') {
@@ -1565,7 +1581,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    if (targetReq.requestType === 'substitute') {
+    if (targetReq.requestType === 'substitute' && !isActingHomeroomOnly) {
       const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
       const { billable, missingLeaveDate } = countBillableDaysForSubstituteApprove(
         targetReq,
@@ -1601,7 +1617,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       leaveDateStart: targetReq.leaveDateStart || targetReq.effectiveDate,
       leaveDateEnd: targetReq.leaveDateEnd || targetReq.effectiveDate,
     });
-    if (clashStatus.hasClash) {
+    if (clashStatus.hasClash && !isActingHomeroomOnly) {
       return { ok: false, reason: clashStatus.messages[0] || '存在衝堂衝突' };
     }
 
@@ -1609,7 +1625,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 保留申請快照之時段；resolve 僅用於衝堂／找現行 id，不可寫回單據蓋掉原時段
     const approvedReq: SubstituteRequest = {
       ...targetReq,
-      originalSession: isPlaceholderSession(targetReq.originalSession)
+      originalSession: isActingHomeroomOnly
+        ? targetReq.originalSession
+        : isPlaceholderSession(targetReq.originalSession)
         ? resolvedOrig
         : {
             ...targetReq.originalSession,
@@ -1893,10 +1911,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const newRequest = {
         ...data,
-        // 保留申請／逕行派代當下之時段快照（佔位才用 resolve 實課堂）
-        originalSession: isPlaceholderSession(data.originalSession)
-          ? resolvedOrig
-          : { ...data.originalSession, id: resolvedOrig.id },
+        // 保留申請／逕行派代當下之時段快照（僅代導師佔位不可 resolve 成實課）
+        originalSession: isActingHomeroomOnly
+          ? data.originalSession
+          : isPlaceholderSession(data.originalSession)
+            ? resolvedOrig
+            : { ...data.originalSession, id: resolvedOrig.id },
         id: `req-${stampPrefix}-${index}`,
         requestNumber,
         createdAt: nowStr,
@@ -2092,6 +2112,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       return false;
     }
+    if (hasPlaceholder && !nextActingId) {
+      window.alert('僅代導師單須指定代導師。');
+      return false;
+    }
+    if (!hasPlaceholder && !nextSubId) {
+      window.alert('請假派代須指定代課教師。');
+      return false;
+    }
+
+    const nextDow = nextLeaveStart ? dateToDayOfWeek(nextLeaveStart) : null;
+    const sessionsForCheck = group.map((r) => {
+      if (!isPlaceholderSession(r.originalSession) || nextDow === null) {
+        return r.originalSession;
+      }
+      return {
+        ...r.originalSession,
+        dayOfWeek: nextDow,
+        id: `s-placeholder-acting-${r.applicantTeacherId}-${nextLeaveStart}`,
+      };
+    });
 
     const leaveMode =
       nextLeaveEnd && nextLeaveEnd !== nextLeaveStart ? 'range' : 'single';
@@ -2100,7 +2140,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       leaveDateMode: leaveMode,
       leaveDateStart: nextLeaveStart,
       leaveDateEnd: nextLeaveEnd,
-      sessions: group.map((r) => r.originalSession),
+      sessions: sessionsForCheck,
       existing: requests,
       applicantTeacherId: primary.applicantTeacherId,
       dayNames,
@@ -2115,18 +2155,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const ids = new Set(group.map((r) => r.id));
-    const applyPatch = (r: SubstituteRequest): SubstituteRequest => ({
-      ...r,
-      leaveType: nextLeaveType,
-      paymentType: nextPayment,
-      reason: nextReason,
-      leaveDateStart: nextLeaveStart || undefined,
-      leaveDateEnd: nextLeaveEnd || undefined,
-      substituteTeacherId: nextSubId,
-      substituteTeacherName: nextSubName,
-      actingHomeroomTeacherId: nextActingId,
-      actingHomeroomTeacherName: nextActingName,
-    });
+    const applyPatch = (r: SubstituteRequest): SubstituteRequest => {
+      const orig = r.originalSession;
+      const nextSession =
+        isPlaceholderSession(orig) && nextDow !== null
+          ? {
+              ...orig,
+              dayOfWeek: nextDow,
+              id: `s-placeholder-acting-${r.applicantTeacherId}-${nextLeaveStart}`,
+            }
+          : orig;
+      return {
+        ...r,
+        leaveType: nextLeaveType,
+        paymentType: nextPayment,
+        reason: nextReason,
+        leaveDateStart: nextLeaveStart || undefined,
+        leaveDateEnd: nextLeaveEnd || undefined,
+        substituteTeacherId: nextSubId,
+        substituteTeacherName: nextSubName,
+        actingHomeroomTeacherId: nextActingId,
+        actingHomeroomTeacherName: nextActingName,
+        originalSession: nextSession,
+      };
+    };
 
     const oldSubId = primary.substituteTeacherId || '';
     const newSubId = nextSubId || '';

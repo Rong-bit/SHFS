@@ -70,6 +70,7 @@ export function findActiveLeaveCoverRequestForSession(
     (r) =>
       r.status === 'approved' &&
       r.requestType === 'substitute' &&
+      Boolean(r.leaveDateStart) &&
       (r.originalSession.id === session.id ||
         (r.originalSession.dayOfWeek === session.dayOfWeek &&
           r.originalSession.period === session.period &&
@@ -685,7 +686,9 @@ export function validateSubstituteLeaveInput(params: {
   }
 
   // 含半日停課／暫時移課：即使沒有整天放假日也要檢查可計節
-  for (const s of targetSessions) {
+  // 僅代導師佔位不依節次計費，略過「第 N 節無可計節」檢查
+  const billedSessions = targetSessions.filter((s) => !isPlaceholderSessionId(s.id));
+  for (const s of billedSessions) {
     const billable = countMatchingWeekdays(
       leaveDateStart,
       resolvedLeaveEnd,
@@ -706,7 +709,7 @@ export function validateSubstituteLeaveInput(params: {
   }
 
   const allowedDays = weekdaysInDateRange(leaveDateStart, resolvedLeaveEnd);
-  const bad = targetSessions.find((s) => !allowedDays.includes(s.dayOfWeek));
+  const bad = billedSessions.find((s) => !allowedDays.includes(s.dayOfWeek));
   if (bad) {
     return {
       ok: false,

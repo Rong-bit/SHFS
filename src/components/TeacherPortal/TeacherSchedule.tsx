@@ -94,6 +94,7 @@ export const TeacherSchedule: React.FC = () => {
       r.status === 'approved' &&
       r.requestType === 'substitute' &&
       r.substituteTeacherId === currentTeacher.id &&
+      Boolean(r.leaveDateStart) &&
       leaveRangeCoversDate(
         r.leaveDateStart,
         r.leaveDateEnd,

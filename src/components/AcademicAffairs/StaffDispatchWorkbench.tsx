@@ -845,10 +845,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
         const term = searchTerm.toLowerCase();
         const matchName = r.applicantTeacherName.toLowerCase().includes(term);
         const matchSub = (r.substituteTeacherName || '').toLowerCase().includes(term);
+        const matchActing = (r.actingHomeroomTeacherName || '').toLowerCase().includes(term);
         const matchClass = r.originalSession.className.toLowerCase().includes(term);
         const matchSubject = r.originalSession.subjectName.toLowerCase().includes(term);
         const matchNum = r.requestNumber.toLowerCase().includes(term);
-        if (!matchName && !matchSub && !matchClass && !matchSubject && !matchNum) return false;
+        if (!matchName && !matchSub && !matchActing && !matchClass && !matchSubject && !matchNum) return false;
       }
 
       return true;
@@ -2283,8 +2284,26 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           <td className="p-3">
                             {req.requestType === 'substitute' && (
                               <div>
-                                <span className="text-slate-500">代課：</span>
-                                <strong className="text-indigo-900">{req.substituteTeacherName || '由教學組媒合'}</strong>
+                                {isActingHomeroomOnlyRequest(req) ? (
+                                  <>
+                                    <span className="text-slate-500">代導師：</span>
+                                    <strong className="text-violet-900">
+                                      {req.actingHomeroomTeacherName || '尚未指定'}
+                                    </strong>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-slate-500">代課：</span>
+                                    <strong className="text-indigo-900">
+                                      {req.substituteTeacherName || '由教學組媒合'}
+                                    </strong>
+                                    {req.actingHomeroomTeacherName && (
+                                      <div className="text-[11px] text-violet-800 mt-0.5">
+                                        代導師：{req.actingHomeroomTeacherName}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                               </div>
                             )}
                             {req.requestType === 'reschedule' && req.targetReschedule && (
@@ -2594,19 +2613,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   teachers={teachers.filter((t) => t.id !== editingRequest.applicantTeacherId)}
                   currentTeacherId={editSubstituteTeacherId}
                   onSelectTeacher={setEditSubstituteTeacherId}
-                  placeholder="搜尋代課教師（可留空）…"
+                  placeholder="搜尋代課教師…"
                   variant="light"
                   fullWidth
                 />
-              )}
-              {editSubstituteTeacherId && !isPlaceholderSession(editingRequest.originalSession) && (
-                <button
-                  type="button"
-                  onClick={() => setEditSubstituteTeacherId('')}
-                  className="mt-1 text-[11px] text-rose-600 font-semibold hover:underline"
-                >
-                  清除代課教師
-                </button>
               )}
             </div>
 
@@ -2614,16 +2624,20 @@ export const StaffDispatchWorkbench: React.FC = () => {
               teachers.find((t) => t.id === editingRequest.applicantTeacherId)
             ) && (
               <div>
-                <label className="block text-xs font-bold text-violet-900 mb-1">代導師</label>
+                <label className="block text-xs font-bold text-violet-900 mb-1">
+                  代導師
+                  {isPlaceholderSession(editingRequest.originalSession) ? '（必填）' : '（選填）'}
+                </label>
                 <TeacherSearchCombobox
                   teachers={teachers.filter((t) => t.id !== editingRequest.applicantTeacherId)}
                   currentTeacherId={editActingHomeroomTeacherId}
                   onSelectTeacher={setEditActingHomeroomTeacherId}
-                  placeholder="搜尋代導師（可留空）…"
+                  placeholder="搜尋代導師…"
                   variant="light"
                   fullWidth
                 />
-                {editActingHomeroomTeacherId && (
+                {editActingHomeroomTeacherId &&
+                  !isPlaceholderSession(editingRequest.originalSession) && (
                   <button
                     type="button"
                     onClick={() => setEditActingHomeroomTeacherId('')}

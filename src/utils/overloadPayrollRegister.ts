@@ -3,6 +3,7 @@ import { leaveTypeRemarkShort } from './leaveTypes';
 import {
   countLeaveSubstitutePeriods,
   countLeaveSubstitutePeriodsInMonth,
+  inferRequestMonth,
 } from './leaveDates';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
@@ -170,11 +171,13 @@ export function buildConcurrentPayrollRemarks(
     );
     const periods =
       inMonth === null
-        ? countLeaveSubstitutePeriods(r, holidaySet, {
-            settlementMonth,
-            settlementYear,
-            ...calendarOpts,
-          })
+        ? inferRequestMonth(r.requestNumber, r.createdAt) === settlementMonth
+          ? countLeaveSubstitutePeriods(r, holidaySet, {
+              settlementMonth,
+              settlementYear,
+              ...calendarOpts,
+            })
+          : 0
         : inMonth;
     if (periods <= 0) continue;
 

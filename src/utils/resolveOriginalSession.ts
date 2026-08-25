@@ -24,6 +24,17 @@ export const resolveOriginalSession = (
   sessions: CourseSession[]
 ): CourseSession => {
   const orig = request.originalSession;
+  // 僅代導師佔位不可對到同星期第 1 節真實課堂，否則會印成調代課單／誤改課表
+  if (
+    orig &&
+    isPlaceholderSession(orig) &&
+    !request.substituteTeacherId &&
+    (orig.id.startsWith('s-placeholder-acting') ||
+      Boolean(orig.subjectName?.includes('代導師')) ||
+      Boolean(orig.notes?.includes('僅代導師')))
+  ) {
+    return orig;
+  }
   if (!isPlaceholderSession(orig)) {
     const byId = sessions.find((s) => s.id === orig.id);
     if (!byId) return orig;

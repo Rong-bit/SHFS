@@ -175,13 +175,30 @@ export const TeacherRequestsList: React.FC = () => {
                   
                   {req.requestType === 'substitute' && (
                     <div className="text-slate-800">
-                      <span>指派代課教師：</span>
-                      <strong className="text-indigo-900 font-bold text-sm ml-1">
-                        {req.substituteTeacherName || '由教學組媒合無課教師'}
-                      </strong>
-                      <span className="text-xs text-slate-500 ml-2">
-                        ({req.paymentType === 'public' ? '公費支給' : '個人代扣支付'})
-                      </span>
+                      {isActingHomeroomOnlyRequest(req) ? (
+                        <>
+                          <span>代導師：</span>
+                          <strong className="text-violet-900 font-bold text-sm ml-1">
+                            {req.actingHomeroomTeacherName || '尚未指定'}
+                          </strong>
+                          <span className="text-xs text-slate-500 ml-2">（當日無排課）</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>指派代課教師：</span>
+                          <strong className="text-indigo-900 font-bold text-sm ml-1">
+                            {req.substituteTeacherName || '由教學組媒合無課教師'}
+                          </strong>
+                          <span className="text-xs text-slate-500 ml-2">
+                            ({req.paymentType === 'public' ? '公費支給' : '個人代扣支付'})
+                          </span>
+                          {req.actingHomeroomTeacherName && (
+                            <div className="text-xs text-violet-800 mt-1">
+                              代導師：{req.actingHomeroomTeacherName}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
 
