@@ -3,11 +3,10 @@ import { useApp } from '../../context/AppContext';
 import { PendingApprovals } from './PendingApprovals';
 import { SchoolTimetableMatrix } from './SchoolTimetableMatrix';
 import { StaffDispatchWorkbench } from './StaffDispatchWorkbench';
-import { ClipboardCheck, Grid, Upload, Download, UserCheck, Zap, Plus } from 'lucide-react';
-import { exportScheduleToExcel } from '../../utils/scheduleImporter';
+import { ClipboardCheck, Grid, UserCheck } from 'lucide-react';
 
 export const AcademicAffairsMain: React.FC = () => {
-  const { requests, sessions, teachers, systemConfig, setIsImportModalOpen, currentAcademicStaff } = useApp();
+  const { requests } = useApp();
   const [activeTab, setActiveTab] = useState<'dispatch' | 'approvals' | 'matrix'>('dispatch');
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
@@ -15,7 +14,7 @@ export const AcademicAffairsMain: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      {/* Tab Switcher & Quick Actions */}
+      {/* Tab Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           
@@ -61,28 +60,6 @@ export const AcademicAffairsMain: React.FC = () => {
           >
             <Grid className="w-4 h-4 text-indigo-400" />
             <span>全校總課表與實習工場檢視</span>
-          </button>
-        </div>
-
-        {/* Schedule Import / Export Actions */}
-        <div className="flex items-center space-x-2">
-          <button
-            id="btn-academic-import-schedule"
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition active:scale-95"
-          >
-            <Upload className="w-3.5 h-3.5 text-amber-400" />
-            <span>📥 匯入課表 (Excel/CSV)</span>
-          </button>
-
-          <button
-            id="btn-academic-export-schedule"
-            onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester, systemConfig.schoolName)}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold shadow-xs transition"
-            title="匯出目前全校課表為 Excel"
-          >
-            <Download className="w-3.5 h-3.5 text-amber-500" />
-            <span>匯出 Excel</span>
           </button>
         </div>
       </div>

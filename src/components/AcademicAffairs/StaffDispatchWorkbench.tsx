@@ -1574,7 +1574,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           )}
                         </>
                       ) : (
-                        <p>該教師目前在課表中無排定課堂，請至總課表確認或重新匯入課表。</p>
+                        <p>該教師目前在課表中無排定課堂，請至總課表確認，或洽系統管理員重新匯入課表。</p>
                       )}
                     </div>
                   ) : (
@@ -1654,62 +1654,96 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         請假日無授課課堂，無需指定代課教師。請指定代導師後送出即可。
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                        {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameSubject, isSameDept, weeklyOverload }) => {
-                          const isSelected = substituteTeacherId === cand.id;
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                          {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameSubject, isSameDept, weeklyOverload }) => {
+                            const isSelected = substituteTeacherId === cand.id;
 
-                          return (
-                            <div
-                              key={cand.id}
+                            return (
+                              <div
+                                key={cand.id}
+                                onClick={() => {
+                                  if (hasClash) return;
+                                  setHasUserChosenSubstituteTeacher(true);
+                                  setSubstituteTeacherId(cand.id);
+                                }}
+                                className={`p-3 rounded-xl border transition ${
+                                  hasClash
+                                    ? 'opacity-50 bg-rose-50/40 border-rose-200 cursor-not-allowed'
+                                    : isSelected
+                                    ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs cursor-pointer'
+                                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100 cursor-pointer'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-slate-900">{cand.name}</span>
+                                  <span className="text-[11px] text-slate-500">{cand.department}</span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                                  {hasClash ? (
+                                    <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 font-bold rounded">
+                                      🚫 時段衝堂 (已有課)
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
+                                      ✓ 此時段空堂
+                                    </span>
+                                  )}
+
+                                  {isSameSubject && (
+                                    <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 font-bold rounded">
+                                      同科目
+                                    </span>
+                                  )}
+
+                                  {!isSameSubject && isSameDept && (
+                                    <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 font-bold rounded">
+                                      同專業科系
+                                    </span>
+                                  )}
+
+                                  <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded">
+                                    超鐘點: {weeklyOverload}節
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="pt-2 space-y-1.5 border-t border-slate-100">
+                          <label className="block text-xs font-bold text-slate-700">
+                            或自行輸入／搜尋指定：
+                          </label>
+                          <TeacherSearchCombobox
+                            teachers={teachers.filter((t) => t.id !== applicantTeacher?.id)}
+                            currentTeacherId={substituteTeacherId}
+                            onSelectTeacher={(id) => {
+                              setHasUserChosenSubstituteTeacher(true);
+                              setSubstituteTeacherId(id);
+                            }}
+                            placeholder="輸入姓名或科別搜尋代課教師…"
+                            variant="light"
+                            fullWidth
+                          />
+                          <p className="text-[11px] text-slate-500">
+                            可直接輸入姓名搜尋，不限智慧推薦清單。點選推薦卡片或由此搜尋皆可指定。
+                          </p>
+                          {substituteTeacherId && (
+                            <button
+                              type="button"
                               onClick={() => {
-                                if (hasClash) return;
                                 setHasUserChosenSubstituteTeacher(true);
-                                setSubstituteTeacherId(cand.id);
+                                setSubstituteTeacherId('');
                               }}
-                              className={`p-3 rounded-xl border transition ${
-                                hasClash
-                                  ? 'opacity-50 bg-rose-50/40 border-rose-200 cursor-not-allowed'
-                                  : isSelected
-                                  ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs cursor-pointer'
-                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 cursor-pointer'
-                              }`}
+                              className="text-[11px] text-rose-600 font-semibold hover:underline"
                             >
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="font-bold text-slate-900">{cand.name}</span>
-                                <span className="text-[11px] text-slate-500">{cand.department}</span>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
-                                {hasClash ? (
-                                  <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 font-bold rounded">
-                                    🚫 時段衝堂 (已有課)
-                                  </span>
-                                ) : (
-                                  <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
-                                    ✓ 此時段空堂
-                                  </span>
-                                )}
-
-                                {isSameSubject && (
-                                  <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 font-bold rounded">
-                                    同科目
-                                  </span>
-                                )}
-
-                                {!isSameSubject && isSameDept && (
-                                  <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 font-bold rounded">
-                                    同專業科系
-                                  </span>
-                                )}
-
-                                <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded">
-                                  超鐘點: {weeklyOverload}節
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                              清除代課教師
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
 
@@ -1726,7 +1760,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         currentTeacherId={actingHomeroomTeacherId}
                         onSelectTeacher={setActingHomeroomTeacherId}
                         placeholder="搜尋代導師姓名…"
-                        compact
+                        variant="light"
+                        fullWidth
                       />
                       <p className="text-[11px] text-violet-700">
                         {canActingHomeroomOnly

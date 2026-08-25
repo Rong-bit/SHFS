@@ -8,7 +8,6 @@ import { AdminSettings } from './components/Admin/AdminSettings';
 import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
-import { AiAdvisorModal } from './components/AiAdvisor/AiAdvisorModal';
 
 const AppContent: React.FC = () => {
   const { 
@@ -72,8 +71,6 @@ const AppContent: React.FC = () => {
         target={loginAuthTarget}
         onClose={() => setIsLoginAuthOpen(false)}
       />
-
-      <AiAdvisorModal />
 
     </div>
   );

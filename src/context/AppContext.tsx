@@ -208,8 +208,6 @@ interface AppContextType {
   calculateMonthlySettlement: (month?: number) => MonthlyTeacherSettlement[];
   
   // UI states
-  isAiAdvisorOpen: boolean;
-  setIsAiAdvisorOpen: (open: boolean) => void;
   isImportModalOpen: boolean;
   setIsImportModalOpen: (open: boolean) => void;
   printModalRequest: SubstituteRequest | null;
@@ -361,7 +359,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  const [isAiAdvisorOpen, setIsAiAdvisorOpen] = useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [printModalRequest, setPrintModalRequest] = useState<SubstituteRequest | null>(null);
 
@@ -2999,8 +2996,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteTeacher,
         checkClashes,
         calculateMonthlySettlement,
-        isAiAdvisorOpen,
-        setIsAiAdvisorOpen,
         isImportModalOpen,
         setIsImportModalOpen,
         importSchedule,

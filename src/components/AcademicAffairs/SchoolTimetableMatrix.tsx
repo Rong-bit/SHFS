@@ -15,17 +15,14 @@ import {
   BookOpen, 
   Search,
   Filter,
-  Upload,
-  Download
 } from 'lucide-react';
-import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { displayTeacherTitle, gradeYearFromClassName, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import { classifyVenueKind, venueKindLabel } from '../../utils/venueKinds';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { sessionNotesForCurrentWeekDisplay } from '../../utils/leaveDates';
 
 export const SchoolTimetableMatrix: React.FC = () => {
-  const { sessions, teachers, venues, systemConfig, setIsImportModalOpen, requests } = useApp();
+  const { sessions, teachers, venues, requests } = useApp();
 
   type ViewDimension = 'venue' | 'class' | 'teacher' | 'department';
   type VenueListGroup = 'workshop' | 'classroom';
@@ -122,7 +119,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
               <span>全校總課表與實習工場排課檢視矩陣</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              可依工場／班級／教師／科別檢視；格子內工場名稱可下拉改選（匯入後對應用，同科標 ★）
+              可依工場／班級／教師／科別檢視；格子內工場名稱可下拉改選（同科標 ★）。課表匯入／匯出請至系統管理員。
             </p>
           </div>
 
@@ -362,21 +359,6 @@ export const SchoolTimetableMatrix: React.FC = () => {
             <span className="text-slate-400">
               排定課堂數：<strong className="text-amber-400">{filteredSessions.length}</strong> 節
             </span>
-            <button
-              onClick={() => setIsImportModalOpen(true)}
-              className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs shadow-xs transition"
-            >
-              <Upload className="w-3 h-3" />
-              <span>匯入新課表</span>
-            </button>
-            <button
-              onClick={() => exportScheduleToExcel(sessions, teachers, systemConfig.academicYear, systemConfig.semester, systemConfig.schoolName)}
-              className="flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold text-xs border border-slate-700 transition"
-              title="匯出目前總課表為 Excel"
-            >
-              <Download className="w-3 h-3 text-amber-400" />
-              <span>匯出 Excel</span>
-            </button>
           </div>
         </div>
 
