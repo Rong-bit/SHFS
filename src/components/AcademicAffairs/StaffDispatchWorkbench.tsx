@@ -7,15 +7,16 @@ import {
   LeaveType, 
   PaymentType, 
   RequestType, 
+  SubstituteRequest,
   Teacher 
 } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
-import { displayTeacherTitle, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import {
   paymentTypeForLeaveType,
   WELLNESS_LEAVE_LEGAL_NOTE,
 } from '../../utils/leaveTypes';
-import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
+import { resolveOriginalSession, isPlaceholderSession } from '../../utils/resolveOriginalSession';
 import {
   countMatchingWeekdays,
   dateToDayOfWeek,
@@ -35,7 +36,7 @@ import {
 import { ModalShell } from '../Common/ModalShell';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
-import { isHomeroomTeacher } from '../../utils/actingHomeroomPayrollRegister';
+import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { 
   UserCheck, 
   User, 
@@ -77,6 +78,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     createStaffDirectDispatches,
     approveRequest,
     deleteRequest,
+    updateStaffDispatchFields,
     batchApproveRequests,
     setPrintModalRequest,
     checkClashes
@@ -93,6 +95,63 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [editBadge, setEditBadge] = useState('');
   const [editScope, setEditScope] = useState('');
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
+  const [editingRequest, setEditingRequest] = useState<SubstituteRequest | null>(null);
+  const [editLeaveType, setEditLeaveType] = useState<LeaveType>('official');
+  const [editPaymentType, setEditPaymentType] = useState<PaymentType>('public');
+  const [editReason, setEditReason] = useState('');
+  const [editLeaveDateMode, setEditLeaveDateMode] = useState<'single' | 'range'>('single');
+  const [editLeaveDateStart, setEditLeaveDateStart] = useState('');
+  const [editLeaveDateEnd, setEditLeaveDateEnd] = useState('');
+  const [editSubstituteTeacherId, setEditSubstituteTeacherId] = useState('');
+  const [editActingHomeroomTeacherId, setEditActingHomeroomTeacherId] = useState('');
+
+  const openEditRequest = (req: SubstituteRequest) => {
+    if (req.requestType !== 'substitute') {
+      alert('目前僅支援修改請假派代單。');
+      return;
+    }
+    setEditingRequest(req);
+    setEditLeaveType(req.leaveType || 'official');
+    setEditPaymentType(req.paymentType || paymentTypeForLeaveType(req.leaveType || 'official'));
+    setEditReason(req.reason || '');
+    const start = req.leaveDateStart || '';
+    const end = req.leaveDateEnd || start;
+    setEditLeaveDateStart(start);
+    setEditLeaveDateEnd(end);
+    setEditLeaveDateMode(end && start && end !== start ? 'range' : 'single');
+    setEditSubstituteTeacherId(req.substituteTeacherId || '');
+    setEditActingHomeroomTeacherId(req.actingHomeroomTeacherId || '');
+  };
+
+  const handleSaveEditRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRequest) return;
+    const sub = teachers.find((t) => t.id === editSubstituteTeacherId);
+    const acting = teachers.find((t) => t.id === editActingHomeroomTeacherId);
+    const ok = updateStaffDispatchFields(editingRequest.id, {
+      leaveType: editLeaveType,
+      paymentType: editPaymentType,
+      reason: editReason,
+      leaveDateStart: editLeaveDateStart,
+      leaveDateEnd:
+        editLeaveDateMode === 'range'
+          ? editLeaveDateEnd || editLeaveDateStart
+          : editLeaveDateStart,
+      substituteTeacherId: isPlaceholderSession(editingRequest.originalSession)
+        ? ''
+        : editSubstituteTeacherId,
+      substituteTeacherName: isPlaceholderSession(editingRequest.originalSession)
+        ? ''
+        : sub?.name || '',
+      actingHomeroomTeacherId: editActingHomeroomTeacherId,
+      actingHomeroomTeacherName: acting?.name || '',
+    });
+    if (ok) {
+      setEditingRequest(null);
+      setSuccessToast(`已更新 ${editingRequest.requestNumber}`);
+      setTimeout(() => setSuccessToast(null), 2500);
+    }
+  };
 
   const handleOpenQuickEdit = () => {
     if (currentAcademicStaff) {
@@ -1303,22 +1362,31 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Teacher Selector */}
+                {/* Teacher Selector：下拉＋輸入搜尋 */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     原授課教師：
                   </label>
-                  <select
-                    value={selectedTeacherId}
-                    onChange={(e) => setSelectedTeacherId(e.target.value)}
-                    className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 font-medium"
-                  >
-                    {filteredTeachers.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.department} · {displayTeacherTitle(t)} · 基本{t.basePeriods}節 / 現排{t.weeklyActualPeriods}節)
-                      </option>
-                    ))}
-                  </select>
+                  <TeacherSearchCombobox
+                    teachers={
+                      filteredTeachers.some((t) => t.id === selectedTeacherId)
+                        ? filteredTeachers
+                        : [
+                            ...(teachers.find((t) => t.id === selectedTeacherId)
+                              ? [teachers.find((t) => t.id === selectedTeacherId)!]
+                              : []),
+                            ...filteredTeachers,
+                          ]
+                    }
+                    currentTeacherId={selectedTeacherId}
+                    onSelectTeacher={setSelectedTeacherId}
+                    placeholder="輸入姓名／科別搜尋，或點下拉選擇…"
+                    variant="light"
+                    fullWidth
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    可直接輸入姓名搜尋，或點右側箭頭從清單選擇。
+                  </p>
                 </div>
 
                 {/* Sessions Grid */}
@@ -2241,15 +2309,32 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           </td>
 
                           <td className="p-3 text-center">
-                            <div className="flex items-center justify-center space-x-1.5">
+                            <div className="flex items-center justify-center flex-wrap gap-1.5">
+                              {req.requestType === 'substitute' && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditRequest(req)}
+                                  className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 transition"
+                                  title="修改假別、事由、請假日、代課／代導師"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                  <span>修改</span>
+                                </button>
+                              )}
                               {req.status === 'approved' && (
                                 <button
                                   onClick={() => setPrintModalRequest(req)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 transition"
-                                  title="列印調代課通知單"
+                                  title={
+                                    isActingHomeroomOnlyRequest(req)
+                                      ? '列印代導師通知單'
+                                      : '列印調代課通知單'
+                                  }
                                 >
                                   <Printer className="w-3 h-3" />
-                                  <span>通知單</span>
+                                  <span>
+                                    {isActingHomeroomOnlyRequest(req) ? '代導師單' : '通知單'}
+                                  </span>
                                 </button>
                               )}
 
@@ -2319,6 +2404,222 @@ export const StaffDispatchWorkbench: React.FC = () => {
           </div>
 
         </div>
+      )}
+
+      {editingRequest && (
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 max-h-[90vh] overflow-y-auto"
+        >
+          <form onSubmit={handleSaveEditRequest} className="p-6 space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Edit2 className="w-4 h-4 text-indigo-600" />
+                  修改請假派代單
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {editingRequest.requestNumber}
+                  {editingRequest.batchGroupId ? ' · 連續節次同批一併更新' : ''}
+                  {' · '}
+                  {editingRequest.applicantTeacherName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRequest(null)}
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold px-2"
+              >
+                關閉
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">假別</label>
+              <select
+                value={editLeaveType}
+                onChange={(e) => {
+                  const t = e.target.value as LeaveType;
+                  setEditLeaveType(t);
+                  setEditPaymentType(paymentTypeForLeaveType(t));
+                }}
+                className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+              >
+                <option value="official">公假 / 公差（公費）</option>
+                <option value="training">專題競賽 / 研習 / 監評（公費）</option>
+                <option value="sick">病假（自費）</option>
+                <option value="personal">事假（自費）</option>
+                <option value="bereavement">喪假（公費）</option>
+                <option value="maternity">產假 / 陪產假（公費）</option>
+                <option value="wellness">身心調適假（公費）</option>
+                <option value="other">其他</option>
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1">
+                費用別將隨假別自動調整為{editPaymentType === 'public' ? '公費' : '自費'}（仍可於下方覆寫）。
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setEditPaymentType('public')}
+                className={`p-2 rounded-xl text-xs font-bold border ${
+                  editPaymentType === 'public'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-700 border-slate-300'
+                }`}
+              >
+                公費
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditPaymentType('private')}
+                className={`p-2 rounded-xl text-xs font-bold border ${
+                  editPaymentType === 'private'
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-white text-slate-700 border-slate-300'
+                }`}
+              >
+                自費
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">請假日期</label>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditLeaveDateMode('single');
+                    setEditLeaveDateEnd(editLeaveDateStart);
+                  }}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-bold border ${
+                    editLeaveDateMode === 'single'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-300'
+                  }`}
+                >
+                  單日
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditLeaveDateMode('range')}
+                  className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-bold border ${
+                    editLeaveDateMode === 'range'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-300'
+                  }`}
+                >
+                  起迄
+                </button>
+              </div>
+              <div className={`grid gap-2 ${editLeaveDateMode === 'range' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <input
+                  type="date"
+                  required
+                  value={editLeaveDateStart}
+                  onChange={(e) => {
+                    setEditLeaveDateStart(e.target.value);
+                    if (editLeaveDateMode === 'single') setEditLeaveDateEnd(e.target.value);
+                  }}
+                  className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+                />
+                {editLeaveDateMode === 'range' && (
+                  <input
+                    type="date"
+                    required
+                    value={editLeaveDateEnd}
+                    onChange={(e) => setEditLeaveDateEnd(e.target.value)}
+                    className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">事由</label>
+              <input
+                type="text"
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="可留空"
+                className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">代課教師</label>
+              {isPlaceholderSession(editingRequest.originalSession) ? (
+                <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  當日無排課佔位單，無法指定代課教師（可改代導師／假別／請假日／事由）。
+                </p>
+              ) : (
+                <TeacherSearchCombobox
+                  teachers={teachers.filter((t) => t.id !== editingRequest.applicantTeacherId)}
+                  currentTeacherId={editSubstituteTeacherId}
+                  onSelectTeacher={setEditSubstituteTeacherId}
+                  placeholder="搜尋代課教師（可留空）…"
+                  variant="light"
+                  fullWidth
+                />
+              )}
+              {editSubstituteTeacherId && !isPlaceholderSession(editingRequest.originalSession) && (
+                <button
+                  type="button"
+                  onClick={() => setEditSubstituteTeacherId('')}
+                  className="mt-1 text-[11px] text-rose-600 font-semibold hover:underline"
+                >
+                  清除代課教師
+                </button>
+              )}
+            </div>
+
+            {isHomeroomTeacher(
+              teachers.find((t) => t.id === editingRequest.applicantTeacherId)
+            ) && (
+              <div>
+                <label className="block text-xs font-bold text-violet-900 mb-1">代導師</label>
+                <TeacherSearchCombobox
+                  teachers={teachers.filter((t) => t.id !== editingRequest.applicantTeacherId)}
+                  currentTeacherId={editActingHomeroomTeacherId}
+                  onSelectTeacher={setEditActingHomeroomTeacherId}
+                  placeholder="搜尋代導師（可留空）…"
+                  variant="light"
+                  fullWidth
+                />
+                {editActingHomeroomTeacherId && (
+                  <button
+                    type="button"
+                    onClick={() => setEditActingHomeroomTeacherId('')}
+                    className="mt-1 text-[11px] text-rose-600 font-semibold hover:underline"
+                  >
+                    清除代導師
+                  </button>
+                )}
+                <p className="text-[11px] text-violet-700 mt-1">
+                  出納清冊僅「未接班專任教師」領費。
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingRequest(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-xs"
+              >
+                儲存修改
+              </button>
+            </div>
+          </form>
+        </ModalShell>
       )}
 
       {deletingRequestId && (

@@ -4,6 +4,7 @@ import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
+import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { ModalShell } from '../Common/ModalShell';
 import { 
   ClipboardCheck, 
@@ -390,7 +391,9 @@ export const PendingApprovals: React.FC = () => {
                         onClick={() => setPrintModalRequest(req)}
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow transition"
                       >
-                        🖨️ 列印調代課通知單
+                        {isActingHomeroomOnlyRequest(req)
+                          ? '列印代導師通知單'
+                          : '列印調代課通知單'}
                       </button>
                     )}
 

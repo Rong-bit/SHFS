@@ -4,6 +4,7 @@ import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
+import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { 
   Printer, 
   Trash2, 
@@ -244,7 +245,11 @@ export const TeacherRequestsList: React.FC = () => {
                     className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg shadow transition"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>🖨️ 列印調代課通知單</span>
+                    <span>
+                      {isActingHomeroomOnlyRequest(req)
+                        ? '列印代導師通知單'
+                        : '列印調代課通知單'}
+                    </span>
                   </button>
                 )}
 

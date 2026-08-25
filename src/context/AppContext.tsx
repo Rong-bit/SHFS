@@ -12,6 +12,8 @@ import {
   DayOfWeek,
   DepartmentType,
   AcademicStaff,
+  LeaveType,
+  PaymentType,
 } from '../types';
 import {
   INITIAL_TEACHERS,
@@ -39,7 +41,7 @@ import {
   mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
-import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth } from '../utils/leaveDates';
+import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth, resolveLeaveDateEnd, validateSubstituteLeaveInput } from '../utils/leaveDates';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -131,6 +133,24 @@ interface AppContextType {
   rejectRequest: (requestId: string, reason: string, reviewerName?: string) => void;
   cancelRequest: (requestId: string) => void;
   deleteRequest: (requestId: string) => void;
+  /**
+   * 教學組修改請假派代單：假別／事由／請假日／代課／代導師（連續節次同批一併更新）。
+   * 已核准且變更代課教師時會回滾並重套課表標註。
+   */
+  updateStaffDispatchFields: (
+    requestId: string,
+    patch: {
+      leaveType?: LeaveType;
+      paymentType?: PaymentType;
+      reason?: string;
+      leaveDateStart?: string;
+      leaveDateEnd?: string;
+      substituteTeacherId?: string;
+      substituteTeacherName?: string;
+      actingHomeroomTeacherId?: string;
+      actingHomeroomTeacherName?: string;
+    }
+  ) => boolean;
   clearAllRequests: () => void;
   updateSystemConfig: (newConfig: Partial<SystemConfig>) => void;
   resetToMockData: () => void;
@@ -2019,6 +2039,164 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRequests((prev) => prev.filter((r) => !ids.has(r.id)));
   };
 
+  const updateStaffDispatchFields = (
+    requestId: string,
+    patch: {
+      leaveType?: LeaveType;
+      paymentType?: PaymentType;
+      reason?: string;
+      leaveDateStart?: string;
+      leaveDateEnd?: string;
+      substituteTeacherId?: string;
+      substituteTeacherName?: string;
+      actingHomeroomTeacherId?: string;
+      actingHomeroomTeacherName?: string;
+    }
+  ): boolean => {
+    const group = collectRelatedRequests(requestId);
+    if (group.length === 0) return false;
+    if (group.some((r) => r.requestType !== 'substitute')) {
+      window.alert('僅支援修改「請假派代」申請單。');
+      return false;
+    }
+
+    const primary = group.find((r) => r.id === requestId) || group[0];
+    const nextLeaveStart =
+      patch.leaveDateStart !== undefined ? patch.leaveDateStart : primary.leaveDateStart || '';
+    const nextLeaveEndRaw =
+      patch.leaveDateEnd !== undefined ? patch.leaveDateEnd : primary.leaveDateEnd || '';
+    const nextLeaveEnd = resolveLeaveDateEnd(nextLeaveStart, nextLeaveEndRaw) || nextLeaveStart;
+    const nextSubId =
+      patch.substituteTeacherId !== undefined
+        ? patch.substituteTeacherId || undefined
+        : primary.substituteTeacherId;
+    const nextSubName =
+      patch.substituteTeacherName !== undefined
+        ? patch.substituteTeacherName || undefined
+        : primary.substituteTeacherName;
+    const nextActingId =
+      patch.actingHomeroomTeacherId !== undefined
+        ? patch.actingHomeroomTeacherId || undefined
+        : primary.actingHomeroomTeacherId;
+    const nextActingName =
+      patch.actingHomeroomTeacherName !== undefined
+        ? patch.actingHomeroomTeacherName || undefined
+        : primary.actingHomeroomTeacherName;
+    const nextLeaveType =
+      patch.leaveType !== undefined ? patch.leaveType : primary.leaveType;
+    const nextPayment =
+      patch.paymentType !== undefined ? patch.paymentType : primary.paymentType;
+    const nextReason = patch.reason !== undefined ? patch.reason : primary.reason;
+
+    const hasPlaceholder = group.some((r) => isPlaceholderSession(r.originalSession));
+    if (hasPlaceholder && nextSubId) {
+      window.alert(
+        '此單為「當日無排課」之代導師／佔位單，無法指定代課教師。請改登有課派代，或僅修改代導師／事由／假別／請假日。'
+      );
+      return false;
+    }
+
+    const leaveMode =
+      nextLeaveEnd && nextLeaveEnd !== nextLeaveStart ? 'range' : 'single';
+    const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
+    const leaveCheck = validateSubstituteLeaveInput({
+      leaveDateMode: leaveMode,
+      leaveDateStart: nextLeaveStart,
+      leaveDateEnd: nextLeaveEnd,
+      sessions: group.map((r) => r.originalSession),
+      existing: requests,
+      applicantTeacherId: primary.applicantTeacherId,
+      dayNames,
+      excludeRequestIds: group.map((r) => r.id),
+      nonTeachingDates: nonTeachingDateSet(systemConfig.nonTeachingDays),
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: systemConfig.partialNonTeachingDays || [],
+    });
+    if (leaveCheck.ok === false) {
+      window.alert(leaveCheck.message);
+      return false;
+    }
+
+    const ids = new Set(group.map((r) => r.id));
+    const applyPatch = (r: SubstituteRequest): SubstituteRequest => ({
+      ...r,
+      leaveType: nextLeaveType,
+      paymentType: nextPayment,
+      reason: nextReason,
+      leaveDateStart: nextLeaveStart || undefined,
+      leaveDateEnd: nextLeaveEnd || undefined,
+      substituteTeacherId: nextSubId,
+      substituteTeacherName: nextSubName,
+      actingHomeroomTeacherId: nextActingId,
+      actingHomeroomTeacherName: nextActingName,
+    });
+
+    const oldSubId = primary.substituteTeacherId || '';
+    const newSubId = nextSubId || '';
+    const subChanged = oldSubId !== newSubId || (primary.substituteTeacherName || '') !== (nextSubName || '');
+    const approvedInGroup = group.filter((r) => r.status === 'approved');
+    const needReschedule = approvedInGroup.length > 0 && subChanged;
+
+    if (!needReschedule) {
+      setRequests((prev) => prev.map((r) => (ids.has(r.id) ? applyPatch(r) : r)));
+      return true;
+    }
+
+    const rolled = rollbackApprovedGroup(approvedInGroup);
+    if (rolled.ok === false) {
+      window.alert(`無法修改代課教師：${rolled.reason}\n請先處理後續課表異動。`);
+      return false;
+    }
+
+    let progressiveSessions = rolled.sessions;
+    const patchedApproved = approvedInGroup.map(applyPatch);
+
+    // 新代課：逐筆衝堂＋套用；清掉代課則僅回滾即可
+    if (newSubId) {
+      let progressiveRequests = requests.map((r) => (ids.has(r.id) ? applyPatch(r) : r));
+      for (const req of patchedApproved) {
+        const clash = checkClashes({
+          requestType: 'substitute',
+          applicantTeacherId: req.applicantTeacherId,
+          originalSession: resolveOriginalSession(req, progressiveSessions),
+          substituteTeacherId: req.substituteTeacherId,
+          sessionsOverride: progressiveSessions,
+          requestsOverride: progressiveRequests,
+          excludeRequestIds: [req.id],
+          leaveDateStart: req.leaveDateStart,
+          leaveDateEnd: req.leaveDateEnd,
+        });
+        if (clash.hasClash) {
+          window.alert(
+            `無法改為該代課教師（${req.requestNumber}）：\n${clash.messages.join('\n')}`
+          );
+          return false;
+        }
+        const applyResult = applyRequestToSessionsDetailed(progressiveSessions, {
+          ...req,
+          clashStatus: clash,
+        });
+        if (!applyResult.applied) {
+          window.alert(
+            `無法套用課表（${req.requestNumber}）：${applyResult.reason || '未知原因'}`
+          );
+          return false;
+        }
+        progressiveSessions = applyResult.sessions;
+        progressiveRequests = progressiveRequests.map((r) =>
+          r.id === req.id ? { ...req, clashStatus: clash } : r
+        );
+      }
+      setSessions(progressiveSessions);
+      setRequests(progressiveRequests);
+      return true;
+    }
+
+    setSessions(progressiveSessions);
+    setRequests((prev) => prev.map((r) => (ids.has(r.id) ? applyPatch(r) : r)));
+    return true;
+  };
+
   const clearAllRequests = () => {
     const { sessions: nextSessions, blocked } = rollbackApprovedRequestsNewestFirstDetailed(
       sessions,
@@ -2808,6 +2986,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rejectRequest,
         cancelRequest,
         deleteRequest,
+        updateStaffDispatchFields,
         clearAllRequests,
         updateSystemConfig,
         resetToMockData,

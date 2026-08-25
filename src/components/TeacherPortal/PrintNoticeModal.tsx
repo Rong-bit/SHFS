@@ -7,8 +7,13 @@ import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { leaveTypeLabel } from '../../utils/leaveTypes';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
-import { Printer, X, CheckCircle2, ShieldAlert } from 'lucide-react';
+import {
+  isActingHomeroomOnlyRequest,
+  isHomeroomTeacher,
+} from '../../utils/actingHomeroomPayrollRegister';
+import { Printer, X } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
+import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
 
 interface PrintNoticeModalProps {
   request: SubstituteRequest;
@@ -70,7 +75,8 @@ function formatPeriodBlockLabel(start: number, end: number): string {
 }
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { currentAcademicStaff, academicStaffList, systemConfig, sessions, requests } = useApp();
+  const { currentAcademicStaff, academicStaffList, systemConfig, sessions, requests, teachers } =
+    useApp();
   
   // Resolve reviewer staff
   const reviewerStaff = currentAcademicStaff || academicStaffList[0];
@@ -158,8 +164,28 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const getLeaveTypeName = (leave?: string) =>
     leaveTypeLabel(leave as SubstituteRequest['leaveType']);
 
+  const isActingOnly = isActingHomeroomOnlyRequest(request);
+  const applicantTeacher = teachers.find((t) => t.id === request.applicantTeacherId);
+  const homeroomClass =
+    applicantTeacher?.homeroomClass?.trim() ||
+    originalSession.className?.trim() ||
+    '—';
+  const actingDailyRate = systemConfig.actingHomeroomDailyRate ?? 404;
+  const noticeTitle = isActingOnly
+    ? '導師請假 · 代導師職務代理通知單'
+    : '教師調課 · 代課 · 補課聯絡通知單';
+  const previewLabel = isActingOnly
+    ? '代導師通知單列印預覽'
+    : `正式調代課通知單列印預覽${
+        isMergedBatch ? `（連續 ${groupedSessions.length} 節合併）` : ' (高職標準格式)'
+      }`;
+
   const handlePrint = () => {
-    window.print();
+    const school = systemConfig.schoolName || '學校';
+    const fileBase = isActingOnly
+      ? `${school}_代導師通知單_${request.requestNumber}`
+      : `${school}_調代課通知單_${request.requestNumber}`;
+    printWithDocumentTitle(fileBase);
   };
 
   return (
@@ -173,10 +199,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
         <div className="print:hidden bg-slate-800 text-white px-5 py-3.5 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Printer className="w-5 h-5 text-amber-400" />
-            <span className="font-semibold text-sm">
-              正式調代課通知單列印預覽
-              {isMergedBatch ? `（連續 ${groupedSessions.length} 節合併）` : ' (高職標準格式)'}
-            </span>
+            <span className="font-semibold text-sm">{previewLabel}</span>
           </div>
           <div className="flex items-center space-x-2">
             <button
@@ -206,7 +229,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
               {systemConfig.schoolName || '國立技術型高級中等學校'}
             </h1>
             <h2 className="text-lg font-semibold text-slate-700 tracking-wide mt-0.5">
-              教師調課 · 代課 · 補課聯絡通知單
+              {noticeTitle}
             </h2>
             <div className="flex justify-between items-center text-xs text-slate-500 mt-2">
               <span>單據編號：<strong className="text-slate-800">{requestNumberLabel}</strong></span>
@@ -221,54 +244,65 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             {/* Row 1: Applicant info */}
             <div className="grid grid-cols-4 divide-x divide-slate-300 bg-slate-50">
               <div className="p-2 font-bold text-slate-700 bg-slate-100 flex items-center justify-center">
-                申請教師
+                {isActingOnly ? '請假導師' : '申請教師'}
               </div>
               <div className="p-2 font-semibold text-slate-900">
                 {request.applicantTeacherName}
+                {isActingOnly && isHomeroomTeacher(applicantTeacher) ? '（導師）' : ''}
               </div>
               <div className="p-2 font-bold text-slate-700 bg-slate-100 flex items-center justify-center">
-                科別 / 職務
+                科別 / 班級
               </div>
               <div className="p-2 text-slate-800">
                 {request.applicantDepartment}
+                {isActingOnly ? ` · ${homeroomClass}` : ''}
               </div>
             </div>
 
             {/* Row 2: Type & Payment */}
             <div className="grid grid-cols-4 divide-x divide-slate-300">
               <div className="p-2 font-bold text-slate-700 bg-slate-100 flex items-center justify-center">
-                調代課類別
+                {isActingOnly ? '代理類別' : '調代課類別'}
               </div>
               <div className="p-2 font-medium text-slate-900">
-                {getTypeName(request.requestType)}
-                {isMergedBatch ? '（連續節次合併）' : ''}
+                {isActingOnly
+                  ? '導師請假 · 代導師職務代理（當日無授課派代）'
+                  : `${getTypeName(request.requestType)}${
+                      isMergedBatch ? '（連續節次合併）' : ''
+                    }`}
               </div>
               <div className="p-2 font-bold text-slate-700 bg-slate-100 flex items-center justify-center">
-                課點鐘點費支給
+                {isActingOnly ? '代導師費支給' : '課點鐘點費支給'}
               </div>
               <div className="p-2 font-medium">
-                {(() => {
-                  const periods = groupedSessions.map((s) => s.period);
-                  const hasCounseling = periods.some((p) => p === 8);
-                  const hasDay = periods.some((p) => p !== 8);
-                  const rateLabel =
-                    hasCounseling && hasDay
-                      ? `日間 ${systemConfig.dayHourlyRate}／課輔 ${systemConfig.nightHourlyRate}元/節`
-                      : hasCounseling
-                        ? `${systemConfig.nightHourlyRate}元/節（第八節課輔）`
-                        : `${systemConfig.dayHourlyRate}元/節`;
-                  return request.paymentType === 'public' ? (
-                    <span className="text-blue-700 font-bold">
-                      公費派代 (學校公款支領 {rateLabel}
-                      {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
-                    </span>
-                  ) : (
-                    <span className="text-amber-800 font-bold">
-                      自費代課 (申請教師自付 {rateLabel}
-                      {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
-                    </span>
-                  );
-                })()}
+                {isActingOnly ? (
+                  <span className="text-violet-800 font-bold">
+                    代導師減授鐘點費（每日 {actingDailyRate} 元 · 按實際上課日計 · 出納清冊）
+                  </span>
+                ) : (
+                  (() => {
+                    const periods = groupedSessions.map((s) => s.period);
+                    const hasCounseling = periods.some((p) => p === 8);
+                    const hasDay = periods.some((p) => p !== 8);
+                    const rateLabel =
+                      hasCounseling && hasDay
+                        ? `日間 ${systemConfig.dayHourlyRate}／課輔 ${systemConfig.nightHourlyRate}元/節`
+                        : hasCounseling
+                          ? `${systemConfig.nightHourlyRate}元/節（第八節課輔）`
+                          : `${systemConfig.dayHourlyRate}元/節`;
+                    return request.paymentType === 'public' ? (
+                      <span className="text-blue-700 font-bold">
+                        公費派代 (學校公款支領 {rateLabel}
+                        {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
+                      </span>
+                    ) : (
+                      <span className="text-amber-800 font-bold">
+                        自費代課 (申請教師自付 {rateLabel}
+                        {isMergedBatch ? ` × ${groupedSessions.length}節` : ''})
+                      </span>
+                    );
+                  })()
+                )}
               </div>
             </div>
 
@@ -283,17 +317,32 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                     【{getLeaveTypeName(request.leaveType)}】
                   </span>
                 )}
-                {request.reason}
+                {request.reason || (isActingOnly ? '（未填事由）' : '')}
               </div>
             </div>
 
-            {/* Row 4: Original Session Info */}
+            {/* Row 4: Original / leave scope */}
             <div className="grid grid-cols-4 divide-x divide-slate-300">
               <div className="p-2 font-bold text-slate-700 bg-slate-100 flex items-center justify-center">
-                原排定授課堂
+                {isActingOnly ? '請假範圍' : '原排定授課堂'}
               </div>
               <div className="p-2 col-span-3 text-slate-900">
-                {isMergedBatch ? (
+                {isActingOnly ? (
+                  <>
+                    <div className="font-medium">
+                      代理班級：<strong>{homeroomClass}</strong>
+                    </div>
+                    <div className="text-slate-800 mt-1 font-medium">
+                      請假日期：
+                      <strong className="ml-1">
+                        {formatLeaveDateLabel(request.leaveDateStart, request.leaveDateEnd)}
+                      </strong>
+                      <span className="text-slate-600 font-normal ml-2">
+                        （當日無排定授課，僅辦理代導師職務代理）
+                      </span>
+                    </div>
+                  </>
+                ) : isMergedBatch ? (
                   <>
                     <div className="font-medium text-slate-800 mb-1.5">
                       時段：<strong>{periodRangeLabel}</strong>
@@ -366,65 +415,107 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
               </div>
             </div>
 
-            {/* Row 5: Adjustment Particulars */}
+            {/* Row 5: Arrangement */}
             <div className="grid grid-cols-4 divide-x divide-slate-300 bg-slate-50">
               <div className="p-2 font-bold text-slate-700 bg-slate-100 flex items-center justify-center">
-                調代課安排內容
+                {isActingOnly ? '代導師安排' : '調代課安排內容'}
               </div>
               <div className="p-2 col-span-3 text-slate-900">
-                {request.requestType === 'substitute' && (
+                {isActingOnly ? (
                   <div>
-                    <span className="text-slate-600">指派代課教師：</span>
-                    <strong className="text-indigo-800 text-base ml-1">
-                      {request.substituteTeacherName || '由教學組指派'}
+                    <span className="text-slate-600">指定代導師：</span>
+                    <strong className="text-violet-800 text-base ml-1">
+                      {request.actingHomeroomTeacherName || '（尚未指定）'}
                     </strong>
                     <span className="text-xs text-slate-500 ml-2">
-                      (具高職同科合格教師證或實習工場操作資格
-                      {isMergedBatch ? `；連續 ${groupedSessions.length} 節同一代課` : ''})
+                      （代理導師班級事務；未接班專任教師始列入代導師印領清冊）
                     </span>
                   </div>
-                )}
-
-                {request.requestType === 'reschedule' && request.targetReschedule && (
-                  <div>
-                    <span className="text-slate-600">移至補課時段：</span>
-                    <strong className="text-indigo-800 ml-1">
-                      {dayNames[request.targetReschedule.dayOfWeek]} {getPeriodLabel(request.targetReschedule.period)}
-                    </strong>
-                    <span className="ml-3 text-slate-600">移至場地：</span>
-                    <strong className="text-slate-800">{request.targetReschedule.venueName}</strong>
-                  </div>
-                )}
-
-                {request.requestType === 'swap' && request.swapTargetSession && (
-                  <div>
-                    <div>
-                      <span className="text-slate-600">
-                        同班對調（{request.swapMode === 'permanent' || (!request.swapMode && !request.effectiveDate) ? '永久' : '暫時'}）對象：
-                      </span>
-                      <strong className="text-indigo-800">{request.swapTargetTeacherName}</strong>
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">
-                      對調課堂：{request.swapTargetSession.className} 《{request.swapTargetSession.subjectName}》
-                      （{dayNames[request.swapTargetSession.dayOfWeek]} {getPeriodLabel(request.swapTargetSession.period)} @ {request.swapTargetSession.venueName}）
-                    </div>
-                    {request.effectiveDate && (
-                      <div className="text-xs text-indigo-800 mt-1 font-medium">
-                        生效：
-                        {formatTemporarySwapEffectLabel(
-                          request.effectiveDate,
-                          request.originalSession.dayOfWeek,
-                          request.swapTargetSession.dayOfWeek
+                ) : (
+                  <>
+                    {request.requestType === 'substitute' && (
+                      <div className="space-y-1">
+                        <div>
+                          <span className="text-slate-600">指派代課教師：</span>
+                          <strong className="text-indigo-800 text-base ml-1">
+                            {request.substituteTeacherName || '由教學組指派'}
+                          </strong>
+                          <span className="text-xs text-slate-500 ml-2">
+                            (具高職同科合格教師證或實習工場操作資格
+                            {isMergedBatch
+                              ? `；連續 ${groupedSessions.length} 節同一代課`
+                              : ''}
+                            )
+                          </span>
+                        </div>
+                        {request.actingHomeroomTeacherId && (
+                          <div>
+                            <span className="text-slate-600">代導師：</span>
+                            <strong className="text-violet-800 ml-1">
+                              {request.actingHomeroomTeacherName || '—'}
+                            </strong>
+                            <span className="text-xs text-slate-500 ml-2">
+                              （每日 {actingDailyRate} 元 · 出納清冊）
+                            </span>
+                          </div>
                         )}
-                        （不改週課表模板）
                       </div>
                     )}
-                    {(request.swapMode === 'permanent' || (!request.swapMode && !request.effectiveDate)) && (
-                      <div className="text-xs text-emerald-800 mt-1 font-medium">
-                        永久對調：已／將改寫週課表模板
+
+                    {request.requestType === 'reschedule' && request.targetReschedule && (
+                      <div>
+                        <span className="text-slate-600">移至補課時段：</span>
+                        <strong className="text-indigo-800 ml-1">
+                          {dayNames[request.targetReschedule.dayOfWeek]}{' '}
+                          {getPeriodLabel(request.targetReschedule.period)}
+                        </strong>
+                        <span className="ml-3 text-slate-600">移至場地：</span>
+                        <strong className="text-slate-800">
+                          {request.targetReschedule.venueName}
+                        </strong>
                       </div>
                     )}
-                  </div>
+
+                    {request.requestType === 'swap' && request.swapTargetSession && (
+                      <div>
+                        <div>
+                          <span className="text-slate-600">
+                            同班對調（
+                            {request.swapMode === 'permanent' ||
+                            (!request.swapMode && !request.effectiveDate)
+                              ? '永久'
+                              : '暫時'}
+                            ）對象：
+                          </span>
+                          <strong className="text-indigo-800">{request.swapTargetTeacherName}</strong>
+                        </div>
+                        <div className="text-xs text-slate-600 mt-1">
+                          對調課堂：{request.swapTargetSession.className} 《
+                          {request.swapTargetSession.subjectName}》（
+                          {dayNames[request.swapTargetSession.dayOfWeek]}{' '}
+                          {getPeriodLabel(request.swapTargetSession.period)} @{' '}
+                          {request.swapTargetSession.venueName}）
+                        </div>
+                        {request.effectiveDate && (
+                          <div className="text-xs text-indigo-800 mt-1 font-medium">
+                            生效：
+                            {formatTemporarySwapEffectLabel(
+                              request.effectiveDate,
+                              request.originalSession.dayOfWeek,
+                              request.swapTargetSession.dayOfWeek
+                            )}
+                            （不改週課表模板）
+                          </div>
+                        )}
+                        {(request.swapMode === 'permanent' ||
+                          (!request.swapMode && !request.effectiveDate)) && (
+                          <div className="text-xs text-emerald-800 mt-1 font-medium">
+                            永久對調：已／將改寫週課表模板
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -432,9 +523,37 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             {/* Row 6: Notice Requirements */}
             <div className="p-2.5 text-xs text-slate-600 bg-amber-50/50 space-y-1">
               <p className="font-semibold text-slate-700">注意事項與法規依據：</p>
-              <p>1. 本單據依據《高級中等學校教師每週授課節數標準》及《技術型高中實習工場安全衛生管理規範》辦理。</p>
-              <p>2. 實習工場課程調代課請代課/授課教師務必於課前落實設備點交與工場安全防護宣導。</p>
-              <p>3. 請於課堂前將本單影本送交「班級學藝股長」與「實習工場管理員」備查，正本由教務處教學組存查核發鐘點費。</p>
+              {isActingOnly ? (
+                <>
+                  <p>
+                    1.
+                    本單據依據《高雄市立高級中等以下學校教職員出勤差假管理要點》等規定，辦理導師請假期間代導師職務代理。
+                  </p>
+                  <p>
+                    2.
+                    代導師減授鐘點費原則支給「未兼任主管職務、未接班之專任教師」；已接導師或行政職可代理，惟不列入印領清冊領費。
+                  </p>
+                  <p>
+                    3.
+                    代理未滿一日部分不計入代理日數。正本由教務處教學組存查，出納組依核准單製作代導師印領清冊。
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    1.
+                    本單據依據《高級中等學校教師每週授課節數標準》及《技術型高中實習工場安全衛生管理規範》辦理。
+                  </p>
+                  <p>
+                    2.
+                    實習工場課程調代課請代課/授課教師務必於課前落實設備點交與工場安全防護宣導。
+                  </p>
+                  <p>
+                    3.
+                    請於課堂前將本單影本送交「班級學藝股長」與「實習工場管理員」備查，正本由教務處教學組存查核發鐘點費。
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -443,18 +562,29 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             
             {/* Applicant Stamp */}
             <div className="p-3">
-              <div className="text-slate-600 font-bold mb-6">申請任課教師</div>
+              <div className="text-slate-600 font-bold mb-6">
+                {isActingOnly ? '請假導師' : '申請任課教師'}
+              </div>
               <div className="inline-block border border-red-400 text-red-600 px-3 py-1 font-serif text-sm rounded">
                 {request.applicantTeacherName.split(' ')[0]} 簽章
               </div>
               <div className="text-[10px] text-slate-400 mt-2">{request.createdAt.slice(0, 10)}</div>
             </div>
 
-            {/* Substitute / Target Stamp */}
+            {/* Substitute / Acting Stamp */}
             <div className="p-3">
-              <div className="text-slate-600 font-bold mb-6">代課 / 對調教師</div>
+              <div className="text-slate-600 font-bold mb-6">
+                {isActingOnly ? '代導師' : '代課 / 對調教師'}
+              </div>
               <div className="inline-block border border-red-400 text-red-600 px-3 py-1 font-serif text-sm rounded">
-                {(request.substituteTeacherName || request.swapTargetTeacherName || '本人移課').split(' ')[0]} 簽章
+                {(
+                  isActingOnly
+                    ? request.actingHomeroomTeacherName || '代導師'
+                    : request.substituteTeacherName ||
+                      request.swapTargetTeacherName ||
+                      '本人移課'
+                ).split(' ')[0]}{' '}
+                簽章
               </div>
               <div className="text-[10px] text-slate-400 mt-2">{request.createdAt.slice(0, 10)}</div>
             </div>
@@ -498,11 +628,21 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             </div>
           </div>
 
-          {/* Student Class & Workshop Check Footer */}
+          {/* Footer */}
           <div className="mt-3 flex justify-between items-center text-xs text-slate-500 border-t border-slate-200 pt-2">
-            <span>班級學藝股長簽收：__________________</span>
-            <span>實習工場管理員備查：__________________</span>
-            <span>主計室出納課點費核銷勾稽欄：[ ✓ ]</span>
+            {isActingOnly ? (
+              <>
+                <span>代導師簽收：__________________</span>
+                <span>教學組存查：__________________</span>
+                <span>出納代導師清冊勾稽：[ ✓ ]</span>
+              </>
+            ) : (
+              <>
+                <span>班級學藝股長簽收：__________________</span>
+                <span>實習工場管理員備查：__________________</span>
+                <span>主計室出納課點費核銷勾稽欄：[ ✓ ]</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -519,7 +659,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg shadow transition"
           >
             <Printer className="w-4 h-4" />
-            <span>列印通知單</span>
+            <span>{isActingOnly ? '列印代導師通知單' : '列印通知單'}</span>
           </button>
         </div>
 

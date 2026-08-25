@@ -1,4 +1,5 @@
 import type { SubstituteRequest, SystemConfig, Teacher } from '../types';
+import { isPlaceholderSession } from './resolveOriginalSession';
 import { actingHomeroomLeaveRemarkShort } from './leaveTypes';
 import { resolveLeaveDateEnd } from './leaveDates';
 import { dateToIsoLocal, isNonTeachingDate, nonTeachingDateSet } from './holidays';
@@ -54,6 +55,26 @@ export function canReceiveActingHomeroomFee(
 ): boolean {
   if (!teacher) return false;
   return teacher.title === '專任教師' && !isHomeroomTeacher(teacher);
+}
+
+/**
+ * 僅辦代導師、無授課派代（佔位／無代課教師）→ 應列印「代導師通知單」。
+ */
+export function isActingHomeroomOnlyRequest(
+  request: Pick<
+    SubstituteRequest,
+    'requestType' | 'substituteTeacherId' | 'originalSession' | 'actingHomeroomTeacherId'
+  >
+): boolean {
+  if (request.requestType !== 'substitute') return false;
+  if (request.substituteTeacherId) return false;
+  const sess = request.originalSession;
+  if (!sess) return Boolean(request.actingHomeroomTeacherId);
+  return (
+    isPlaceholderSession(sess) ||
+    Boolean(sess.subjectName?.includes('代導師')) ||
+    Boolean(sess.notes?.includes('僅代導師'))
+  );
 }
 
 const formatMd = (iso: string) => {
