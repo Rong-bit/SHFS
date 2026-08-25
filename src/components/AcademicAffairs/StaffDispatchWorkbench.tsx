@@ -19,6 +19,7 @@ import {
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import {
   countMatchingWeekdays,
+  dateToDayOfWeek,
   formatLeaveDateLabel,
   formatWeekdayList,
   resolveLeaveDateEnd,
@@ -329,9 +330,26 @@ export const StaffDispatchWorkbench: React.FC = () => {
     leaveDateMode,
   ]);
 
+  /** 導師請假日無授課課堂：僅需代導師，不必選原課堂／代課教師 */
+  const canActingHomeroomOnly = Boolean(
+    requestType === 'substitute' &&
+      isHomeroomTeacher(applicantTeacher) &&
+      leaveDateStart &&
+      leaveFilterDays.length > 0 &&
+      applicantSessions.length === 0
+  );
+
   // 課堂／候選變更時自動補人選：使用者已點選則不覆寫；僅空值或現人選衝堂時補最佳
+  // 請假日無課（無可派代課堂）時清除殘留預選，避免「沒有原課堂卻有代課教師」
   React.useEffect(() => {
     if (requestType !== 'substitute') return;
+    if (applicantSessions.length === 0) {
+      if (substituteTeacherId) {
+        setSubstituteTeacherId('');
+        setHasUserChosenSubstituteTeacher(false);
+      }
+      return;
+    }
     if (candidateSubstitutes.length === 0) return;
     if (hasUserChosenSubstituteTeacher) return;
 
@@ -348,6 +366,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
   }, [
     requestType,
+    applicantSessions.length,
     substituteTeacherId,
     hasUserChosenSubstituteTeacher,
     candidateSubstitutes,
@@ -358,9 +377,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
     setHasUserChosenSubstituteTeacher(false);
   }, [selectedTeacherId, sessionPickMode, selectedSessionId, requestType]);
 
-  // Auto-select first session if not set
+  // Auto-select first session if not set；篩選後無課則清空選堂
   React.useEffect(() => {
-    if (applicantSessions.length > 0 && (!selectedSessionId || !applicantSessions.some(s => s.id === selectedSessionId))) {
+    if (applicantSessions.length === 0) {
+      if (selectedSessionId) setSelectedSessionId('');
+      return;
+    }
+    if (!selectedSessionId || !applicantSessions.some((s) => s.id === selectedSessionId)) {
       setSelectedSessionId(applicantSessions[0].id);
     }
   }, [applicantSessions, selectedSessionId]);
@@ -487,33 +510,73 @@ export const StaffDispatchWorkbench: React.FC = () => {
     swapEffectiveDate,
   ]);
 
+  /** 導師當日無排課：建立僅供代導師清冊用的佔位課堂 */
+  const buildActingHomeroomOnlySession = (
+    teacher: Teacher,
+    leaveStart: string
+  ): CourseSession | null => {
+    const dow = dateToDayOfWeek(leaveStart);
+    if (dow === null) return null;
+    const className = teacher.homeroomClass?.trim() || '導師班';
+    return {
+      id: `s-placeholder-acting-${teacher.id}-${leaveStart}`,
+      dayOfWeek: dow,
+      period: 1,
+      className,
+      subjectName: '代導師代理（當日無排課）',
+      teacherId: teacher.id,
+      teacherName: teacher.name,
+      venueId: '',
+      venueName: '',
+      isPractical: false,
+      notes: '僅代導師派代，當日無授課課堂',
+    };
+  };
+
   // Handle direct dispatch submission
   const handleSubmitDispatch = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const sessionsToDispatch =
+    const actingHomeroomOnly =
+      requestType === 'substitute' &&
+      canActingHomeroomOnly &&
+      Boolean(actingHomeroomTeacherId);
+
+    let sessionsToDispatch =
       requestType === 'substitute' && sessionPickMode === 'periodRange'
         ? batchSelectedSessions
         : selectedOriginalSession
         ? [selectedOriginalSession]
         : [];
 
+    if (sessionsToDispatch.length === 0 && actingHomeroomOnly && applicantTeacher) {
+      const placeholder = buildActingHomeroomOnlySession(applicantTeacher, leaveDateStart);
+      if (!placeholder) {
+        alert('請假開始日須為週一至週五。');
+        return;
+      }
+      sessionsToDispatch = [placeholder];
+    }
+
     if (sessionsToDispatch.length === 0) {
       alert(
-        requestType === 'substitute' && sessionPickMode === 'periodRange'
-          ? '請先設定連續節次範圍，並確認該範圍內有可派代課堂！'
-          : '請先選擇欲辦理調代課之原課堂！'
+        requestType === 'substitute' && canActingHomeroomOnly
+          ? '該請假日無授課課堂。請指定代導師後送出（僅辦理代導師，無須選原課堂／代課教師）。'
+          : requestType === 'substitute' && sessionPickMode === 'periodRange'
+            ? '請先設定連續節次範圍，並確認該範圍內有可派代課堂！'
+            : '請先選擇欲辦理調代課之原課堂！'
       );
       return;
     }
 
     if (requestType === 'substitute') {
-      if (!substituteTeacherId) {
+      if (!actingHomeroomOnly && !substituteTeacherId) {
         alert('請假派代須指定代課教師。');
         return;
       }
-      if (isHomeroomTeacher(applicantTeacher) && !actingHomeroomTeacherId) {
-        alert('申請人為導師，請指定代導師（可與代課教師不同人），以便出納製作代導師清冊。');
+      // 當日無課、僅辦代導師時才必填；有課（例如僅請上午）可不指定代導師
+      if (actingHomeroomOnly && !actingHomeroomTeacherId) {
+        alert('該請假日無授課課堂。若僅辦理代導師，請指定代導師後再送出。');
         return;
       }
       const leaveCheck = validateSubstituteLeaveInput({
@@ -570,44 +633,49 @@ export const StaffDispatchWorkbench: React.FC = () => {
       }
     }
 
-    // 送出前再逐節衝堂（防預覽與送出之間狀態變化）
+    // 送出前再逐節衝堂（防預覽與送出之間狀態變化）；僅代導師無代課時略過
     const swapPartnerSession = sessions.find((s) => s.id === swapTargetSessionId);
-    for (const originalSession of sessionsToDispatch) {
-      const clash = checkClashes({
-        requestType,
-        applicantTeacherId: applicantTeacher.id,
-        originalSession,
-        targetReschedule:
-          requestType === 'reschedule'
-            ? {
-                dayOfWeek: targetDay,
-                period: targetPeriod,
-                venueId: targetVenueId,
-              }
-            : undefined,
-        swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
-        swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
-        substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
-        leaveDateStart:
-          requestType === 'substitute'
-            ? leaveDateStart || undefined
-            : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
-              ? swapEffectiveDate
+    if (!(requestType === 'substitute' && actingHomeroomOnly)) {
+      for (const originalSession of sessionsToDispatch) {
+        const clash = checkClashes({
+          requestType,
+          applicantTeacherId: applicantTeacher.id,
+          originalSession,
+          targetReschedule:
+            requestType === 'reschedule'
+              ? {
+                  dayOfWeek: targetDay,
+                  period: targetPeriod,
+                  venueId: targetVenueId,
+                }
               : undefined,
-        leaveDateEnd:
-          requestType === 'substitute'
-            ? leaveDateMode === 'range'
-              ? leaveDateEnd || leaveDateStart || undefined
-              : leaveDateStart || undefined
-            : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
-              ? swapEffectiveDate
+          swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
+          swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
+          substituteTeacherId:
+            requestType === 'substitute' && substituteTeacherId
+              ? substituteTeacherId
               : undefined,
-      });
-      if (clash.hasClash) {
-        alert(
-          `第${originalSession.period}節存在衝堂，無法送出：\n${clash.messages.join('\n')}`
-        );
-        return;
+          leaveDateStart:
+            requestType === 'substitute'
+              ? leaveDateStart || undefined
+              : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
+                ? swapEffectiveDate
+                : undefined,
+          leaveDateEnd:
+            requestType === 'substitute'
+              ? leaveDateMode === 'range'
+                ? leaveDateEnd || leaveDateStart || undefined
+                : leaveDateStart || undefined
+              : requestType === 'swap' && swapMode === 'temporary' && swapEffectiveDate
+                ? swapEffectiveDate
+                : undefined,
+        });
+        if (clash.hasClash) {
+          alert(
+            `第${originalSession.period}節存在衝堂，無法送出：\n${clash.messages.join('\n')}`
+          );
+          return;
+        }
       }
     }
 
@@ -643,8 +711,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
           paymentType,
           reason,
           originalSession,
-          substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
-          substituteTeacherName: requestType === 'substitute' ? subTeacher?.name : undefined,
+          substituteTeacherId:
+            requestType === 'substitute' && substituteTeacherId
+              ? substituteTeacherId
+              : undefined,
+          substituteTeacherName:
+            requestType === 'substitute' && substituteTeacherId
+              ? subTeacher?.name
+              : undefined,
           actingHomeroomTeacherId:
             requestType === 'substitute' && isHomeroomTeacher(applicantTeacher)
               ? actingHomeroomTeacherId || undefined
@@ -1419,10 +1493,24 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       </div>
                     )
                   ) : applicantSessions.length === 0 ? (
-                    <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                      {leaveFilterDays.length > 0
-                        ? `該教師在「${formatWeekdayList(leaveFilterDays, dayNames)}」沒有排定課堂，請改請假起迄或確認課表。`
-                        : '該教師目前在課表中無排定課堂，請至總課表確認或重新匯入課表。'}
+                    <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                      {leaveFilterDays.length > 0 ? (
+                        <>
+                          <p>
+                            該教師在「{formatWeekdayList(leaveFilterDays, dayNames)}
+                            」沒有排定課堂，無需選擇原課堂／代課教師。
+                          </p>
+                          {isHomeroomTeacher(applicantTeacher) ? (
+                            <p className="text-violet-700 font-medium">
+                              申請人為導師：請於下方指定代導師後即可送出（僅辦理代導師派代）。
+                            </p>
+                          ) : (
+                            <p>請改請假起迄，或確認課表後再辦派代。</p>
+                          )}
+                        </>
+                      ) : (
+                        <p>該教師目前在課表中無排定課堂，請至總課表確認或重新匯入課表。</p>
+                      )}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
@@ -1496,68 +1584,77 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       智慧推薦師資清單 (點選即指定)：
                     </label>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                      {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameSubject, isSameDept, weeklyOverload }) => {
-                        const isSelected = substituteTeacherId === cand.id;
+                    {canActingHomeroomOnly ? (
+                      <div className="p-4 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl">
+                        請假日無授課課堂，無需指定代課教師。請指定代導師後送出即可。
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                        {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameSubject, isSameDept, weeklyOverload }) => {
+                          const isSelected = substituteTeacherId === cand.id;
 
-                        return (
-                          <div
-                            key={cand.id}
-                            onClick={() => {
-                              if (hasClash) return;
-                              setHasUserChosenSubstituteTeacher(true);
-                              setSubstituteTeacherId(cand.id);
-                            }}
-                            className={`p-3 rounded-xl border transition ${
-                              hasClash
-                                ? 'opacity-50 bg-rose-50/40 border-rose-200 cursor-not-allowed'
-                                : isSelected
-                                ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs cursor-pointer'
-                                : 'bg-slate-50 border-slate-200 hover:bg-slate-100 cursor-pointer'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-slate-900">{cand.name}</span>
-                              <span className="text-[11px] text-slate-500">{cand.department}</span>
+                          return (
+                            <div
+                              key={cand.id}
+                              onClick={() => {
+                                if (hasClash) return;
+                                setHasUserChosenSubstituteTeacher(true);
+                                setSubstituteTeacherId(cand.id);
+                              }}
+                              className={`p-3 rounded-xl border transition ${
+                                hasClash
+                                  ? 'opacity-50 bg-rose-50/40 border-rose-200 cursor-not-allowed'
+                                  : isSelected
+                                  ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs cursor-pointer'
+                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-bold text-slate-900">{cand.name}</span>
+                                <span className="text-[11px] text-slate-500">{cand.department}</span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                                {hasClash ? (
+                                  <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 font-bold rounded">
+                                    🚫 時段衝堂 (已有課)
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
+                                    ✓ 此時段空堂
+                                  </span>
+                                )}
+
+                                {isSameSubject && (
+                                  <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 font-bold rounded">
+                                    同科目
+                                  </span>
+                                )}
+
+                                {!isSameSubject && isSameDept && (
+                                  <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 font-bold rounded">
+                                    同專業科系
+                                  </span>
+                                )}
+
+                                <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded">
+                                  超鐘點: {weeklyOverload}節
+                                </span>
+                              </div>
                             </div>
-
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
-                              {hasClash ? (
-                                <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 font-bold rounded">
-                                  🚫 時段衝堂 (已有課)
-                                </span>
-                              ) : (
-                                <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
-                                  ✓ 此時段空堂
-                                </span>
-                              )}
-
-                              {isSameSubject && (
-                                <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 font-bold rounded">
-                                  同科目
-                                </span>
-                              )}
-
-                              {!isSameSubject && isSameDept && (
-                                <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 font-bold rounded">
-                                  同專業科系
-                                </span>
-                              )}
-
-                              <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded">
-                                超鐘點: {weeklyOverload}節
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {isHomeroomTeacher(applicantTeacher) && (
                     <div className="p-3 bg-violet-50 border border-violet-200 rounded-xl space-y-2">
                       <label className="block text-xs font-bold text-violet-900">
-                        代導師（必填 · 領取代導師減授鐘點費）
+                        代導師
+                        {canActingHomeroomOnly
+                          ? '（必填 · 當日無課僅辦代導師）'
+                          : '（選填 · 領取代導師減授鐘點費）'}
                       </label>
                       <TeacherSearchCombobox
                         teachers={teachers.filter((t) => t.id !== applicantTeacher?.id)}
@@ -1567,8 +1664,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         compact
                       />
                       <p className="text-[11px] text-violet-700">
-                        可與代課教師不同人。出納組「代導師印領清冊」依此按日計費（每日{' '}
-                        {systemConfig.actingHomeroomDailyRate ?? 404} 元）。
+                        {canActingHomeroomOnly
+                          ? `當日無授課課堂，請指定代導師。出納組「代導師印領清冊」按日計費（每日 ${systemConfig.actingHomeroomDailyRate ?? 404} 元）。`
+                          : `可與代課教師不同人。僅請上午等不需代理導師事務時可留空；填寫後才會列入代導師清冊（每日 ${systemConfig.actingHomeroomDailyRate ?? 404} 元）。`}
                       </p>
                       {actingHomeroomTeacherId &&
                         substituteTeacherId &&
@@ -1884,16 +1982,20 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   type="submit"
                   disabled={
                     clashPreview.hasClash ||
-                    (requestType === 'substitute' && !substituteTeacherId) ||
                     (requestType === 'substitute' &&
-                      isHomeroomTeacher(applicantTeacher) &&
+                      !canActingHomeroomOnly &&
+                      !substituteTeacherId) ||
+                    (requestType === 'substitute' &&
+                      canActingHomeroomOnly &&
                       !actingHomeroomTeacherId)
                   }
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 ${
                     clashPreview.hasClash ||
-                    (requestType === 'substitute' && !substituteTeacherId) ||
                     (requestType === 'substitute' &&
-                      isHomeroomTeacher(applicantTeacher) &&
+                      !canActingHomeroomOnly &&
+                      !substituteTeacherId) ||
+                    (requestType === 'substitute' &&
+                      canActingHomeroomOnly &&
                       !actingHomeroomTeacherId)
                       ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 active:scale-98'
@@ -1901,12 +2003,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 >
                   <Send className="w-4 h-4" />
                   <span>
-                    {requestType === 'substitute' && !substituteTeacherId
-                      ? '請先指定代課教師'
+                    {requestType === 'substitute' &&
+                    canActingHomeroomOnly &&
+                    !actingHomeroomTeacherId
+                      ? '請先指定代導師'
                       : requestType === 'substitute' &&
-                          isHomeroomTeacher(applicantTeacher) &&
-                          !actingHomeroomTeacherId
-                        ? '請先指定代導師'
+                          canActingHomeroomOnly &&
+                          actingHomeroomTeacherId
+                        ? '確定僅派代導師（當日無課）'
+                      : requestType === 'substitute' && !substituteTeacherId
+                        ? '請先指定代課教師'
                       : requestType === 'substitute' &&
                         sessionPickMode === 'periodRange' &&
                         batchSelectedSessions.length > 1

@@ -1787,10 +1787,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       const swapErr = validateSwapRequestFields(data);
       if (swapErr) throw new Error(swapErr);
+
+      const isActingHomeroomOnly =
+        data.requestType === 'substitute' &&
+        Boolean(data.actingHomeroomTeacherId) &&
+        !data.substituteTeacherId &&
+        isPlaceholderSession(data.originalSession);
+
       if (
         data.requestType === 'substitute' &&
         data.autoApprove !== false &&
-        !data.substituteTeacherId
+        !data.substituteTeacherId &&
+        !isActingHomeroomOnly
       ) {
         throw new Error('逕行核定請假派代須指定代課教師');
       }
@@ -1807,14 +1815,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (
         data.requestType === 'substitute' &&
         data.autoApprove !== false &&
-        isPlaceholderSession(resolvedOrig)
+        isPlaceholderSession(resolvedOrig) &&
+        !isActingHomeroomOnly
       ) {
         throw new Error('找不到對應課表課堂，無法逕行核定（請確認該時段已有課堂）');
       }
 
       if (
         data.requestType === 'substitute' &&
-        data.autoApprove !== false
+        data.autoApprove !== false &&
+        !isActingHomeroomOnly
       ) {
         const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
         const probe = {
@@ -1856,7 +1866,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         leaveDateEnd: data.leaveDateEnd || data.effectiveDate,
       });
 
-      if (data.autoApprove !== false && clashStatus.hasClash) {
+      if (data.autoApprove !== false && clashStatus.hasClash && !isActingHomeroomOnly) {
         throw new Error(clashStatus.messages[0] || '存在衝堂衝突，無法逕行核定');
       }
 
