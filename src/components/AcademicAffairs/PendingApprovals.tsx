@@ -4,7 +4,7 @@ import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
-import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
+import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/actingHomeroomPayrollRegister';
 import { ModalShell } from '../Common/ModalShell';
 import { 
   ClipboardCheck, 
@@ -162,7 +162,9 @@ export const PendingApprovals: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {displayRequests.map((req) => {
-            const hasClash = req.clashStatus.hasClash;
+            const clash = displayClashStatus(req);
+            const hasClash = clash.hasClash;
+            const isActingOnly = isActingHomeroomOnlyRequest(req);
 
             return (
               <div
@@ -193,12 +195,16 @@ export const PendingApprovals: React.FC = () => {
                     </span>
                     <span
                       className={`text-xs px-2 py-0.5 rounded font-semibold ${
-                        req.paymentType === 'public'
+                        isActingOnly
+                          ? 'bg-violet-50 text-violet-800 border border-violet-200'
+                          : req.paymentType === 'public'
                           ? 'bg-blue-50 text-blue-700 border border-blue-200'
                           : 'bg-amber-50 text-amber-800 border border-amber-200'
                       }`}
                     >
-                      {req.paymentType === 'public'
+                      {isActingOnly
+                        ? `代導師費 (${systemConfig.actingHomeroomDailyRate ?? 404}元/日)`
+                        : req.paymentType === 'public'
                         ? `公費派代 (${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元)`
                         : `自費代課 (${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元)`}
                     </span>
@@ -262,7 +268,7 @@ export const PendingApprovals: React.FC = () => {
                     
                     {req.requestType === 'substitute' && (
                       <div className="text-slate-900 font-medium">
-                        {isActingHomeroomOnlyRequest(req) ? (
+                        {isActingOnly ? (
                           <>
                             <span>代導師：</span>
                             <strong className="text-violet-900 text-base ml-1">
@@ -338,14 +344,14 @@ export const PendingApprovals: React.FC = () => {
                   className={`p-3 rounded-xl border flex items-start space-x-2.5 text-xs ${
                     hasClash
                       ? 'bg-rose-50 border-rose-300 text-rose-900'
-                      : req.clashStatus.severity === 'warning'
+                      : clash.severity === 'warning'
                       ? 'bg-amber-50 border-amber-300 text-amber-900'
                       : 'bg-emerald-50 border-emerald-300 text-emerald-900'
                   }`}
                 >
                   {hasClash ? (
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  ) : req.clashStatus.severity === 'warning' ? (
+                  ) : clash.severity === 'warning' ? (
                     <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   ) : (
                     <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -354,11 +360,11 @@ export const PendingApprovals: React.FC = () => {
                     <span className="font-bold">
                       {hasClash
                         ? '🚫 衝堂衝突警示：'
-                        : req.clashStatus.severity === 'warning'
+                        : clash.severity === 'warning'
                         ? '⚠️ 系統提醒：'
                         : '✅ 系統檢核通過：'}
                     </span>
-                    {req.clashStatus.messages.map((m, idx) => (
+                    {clash.messages.map((m, idx) => (
                       <span key={idx} className="block">
                         {m}
                       </span>
@@ -379,7 +385,7 @@ export const PendingApprovals: React.FC = () => {
                             setRejectingId(req.id);
                             setRejectReason(
                               hasClash
-                                ? req.clashStatus.messages[0] || '該時段已排有正課衝堂'
+                                ? clash.messages[0] || '該時段已排有正課衝堂'
                                 : '事由不合規定或請假公文未齊全'
                             );
                           }}
@@ -410,7 +416,7 @@ export const PendingApprovals: React.FC = () => {
                         onClick={() => setPrintModalRequest(req)}
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow transition"
                       >
-                        {isActingHomeroomOnlyRequest(req)
+                        {isActingOnly
                           ? '列印代導師通知單'
                           : '列印調代課通知單'}
                       </button>

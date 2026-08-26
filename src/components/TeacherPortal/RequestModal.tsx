@@ -422,6 +422,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           applicantTeacherId: currentTeacher.id,
           originalSession,
           substituteTeacherId: substituteTeacherId || undefined,
+          actingHomeroomTeacherId: actingHomeroomTeacherId || undefined,
           leaveDateStart: leaveDateStart || undefined,
           leaveDateEnd:
             leaveDateMode === 'range'

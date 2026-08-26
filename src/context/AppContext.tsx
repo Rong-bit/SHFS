@@ -61,7 +61,11 @@ import {
   rollbackRequestFromSessionsDetailed,
 } from '../utils/scheduleAdjustments';
 import { isPlaceholderSession, resolveOriginalSession, resolveSwapTargetSession } from '../utils/resolveOriginalSession';
-import { isActingHomeroomOnlyRequest } from '../utils/actingHomeroomPayrollRegister';
+import {
+  ACTING_HOMEROOM_ONLY_CLASH_PASS,
+  isActingHomeroomOnlyRequest,
+  sanitizeActingHomeroomOnlyClashStatus,
+} from '../utils/actingHomeroomPayrollRegister';
 import {
   collectSubstituteOccupancies,
   countWeeklySubstituteOccupancySlots,
@@ -194,6 +198,7 @@ interface AppContextType {
     swapTargetTeacherId?: string;
     swapTargetSession?: CourseSession;
     substituteTeacherId?: string;
+    actingHomeroomTeacherId?: string;
     /** 批次核准時傳入累進課表 */
     sessionsOverride?: CourseSession[];
     /** 批次核准時傳入累進申請（含已核准佔用） */
@@ -325,7 +330,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [requests, setRequests] = useState<SubstituteRequest[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.REQUESTS);
-    return saved ? JSON.parse(saved) : INITIAL_REQUESTS;
+    const list: SubstituteRequest[] = saved ? JSON.parse(saved) : INITIAL_REQUESTS;
+    return list.map(sanitizeActingHomeroomOnlyClashStatus);
   });
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(() => {
@@ -597,6 +603,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 一次性：僅代導師單誤存「尚未指定代課教師」警示，改回檢核通過
+  const didHealActingHomeroomClashRef = useRef(false);
+  useEffect(() => {
+    if (didHealActingHomeroomClashRef.current) return;
+    didHealActingHomeroomClashRef.current = true;
+    setRequests((prev) => {
+      const next = prev.map(sanitizeActingHomeroomOnlyClashStatus);
+      return next.some((r, i) => r !== prev[i]) ? next : prev;
+    });
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(systemConfig));
   }, [systemConfig]);
@@ -642,7 +659,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     setVenues(merged.venues || []);
     setSessions(remoteSessions);
-    setRequests(merged.requests || []);
+    setRequests((merged.requests || []).map(sanitizeActingHomeroomOnlyClashStatus));
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,
       ...(merged.systemConfig || {}),
@@ -976,6 +993,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     swapTargetTeacherId?: string;
     swapTargetSession?: CourseSession;
     substituteTeacherId?: string;
+    actingHomeroomTeacherId?: string;
     sessionsOverride?: CourseSession[];
     requestsOverride?: SubstituteRequest[];
     excludeRequestIds?: string[];
@@ -1397,6 +1415,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
     } else if (requestType === 'substitute') {
+      if (
+        isActingHomeroomOnlyRequest({
+          requestType: 'substitute',
+          substituteTeacherId,
+          originalSession,
+          actingHomeroomTeacherId: params.actingHomeroomTeacherId,
+        })
+      ) {
+        return ACTING_HOMEROOM_ONLY_CLASH_PASS;
+      }
+
       if (!substituteTeacherId) {
         return {
           hasClash: false,
@@ -1494,6 +1523,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         swapTargetTeacherId: data.swapTargetTeacherId,
         swapTargetSession: data.swapTargetSession,
         substituteTeacherId: data.substituteTeacherId,
+        actingHomeroomTeacherId: data.actingHomeroomTeacherId,
         requestsOverride: progressiveRequests,
         leaveDateStart: data.leaveDateStart || data.effectiveDate,
         leaveDateEnd: data.leaveDateEnd || data.effectiveDate,
@@ -1611,6 +1641,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       swapTargetTeacherId: targetReq.swapTargetTeacherId,
       swapTargetSession: resolvedSwap,
       substituteTeacherId: targetReq.substituteTeacherId,
+      actingHomeroomTeacherId: targetReq.actingHomeroomTeacherId,
       sessionsOverride: workingSessions,
       requestsOverride: workingRequests,
       excludeRequestIds: [requestId],
@@ -1895,6 +1926,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         swapTargetTeacherId: data.swapTargetTeacherId,
         swapTargetSession: data.swapTargetSession,
         substituteTeacherId: data.substituteTeacherId,
+        actingHomeroomTeacherId: data.actingHomeroomTeacherId,
         sessionsOverride: progressiveSessions,
         requestsOverride: progressiveRequests,
         leaveDateStart: data.leaveDateStart || data.effectiveDate,
@@ -2165,7 +2197,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: `s-placeholder-acting-${r.applicantTeacherId}-${nextLeaveStart}`,
             }
           : orig;
-      return {
+      return sanitizeActingHomeroomOnlyClashStatus({
         ...r,
         leaveType: nextLeaveType,
         paymentType: nextPayment,
@@ -2177,7 +2209,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         actingHomeroomTeacherId: nextActingId,
         actingHomeroomTeacherName: nextActingName,
         originalSession: nextSession,
-      };
+      });
     };
 
     const oldSubId = primary.substituteTeacherId || '';
@@ -2198,6 +2230,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             applicantTeacherId: req.applicantTeacherId,
             originalSession: resolveOriginalSession(req, sessions),
             substituteTeacherId: req.substituteTeacherId,
+            actingHomeroomTeacherId: req.actingHomeroomTeacherId,
             sessionsOverride: sessions,
             requestsOverride: patched,
             excludeRequestIds: [req.id],
@@ -2234,6 +2267,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           applicantTeacherId: req.applicantTeacherId,
           originalSession: resolveOriginalSession(req, progressiveSessions),
           substituteTeacherId: req.substituteTeacherId,
+          actingHomeroomTeacherId: req.actingHomeroomTeacherId,
           sessionsOverride: progressiveSessions,
           requestsOverride: progressiveRequests,
           excludeRequestIds: [req.id],
@@ -2560,7 +2594,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       setTeachers(teachersAfterReapply);
       setSessions(withCovers);
-      setRequests(remapped);
+      setRequests(remapped.map(sanitizeActingHomeroomOnlyClashStatus));
     } else {
       setSessions(finalSessions);
     }

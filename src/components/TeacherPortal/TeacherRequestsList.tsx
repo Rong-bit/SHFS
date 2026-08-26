@@ -133,7 +133,11 @@ export const TeacherRequestsList: React.FC = () => {
                       ? '🔄 同班對調'
                       : '⏱️ 自行移課'}
                   </span>
-                  {req.paymentType === 'public' ? (
+                  {isActingHomeroomOnlyRequest(req) ? (
+                    <span className="text-[11px] px-2 py-0.5 bg-violet-50 text-violet-800 border border-violet-200 rounded font-semibold">
+                      代導師費 ({systemConfig.actingHomeroomDailyRate ?? 404}元/日)
+                    </span>
+                  ) : req.paymentType === 'public' ? (
                     <span className="text-[11px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">
                       公費派代 ({req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)
                     </span>

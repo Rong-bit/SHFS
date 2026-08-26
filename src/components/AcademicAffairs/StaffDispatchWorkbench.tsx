@@ -514,6 +514,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
         swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
         swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
         substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+        actingHomeroomTeacherId:
+          requestType === 'substitute' ? actingHomeroomTeacherId || undefined : undefined,
         leaveDateStart:
           requestType === 'substitute'
             ? leaveDateStart || undefined
@@ -559,6 +561,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     swapTargetTeacherId,
     swapTargetSessionId,
     substituteTeacherId,
+    actingHomeroomTeacherId,
     sessions,
     leaveDateStart,
     leaveDateEnd,
@@ -712,6 +715,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
             requestType === 'substitute' && substituteTeacherId
               ? substituteTeacherId
               : undefined,
+          actingHomeroomTeacherId:
+            requestType === 'substitute' ? actingHomeroomTeacherId || undefined : undefined,
           leaveDateStart:
             requestType === 'substitute'
               ? leaveDateStart || undefined

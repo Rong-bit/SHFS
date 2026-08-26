@@ -1,4 +1,4 @@
-import type { SubstituteRequest, SystemConfig, Teacher } from '../types';
+import type { ClashCheckResult, SubstituteRequest, SystemConfig, Teacher } from '../types';
 import { isPlaceholderSession } from './resolveOriginalSession';
 import { actingHomeroomLeaveRemarkShort } from './leaveTypes';
 import { resolveLeaveDateEnd } from './leaveDates';
@@ -75,6 +75,30 @@ export function isActingHomeroomOnlyRequest(
     Boolean(sess.subjectName?.includes('代導師')) ||
     Boolean(sess.notes?.includes('僅代導師'))
   );
+}
+
+/** 僅代導師單不需媒合代課教師；衝堂檢核應顯示通過而非「尚未指定代課教師」。 */
+export const ACTING_HOMEROOM_ONLY_CLASH_PASS: ClashCheckResult = {
+  hasClash: false,
+  severity: 'none',
+  messages: ['檢核通過：當日無排課，僅辦代導師職務代理，無需指定代課教師。'],
+};
+
+function isMissingSubstituteTeacherHint(messages: string[] | undefined): boolean {
+  return Boolean(messages?.some((m) => m.includes('尚未指定代課教師')));
+}
+
+/** 修正舊單將「僅代導師」誤標成尚未指定代課教師的 clashStatus。 */
+export function sanitizeActingHomeroomOnlyClashStatus(
+  request: SubstituteRequest
+): SubstituteRequest {
+  if (!isActingHomeroomOnlyRequest(request)) return request;
+  if (!isMissingSubstituteTeacherHint(request.clashStatus?.messages)) return request;
+  return { ...request, clashStatus: ACTING_HOMEROOM_ONLY_CLASH_PASS };
+}
+
+export function displayClashStatus(request: SubstituteRequest): ClashCheckResult {
+  return sanitizeActingHomeroomOnlyClashStatus(request).clashStatus;
 }
 
 const formatMd = (iso: string) => {
