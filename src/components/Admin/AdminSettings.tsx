@@ -94,7 +94,7 @@ const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
   { id: 'venues', label: '場地維護', tabs: ['venues'] },
   { id: 'roster', label: '名冊維護', tabs: ['teachers', 'staff'] },
   { id: 'data', label: '課表與同步', tabs: ['schedules', 'sync'] },
-  { id: 'ops', label: '系統維運', tabs: ['security', 'maintenance'] },
+  { id: 'ops', label: '系統維護', tabs: ['security', 'maintenance'] },
 ];
 
 const groupOfTab = (tab: AdminTab): AdminGroup =>
@@ -855,7 +855,7 @@ export const AdminSettings: React.FC = () => {
       {activeTab === 'config' && (
         <form onSubmit={handleConfigSubmit} className="space-y-6">
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-950 leading-relaxed">
-            此分頁只調整<strong>鐘點費率</strong>與<strong>職務基本授課節數</strong>。學校名稱、學年度、放假日請改到「學校與行事曆」；登入密碼在「系統維運 → 登入密碼」。
+            此分頁只調整<strong>鐘點費率</strong>與<strong>職務基本授課節數</strong>。學校名稱、學年度、放假日請改到「學校與行事曆」；登入密碼在「系統維護 → 登入密碼」。
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Hourly Rates Card */}

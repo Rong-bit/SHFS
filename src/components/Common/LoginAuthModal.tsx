@@ -413,7 +413,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
         {/* Footer Note */}
         <div className="bg-slate-950/60 px-6 py-2.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-          <span>🔒 密碼可於【系統管理員 ➔ 系統維運 ➔ 登入密碼】中自訂或開關</span>
+          <span>🔒 密碼可於【系統管理員 ➔ 系統維護 ➔ 登入密碼】中自訂或開關</span>
         </div>
     </ModalShell>
   );
