@@ -86,7 +86,7 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
 
       <div className="p-5 space-y-4">
         <p className="text-xs text-slate-300 leading-relaxed">
-          請輸入管理員在「系統參數 → 雲端同步」設定的<strong className="text-amber-300">學校同步密碼</strong>
+          請輸入管理員在「課表與同步 → 跨電腦同步」設定的<strong className="text-amber-300">學校同步密碼</strong>
           （與教學組／管理員<strong className="text-rose-300">登入密碼不同</strong>）。密碼必須完全相同（含大小寫與符號），差一個字就連不到同一份資料。
         </p>
 

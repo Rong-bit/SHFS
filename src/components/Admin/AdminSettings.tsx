@@ -76,6 +76,29 @@ import { isPasswordHash } from '../../utils/passwordCrypto';
 import { ModalShell } from '../Common/ModalShell';
 import { DraftNumberInput } from '../Common/DraftNumberInput';
 
+type AdminTab =
+  | 'config'
+  | 'school'
+  | 'security'
+  | 'venues'
+  | 'teachers'
+  | 'staff'
+  | 'schedules'
+  | 'sync'
+  | 'maintenance';
+
+type AdminGroup = 'params' | 'roster' | 'data' | 'ops';
+
+const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
+  { id: 'params', label: '標準與參數', tabs: ['config', 'school', 'security'] },
+  { id: 'roster', label: '名冊維護', tabs: ['venues', 'teachers', 'staff'] },
+  { id: 'data', label: '課表與同步', tabs: ['schedules', 'sync'] },
+  { id: 'ops', label: '系統維運', tabs: ['maintenance'] },
+];
+
+const groupOfTab = (tab: AdminTab): AdminGroup =>
+  ADMIN_GROUPS.find((g) => g.tabs.includes(tab))?.id ?? 'params';
+
 export const AdminSettings: React.FC = () => {
   const { 
     systemConfig, 
@@ -98,7 +121,7 @@ export const AdminSettings: React.FC = () => {
     deleteAcademicStaff
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'config' | 'venues' | 'teachers' | 'staff' | 'schedules' | 'sync' | 'maintenance'>('config');
+  const [activeTab, setActiveTab] = useState<AdminTab>('config');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   
@@ -314,6 +337,39 @@ export const AdminSettings: React.FC = () => {
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
   };
+
+  const renderConfigSaveBar = () => (
+    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+      <div>
+        {saveSuccess ? (
+          <span className="text-xs text-emerald-700 font-bold flex items-center gap-1.5">
+            <Check className="w-4 h-4 text-emerald-600" />
+            系統設定參數已成功儲存並即時套用至全校課表與結算！
+          </span>
+        ) : (
+          <span className="text-xs text-slate-500">
+            修改後請按儲存，才會套用到通知單、結算與登入驗證。
+          </span>
+        )}
+      </div>
+      <button
+        type="submit"
+        id="btn-save-admin-config"
+        className="flex items-center space-x-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow transition active:scale-95"
+      >
+        <Save className="w-4 h-4" />
+        <span>儲存系統參數設定</span>
+      </button>
+    </div>
+  );
+
+  const activeGroup = groupOfTab(activeTab);
+  const subTabClass = (on: boolean) =>
+    `flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+      on
+        ? 'bg-indigo-600 text-white shadow-sm'
+        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+    }`;
 
   // Open Venue Modal
   const handleOpenAddVenue = () => {
@@ -643,148 +699,157 @@ export const AdminSettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          
-          <button
-            id="tab-admin-config"
-            onClick={() => setActiveTab('config')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === 'config'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Coins className="w-4 h-4 text-amber-300" />
-            <span>鐘點費與授課節數標準</span>
-          </button>
-
-          <button
-            id="tab-admin-venues"
-            onClick={() => setActiveTab('venues')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === 'venues'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Building2 className="w-4 h-4 text-amber-400" />
-            <span>工場與教室維護 ({venues.length})</span>
-          </button>
-
-          <button
-            id="tab-admin-teachers"
-            onClick={() => setActiveTab('teachers')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === 'teachers'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4 text-emerald-400" />
-            <span>全校師資名冊與節數 ({teachers.length})</span>
-          </button>
-
-          <button
-            id="tab-admin-staff"
-            onClick={() => setActiveTab('staff')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === 'staff'
-                ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <UserCheck className="w-4 h-4 text-amber-300" />
-            <span>成員名冊維護 ({academicStaffList.length})</span>
-          </button>
-
-          <button
-            id="tab-admin-schedules"
-            onClick={() => setActiveTab('schedules')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === 'schedules'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-sky-400" />
-            <span>課表資料與批次中心</span>
-          </button>
-
-          <button
-            id="tab-admin-sync"
-            onClick={() => setActiveTab('sync')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === 'sync'
-                ? 'bg-sky-700 text-white shadow-sm'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Cloud className="w-4 h-4 text-sky-500" />
-            <span>跨電腦同步</span>
-          </button>
-
-          <button
-            id="tab-admin-maintenance"
-            onClick={() => setActiveTab('maintenance')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === 'maintenance'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 text-purple-400" />
-            <span>法規依據與系統日誌</span>
-          </button>
-
-        </div>
-
-        {/* Global Quick Stats */}
-        <div className="hidden lg:flex items-center space-x-3 text-xs text-slate-500">
-          <span>學期：{formConfig.academicYear}-{formConfig.semester}</span>
-          <span>•</span>
-          <span>公立鐘點費：日間 {formConfig.dayHourlyRate}／課輔 {formConfig.nightHourlyRate} 元/節 · 代導師 {formConfig.actingHomeroomDailyRate ?? 404} 元/日</span>
-        </div>
-      </div>
-
-      {/* TAB 1: 鐘點費與授課節數標準 */}
-      {activeTab === 'config' && (
-        <form onSubmit={handleConfigSubmit} className="space-y-6">
-
-          {/* 學校名稱 — 獨立置頂 */}
-          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-200 shadow-xs">
-            <label className="block text-sm font-bold text-indigo-900 mb-2 flex items-center space-x-2">
-              <School className="w-4 h-4 text-indigo-600" />
-              <span>學校名稱（通知單抬頭 · 匯出課表標題）</span>
-            </label>
-            <input
-              type="text"
-              value={formConfig.schoolName || ''}
-              onChange={(e) => setFormConfig({ ...formConfig, schoolName: e.target.value })}
-              className="w-full bg-white border border-indigo-300 rounded-xl p-3 text-lg font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
-              placeholder="如：國立○○高級工業職業學校"
-            />
-            <p className="text-[11px] text-indigo-600 mt-1.5">修改後將套用於代課通知單抬頭及匯出 Excel 課表標題。</p>
-            <label className="block text-sm font-bold text-indigo-900 mt-4 mb-2">
-              教務主任姓名（調代課通知單決行印章）
-            </label>
-            <input
-              type="text"
-              value={formConfig.academicDirectorName || ''}
-              onChange={(e) =>
-                setFormConfig({ ...formConfig, academicDirectorName: e.target.value })
-              }
-              className="w-full bg-white border border-indigo-300 rounded-xl p-3 text-base font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
-              placeholder="如：王大同"
-            />
-            <p className="text-[11px] text-indigo-600 mt-1.5">
-              填寫後通知單第四欄印章顯示「姓名＋決行」；空白則維持「教務處 決行」。
-            </p>
+      {/* 大類 → 子分頁，避免七個按鈕擠成一排 */}
+      <div className="space-y-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {ADMIN_GROUPS.map((group) => {
+              const selected = activeGroup === group.id;
+              const GroupIcon =
+                group.id === 'params'
+                  ? Settings
+                  : group.id === 'roster'
+                    ? Users
+                    : group.id === 'data'
+                      ? Cloud
+                      : ShieldCheck;
+              return (
+                <button
+                  key={group.id}
+                  id={`tab-admin-group-${group.id}`}
+                  type="button"
+                  onClick={() => {
+                    if (!selected) setActiveTab(group.tabs[0]);
+                  }}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+                    selected
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <GroupIcon className="w-4 h-4" />
+                  <span>{group.label}</span>
+                </button>
+              );
+            })}
           </div>
 
+          <div className="hidden lg:flex items-center space-x-3 text-xs text-slate-500">
+            <span>學期：{formConfig.academicYear}-{formConfig.semester}</span>
+            <span>•</span>
+            <span>公立鐘點費：日間 {formConfig.dayHourlyRate}／課輔 {formConfig.nightHourlyRate} 元/節 · 代導師 {formConfig.actingHomeroomDailyRate ?? 404} 元/日</span>
+          </div>
+        </div>
+
+        {activeGroup === 'params' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              id="tab-admin-config"
+              type="button"
+              onClick={() => setActiveTab('config')}
+              className={subTabClass(activeTab === 'config')}
+            >
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>鐘點費與授課節數標準</span>
+            </button>
+            <button
+              id="tab-admin-school"
+              type="button"
+              onClick={() => setActiveTab('school')}
+              className={subTabClass(activeTab === 'school')}
+            >
+              <School className="w-3.5 h-3.5 text-indigo-400" />
+              <span>學校與行事曆</span>
+            </button>
+            <button
+              id="tab-admin-security"
+              type="button"
+              onClick={() => setActiveTab('security')}
+              className={subTabClass(activeTab === 'security')}
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-500" />
+              <span>登入密碼</span>
+            </button>
+          </div>
+        )}
+
+        {activeGroup === 'roster' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              id="tab-admin-venues"
+              type="button"
+              onClick={() => setActiveTab('venues')}
+              className={subTabClass(activeTab === 'venues')}
+            >
+              <Building2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>工場與教室維護 ({venues.length})</span>
+            </button>
+            <button
+              id="tab-admin-teachers"
+              type="button"
+              onClick={() => setActiveTab('teachers')}
+              className={subTabClass(activeTab === 'teachers')}
+            >
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
+              <span>全校師資名冊與節數 ({teachers.length})</span>
+            </button>
+            <button
+              id="tab-admin-staff"
+              type="button"
+              onClick={() => setActiveTab('staff')}
+              className={subTabClass(activeTab === 'staff')}
+            >
+              <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>成員名冊維護 ({academicStaffList.length})</span>
+            </button>
+          </div>
+        )}
+
+        {activeGroup === 'data' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              id="tab-admin-schedules"
+              type="button"
+              onClick={() => setActiveTab('schedules')}
+              className={subTabClass(activeTab === 'schedules')}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-sky-400" />
+              <span>課表資料與批次中心</span>
+            </button>
+            <button
+              id="tab-admin-sync"
+              type="button"
+              onClick={() => setActiveTab('sync')}
+              className={subTabClass(activeTab === 'sync')}
+            >
+              <Cloud className="w-3.5 h-3.5 text-sky-500" />
+              <span>跨電腦同步</span>
+            </button>
+          </div>
+        )}
+
+        {activeGroup === 'ops' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              id="tab-admin-maintenance"
+              type="button"
+              onClick={() => setActiveTab('maintenance')}
+              className={subTabClass(activeTab === 'maintenance')}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+              <span>法規依據與系統日誌</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* TAB: 鐘點費與授課節數標準（僅費率與基本鐘點） */}
+      {activeTab === 'config' && (
+        <form onSubmit={handleConfigSubmit} className="space-y-6">
+          <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-950 leading-relaxed">
+            此分頁只調整<strong>鐘點費率</strong>與<strong>職務基本授課節數</strong>。學校名稱、學年度、放假日與登入密碼請改到上方「學校與行事曆」或「登入密碼」。
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
             {/* Hourly Rates Card */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
@@ -860,93 +925,273 @@ export const AdminSettings: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      全月折算週數基準
-                    </label>
-                    <DraftNumberInput
-                      value={formConfig.weeksInMonth}
-                      onChange={(weeksInMonth) => setFormConfig({ ...formConfig, weeksInMonth })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
-                      min={1}
-                      required
-                    />
-                    <span className="text-[10px] text-slate-400">結算依該月週一至週五實際日數（並扣除下方放假日）</span>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      每週兼代課法定上限 (節)
-                    </label>
-                    <DraftNumberInput
-                      value={formConfig.maxWeeklyOverloadPeriods}
-                      onChange={(maxWeeklyOverloadPeriods) =>
-                        setFormConfig({ ...formConfig, maxWeeklyOverloadPeriods })
-                      }
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
-                      min={1}
-                      required
-                    />
-                    <span className="text-[10px] text-slate-400">法規上限 9 節（兼4+代5）</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 pt-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">學年度</label>
-                    <input
-                      type="text"
-                      value={formConfig.academicYear}
-                      onChange={(e) => setFormConfig({ ...formConfig, academicYear: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold text-slate-900"
-                    />
-                    {Number(formConfig.academicYear) <
-                      (() => {
-                        const y = new Date().getFullYear();
-                        const m = new Date().getMonth() + 1;
-                        return m >= 8 ? y - 1911 : y - 1912;
-                      })() && (
-                      <p className="text-[10px] text-amber-700 mt-1 leading-snug">
-                        學年度似乎未更新至本學期；結算將暫以西曆校正，建議改為{' '}
-                        {(() => {
-                          const y = new Date().getFullYear();
-                          const m = new Date().getMonth() + 1;
-                          return m >= 8 ? y - 1911 : y - 1912;
-                        })()}
-                        。
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">學期</label>
-                    <select
-                      value={formConfig.semester}
-                      onChange={(e) => setFormConfig({ ...formConfig, semester: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
-                    >
-                      <option value="1">第 1 學期</option>
-                      <option value="2">第 2 學期</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">結算月份</label>
-                    <select
-                      value={formConfig.currentMonth}
-                      onChange={(e) => setFormConfig({ ...formConfig, currentMonth: Number(e.target.value) })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
-                    >
-                      {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
-                        <option key={m} value={m}>{m} 月</option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-slate-400 mt-0.5">預設自動帶入系統當月，需補登過去月份時可手動調整</p>
-                  </div>
+                <div className="pt-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    每週兼代課法定上限 (節)
+                  </label>
+                  <DraftNumberInput
+                    value={formConfig.maxWeeklyOverloadPeriods}
+                    onChange={(maxWeeklyOverloadPeriods) =>
+                      setFormConfig({ ...formConfig, maxWeeklyOverloadPeriods })
+                    }
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
+                    min={1}
+                    required
+                  />
+                  <span className="text-[10px] text-slate-400">法規上限 9 節（兼4+代5）</span>
                 </div>
 
               </div>
             </div>
+            {/* Base Teaching Periods Card */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                  <BookOpen className="w-4 h-4 text-indigo-500" />
+                  <span>職務基本鐘點設定</span>
+                </h3>
+                <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-bold border border-indigo-200">
+                  五種職稱基本鐘點皆可設定（專任預設 16）
+                </span>
+              </div>
 
+              <div className="space-y-4 text-xs sm:text-sm">
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
+                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五實際日數計費，並扣除放假日行事曆）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
+                  專任、導師、組長、科主任、主任都可在下方填節數，按「儲存系統參數設定」後會套用到全校該職稱教師。團體活動 3 節中：班會／班級活動計入正課，對開社團 2 節不計入。
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      專任教師基本鐘點 (節/週)
+                    </label>
+                    <DraftNumberInput
+                      min={0}
+                      value={formConfig.standardBasePeriods.fulltime}
+                      onChange={(fulltime) =>
+                        setFormConfig({
+                          ...formConfig,
+                          standardBasePeriods: {
+                            ...formConfig.standardBasePeriods,
+                            fulltime,
+                          },
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">可設定，預設 16 節；儲存後套用全體專任教師</span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      導師基本鐘點
+                    </label>
+                    <DraftNumberInput
+                      min={0}
+                      value={formConfig.standardBasePeriods.homeroom}
+                      onChange={(homeroom) =>
+                        setFormConfig({
+                          ...formConfig,
+                          standardBasePeriods: {
+                            ...formConfig.standardBasePeriods,
+                            homeroom,
+                          },
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體導師</span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      組長基本鐘點
+                    </label>
+                    <DraftNumberInput
+                      min={0}
+                      value={formConfig.standardBasePeriods.sectionChief}
+                      onChange={(sectionChief) =>
+                        setFormConfig({
+                          ...formConfig,
+                          standardBasePeriods: {
+                            ...formConfig.standardBasePeriods,
+                            sectionChief,
+                          },
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體組長</span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      科主任基本鐘點
+                    </label>
+                    <DraftNumberInput
+                      min={0}
+                      value={formConfig.standardBasePeriods.head}
+                      onChange={(head) =>
+                        setFormConfig({
+                          ...formConfig,
+                          standardBasePeriods: {
+                            ...formConfig.standardBasePeriods,
+                            head,
+                          },
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體科主任</span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      主任基本鐘點
+                    </label>
+                    <DraftNumberInput
+                      min={0}
+                      value={formConfig.standardBasePeriods.director}
+                      onChange={(director) =>
+                        setFormConfig({
+                          ...formConfig,
+                          standardBasePeriods: {
+                            ...formConfig.standardBasePeriods,
+                            director,
+                          },
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體主任</span>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-100 text-xs text-indigo-900 space-y-1">
+                  <div className="font-bold text-indigo-950 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                    目前套用中的基本鐘點
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-indigo-800">
+                    專任 {formConfig.standardBasePeriods.fulltime} 節、導師 {formConfig.standardBasePeriods.homeroom} 節、組長 {formConfig.standardBasePeriods.sectionChief} 節、科主任 {formConfig.standardBasePeriods.head} 節、主任 {formConfig.standardBasePeriods.director} 節。任務減授仍依各人職稱預設或名冊填寫。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          {renderConfigSaveBar()}
+        </form>
+      )}
+
+      {/* TAB: 學校與行事曆 */}
+      {activeTab === 'school' && (
+        <form onSubmit={handleConfigSubmit} className="space-y-6">
+          {/* 學校名稱 — 獨立置頂 */}
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-200 shadow-xs">
+            <label className="block text-sm font-bold text-indigo-900 mb-2 flex items-center space-x-2">
+              <School className="w-4 h-4 text-indigo-600" />
+              <span>學校名稱（通知單抬頭 · 匯出課表標題）</span>
+            </label>
+            <input
+              type="text"
+              value={formConfig.schoolName || ''}
+              onChange={(e) => setFormConfig({ ...formConfig, schoolName: e.target.value })}
+              className="w-full bg-white border border-indigo-300 rounded-xl p-3 text-lg font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
+              placeholder="如：國立○○高級工業職業學校"
+            />
+            <p className="text-[11px] text-indigo-600 mt-1.5">修改後將套用於代課通知單抬頭及匯出 Excel 課表標題。</p>
+            <label className="block text-sm font-bold text-indigo-900 mt-4 mb-2">
+              教務主任姓名（調代課通知單決行印章）
+            </label>
+            <input
+              type="text"
+              value={formConfig.academicDirectorName || ''}
+              onChange={(e) =>
+                setFormConfig({ ...formConfig, academicDirectorName: e.target.value })
+              }
+              className="w-full bg-white border border-indigo-300 rounded-xl p-3 text-base font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
+              placeholder="如：王大同"
+            />
+            <p className="text-[11px] text-indigo-600 mt-1.5">
+              填寫後通知單第四欄印章顯示「姓名＋決行」；空白則維持「教務處 決行」。
+            </p>
+          </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-indigo-500" />
+                  <span>學年度 · 學期 · 結算月份</span>
+                </h3>
+                <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-bold border border-indigo-200">
+                  出納結算基準
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs sm:text-sm">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">學年度</label>
+                  <input
+                    type="text"
+                    value={formConfig.academicYear}
+                    onChange={(e) => setFormConfig({ ...formConfig, academicYear: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold text-slate-900"
+                  />
+                  {Number(formConfig.academicYear) <
+                    (() => {
+                      const y = new Date().getFullYear();
+                      const m = new Date().getMonth() + 1;
+                      return m >= 8 ? y - 1911 : y - 1912;
+                    })() && (
+                    <p className="text-[10px] text-amber-700 mt-1 leading-snug">
+                      學年度似乎未更新至本學期；結算將暫以西曆校正，建議改為{' '}
+                      {(() => {
+                        const y = new Date().getFullYear();
+                        const m = new Date().getMonth() + 1;
+                        return m >= 8 ? y - 1911 : y - 1912;
+                      })()}
+                      。
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">學期</label>
+                  <select
+                    value={formConfig.semester}
+                    onChange={(e) => setFormConfig({ ...formConfig, semester: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
+                  >
+                    <option value="1">第 1 學期</option>
+                    <option value="2">第 2 學期</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">結算月份</label>
+                  <select
+                    value={formConfig.currentMonth}
+                    onChange={(e) => setFormConfig({ ...formConfig, currentMonth: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-slate-900"
+                  >
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
+                      <option key={m} value={m}>{m} 月</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-0.5">補登過去月份時可手動調整</p>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">全月折算週數基準</label>
+                  <DraftNumberInput
+                    value={formConfig.weeksInMonth}
+                    onChange={(weeksInMonth) => setFormConfig({ ...formConfig, weeksInMonth })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-900"
+                    min={1}
+                    required
+                  />
+                  <span className="text-[10px] text-slate-400">結算依該月週一至週五實際日數（並扣除放假日）</span>
+                </div>
+              </div>
+            </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* 放假日行事曆 */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
@@ -1348,145 +1593,14 @@ export const AdminSettings: React.FC = () => {
                 )}
               </div>
             </div>
-
-            {/* Base Teaching Periods Card */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
-                  <BookOpen className="w-4 h-4 text-indigo-500" />
-                  <span>職務基本鐘點設定</span>
-                </h3>
-                <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-bold border border-indigo-200">
-                  五種職稱基本鐘點皆可設定（專任預設 16）
-                </span>
-              </div>
-
-              <div className="space-y-4 text-xs sm:text-sm">
-                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
-                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五實際日數計費，並扣除放假日行事曆）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
-                  專任、導師、組長、科主任、主任都可在下方填節數，按「儲存系統參數設定」後會套用到全校該職稱教師。團體活動 3 節中：班會／班級活動計入正課，對開社團 2 節不計入。
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      專任教師基本鐘點 (節/週)
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.fulltime}
-                      onChange={(fulltime) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            fulltime,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定，預設 16 節；儲存後套用全體專任教師</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      導師基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.homeroom}
-                      onChange={(homeroom) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            homeroom,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體導師</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      組長基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.sectionChief}
-                      onChange={(sectionChief) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            sectionChief,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體組長</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      科主任基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.head}
-                      onChange={(head) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            head,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體科主任</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      主任基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.director}
-                      onChange={(director) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            director,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體主任</span>
-                  </div>
-                </div>
-
-                <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-100 text-xs text-indigo-900 space-y-1">
-                  <div className="font-bold text-indigo-950 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                    目前套用中的基本鐘點
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-indigo-800">
-                    專任 {formConfig.standardBasePeriods.fulltime} 節、導師 {formConfig.standardBasePeriods.homeroom} 節、組長 {formConfig.standardBasePeriods.sectionChief} 節、科主任 {formConfig.standardBasePeriods.head} 節、主任 {formConfig.standardBasePeriods.director} 節。任務減授仍依各人職稱預設或名冊填寫。
-                  </p>
-                </div>
-              </div>
-            </div>
-
           </div>
+          {renderConfigSaveBar()}
+        </form>
+      )}
 
+      {/* TAB: 登入密碼 */}
+      {activeTab === 'security' && (
+        <form onSubmit={handleConfigSubmit} className="space-y-6">
           {/* Security & Authentication Configuration Card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
@@ -1666,30 +1780,7 @@ export const AdminSettings: React.FC = () => {
             </div>
           </div>
 
-          {/* Save Bar */}
-          <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div>
-              {saveSuccess ? (
-                <span className="text-xs text-emerald-700 font-bold flex items-center gap-1.5">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  系統設定參數已成功儲存並即時套用至全校課表與結算！
-                </span>
-              ) : (
-                <span className="text-xs text-slate-500">
-                  修改參數後點擊儲存，將即時更新主計出納結算與調代課計算邏輯。
-                </span>
-              )}
-            </div>
-            
-            <button
-              type="submit"
-              id="btn-save-admin-config"
-              className="flex items-center space-x-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow transition active:scale-95"
-            >
-              <Save className="w-4 h-4" />
-              <span>儲存系統參數設定</span>
-            </button>
-          </div>
+          {renderConfigSaveBar()}
         </form>
       )}
 
