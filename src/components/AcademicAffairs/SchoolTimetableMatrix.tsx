@@ -418,9 +418,10 @@ export const SchoolTimetableMatrix: React.FC = () => {
                                     }`}
                                   >
                                     <div>
-                                      <div className="flex items-center justify-between font-bold text-xs gap-1">
-                                        <span>{session.className}</span>
-                                        <span className="flex items-center gap-0.5 shrink-0">
+                                      <div className="font-bold text-xs whitespace-nowrap">
+                                        {session.className}
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-0.5 mt-0.5">
                                           {session.isConcurrent && (
                                             <span className="text-[10px] bg-violet-600 text-white px-1.5 py-0.2 rounded font-semibold">
                                               兼課
@@ -431,7 +432,6 @@ export const SchoolTimetableMatrix: React.FC = () => {
                                               實習
                                             </span>
                                           )}
-                                        </span>
                                       </div>
                                       <div className="font-semibold text-xs mt-0.5 line-clamp-1">
                                         {session.subjectName}
