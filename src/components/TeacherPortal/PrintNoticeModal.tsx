@@ -656,9 +656,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 </>
               ) : (
                 <div className="flex flex-col items-center gap-1">
-                  <div className="h-14 flex items-end justify-center">
-                    <span className="print:hidden text-[10px] text-slate-400">（蓋章處）</span>
-                  </div>
+                  <div className="h-14" />
                   {reviewerStamp.note && (
                     <div className="text-[10px] text-red-700 font-bold text-center tracking-tight">
                       {reviewerStamp.note}
@@ -699,9 +697,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                   <div className="text-[10px] text-slate-400 mt-2">存查建檔</div>
                 </>
               ) : (
-                <div className="h-16 flex items-end justify-center">
-                  <span className="print:hidden text-[10px] text-slate-400">（蓋章處）</span>
-                </div>
+                <div className="h-16" />
               )}
             </div>
           </div>
