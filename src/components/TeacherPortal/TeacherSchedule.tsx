@@ -289,8 +289,8 @@ export const TeacherSchedule: React.FC = () => {
                 </div>
               )}
               {overloadBreakdown.sessionRows > overloadBreakdown.scheduleTotal && (
-                <div className="flex justify-between text-amber-700">
-                  <span>同一時段重疊課堂：</span>
+                <div className="flex justify-between text-sky-700">
+                  <span>跨班合授（同時段）：</span>
                   <span className="font-semibold">
                     {overloadBreakdown.sessionRows - overloadBreakdown.scheduleTotal} 筆（已合併計算）
                   </span>
@@ -485,8 +485,11 @@ export const TeacherSchedule: React.FC = () => {
                                         </span>
                                       )}
                                       {slotSessions.length > 1 && (
-                                        <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
-                                          {slotSessions.length}堂
+                                        <span
+                                          className="text-[10px] px-1.5 py-0.2 bg-sky-600 text-white rounded font-medium"
+                                          title={slotSessions.map((s) => s.className).join('、')}
+                                        >
+                                          跨班
                                         </span>
                                       )}
                                       {isWednesdayHomeroomPeriod(session.dayOfWeek, session.period) && (
