@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CourseSession, SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
@@ -77,6 +77,9 @@ function formatPeriodBlockLabel(start: number, end: number): string {
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
   const { currentAcademicStaff, academicStaffList, systemConfig, sessions, requests, teachers } =
     useApp();
+  /** 列印前可關閉紅章，改留空白蓋實體章 */
+  const [showAcademicStaffStamp, setShowAcademicStaffStamp] = useState(true);
+  const [showDirectorStamp, setShowDirectorStamp] = useState(true);
   
   // Resolve reviewer staff
   const reviewerStaff = currentAcademicStaff || academicStaffList[0];
@@ -197,27 +200,51 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     >
         
         {/* Top bar (Hidden when printing) */}
-        <div className="print:hidden bg-slate-800 text-white px-5 py-3.5 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Printer className="w-5 h-5 text-amber-400" />
-            <span className="font-semibold text-sm">{previewLabel}</span>
+        <div className="print:hidden bg-slate-800 text-white px-5 py-3.5 space-y-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-2 min-w-0">
+              <Printer className="w-5 h-5 text-amber-400 shrink-0" />
+              <span className="font-semibold text-sm truncate">{previewLabel}</span>
+            </div>
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                id="btn-trigger-print"
+                onClick={handlePrint}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded shadow transition"
+              >
+                <Printer className="w-4 h-4" />
+                <span>立即列印 / 存為 PDF</span>
+              </button>
+              <button
+                id="btn-close-print-modal"
+                onClick={onClose}
+                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              id="btn-trigger-print"
-              onClick={handlePrint}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded shadow transition"
-            >
-              <Printer className="w-4 h-4" />
-              <span>立即列印 / 存為 PDF</span>
-            </button>
-            <button
-              id="btn-close-print-modal"
-              onClick={onClose}
-              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-300 border-t border-slate-700 pt-2.5">
+            <span className="text-slate-400 font-medium">行政印章：</span>
+            <label className="inline-flex items-center gap-1.5 cursor-pointer select-none hover:text-white">
+              <input
+                type="checkbox"
+                checked={showAcademicStaffStamp}
+                onChange={(e) => setShowAcademicStaffStamp(e.target.checked)}
+                className="rounded border-slate-500 text-amber-500 focus:ring-amber-400"
+              />
+              <span>顯示教學組印章</span>
+            </label>
+            <label className="inline-flex items-center gap-1.5 cursor-pointer select-none hover:text-white">
+              <input
+                type="checkbox"
+                checked={showDirectorStamp}
+                onChange={(e) => setShowDirectorStamp(e.target.checked)}
+                className="rounded border-slate-500 text-amber-500 focus:ring-amber-400"
+              />
+              <span>顯示教務主任印章</span>
+            </label>
+            <span className="text-slate-500">關閉後欄位留白，方便蓋實體章</span>
           </div>
         </div>
 
@@ -597,56 +624,72 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             {/* Academic Affairs Section Chief */}
             <div className="p-3">
               <div className="text-slate-600 font-bold mb-4">教務處經辦 / 組長</div>
-              <div className="inline-flex flex-col items-center">
-                <div className="w-[5.75rem] border-2 border-red-500 text-red-700 px-2 py-1.5 font-serif font-bold text-sm rounded leading-tight space-y-0.5">
-                  <span className="flex w-full justify-between">
-                    {Array.from(reviewerStamp.name).map((ch, i) => (
-                      <span key={`n-${ch}-${i}`}>{ch}</span>
-                    ))}
-                  </span>
-                  {reviewerStamp.title && (
-                    <span className="flex w-full justify-between text-[11px] font-semibold">
-                      {Array.from(reviewerStamp.title).map((ch, i) => (
-                        <span key={`t-${ch}-${i}`}>{ch}</span>
-                      ))}
-                    </span>
-                  )}
-                </div>
-                {reviewerStamp.note && (
-                  <div className="mt-1 text-[10px] text-red-700 font-bold text-center tracking-tight">
-                    {reviewerStamp.note}
+              {showAcademicStaffStamp ? (
+                <>
+                  <div className="inline-flex flex-col items-center">
+                    <div className="w-[5.75rem] border-2 border-red-500 text-red-700 px-2 py-1.5 font-serif font-bold text-sm rounded leading-tight space-y-0.5">
+                      <span className="flex w-full justify-between">
+                        {Array.from(reviewerStamp.name).map((ch, i) => (
+                          <span key={`n-${ch}-${i}`}>{ch}</span>
+                        ))}
+                      </span>
+                      {reviewerStamp.title && (
+                        <span className="flex w-full justify-between text-[11px] font-semibold">
+                          {Array.from(reviewerStamp.title).map((ch, i) => (
+                            <span key={`t-${ch}-${i}`}>{ch}</span>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                    {reviewerStamp.note && (
+                      <div className="mt-1 text-[10px] text-red-700 font-bold text-center tracking-tight">
+                        {reviewerStamp.note}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="text-[10px] text-emerald-700 font-semibold mt-2">
-                {request.reviewedAt || '—'} 核准
-              </div>
+                  <div className="text-[10px] text-emerald-700 font-semibold mt-2">
+                    {request.reviewedAt || '—'} 核准
+                  </div>
+                </>
+              ) : (
+                <div className="h-16 flex items-end justify-center">
+                  <span className="print:hidden text-[10px] text-slate-400">（蓋章處）</span>
+                </div>
+              )}
             </div>
 
             {/* Dean of Academic Affairs / Principal */}
             <div className="p-3">
               <div className="text-slate-600 font-bold mb-4">教務主任 / 校長</div>
-              {academicDirectorName ? (
-                <div className="inline-flex flex-col items-center">
-                  <div className="w-[5.75rem] border-2 border-red-600 text-red-800 px-2 py-1.5 font-serif font-bold text-sm rounded leading-tight space-y-0.5">
-                    <span className="flex w-full justify-between">
-                      {Array.from(academicDirectorName).map((ch, i) => (
-                        <span key={`d-${ch}-${i}`}>{ch}</span>
-                      ))}
-                    </span>
-                    <span className="flex w-full justify-between text-[11px] font-semibold">
-                      {Array.from('決行').map((ch, i) => (
-                        <span key={`a-${ch}-${i}`}>{ch}</span>
-                      ))}
-                    </span>
-                  </div>
-                </div>
+              {showDirectorStamp ? (
+                <>
+                  {academicDirectorName ? (
+                    <div className="inline-flex flex-col items-center">
+                      <div className="w-[5.75rem] border-2 border-red-600 text-red-800 px-2 py-1.5 font-serif font-bold text-sm rounded leading-tight space-y-0.5">
+                        <span className="flex w-full justify-between">
+                          {Array.from(academicDirectorName).map((ch, i) => (
+                            <span key={`d-${ch}-${i}`}>{ch}</span>
+                          ))}
+                        </span>
+                        <span className="flex w-full justify-between text-[11px] font-semibold">
+                          {Array.from('決行').map((ch, i) => (
+                            <span key={`a-${ch}-${i}`}>{ch}</span>
+                          ))}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="inline-block border-2 border-red-600 text-red-800 px-4 py-1 font-serif font-bold text-sm rounded">
+                      教務處 決行
+                    </div>
+                  )}
+                  <div className="text-[10px] text-slate-400 mt-2">存查建檔</div>
+                </>
               ) : (
-                <div className="inline-block border-2 border-red-600 text-red-800 px-4 py-1 font-serif font-bold text-sm rounded">
-                  教務處 決行
+                <div className="h-16 flex items-end justify-center">
+                  <span className="print:hidden text-[10px] text-slate-400">（蓋章處）</span>
                 </div>
               )}
-              <div className="text-[10px] text-slate-400 mt-2">存查建檔</div>
             </div>
           </div>
 

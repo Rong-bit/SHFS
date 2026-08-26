@@ -471,10 +471,7 @@ export const TeacherSchedule: React.FC = () => {
                                 }`}
                               >
                                 <div>
-                                  <div className="font-bold text-xs text-slate-900 whitespace-nowrap">
-                                    {session.className}
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-0.5 mt-0.5">
+                                  <div className="flex flex-wrap items-center justify-end gap-0.5">
                                       {leaveLabel && (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
                                           請假派代
@@ -511,6 +508,9 @@ export const TeacherSchedule: React.FC = () => {
                                         <span className="text-[10px] text-slate-500 font-normal">正課</span>
                                       ) : null}
                                   </div>
+                                  <div className="font-bold text-xs text-slate-900 whitespace-nowrap mt-0.5">
+                                    {session.className}
+                                  </div>
                                   <div className="font-semibold text-xs text-slate-800 mt-1 line-clamp-1">
                                     {session.subjectName}
                                   </div>
@@ -542,13 +542,13 @@ export const TeacherSchedule: React.FC = () => {
                             ) : subDuty ? (
                               <div className="h-full p-2.5 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/80 text-indigo-950 flex flex-col justify-between">
                                 <div>
-                                  <div className="font-bold text-xs whitespace-nowrap">
-                                    {subDuty.originalSession.className}
-                                  </div>
-                                  <div className="mt-0.5">
+                                  <div className="flex justify-end">
                                     <span className="text-[10px] px-1.5 py-0.2 bg-indigo-600 text-white rounded font-medium">
                                       代課任務
                                     </span>
+                                  </div>
+                                  <div className="font-bold text-xs whitespace-nowrap mt-0.5">
+                                    {subDuty.originalSession.className}
                                   </div>
                                   <div className="font-semibold text-xs mt-1 line-clamp-1">
                                     {subDuty.originalSession.subjectName}
