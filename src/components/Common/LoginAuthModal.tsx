@@ -138,7 +138,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       }
       case 'admin':
         targetTitle = '系統管理員';
-        targetSubtitle = '全校課表匯入 · 師資場地維護 · 系統法規參數設定';
+        targetSubtitle = '標準與參數 · 場地／名冊維護 · 課表匯入';
         targetBadge = '最高管理權限';
         expectedPassword = auth.adminPassword || DEFAULT_ADMIN_PASSWORD;
         hint = '請輸入系統管理員密碼';
@@ -413,7 +413,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
         {/* Footer Note */}
         <div className="bg-slate-950/60 px-6 py-2.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-          <span>🔒 密碼可於【系統管理員 ➔ 標準與參數 ➔ 登入密碼】中自訂或開關</span>
+          <span>🔒 密碼可於【系統管理員 ➔ 系統維運 ➔ 登入密碼】中自訂或開關</span>
         </div>
     </ModalShell>
   );

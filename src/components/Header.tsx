@@ -284,7 +284,7 @@ export const Header: React.FC = () => {
           {currentRole === 'admin' && (
             <div className="text-xs text-slate-400 flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-              <span>標準與參數 · 名冊維護 · 課表與同步 · 系統維運</span>
+              <span>標準與參數 · 場地維護 · 名冊維護 · 課表與同步 · 系統維運</span>
             </div>
           )}
         </div>

@@ -87,13 +87,14 @@ type AdminTab =
   | 'sync'
   | 'maintenance';
 
-type AdminGroup = 'params' | 'roster' | 'data' | 'ops';
+type AdminGroup = 'params' | 'venues' | 'roster' | 'data' | 'ops';
 
 const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
-  { id: 'params', label: '標準與參數', tabs: ['config', 'school', 'security'] },
-  { id: 'roster', label: '名冊維護', tabs: ['venues', 'teachers', 'staff'] },
+  { id: 'params', label: '標準與參數', tabs: ['config', 'school'] },
+  { id: 'venues', label: '場地維護', tabs: ['venues'] },
+  { id: 'roster', label: '名冊維護', tabs: ['teachers', 'staff'] },
   { id: 'data', label: '課表與同步', tabs: ['schedules', 'sync'] },
-  { id: 'ops', label: '系統維運', tabs: ['maintenance'] },
+  { id: 'ops', label: '系統維運', tabs: ['security', 'maintenance'] },
 ];
 
 const groupOfTab = (tab: AdminTab): AdminGroup =>
@@ -708,11 +709,13 @@ export const AdminSettings: React.FC = () => {
               const GroupIcon =
                 group.id === 'params'
                   ? Settings
-                  : group.id === 'roster'
-                    ? Users
-                    : group.id === 'data'
-                      ? Cloud
-                      : ShieldCheck;
+                  : group.id === 'venues'
+                    ? Building2
+                    : group.id === 'roster'
+                      ? Users
+                      : group.id === 'data'
+                        ? Cloud
+                        : ShieldCheck;
               return (
                 <button
                   key={group.id}
@@ -761,19 +764,10 @@ export const AdminSettings: React.FC = () => {
               <School className="w-3.5 h-3.5 text-indigo-400" />
               <span>學校與行事曆</span>
             </button>
-            <button
-              id="tab-admin-security"
-              type="button"
-              onClick={() => setActiveTab('security')}
-              className={subTabClass(activeTab === 'security')}
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-500" />
-              <span>登入密碼</span>
-            </button>
           </div>
         )}
 
-        {activeGroup === 'roster' && (
+        {activeGroup === 'venues' && (
           <div className="flex flex-wrap items-center gap-2">
             <button
               id="tab-admin-venues"
@@ -782,8 +776,13 @@ export const AdminSettings: React.FC = () => {
               className={subTabClass(activeTab === 'venues')}
             >
               <Building2 className="w-3.5 h-3.5 text-amber-400" />
-              <span>工場與教室維護 ({venues.length})</span>
+              <span>工場與教室 ({venues.length})</span>
             </button>
+          </div>
+        )}
+
+        {activeGroup === 'roster' && (
+          <div className="flex flex-wrap items-center gap-2">
             <button
               id="tab-admin-teachers"
               type="button"
@@ -831,6 +830,15 @@ export const AdminSettings: React.FC = () => {
         {activeGroup === 'ops' && (
           <div className="flex flex-wrap items-center gap-2">
             <button
+              id="tab-admin-security"
+              type="button"
+              onClick={() => setActiveTab('security')}
+              className={subTabClass(activeTab === 'security')}
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-500" />
+              <span>登入密碼</span>
+            </button>
+            <button
               id="tab-admin-maintenance"
               type="button"
               onClick={() => setActiveTab('maintenance')}
@@ -847,7 +855,7 @@ export const AdminSettings: React.FC = () => {
       {activeTab === 'config' && (
         <form onSubmit={handleConfigSubmit} className="space-y-6">
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-950 leading-relaxed">
-            此分頁只調整<strong>鐘點費率</strong>與<strong>職務基本授課節數</strong>。學校名稱、學年度、放假日與登入密碼請改到上方「學校與行事曆」或「登入密碼」。
+            此分頁只調整<strong>鐘點費率</strong>與<strong>職務基本授課節數</strong>。學校名稱、學年度、放假日請改到「學校與行事曆」；登入密碼在「系統維運 → 登入密碼」。
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Hourly Rates Card */}
