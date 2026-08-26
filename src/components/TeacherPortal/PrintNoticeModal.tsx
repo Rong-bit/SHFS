@@ -417,7 +417,10 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                       <strong>{originalSession.subjectName}</strong>
                     </div>
                     <div className="text-slate-600 mt-0.5">
-                      時段：{periodRangeLabel} ｜ 上課地點：
+                      時段：{periodRangeLabel}
+                    </div>
+                    <div className="text-slate-600 mt-0.5">
+                      上課地點：
                       <strong className="text-slate-800">{originalSession.venueName}</strong>
                       {originalSession.isConcurrent && (
                         <span className="ml-2 px-1.5 py-0.5 bg-violet-100 text-violet-800 text-[11px] rounded font-medium">
@@ -652,8 +655,18 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                   </div>
                 </>
               ) : (
-                <div className="h-16 flex items-end justify-center">
-                  <span className="print:hidden text-[10px] text-slate-400">（蓋章處）</span>
+                <div className="flex flex-col items-center gap-1">
+                  <div className="h-14 flex items-end justify-center">
+                    <span className="print:hidden text-[10px] text-slate-400">（蓋章處）</span>
+                  </div>
+                  {reviewerStamp.note && (
+                    <div className="text-[10px] text-red-700 font-bold text-center tracking-tight">
+                      {reviewerStamp.note}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-emerald-700 font-semibold">
+                    {request.reviewedAt || '—'} 核准
+                  </div>
                 </div>
               )}
             </div>
