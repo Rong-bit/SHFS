@@ -2073,7 +2073,7 @@ export const AdminSettings: React.FC = () => {
                   <h3 className="font-bold text-sm">全校專業群科教師師資與授課標準名冊</h3>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  基本節數依系統設定。職稱請用下拉選：導師、組長、科主任、主任、專任教師。
+                  基本節數依系統設定。職稱請用下拉選：導師、組長、科主任、主任、專任教師。欄位較多時可左右滑動／捲動。
                 </p>
               </div>
               <span className="text-xs text-slate-400">
@@ -2081,21 +2081,21 @@ export const AdminSettings: React.FC = () => {
               </span>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+              <table className="min-w-[1180px] w-max text-left text-xs border-collapse">
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
-                    <th className="p-3.5">教師姓名</th>
-                    <th className="p-3.5 w-[100px]">薪資編號</th>
-                    <th className="p-3.5">職稱</th>
-                    <th className="p-3.5">群科科別</th>
-                    <th className="p-3.5 text-center">任務減授</th>
-                    <th className="p-3.5 text-center">基本節數</th>
-                    <th className="p-3.5 text-center">排定節數（不含團體活動）</th>
-                    <th className="p-3.5 text-center">每週超額（兼課）</th>
-                    <th className="p-3.5">任教專長 / 專業證照</th>
-                    <th className="p-3.5">聯絡資訊</th>
-                    <th className="p-3.5 text-right">操作</th>
+                    <th className="p-3.5 whitespace-nowrap min-w-[7.5rem]">教師姓名</th>
+                    <th className="p-3.5 whitespace-nowrap min-w-[6.5rem]">薪資編號</th>
+                    <th className="p-3.5 whitespace-nowrap min-w-[7.5rem]">職稱</th>
+                    <th className="p-3.5 whitespace-nowrap min-w-[5.5rem]">群科科別</th>
+                    <th className="p-3.5 text-center whitespace-nowrap min-w-[5rem]">任務減授</th>
+                    <th className="p-3.5 text-center whitespace-nowrap min-w-[5rem]">基本節數</th>
+                    <th className="p-3.5 text-center whitespace-nowrap min-w-[9rem]">排定節數（不含團體活動）</th>
+                    <th className="p-3.5 text-center whitespace-nowrap min-w-[7.5rem]">每週超額（兼課）</th>
+                    <th className="p-3.5 whitespace-nowrap min-w-[12rem]">任教專長 / 專業證照</th>
+                    <th className="p-3.5 whitespace-nowrap min-w-[10rem]">聯絡資訊</th>
+                    <th className="p-3.5 text-right whitespace-nowrap min-w-[7rem]">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -2110,7 +2110,7 @@ export const AdminSettings: React.FC = () => {
                       const overload = teacherWeeklyOverload(t, sessions);
                       return (
                         <tr key={t.id} className="hover:bg-slate-50/80 transition">
-                          <td className="p-3.5">
+                          <td className="p-3.5 whitespace-nowrap">
                             <div className="font-bold text-slate-900 text-sm">{t.name}</div>
                             {t.homeroomClass ? (
                               <span className="text-[10px] text-slate-400">{t.homeroomClass}導師</span>
@@ -2123,7 +2123,7 @@ export const AdminSettings: React.FC = () => {
                               <span className="ml-1.5 text-[10px] text-slate-400">使用預設密碼</span>
                             )}
                           </td>
-                          <td className="p-3.5">
+                          <td className="p-3.5 whitespace-nowrap">
                             <input
                               type="text"
                               defaultValue={resolveTeacherSalaryCode(t, systemConfig)}
@@ -2141,7 +2141,7 @@ export const AdminSettings: React.FC = () => {
                               title="出納印領清冊薪資編號"
                             />
                           </td>
-                          <td className="p-3.5">
+                          <td className="p-3.5 whitespace-nowrap">
                             <select
                               value={normalizeTeacherTitle(t.title)}
                               onChange={(e) => {
@@ -2159,12 +2159,12 @@ export const AdminSettings: React.FC = () => {
                               ))}
                             </select>
                           </td>
-                          <td className="p-3.5">
+                          <td className="p-3.5 whitespace-nowrap">
                             <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-semibold text-[11px]">
                               {t.department}
                             </span>
                           </td>
-                          <td className="p-3.5 text-center">
+                          <td className="p-3.5 text-center whitespace-nowrap">
                             <DraftNumberInput
                               min={0}
                               max={formConfig.standardBasePeriods.fulltime}
@@ -2178,13 +2178,13 @@ export const AdminSettings: React.FC = () => {
                             />
                             <span className="block text-[10px] text-slate-400 mt-0.5">節</span>
                           </td>
-                          <td className="p-3.5 text-center font-mono font-bold text-slate-800">
+                          <td className="p-3.5 text-center font-mono font-bold text-slate-800 whitespace-nowrap">
                             {t.basePeriods} 節
                           </td>
-                          <td className="p-3.5 text-center font-mono font-bold text-slate-900">
+                          <td className="p-3.5 text-center font-mono font-bold text-slate-900 whitespace-nowrap">
                             {t.weeklyActualPeriods} 節
                           </td>
-                          <td className="p-3.5 text-center">
+                          <td className="p-3.5 text-center whitespace-nowrap">
                             {overload > 0 ? (
                               <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-mono font-bold rounded">
                                 +{overload} 節
@@ -2193,7 +2193,7 @@ export const AdminSettings: React.FC = () => {
                               <span className="text-slate-400 font-mono">0</span>
                             )}
                           </td>
-                          <td className="p-3.5 max-w-[220px]">
+                          <td className="p-3.5 min-w-[12rem] max-w-[16rem]">
                             <div className="flex flex-wrap gap-1">
                               {t.certifications.map((c, i) => (
                                 <span key={i} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border">
@@ -2202,11 +2202,11 @@ export const AdminSettings: React.FC = () => {
                               ))}
                             </div>
                           </td>
-                          <td className="p-3.5 text-slate-600 text-[11px]">
+                          <td className="p-3.5 text-slate-600 text-[11px] whitespace-nowrap">
                             <div>{t.phone}</div>
                             <div className="text-slate-400">{t.email}</div>
                           </td>
-                          <td className="p-3.5 text-right">
+                          <td className="p-3.5 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end space-x-1.5">
                               <button
                                 onClick={() => {
