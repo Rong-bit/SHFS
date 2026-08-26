@@ -77,8 +77,8 @@ function formatPeriodBlockLabel(start: number, end: number): string {
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
   const { currentAcademicStaff, academicStaffList, systemConfig, sessions, requests, teachers } =
     useApp();
-  /** 列印前可關閉紅章，改留空白蓋實體章 */
-  const [showAcademicStaffStamp, setShowAcademicStaffStamp] = useState(true);
+  /** 列印前可關閉紅章，改留空白蓋實體章；預設隱藏教學組、顯示教務主任 */
+  const [showAcademicStaffStamp, setShowAcademicStaffStamp] = useState(false);
   const [showDirectorStamp, setShowDirectorStamp] = useState(true);
   
   // Resolve reviewer staff
