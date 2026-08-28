@@ -88,13 +88,14 @@ export type RequestType = 'swap' | 'reschedule' | 'substitute';
 
 export type LeaveType = 
   | 'official' // 公假/公差 (公費派代)
-  | 'personal' // 事假 (自費代課)
-  | 'sick' // 病假 (自費代課)
-  | 'bereavement' // 喪假 (公費派代)
-  | 'maternity' // 產假/陪產假 (公費派代)
-  | 'training' // 研習/評鑑/監評 (公費派代)
-  | 'wellness' // 身心調適假 (公費派代，教師請假規則第3條)
-  | 'other'; // 其他
+  | 'marriage' // 婚假 (公費派代 · 按小時計)
+  | 'maternity' // 娩假/陪產假 (公費派代 · 按小時計)
+  | 'wellness' // 身心調適假 (公費派代 · 21 小時/學年)
+  | 'personal' // 事假 (第 8 天起公費派代)
+  | 'sick' // 病假 (連續 3 日起公費派代)
+  | 'training' // @deprecated 舊資料：併入公假
+  | 'bereavement' // @deprecated 舊資料：併入公假
+  | 'other'; // @deprecated 舊資料：併入事假
 
 export type PaymentType = 'public' | 'private'; // 公費派代 | 自費代課
 

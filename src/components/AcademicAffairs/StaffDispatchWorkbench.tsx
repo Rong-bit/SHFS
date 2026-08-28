@@ -13,9 +13,18 @@ import {
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import {
-  paymentTypeForLeaveType,
+  LEAVE_TYPE_FORM_OPTIONS,
+  PERSONAL_LEAVE_POLICY_NOTE,
+  SICK_LEAVE_POLICY_NOTE,
   WELLNESS_LEAVE_LEGAL_NOTE,
 } from '../../utils/leaveTypes';
+import {
+  buildLeavePayrollContext,
+  leavePaymentDisplayLabel,
+  resolvePaymentTypeForLeaveDraft,
+  resolveRequestPaymentType,
+  validateWellnessLeaveHours,
+} from '../../utils/leavePayrollPolicy';
 import { resolveOriginalSession, isPlaceholderSession } from '../../utils/resolveOriginalSession';
 import {
   countMatchingWeekdays,
@@ -97,7 +106,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
   const [editingRequest, setEditingRequest] = useState<SubstituteRequest | null>(null);
   const [editLeaveType, setEditLeaveType] = useState<LeaveType>('official');
-  const [editPaymentType, setEditPaymentType] = useState<PaymentType>('public');
   const [editReason, setEditReason] = useState('');
   const [editLeaveDateMode, setEditLeaveDateMode] = useState<'single' | 'range'>('single');
   const [editLeaveDateStart, setEditLeaveDateStart] = useState('');
@@ -112,7 +120,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
     setEditingRequest(req);
     setEditLeaveType(req.leaveType || 'official');
-    setEditPaymentType(req.paymentType || paymentTypeForLeaveType(req.leaveType || 'official'));
     setEditReason(req.reason || '');
     const start = req.leaveDateStart || '';
     const end = req.leaveDateEnd || start;
@@ -130,7 +137,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
     const acting = teachers.find((t) => t.id === editActingHomeroomTeacherId);
     const ok = updateStaffDispatchFields(editingRequest.id, {
       leaveType: editLeaveType,
-      paymentType: editPaymentType,
       reason: editReason,
       leaveDateStart: editLeaveDateStart,
       leaveDateEnd:
@@ -184,7 +190,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [requestType, setRequestType] = useState<RequestType>('substitute');
   const [leaveType, setLeaveType] = useState<LeaveType>('official');
-  const [paymentType, setPaymentType] = useState<PaymentType>('public');
   const [reason, setReason] = useState<string>('');
 
   // 歸屬月份：本月、7 天內可選上月，以及系統管理員指定的補登月份
@@ -480,8 +485,90 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // Auto-switch payment type default when leave type changes
   const handleLeaveTypeChange = (type: LeaveType) => {
     setLeaveType(type);
-    setPaymentType(paymentTypeForLeaveType(type));
   };
+
+  const payrollCtx = useMemo(
+    () => buildLeavePayrollContext(requests, systemConfig),
+    [requests, systemConfig]
+  );
+  const holidaySet = useMemo(
+    () => nonTeachingDateSet(systemConfig.nonTeachingDays),
+    [systemConfig.nonTeachingDays]
+  );
+  const calendarBillableOpts = useMemo(
+    () => ({
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: systemConfig.partialNonTeachingDays || [],
+    }),
+    [systemConfig.temporaryScheduleMoves, systemConfig.partialNonTeachingDays]
+  );
+
+  const dispatchSampleSession =
+    sessionPickMode === 'periodRange' ? batchSelectedSessions[0] : selectedOriginalSession;
+
+  const resolvedDispatchPayment = useMemo(() => {
+    if (requestType !== 'substitute' || !applicantTeacher || !dispatchSampleSession) {
+      return 'private' as PaymentType;
+    }
+    return resolvePaymentTypeForLeaveDraft(
+      {
+        leaveType,
+        reason,
+        leaveDateStart,
+        leaveDateEnd:
+          leaveDateMode === 'range'
+            ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+            : leaveDateStart,
+        originalSession: dispatchSampleSession,
+        applicantTeacherId: applicantTeacher.id,
+        requestType: 'substitute',
+      },
+      payrollCtx,
+      holidaySet,
+      { ...calendarBillableOpts, period: dispatchSampleSession.period }
+    );
+  }, [
+    requestType,
+    applicantTeacher,
+    dispatchSampleSession,
+    leaveType,
+    reason,
+    leaveDateStart,
+    leaveDateEnd,
+    leaveDateMode,
+    payrollCtx,
+    holidaySet,
+    calendarBillableOpts,
+  ]);
+
+  const dispatchPaymentDisplay = leavePaymentDisplayLabel(
+    resolvedDispatchPayment,
+    leaveType,
+    reason
+  );
+
+  const requestPaymentCounts = useMemo(() => {
+    const ctx = buildLeavePayrollContext(requests, systemConfig, {
+      countStatuses: ['approved', 'pending'],
+    });
+    const hs = nonTeachingDateSet(systemConfig.nonTeachingDays);
+    const opts = {
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: systemConfig.partialNonTeachingDays || [],
+    };
+    let publicCount = 0;
+    let privateCount = 0;
+    for (const r of requests) {
+      if (r.requestType !== 'substitute') continue;
+      const resolved = resolveRequestPaymentType(r, ctx, hs, {
+        ...opts,
+        period: resolveOriginalSession(r, sessions)?.period,
+      });
+      if (resolved === 'public') publicCount += 1;
+      else privateCount += 1;
+    }
+    return { public: publicCount, private: privateCount };
+  }, [requests, systemConfig, sessions]);
 
   // Preview clash check（連續節次：逐節檢核後合併）
   const clashPreview = useMemo(() => {
@@ -655,6 +742,29 @@ export const StaffDispatchWorkbench: React.FC = () => {
         alert(leaveCheck.message);
         return;
       }
+      if (leaveType === 'wellness') {
+        const resolvedEnd =
+          leaveDateMode === 'range'
+            ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+            : leaveDateStart;
+        for (const originalSession of sessionsToDispatch) {
+          const wellnessCheck = validateWellnessLeaveHours(
+            {
+              leaveDateStart,
+              leaveDateEnd: resolvedEnd,
+              originalSession,
+              applicantTeacherId: applicantTeacher.id,
+            },
+            payrollCtx,
+            holidaySet,
+            { ...calendarBillableOpts, period: originalSession.period }
+          );
+          if (wellnessCheck.ok === false) {
+            alert(wellnessCheck.message);
+            return;
+          }
+        }
+      }
     }
 
     if (requestType === 'reschedule') {
@@ -770,7 +880,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
           leaveType,
           leaveDateStart: requestType === 'substitute' ? leaveDateStart : undefined,
           leaveDateEnd: requestType === 'substitute' ? resolvedLeaveEnd : undefined,
-          paymentType,
+          paymentType: resolvedDispatchPayment,
           reason,
           originalSession,
           substituteTeacherId:
@@ -838,11 +948,30 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Filtered requests in list view
   const filteredRequests = useMemo(() => {
-    return resolvedRequests.filter((r) => {
+    const listPayrollCtx = buildLeavePayrollContext(requests, systemConfig, {
+      countStatuses: ['approved', 'pending'],
+    });
+    const listHolidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+    const listCalendarOpts = {
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: systemConfig.partialNonTeachingDays || [],
+    };
+    return resolvedRequests
+      .map((r) => ({
+        ...r,
+        resolvedPayment:
+          r.requestType === 'substitute'
+            ? resolveRequestPaymentType(r, listPayrollCtx, listHolidaySet, {
+                ...listCalendarOpts,
+                period: r.originalSession?.period,
+              })
+            : r.paymentType,
+      }))
+      .filter((r) => {
       // Filter tab
       if (listFilter === 'pending' && r.status !== 'pending') return false;
-      if (listFilter === 'public' && r.paymentType !== 'public') return false;
-      if (listFilter === 'private' && r.paymentType !== 'private') return false;
+      if (listFilter === 'public' && r.resolvedPayment !== 'public') return false;
+      if (listFilter === 'private' && r.resolvedPayment !== 'private') return false;
       if (listFilter === 'practical' && !isPracticalSession(r.originalSession)) return false;
 
       // Search term
@@ -859,7 +988,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
       return true;
     });
-  }, [resolvedRequests, listFilter, searchTerm]);
+  }, [resolvedRequests, listFilter, searchTerm, requests, systemConfig]);
 
   // Handle batch approval
   const handleBatchApprove = () => {
@@ -1177,49 +1306,47 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           onChange={(e) => handleLeaveTypeChange(e.target.value as LeaveType)}
                           className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         >
-                          <option value="official">🏛️ 公假 / 公差 (公費派代 · {systemConfig.dayHourlyRate}元/節，第八節課輔 {systemConfig.nightHourlyRate})</option>
-                          <option value="training">📚 專題競賽 / 專業研習 / 監評 (公費派代 · {systemConfig.dayHourlyRate}元/節，第八節課輔 {systemConfig.nightHourlyRate})</option>
-                          <option value="sick">🏥 病假 / 住院 / 緊急就醫 (自費代課)</option>
-                          <option value="personal">💼 個人事假 (自費代課)</option>
-                          <option value="bereavement">🕊️ 喪假 (公費派代)</option>
-                          <option value="maternity">👶 產假 / 陪產假 (公費派代)</option>
-                          <option value="wellness">🧘 身心調適假 (公費派代 · 每學年3日 · 免證明)</option>
-                          <option value="other">📌 其他專案指派</option>
+                          {LEAVE_TYPE_FORM_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
                         </select>
                         {leaveType === 'wellness' && (
                           <p className="mt-1.5 text-[10px] text-teal-800 leading-snug bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5">
                             {WELLNESS_LEAVE_LEGAL_NOTE}
                           </p>
                         )}
+                        {leaveType === 'personal' && (
+                          <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                            {PERSONAL_LEAVE_POLICY_NOTE}
+                          </p>
+                        )}
+                        {leaveType === 'sick' && (
+                          <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                            {SICK_LEAVE_POLICY_NOTE}
+                          </p>
+                        )}
                       </div>
 
                       <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                          鐘點費支給來源 (主計出納結算依據)：
+                          鐘點費支給判定（依對照表自動）：
                         </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setPaymentType('public')}
-                            className={`p-2.5 rounded-xl text-xs font-bold text-center border transition ${
-                              paymentType === 'public'
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                : 'bg-white text-slate-700 border-slate-300'
+                        <div className="p-2.5 rounded-xl border bg-white text-xs sm:text-sm">
+                          <span
+                            className={`font-bold ${
+                              dispatchPaymentDisplay.kind === 'public'
+                                ? 'text-blue-700'
+                                : 'text-amber-800'
                             }`}
                           >
-                            🏛️ 公費派代 (學校預算)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPaymentType('private')}
-                            className={`p-2.5 rounded-xl text-xs font-bold text-center border transition ${
-                              paymentType === 'private'
-                                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                                : 'bg-white text-slate-700 border-slate-300'
-                            }`}
-                          >
-                            👤 自費代課 (教師自理)
-                          </button>
+                            {dispatchPaymentDisplay.kind === 'public' ? '🏛️ ' : '👤 '}
+                            {dispatchPaymentDisplay.label}
+                          </span>
+                          <p className="text-[10px] text-slate-600 mt-1 leading-snug">
+                            {dispatchPaymentDisplay.detail}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -2018,9 +2145,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       <div className="text-slate-200">
                         代課教師：<strong className="text-indigo-400 text-sm">{teachers.find(t => t.id === substituteTeacherId)?.name || '未指定'}</strong>
                         <div className="text-[11px] text-slate-400 mt-0.5">
-                          {paymentType === 'public'
+                          {dispatchPaymentDisplay.kind === 'public'
                             ? `🏛️ 公費派代 (${(sessionPickMode === 'periodRange' ? batchSelectedSessions[0]?.period : selectedOriginalSession?.period) === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)`
-                            : `👤 自費代課 (${(sessionPickMode === 'periodRange' ? batchSelectedSessions[0]?.period : selectedOriginalSession?.period) === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)`}
+                            : `👤 ${dispatchPaymentDisplay.label}（不入代課清冊）`}
                         </div>
                       </div>
                     )}
@@ -2160,8 +2287,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
               {[
                 { key: 'all', label: `全部案件 (${requests.length})` },
                 { key: 'pending', label: `⏳ 待簽核 (${requests.filter(r => r.status === 'pending').length})` },
-                { key: 'public', label: `🏛️ 公費派代 (${requests.filter(r => r.paymentType === 'public').length})` },
-                { key: 'private', label: `👤 自費代課 (${requests.filter(r => r.paymentType === 'private').length})` },
+                { key: 'public', label: `🏛️ 公費派代 (${requestPaymentCounts.public})` },
+                { key: 'private', label: `👤 教師自理 (${requestPaymentCounts.private})` },
                 { key: 'practical', label: `🔧 實習工場課 (${resolvedRequests.filter(r => isPracticalSession(r.originalSession)).length})` },
               ].map((f) => (
                 <button
@@ -2354,11 +2481,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded font-bold text-[11px] ${
-                              req.paymentType === 'public'
+                              req.resolvedPayment === 'public'
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-amber-100 text-amber-800'
                             }`}>
-                              {req.paymentType === 'public' ? '🏛️ 公費' : '👤 自費'}
+                              {req.resolvedPayment === 'public' ? '🏛️ 公費' : '👤 自理'}
                             </span>
                           </td>
 
@@ -2511,50 +2638,18 @@ export const StaffDispatchWorkbench: React.FC = () => {
               <label className="block text-xs font-bold text-slate-700 mb-1">假別</label>
               <select
                 value={editLeaveType}
-                onChange={(e) => {
-                  const t = e.target.value as LeaveType;
-                  setEditLeaveType(t);
-                  setEditPaymentType(paymentTypeForLeaveType(t));
-                }}
+                onChange={(e) => setEditLeaveType(e.target.value as LeaveType)}
                 className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
               >
-                <option value="official">公假 / 公差（公費）</option>
-                <option value="training">專題競賽 / 研習 / 監評（公費）</option>
-                <option value="sick">病假（自費）</option>
-                <option value="personal">事假（自費）</option>
-                <option value="bereavement">喪假（公費）</option>
-                <option value="maternity">產假 / 陪產假（公費）</option>
-                <option value="wellness">身心調適假（公費）</option>
-                <option value="other">其他</option>
+                {LEAVE_TYPE_FORM_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
               <p className="text-[11px] text-slate-500 mt-1">
-                費用別將隨假別自動調整為{editPaymentType === 'public' ? '公費' : '自費'}（仍可於下方覆寫）。
+                鐘點費依對照表自動判定（儲存時重新計算，無法手動覆寫）。
               </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setEditPaymentType('public')}
-                className={`p-2 rounded-xl text-xs font-bold border ${
-                  editPaymentType === 'public'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-slate-700 border-slate-300'
-                }`}
-              >
-                公費
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditPaymentType('private')}
-                className={`p-2 rounded-xl text-xs font-bold border ${
-                  editPaymentType === 'private'
-                    ? 'bg-amber-600 text-white border-amber-600'
-                    : 'bg-white text-slate-700 border-slate-300'
-                }`}
-              >
-                自費
-              </button>
             </div>
 
             <div>

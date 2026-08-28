@@ -174,8 +174,8 @@ export const AccountingSettlement: React.FC = () => {
             計，並已扣除系統設定之放假日 ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
             <span className="block mt-1 text-slate-600">
-              扣款規則：僅<strong>事假／病假（自費代課）</strong>且<strong>已核准並已指定代課</strong>才會在請假人欄顯示「-扣」；
-              公假／公差／研習為<strong>公費派代</strong>，由公款支應代課費，請假人不會被扣款。
+              代課費規則（依薪資對照表）：公假／公差、婚假、娩假／陪產假、身心調適假，以及<strong>事假學年第 8 天起</strong>、<strong>病假連續 3 日起</strong>，由學校公費支應（代課清冊）；
+              未達門檻之事病假<strong>不入清冊</strong>，請假人自行與代課教師約定。身心調適假超鐘點<strong>不扣</strong>兼課費。
             </span>
           </p>
         </div>
@@ -305,21 +305,21 @@ export const AccountingSettlement: React.FC = () => {
             ${totalPublicSubAmount.toLocaleString()}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            公假、公差、競賽指導公費派代
+            公假、婚假、娩假／陪產假、身心調適假，及事假第 8 天起、病假連續 3 日起
           </p>
         </div>
 
-        {/* Total Private Substitution */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+        {/* Out-of-register self pay (always zero under new rules) */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs opacity-80">
           <div className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center justify-between">
-            <span>自費代課轉發款</span>
-            <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-bold">代扣代發</span>
+            <span>教師自理代課</span>
+            <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-bold">不入清冊</span>
           </div>
           <div className="text-2xl font-extrabold text-amber-700 mt-2">
-            ${totalPrivateSubAmount.toLocaleString()}
+            —
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            受領合計；事病假扣款合計 ${totalPrivateLeaveDeduction.toLocaleString()}
+            未達門檻之事病假由請假人自行與代課教師約定，系統不代扣代發
           </p>
         </div>
 

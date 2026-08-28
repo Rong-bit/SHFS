@@ -1,11 +1,11 @@
 import type { MonthlyTeacherSettlement, SubstituteRequest, SystemConfig } from '../types';
 import { leaveTypeRemarkShort } from './leaveTypes';
 import {
-  countLeaveSubstitutePeriods,
-  countLeaveSubstitutePeriodsInMonth,
-  isLeaveDatePeriodBillable,
-  legacyRequestBelongsToSettlement,
-} from './leaveDates';
+  buildLeavePayrollContext,
+  countSubstitutePublicPayrollPeriodsInMonth,
+  isLeaveDatePublicPayroll,
+  listBillableLeaveDatesInMonth,
+} from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 import {
@@ -47,50 +47,6 @@ const formatMd = (iso: string) => {
   return `${Number(m)}/${Number(d)}`;
 };
 
-const dateToIsoLocal = (d: Date) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
-/** 請假區間內、落在結算月且星期相符的可計費日期 */
-function listBillableLeaveDatesInMonth(
-  request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
-  settlementMonth: number,
-  settlementYear: number,
-  excludeDates: Set<string>,
-  calendarOpts: {
-    temporaryMoves?: SystemConfig['temporaryScheduleMoves'];
-    partialStops?: SystemConfig['partialNonTeachingDays'];
-  }
-): string[] {
-  if (!request.leaveDateStart || !request.originalSession) return [];
-  const end = request.leaveDateEnd || request.leaveDateStart;
-  const dayOfWeek = request.originalSession.dayOfWeek;
-  const period = request.originalSession.period;
-  const billableOpts = {
-    period,
-    temporaryMoves: calendarOpts.temporaryMoves,
-    partialStops: calendarOpts.partialStops,
-  };
-
-  const s = new Date(request.leaveDateStart.replace(/-/g, '/') + ' 12:00:00');
-  const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return [];
-
-  const dates: string[] = [];
-  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-    if (cur.getDay() !== dayOfWeek) continue;
-    if (cur.getMonth() + 1 !== settlementMonth) continue;
-    if (cur.getFullYear() !== settlementYear) continue;
-    const iso = dateToIsoLocal(cur);
-    if (!isLeaveDatePeriodBillable(iso, excludeDates, billableOpts)) continue;
-    dates.push(iso);
-  }
-  return dates;
-}
-
 function formatPeriodLabel(period: number) {
   return `(第${period}節)`;
 }
@@ -108,6 +64,9 @@ export function buildSubstitutePayrollRemarks(
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
   };
+  const payrollCtx = buildLeavePayrollContext(requests, systemConfig, {
+    countStatuses: ['approved'],
+  });
   const parts: string[] = [];
 
   for (const r of requests) {
@@ -117,6 +76,7 @@ export function buildSubstitutePayrollRemarks(
     const period = r.originalSession?.period;
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
     const prefix = `代${r.applicantTeacherName}${leaveShort}`;
+    const periodOpts = { ...calendarOpts, period };
 
     if (r.leaveDateStart && period) {
       const dates = listBillableLeaveDatesInMonth(
@@ -124,7 +84,9 @@ export function buildSubstitutePayrollRemarks(
         settlementMonth,
         settlementYear,
         holidaySet,
-        calendarOpts
+        periodOpts
+      ).filter((iso) =>
+        isLeaveDatePublicPayroll(iso, r, payrollCtx, r.applicantTeacherId)
       );
       for (const iso of dates) {
         parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);
@@ -132,28 +94,14 @@ export function buildSubstitutePayrollRemarks(
       continue;
     }
 
-    const inMonth = countLeaveSubstitutePeriodsInMonth(
+    const periods = countSubstitutePublicPayrollPeriodsInMonth(
       r,
       settlementMonth,
       settlementYear,
+      payrollCtx,
       holidaySet,
-      calendarOpts
+      periodOpts
     );
-    const periods =
-      inMonth === null
-        ? legacyRequestBelongsToSettlement(
-            r.requestNumber,
-            r.createdAt,
-            settlementMonth,
-            settlementYear
-          )
-          ? countLeaveSubstitutePeriods(r, holidaySet, {
-              settlementMonth,
-              settlementYear,
-              ...calendarOpts,
-            })
-          : 0
-        : inMonth;
     if (periods <= 0) continue;
     const periodLabel = period ? formatPeriodLabel(period) : '';
     parts.push(`${prefix}${periods}節${periodLabel}`);
@@ -170,10 +118,10 @@ export function buildSubstitutePayrollRows(
   settlementYear: number
 ): SubstitutePayrollRow[] {
   return settlements
-    .filter((s) => s.publicSubstitutePeriods + s.privateSubstituteEarnPeriods > 0)
+    .filter((s) => s.publicSubstitutePeriods > 0)
     .map((s) => {
-      const substitutePeriods = s.publicSubstitutePeriods + s.privateSubstituteEarnPeriods;
-      const amount = s.publicSubstituteAmount + s.privateSubstituteEarnAmount;
+      const substitutePeriods = s.publicSubstitutePeriods;
+      const amount = s.publicSubstituteAmount;
       const ratePerPeriod =
         substitutePeriods > 0
           ? Math.round(amount / substitutePeriods)

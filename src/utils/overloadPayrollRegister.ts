@@ -1,10 +1,11 @@
 import type { MonthlyTeacherSettlement, SubstituteRequest, SystemConfig } from '../types';
 import { leaveTypeRemarkShort } from './leaveTypes';
 import {
-  countLeaveSubstitutePeriods,
-  countLeaveSubstitutePeriodsInMonth,
-  legacyRequestBelongsToSettlement,
-} from './leaveDates';
+  buildLeavePayrollContext,
+  countConcurrentDeductPeriodsInMonth,
+  listBillableLeaveDatesInMonth,
+  shouldDeductConcurrentOnLeaveDate,
+} from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 
@@ -133,16 +134,39 @@ export function buildConcurrentPayrollRemarks(
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
   };
+  const payrollCtx = buildLeavePayrollContext(requests, systemConfig, {
+    countStatuses: ['approved'],
+  });
   const parts: string[] = [];
 
-  const pushDates = (
-    r: SubstituteRequest,
-    periods: number,
-    prefix: string
-  ) => {
-    if (periods <= 0) return;
+  const pushDateLines = (r: SubstituteRequest, prefix: string) => {
     const period = r.originalSession?.period;
     const periodLabel = period ? `(第${period}節)` : '';
+    const periodOpts = { ...calendarOpts, period };
+    const dates = r.leaveDateStart
+      ? listBillableLeaveDatesInMonth(
+          r,
+          settlementMonth,
+          settlementYear,
+          holidaySet,
+          periodOpts
+        ).filter((d) => shouldDeductConcurrentOnLeaveDate(d, r, payrollCtx))
+      : [];
+    if (dates.length > 0) {
+      for (const iso of dates) {
+        parts.push(`${formatMd(iso)}${prefix}1節${periodLabel}`);
+      }
+      return;
+    }
+    const periods = countConcurrentDeductPeriodsInMonth(
+      r,
+      settlementMonth,
+      settlementYear,
+      payrollCtx,
+      holidaySet,
+      periodOpts
+    );
+    if (periods <= 0) return;
     const start = r.leaveDateStart;
     const end = r.leaveDateEnd || r.leaveDateStart;
     if (start) {
@@ -161,32 +185,9 @@ export function buildConcurrentPayrollRemarks(
     if (!r.originalSession?.isConcurrent) continue;
     if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
     if (r.applicantTeacherId !== teacherId) continue;
+    if (!r.substituteTeacherId) continue;
 
-    const inMonth = countLeaveSubstitutePeriodsInMonth(
-      r,
-      settlementMonth,
-      settlementYear,
-      holidaySet,
-      calendarOpts
-    );
-    const periods =
-      inMonth === null
-        ? legacyRequestBelongsToSettlement(
-            r.requestNumber,
-            r.createdAt,
-            settlementMonth,
-            settlementYear
-          )
-          ? countLeaveSubstitutePeriods(r, holidaySet, {
-              settlementMonth,
-              settlementYear,
-              ...calendarOpts,
-            })
-          : 0
-        : inMonth;
-    if (periods <= 0) continue;
-
-    pushDates(r, periods, `請${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`);
+    pushDateLines(r, `請${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`);
   }
 
   return parts.join('；');

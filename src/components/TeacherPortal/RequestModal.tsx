@@ -17,9 +17,17 @@ import {
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
 import {
-  paymentTypeForLeaveType,
+  LEAVE_TYPE_FORM_OPTIONS,
+  PERSONAL_LEAVE_POLICY_NOTE,
+  SICK_LEAVE_POLICY_NOTE,
   WELLNESS_LEAVE_LEGAL_NOTE,
 } from '../../utils/leaveTypes';
+import {
+  buildLeavePayrollContext,
+  leavePaymentDisplayLabel,
+  resolvePaymentTypeForLeaveDraft,
+  validateWellnessLeaveHours,
+} from '../../utils/leavePayrollPolicy';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
@@ -90,7 +98,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const canSelectLastMonth = sevenDaysAgo.getMonth() !== now.getMonth();
   const lastMonth = sevenDaysAgo.getMonth() + 1;
   const [requestMonth, setRequestMonth] = useState<number>(thisMonth);
-  const [paymentType, setPaymentType] = useState<PaymentType>('private');
 
   // For Reschedule (行政／自行移課＝僅移入空堂)
   const [targetDay, setTargetDay] = useState<DayOfWeek>(2);
@@ -196,6 +203,60 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     matchedLeaveSession,
     placeholderSession,
   ]);
+
+  const payrollCtx = useMemo(
+    () => buildLeavePayrollContext(requests, systemConfig),
+    [requests, systemConfig]
+  );
+  const calendarBillableOpts = useMemo(
+    () => ({
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: systemConfig.partialNonTeachingDays || [],
+    }),
+    [systemConfig.temporaryScheduleMoves, systemConfig.partialNonTeachingDays]
+  );
+  const holidaySet = useMemo(
+    () => nonTeachingDateSet(systemConfig.nonTeachingDays),
+    [systemConfig.nonTeachingDays]
+  );
+
+  const resolvedSubstitutePayment = useMemo(() => {
+    if (requestType !== 'substitute' || !currentTeacher) return 'private' as PaymentType;
+    const sampleSession = leaveSessionsForSubmit[0] || selectedSession;
+    if (!sampleSession) return 'private' as PaymentType;
+    return resolvePaymentTypeForLeaveDraft(
+      {
+        leaveType,
+        reason,
+        leaveDateStart,
+        leaveDateEnd:
+          leaveDateMode === 'range'
+            ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+            : leaveDateStart,
+        originalSession: sampleSession,
+        applicantTeacherId: currentTeacher.id,
+        requestType: 'substitute',
+      },
+      payrollCtx,
+      holidaySet,
+      { ...calendarBillableOpts, period: sampleSession.period }
+    );
+  }, [
+    requestType,
+    currentTeacher,
+    leaveType,
+    reason,
+    leaveDateStart,
+    leaveDateEnd,
+    leaveDateMode,
+    leaveSessionsForSubmit,
+    selectedSession,
+    payrollCtx,
+    holidaySet,
+    calendarBillableOpts,
+  ]);
+
+  const paymentDisplay = leavePaymentDisplayLabel(resolvedSubstitutePayment, leaveType, reason);
 
   const effectiveOriginalSession: CourseSession | undefined =
     requestType === 'substitute'
@@ -329,15 +390,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     );
     return teachers.filter((t) => ids.has(t.id));
   }, [sessions, teachers, effectiveOriginalSession, currentTeacher]);
-
-  // Auto-set paymentType based on leaveType
-  useEffect(() => {
-    if (requestType === 'substitute') {
-      setPaymentType(paymentTypeForLeaveType(leaveType));
-    } else {
-      setPaymentType('private');
-    }
-  }, [leaveType, requestType]);
 
   // 互調：預設選同班教師；調課／補課仍可用全校預設
   useEffect(() => {
@@ -544,6 +596,30 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         return;
       }
 
+      if (leaveType === 'wellness') {
+        const resolvedEnd =
+          leaveDateMode === 'range'
+            ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+            : leaveDateStart;
+        for (const originalSession of sessionsToLeave) {
+          const wellnessCheck = validateWellnessLeaveHours(
+            {
+              leaveDateStart,
+              leaveDateEnd: resolvedEnd,
+              originalSession,
+              applicantTeacherId: currentTeacher.id,
+            },
+            payrollCtx,
+            holidaySet,
+            { ...calendarBillableOpts, period: originalSession.period }
+          );
+          if (wellnessCheck.ok === false) {
+            alert(wellnessCheck.message);
+            return;
+          }
+        }
+      }
+
       const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
       const actingHomeroomTeacher = teachers.find((t) => t.id === actingHomeroomTeacherId);
       const resolvedLeaveEnd =
@@ -565,7 +641,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
             leaveDateStart,
             leaveDateEnd: resolvedLeaveEnd,
             reason,
-            paymentType,
+            paymentType: resolvedSubstitutePayment,
             originalSession,
             batchGroupId,
             substituteTeacherId: substituteTeacherId || undefined,
@@ -654,7 +730,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         leaveDateStart: undefined,
         leaveDateEnd: undefined,
         reason,
-        paymentType,
+        paymentType: 'private',
         originalSession: effectiveOriginalSession,
         targetReschedule:
           requestType === 'reschedule' && targetVenueObj
@@ -1113,18 +1189,25 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       onChange={(e) => setLeaveType(e.target.value as LeaveType)}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
                     >
-                      <option value="official">🏛️ 公假 / 公差 (帶學生競賽、出差、公文指派)</option>
-                      <option value="training">📚 研習 / 評鑑 / 技能檢定監評 (公假)</option>
-                      <option value="bereavement">🕊️ 喪假 (依規定公費派代)</option>
-                      <option value="maternity">👶 產假 / 陪產檢及產假 (公費派代)</option>
-                      <option value="wellness">🧘 身心調適假 (公費派代 · 每學年3日 · 免證明)</option>
-                      <option value="personal">💼 事假 (自費代課)</option>
-                      <option value="sick">🩺 病假 (自費代課)</option>
-                      <option value="other">📝 其他私事需求 (自費代課)</option>
+                      {LEAVE_TYPE_FORM_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                     {leaveType === 'wellness' && (
                       <p className="mt-1.5 text-[10px] text-teal-800 leading-snug bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5">
                         {WELLNESS_LEAVE_LEGAL_NOTE}
+                      </p>
+                    )}
+                    {leaveType === 'personal' && (
+                      <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                        {PERSONAL_LEAVE_POLICY_NOTE}
+                      </p>
+                    )}
+                    {leaveType === 'sick' && (
+                      <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                        {SICK_LEAVE_POLICY_NOTE}
                       </p>
                     )}
                   </div>
@@ -1133,20 +1216,22 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       鐘點費支給判定
                     </label>
-                    <div className="p-2 rounded-lg border bg-white flex items-center justify-between text-xs sm:text-sm">
-                      <span className="font-semibold">
-                        {paymentType === 'public' ? (
-                          <span className="text-blue-700 flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                            公費派代 (學校支付 {sessionRateKind} {sessionHourlyRate}元/節)
-                          </span>
-                        ) : (
-                          <span className="text-amber-800 flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                            自費代課 (個人扣繳 {sessionRateKind} {sessionHourlyRate}元/節)
-                          </span>
-                        )}
+                    <div className="p-2 rounded-lg border bg-white text-xs sm:text-sm">
+                      <span
+                        className={`font-semibold flex items-center gap-1 ${
+                          paymentDisplay.kind === 'public' ? 'text-blue-700' : 'text-amber-800'
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            paymentDisplay.kind === 'public' ? 'bg-blue-500' : 'bg-amber-500'
+                          }`}
+                        />
+                        {paymentDisplay.label}
+                        {paymentDisplay.kind === 'public' &&
+                          ` (學校支付 ${sessionRateKind} ${sessionHourlyRate}元/節)`}
                       </span>
+                      <p className="text-[10px] text-slate-600 mt-1 leading-snug">{paymentDisplay.detail}</p>
                     </div>
                   </div>
                 </div>

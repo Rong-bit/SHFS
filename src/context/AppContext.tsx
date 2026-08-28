@@ -42,6 +42,12 @@ import {
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
 import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth, dateToDayOfWeek, legacyRequestBelongsToSettlement, resolveLeaveDateEnd, validateSubstituteLeaveInput } from '../utils/leaveDates';
+import {
+  buildLeavePayrollContext,
+  countApplicantConcurrentDeductPeriodsInMonth,
+  countSubstitutePublicPayrollPeriodsInMonth,
+  resolveRequestPaymentType,
+} from '../utils/leavePayrollPolicy';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -1536,8 +1542,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const seq = baseSeq + index;
+      const payrollCtx = buildLeavePayrollContext(
+        [...progressiveRequests, ...prepared],
+        systemConfig
+      );
+      const resolvedPayment =
+        data.requestType === 'substitute'
+          ? resolveRequestPaymentType(
+              {
+                ...data,
+                id: `draft-${stampPrefix}-${index}`,
+                requestNumber: '',
+                createdAt: nowStr,
+                status: 'pending',
+                clashStatus: { hasClash: false, severity: 'none', messages: [] },
+              },
+              payrollCtx,
+              nonTeachingDateSet(systemConfig.nonTeachingDays),
+              {
+                temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+                partialStops: systemConfig.partialNonTeachingDays || [],
+                period: data.originalSession?.period,
+              }
+            )
+          : data.paymentType;
       const newRequest: SubstituteRequest = {
         ...data,
+        paymentType: resolvedPayment,
         id: `req-${stampPrefix}-${index}`,
         requestNumber: formatRequestNumber(systemConfig.academicYear, month, seq),
         createdAt: nowStr,
@@ -2133,9 +2164,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : primary.actingHomeroomTeacherName;
     const nextLeaveType =
       patch.leaveType !== undefined ? patch.leaveType : primary.leaveType;
-    const nextPayment =
-      patch.paymentType !== undefined ? patch.paymentType : primary.paymentType;
     const nextReason = patch.reason !== undefined ? patch.reason : primary.reason;
+    const draftForPayment: SubstituteRequest = {
+      ...primary,
+      leaveType: nextLeaveType,
+      reason: nextReason,
+      leaveDateStart: nextLeaveStart || undefined,
+      leaveDateEnd: nextLeaveEnd || undefined,
+      substituteTeacherId: nextSubId,
+    };
+    const nextPayment = resolveRequestPaymentType(
+      draftForPayment,
+      buildLeavePayrollContext(requests, systemConfig, {
+        countStatuses: ['approved', 'pending'],
+      }),
+      nonTeachingDateSet(systemConfig.nonTeachingDays),
+      {
+        temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+        partialStops: systemConfig.partialNonTeachingDays || [],
+        period: primary.originalSession?.period,
+      }
+    );
 
     const hasPlaceholder = group.some((r) => isPlaceholderSession(r.originalSession));
     if (hasPlaceholder && nextSubId) {
@@ -2837,6 +2886,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       systemConfig.academicYear,
       calendarOpts
     );
+    const payrollCtx = buildLeavePayrollContext(requests, systemConfig, {
+      countStatuses: ['approved'],
+    });
 
     return teachers.map((teacher) => {
       // 1. Weekly actual and overload（不含第八節課輔）
@@ -2852,12 +2904,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         systemConfig.academicYear,
         calendarOpts
       );
-      // 請假日按日扣兼課：週課表 [請假派代] 不整月排除，只扣實際請假天數
-      const leaveConcurrentDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
+      // 請假日按日扣兼課（依對照表：身心調適假不扣；事病假僅公費派代日扣）
+      const leaveConcurrentDeduct = countApplicantConcurrentDeductPeriodsInMonth(
         requests,
         teacher.id,
         settlementMonth,
         settlementYear,
+        payrollCtx,
         holidaySet,
         {
           matchSession: (s) =>
@@ -2961,49 +3014,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       requests
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
         .forEach((r) => {
-          const inMonthPeriods = countLeaveSubstitutePeriodsInMonth(
+          if (!r.substituteTeacherId) return;
+
+          const periodOpts = {
+            ...leaveCalendarOpts,
+            period: r.originalSession?.period,
+          };
+          const publicPeriods = countSubstitutePublicPayrollPeriodsInMonth(
             r,
             settlementMonth,
             settlementYear,
+            payrollCtx,
             holidaySet,
-            leaveCalendarOpts
+            periodOpts
           );
-          // 有請假日期：依實際落在結算月的相符星期計節；無日期舊案：依單號月份，且該月該星期須有上課日
-          const periods =
-            inMonthPeriods === null
-              ? requestBelongsToMonth(
-                  r.requestNumber,
-                  r.createdAt,
-                  settlementMonth,
-                  settlementYear
-                )
-                ? countLeaveSubstitutePeriods(r, holidaySet, {
-                    settlementMonth,
-                    settlementYear,
-                    ...leaveCalendarOpts,
-                  })
-                : 0
-              : inMonthPeriods;
-          if (periods <= 0) return;
+          if (publicPeriods <= 0) return;
 
           const rate = rateForRequest(r);
-          // 未指定代課教師：不發代課費、也不自費扣款（避免只扣錢沒人代）
-          if (!r.substituteTeacherId) return;
-
           if (r.substituteTeacherId === teacher.id) {
-            if (r.paymentType === 'public') {
-              publicSubstitutePeriods += periods;
-              publicSubstituteAmount += rate * periods;
-            } else {
-              privateSubstituteEarnPeriods += periods;
-              privateSubstituteEarnAmount += rate * periods;
-            }
-          }
-          if (r.applicantTeacherId === teacher.id) {
-            if (r.paymentType === 'private') {
-              privateLeaveDeductionPeriods += periods;
-              privateLeaveDeductionAmount += rate * periods;
-            }
+            publicSubstitutePeriods += publicPeriods;
+            publicSubstituteAmount += rate * publicPeriods;
           }
         });
 
@@ -3022,14 +3052,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const netPayableAmount =
         monthlyOverloadAmount +
         monthlyCounselingAmount +
-        publicSubstituteAmount +
-        privateSubstituteEarnAmount -
-        privateLeaveDeductionAmount;
+        publicSubstituteAmount;
 
       // 整月平日皆放假時 weeks=0，避免 Infinity
       const totalSubstituteWeeklyEstimated =
         weeks > 0
-          ? weeklyOverload + (publicSubstitutePeriods + privateSubstituteEarnPeriods) / weeks
+          ? weeklyOverload + publicSubstitutePeriods / weeks
           : weeklyOverload;
 
       const isOverLimit =
