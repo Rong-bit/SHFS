@@ -7,8 +7,6 @@ import {
   SystemConfig,
   AcademicStaff
 } from '../types';
-import { defaultSchoolEmail } from '../utils/schoolEmail';
-
 export const DEFAULT_ADMIN_PASSWORD = 'admin';
 
 export const withMigratedAuthConfig = (auth?: SystemConfig['authConfig']): NonNullable<SystemConfig['authConfig']> => {
@@ -32,7 +30,7 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     name: '陳雅筑',
     title: '教學組長',
     badge: '全權審核 · 決行簽結',
-    email: defaultSchoolEmail('陳雅筑'),
+    email: '',
     phone: '分機 210',
     avatarBg: 'from-indigo-600 to-indigo-800',
     responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調',
@@ -43,7 +41,7 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     name: '林承翰',
     title: '教學組組員 (幹事)',
     badge: '經辦 · 專業實習與突發公差派代',
-    email: defaultSchoolEmail('林承翰'),
+    email: '',
     phone: '分機 211',
     avatarBg: 'from-amber-600 to-amber-800',
     responsibleScope: '專業實習工場調代課經辦、突發病假與公假派代、實習檢定移課',
@@ -54,7 +52,7 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     name: '黃詩婷',
     title: '教學組助理',
     badge: '協辦 · 課表登錄與代課通知單印發',
-    email: defaultSchoolEmail('黃詩婷'),
+    email: '',
     phone: '分機 212',
     avatarBg: 'from-emerald-600 to-emerald-800',
     responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合',
@@ -65,7 +63,7 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     name: '王淑芬',
     title: '出納組長',
     badge: '鐘點費核銷 · 出納結算',
-    email: defaultSchoolEmail('王淑芬'),
+    email: '',
     phone: '分機 310',
     avatarBg: 'from-teal-600 to-teal-800',
     responsibleScope: '每月超鐘點費結算核銷、調代課鐘點費撥付、教師薪資異動通知',
@@ -196,7 +194,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     dutyReductionPeriods: 6,
     basePeriods: 10,
     weeklyActualPeriods: 12,
-    email: defaultSchoolEmail('鄭志華'),
+    email: '',
     phone: '04-2222-1001 #201',
     certifications: ['高職電機科合格教師證', '甲級室內配線技術士', 'PLC 乙級檢定監評'],
     avatarBg: 'from-amber-600 to-amber-800',
@@ -209,7 +207,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     dutyReductionPeriods: 4,
     basePeriods: 12,
     weeklyActualPeriods: 16,
-    email: defaultSchoolEmail('林美惠'),
+    email: '',
     phone: '04-2222-1001 #215',
     certifications: ['高職資訊科合格教師證', '乙級電腦硬體裝修', 'Python 專業認證'],
     avatarBg: 'from-blue-600 to-blue-800',
@@ -222,7 +220,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     dutyReductionPeriods: 0,
     basePeriods: 16,
     weeklyActualPeriods: 22, // 22 periods: Overload 6 periods, High workload for 9-period limit warning
-    email: defaultSchoolEmail('王大成'),
+    email: '',
     phone: '04-2222-1001 #401',
     certifications: ['高職機械科合格教師證', '甲級精密機械加工', 'CNC 銑床乙級監評'],
     avatarBg: 'from-purple-600 to-purple-800',
@@ -235,7 +233,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     dutyReductionPeriods: 8,
     basePeriods: 8,
     weeklyActualPeriods: 10,
-    email: defaultSchoolEmail('陳雅筑'),
+    email: '',
     phone: '04-2222-1001 #112',
     certifications: ['高中英文科合格教師證', '中等學校行政主管研習及格'],
     avatarBg: 'from-rose-600 to-rose-800',
@@ -248,7 +246,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     dutyReductionPeriods: 0,
     basePeriods: 16,
     weeklyActualPeriods: 16,
-    email: defaultSchoolEmail('黃宗翰'),
+    email: '',
     phone: '04-2222-1001 #203',
     certifications: ['高職電機科合格教師證', '乙級工業配線技術士'],
     avatarBg: 'from-indigo-600 to-indigo-800',
@@ -261,7 +259,7 @@ export const INITIAL_TEACHERS: Teacher[] = [
     dutyReductionPeriods: 0,
     basePeriods: 16,
     weeklyActualPeriods: 16,
-    email: defaultSchoolEmail('蔡宏達'),
+    email: '',
     phone: '04-2222-1001 #218',
     certifications: ['高職資訊科合格教師證', '乙級網路架設技術士'],
     avatarBg: 'from-cyan-600 to-cyan-800',

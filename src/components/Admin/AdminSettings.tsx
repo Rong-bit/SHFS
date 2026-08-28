@@ -68,7 +68,7 @@ import {
 } from '../../utils/salaryCodes';
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
-import { defaultSchoolEmail, ensureSchoolEmail, isPlaceholderSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
+import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
 import { normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadSystemManual } from '../../utils/generateManual';
@@ -474,7 +474,7 @@ export const AdminSettings: React.FC = () => {
         department: teacherFormData.department,
         dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
         basePeriods: nextBasePeriods,
-        email: ensureSchoolEmail(teacherFormData.name, teacherFormData.email),
+        email: normalizeSchoolEmail(teacherFormData.email),
         phone: teacherFormData.phone,
         certifications: certArray,
       });
@@ -485,7 +485,7 @@ export const AdminSettings: React.FC = () => {
         department: teacherFormData.department,
         dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
         basePeriods: nextBasePeriods,
-        email: ensureSchoolEmail(teacherFormData.name, teacherFormData.email),
+        email: normalizeSchoolEmail(teacherFormData.email),
         phone: teacherFormData.phone || '分機 300',
         certifications: certArray,
         avatarBg: 'from-slate-700 to-indigo-800',
@@ -534,7 +534,7 @@ export const AdminSettings: React.FC = () => {
         name: staffFormData.name.trim(),
         title: staffFormData.title,
         badge: staffFormData.badge,
-        email: ensureSchoolEmail(staffFormData.name, staffFormData.email),
+        email: normalizeSchoolEmail(staffFormData.email),
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
@@ -545,7 +545,7 @@ export const AdminSettings: React.FC = () => {
         name: staffFormData.name.trim(),
         title: staffFormData.title,
         badge: staffFormData.badge,
-        email: ensureSchoolEmail(staffFormData.name, staffFormData.email),
+        email: normalizeSchoolEmail(staffFormData.email),
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
@@ -2670,19 +2670,7 @@ export const AdminSettings: React.FC = () => {
                   <input
                     type="text"
                     value={teacherFormData.name}
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      setTeacherFormData({
-                        ...teacherFormData,
-                        name,
-                        email:
-                          !teacherFormData.email || isPlaceholderSchoolEmail(teacherFormData.email)
-                            ? name.trim()
-                              ? defaultSchoolEmail(name)
-                              : ''
-                            : teacherFormData.email,
-                      });
-                    }}
+                    onChange={(e) => setTeacherFormData({ ...teacherFormData, name: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                     placeholder="如：王大明"
                     required
@@ -2779,13 +2767,13 @@ export const AdminSettings: React.FC = () => {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">電子郵件</label>
+                <label className="block font-semibold text-slate-700 mb-1">電子郵件（選填）</label>
                 <input
                   type="email"
                   value={teacherFormData.email}
                   onChange={(e) => setTeacherFormData({ ...teacherFormData, email: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
-                  placeholder={`如：王大明@${SCHOOL_EMAIL_DOMAIN}`}
+                  placeholder={`如：${SCHOOL_EMAIL_EXAMPLE}`}
                 />
               </div>
 
@@ -2848,19 +2836,7 @@ export const AdminSettings: React.FC = () => {
                   <input
                     type="text"
                     value={staffFormData.name}
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      setStaffFormData({
-                        ...staffFormData,
-                        name,
-                        email:
-                          !staffFormData.email || isPlaceholderSchoolEmail(staffFormData.email)
-                            ? name.trim()
-                              ? defaultSchoolEmail(name)
-                              : ''
-                            : staffFormData.email,
-                      });
-                    }}
+                    onChange={(e) => setStaffFormData({ ...staffFormData, name: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-sm"
                     placeholder="請輸入姓名（例：陳雅筑、張志強）"
                     required
@@ -2971,13 +2947,13 @@ export const AdminSettings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">公務電子郵件</label>
+                  <label className="block font-semibold text-slate-700 mb-1">公務電子郵件（選填）</label>
                   <input
                     type="email"
                     value={staffFormData.email}
                     onChange={(e) => setStaffFormData({ ...staffFormData, email: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
-                    placeholder={`如：陳雅筑@${SCHOOL_EMAIL_DOMAIN}`}
+                    placeholder={`如：${SCHOOL_EMAIL_EXAMPLE}`}
                   />
                 </div>
               </div>

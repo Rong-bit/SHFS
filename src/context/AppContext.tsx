@@ -26,7 +26,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical, splitTeacherNames } from '../utils/scheduleImporter';
 import { formatLocalDateTime } from '../utils/dateTime';
-import { ensureSchoolEmail } from '../utils/schoolEmail';
+import { normalizeSchoolEmail } from '../utils/schoolEmail';
 import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
 import { temporarySwapPeriodDeltaInMonth, validateSwapRequestFields } from '../utils/temporarySwap';
@@ -284,7 +284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [academicStaffList, setAcademicStaffList] = useState<AcademicStaff[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.STAFF_LIST);
     const list: AcademicStaff[] = saved ? JSON.parse(saved) : INITIAL_ACADEMIC_STAFF;
-    return list.map((s) => ({ ...s, email: ensureSchoolEmail(s.name, s.email) }));
+    return list.map((s) => ({ ...s, email: normalizeSchoolEmail(s.email) }));
   });
 
   const [currentAcademicStaffId, setCurrentAcademicStaffId] = useState<string>(() => {
@@ -295,7 +295,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.TEACHERS);
     const list: Teacher[] = saved ? JSON.parse(saved) : INITIAL_TEACHERS;
-    const withEmail = list.map((t) => ({ ...t, email: ensureSchoolEmail(t.name, t.email) }));
+    const withEmail = list.map((t) => ({ ...t, email: normalizeSchoolEmail(t.email) }));
     const savedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     const sessionList: CourseSession[] = savedSessions ? JSON.parse(savedSessions) : INITIAL_SESSIONS;
     let basePeriods = normalizeStandardBasePeriods(INITIAL_SYSTEM_CONFIG.standardBasePeriods);
@@ -668,7 +668,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     const remoteTeachers = (merged.teachers || []).map((t) => ({
       ...t,
-      email: ensureSchoolEmail(t.name, t.email),
+      email: normalizeSchoolEmail(t.email),
     }));
     const remoteSessions = (merged.sessions || []).map((s) => ({
       ...s,
@@ -708,7 +708,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     if (merged.academicStaffList?.length) {
       setAcademicStaffList(
-        merged.academicStaffList.map((s) => ({ ...s, email: ensureSchoolEmail(s.name, s.email) }))
+        merged.academicStaffList.map((s) => ({ ...s, email: normalizeSchoolEmail(s.email) }))
       );
     }
     lastCloudSyncAtRef.current = merged.updatedAt;
@@ -2489,7 +2489,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               ...existing,
               department: dept,
               weeklyActualPeriods: 0,
-              email: ensureSchoolEmail(name, existing.email),
+              email: normalizeSchoolEmail(existing.email),
             }
           : {
               id: `t-imp-${Date.now()}-${idx}`,
@@ -2499,7 +2499,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               dutyReductionPeriods: 0,
               basePeriods: systemConfig.standardBasePeriods.fulltime,
               weeklyActualPeriods: 0,
-              email: ensureSchoolEmail(name),
+              email: '',
               phone: '分機 301',
               certifications: ['高職專業群科合格教師證'],
               avatarBg: ['from-amber-600 to-amber-800', 'from-indigo-600 to-indigo-800', 'from-emerald-600 to-emerald-800', 'from-purple-600 to-purple-800', 'from-cyan-600 to-cyan-800'][idx % 5],
@@ -2530,7 +2530,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dutyReductionPeriods: 0,
             basePeriods: systemConfig.standardBasePeriods.fulltime,
             weeklyActualPeriods: 0,
-            email: ensureSchoolEmail(name),
+            email: '',
             phone: '分機 301',
             certifications: ['高職專業群科合格教師證'],
             avatarBg: 'from-emerald-600 to-emerald-800',

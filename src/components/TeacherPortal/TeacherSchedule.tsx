@@ -26,7 +26,7 @@ import {
 import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { ModalShell } from '../Common/ModalShell';
-import { defaultSchoolEmail, ensureSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../../utils/schoolEmail';
+import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
 import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod } from '../../utils/schoolDepartments';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import {
@@ -225,7 +225,7 @@ export const TeacherSchedule: React.FC = () => {
                           currentTeacher.id,
                           () => {
                             setEditPhone(currentTeacher.phone || '');
-                            setEditEmail(ensureSchoolEmail(currentTeacher.name, currentTeacher.email));
+                            setEditEmail(currentTeacher.email || '');
                             setContactSavedNotice(false);
                             setIsEditContactOpen(true);
                           },
@@ -709,7 +709,7 @@ export const TeacherSchedule: React.FC = () => {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-400">
-                匯入課表時會先帶入 <span className="text-amber-300">姓名@{SCHOOL_EMAIL_DOMAIN}</span>。若實際帳號不同，請在此修改；儲存後其他電腦同步也會一起更新。
+                電子郵件可留空；若有公務信箱請填寫（例：{SCHOOL_EMAIL_EXAMPLE}）。儲存後其他電腦同步也會一起更新。
               </p>
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">公務分機</label>
@@ -722,12 +722,12 @@ export const TeacherSchedule: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">電子郵件</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">電子郵件（選填）</label>
                 <input
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder={`例如：${defaultSchoolEmail('王小明')}`}
+                  placeholder={`例如：${SCHOOL_EMAIL_EXAMPLE}`}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 text-sm focus:outline-none"
                 />
               </div>
@@ -750,7 +750,7 @@ export const TeacherSchedule: React.FC = () => {
                   onClick={() => {
                     updateTeacher(currentTeacher.id, {
                       phone: editPhone.trim() || currentTeacher.phone,
-                      email: ensureSchoolEmail(currentTeacher.name, editEmail),
+                      email: normalizeSchoolEmail(editEmail),
                     });
                     setContactSavedNotice(true);
                     window.setTimeout(() => setIsEditContactOpen(false), 800);

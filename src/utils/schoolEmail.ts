@@ -1,5 +1,8 @@
 export const SCHOOL_EMAIL_DOMAIN = 'mail2.ccvs.kh.edu.tw';
 
+/** 表單 placeholder 用範例 */
+export const SCHOOL_EMAIL_EXAMPLE = `陳卉淩@${SCHOOL_EMAIL_DOMAIN}`;
+
 const PLACEHOLDER_EMAIL_DOMAINS = [
   'school.edu.tw',
   'voc.edu.tw',
@@ -13,6 +16,7 @@ const localPartFromName = (name: string) =>
     .replace(/\s+/g, '')
     .trim() || 'teacher';
 
+/** 依姓名推測信箱（僅供提示，不自動寫入） */
 export const defaultSchoolEmail = (name: string) =>
   `${localPartFromName(name)}@${SCHOOL_EMAIL_DOMAIN}`;
 
@@ -22,5 +26,11 @@ export const isPlaceholderSchoolEmail = (email?: string) => {
   return PLACEHOLDER_EMAIL_DOMAINS.includes(domain);
 };
 
-export const ensureSchoolEmail = (name: string, email?: string) =>
-  isPlaceholderSchoolEmail(email) ? defaultSchoolEmail(name) : email!.trim();
+/** 儲存用：允許空白；舊版示範網域視為未填 */
+export const normalizeSchoolEmail = (email?: string): string => {
+  const trimmed = email?.trim() || '';
+  if (!trimmed) return '';
+  const domain = trimmed.split('@')[1]?.toLowerCase() || '';
+  if (PLACEHOLDER_EMAIL_DOMAINS.includes(domain)) return '';
+  return trimmed;
+};
