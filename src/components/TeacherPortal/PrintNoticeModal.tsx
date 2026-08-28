@@ -100,7 +100,7 @@ const NOTICE_PRINT_CSS = `
 .substitute-notice-page-stamp {
   position: absolute;
   right: 1cm;
-  bottom: 1cm;
+  bottom: 0.5cm;
   width: 37.5mm;
   height: auto;
   pointer-events: none;
@@ -247,7 +247,7 @@ const NOTICE_PRINT_CSS = `
   .substitute-notice-page-stamp {
     position: absolute !important;
     right: 1cm !important;
-    bottom: 1cm !important;
+    bottom: 0.5cm !important;
     width: 37.5mm !important;
     height: auto !important;
     opacity: 1 !important;
