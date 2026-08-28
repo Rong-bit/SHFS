@@ -2266,7 +2266,7 @@ export const AdminSettings: React.FC = () => {
               className="flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>➕ 新增成員</span>
+              <span>新增成員</span>
             </button>
           </div>
 
