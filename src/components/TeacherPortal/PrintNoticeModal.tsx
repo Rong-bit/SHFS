@@ -588,43 +588,48 @@ const NoticeTableEditor: React.FC<{
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
   const { systemConfig, sessions, requests, saveNoticeRows } = useApp();
 
+  const liveRequest = useMemo(
+    () => requests.find((r) => r.id === request.id) ?? request,
+    [requests, request]
+  );
+
   const printGroup = useMemo(
     () =>
-      request.status === 'approved' && request.batchGroupId
+      liveRequest.status === 'approved' && liveRequest.batchGroupId
         ? requests
             .filter(
-              (r) => r.batchGroupId === request.batchGroupId && r.status === 'approved'
+              (r) => r.batchGroupId === liveRequest.batchGroupId && r.status === 'approved'
             )
             .sort(
               (a, b) =>
                 a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
                 a.originalSession.period - b.originalSession.period
             )
-        : [request],
-    [request, requests]
+        : [liveRequest],
+    [liveRequest, requests]
   );
   const groupedSessions = useMemo(
     () => printGroup.map((r) => resolveOriginalSession(r, sessions)),
     [printGroup, sessions]
   );
-  const originalSession = groupedSessions[0] || resolveOriginalSession(request, sessions);
+  const originalSession = groupedSessions[0] || resolveOriginalSession(liveRequest, sessions);
   const requestNumberLabel =
     printGroup.length > 1
       ? printGroup[0].requestNumber === printGroup[printGroup.length - 1].requestNumber
         ? printGroup[0].requestNumber
         : `${printGroup[0].requestNumber}～${printGroup[printGroup.length - 1].requestNumber}`
-      : request.requestNumber;
+      : liveRequest.requestNumber;
 
-  const leaveShort = leaveTypeRemarkShort(request.leaveType, request.reason);
-  const leaveStart = request.leaveDateStart || '';
-  const leaveEnd = resolveLeaveDateEnd(leaveStart, request.leaveDateEnd) || leaveStart;
+  const leaveShort = leaveTypeRemarkShort(liveRequest.leaveType, liveRequest.reason);
+  const leaveStart = liveRequest.leaveDateStart || '';
+  const leaveEnd = resolveLeaveDateEnd(leaveStart, liveRequest.leaveDateEnd) || leaveStart;
 
   const noticeMeta = useMemo(() => {
-    if (request.requestType === 'reschedule') {
-      const target = request.targetReschedule;
+    if (liveRequest.requestType === 'reschedule') {
+      const target = liveRequest.targetReschedule;
       return {
         title: '調課通知單',
-        addressee: teacherLabel(request.applicantTeacherName, '申請'),
+        addressee: teacherLabel(liveRequest.applicantTeacherName, '申請'),
         greeting: `您好！您申請自行移課如下，請依新時段授課，`,
         defaultRows: groupedSessions.map((sess) =>
           sessionRow(
@@ -642,48 +647,48 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       };
     }
 
-    if (request.requestType === 'swap' && request.swapTargetSession) {
+    if (liveRequest.requestType === 'swap' && liveRequest.swapTargetSession) {
       let applicantDate: string | undefined;
       let partnerDate: string | undefined;
-      if (isTemporarySwap(request) && request.effectiveDate) {
+      if (isTemporarySwap(liveRequest) && liveRequest.effectiveDate) {
         const occ = resolveTemporarySwapOccurrenceDates(
-          request.effectiveDate,
+          liveRequest.effectiveDate,
           originalSession.dayOfWeek,
-          request.swapTargetSession.dayOfWeek
+          liveRequest.swapTargetSession.dayOfWeek
         );
         applicantDate = occ.applicantDate;
         partnerDate = occ.partnerDate;
       }
       return {
         title: '調課通知單',
-        addressee: teacherLabel(request.swapTargetTeacherName, '對調'),
-        greeting: `您好！${teacherLabel(request.applicantTeacherName, '申請')}申請同班對調如下，請依對調時段授課，`,
+        addressee: teacherLabel(liveRequest.swapTargetTeacherName, '對調'),
+        greeting: `您好！${teacherLabel(liveRequest.applicantTeacherName, '申請')}申請同班對調如下，請依對調時段授課，`,
         defaultRows: [
           sessionRow(originalSession, applicantDate),
-          sessionRow(request.swapTargetSession, partnerDate),
+          sessionRow(liveRequest.swapTargetSession, partnerDate),
         ],
       };
     }
 
     return {
       title: '代課通知單',
-      addressee: teacherLabel(request.substituteTeacherName),
-      greeting: `您好！${teacherLabel(request.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`,
+      addressee: teacherLabel(liveRequest.substituteTeacherName),
+      greeting: `您好！${teacherLabel(liveRequest.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`,
       defaultRows: buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd),
     };
-  }, [request, groupedSessions, originalSession, leaveShort, leaveStart, leaveEnd]);
+  }, [liveRequest, groupedSessions, originalSession, leaveShort, leaveStart, leaveEnd]);
 
   const { title, addressee, greeting, defaultRows } = noticeMeta;
 
   const savedNoticeRows = useMemo(() => {
-    if (request.noticeRowsCustomized && request.noticeRows?.length) {
-      return request.noticeRows;
+    if (liveRequest.noticeRowsCustomized && liveRequest.noticeRows?.length) {
+      return liveRequest.noticeRows;
     }
     const batchSaved = printGroup.find(
       (r) => r.noticeRowsCustomized && r.noticeRows?.length
     );
     return batchSaved?.noticeRows ?? null;
-  }, [request.noticeRows, request.noticeRowsCustomized, printGroup]);
+  }, [liveRequest.noticeRows, liveRequest.noticeRowsCustomized, printGroup]);
 
   const [editableRows, setEditableRows] = useState<NoticeRow[]>(defaultRows);
   const [isDirty, setIsDirty] = useState(false);
@@ -691,17 +696,23 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   useEffect(() => {
     setEditableRows(savedNoticeRows ?? defaultRows);
     setIsDirty(false);
-  }, [request.id, savedNoticeRows, defaultRows]);
+  }, [request.id]);
+
+  useEffect(() => {
+    if (!liveRequest.noticeRowsCustomized || !savedNoticeRows) return;
+    setEditableRows(savedNoticeRows);
+    setIsDirty(false);
+  }, [liveRequest.noticeRowsCustomized, savedNoticeRows]);
 
   const rows = editableRows;
 
   const persistNoticeRows = () => {
     if (rowsEqual(editableRows, defaultRows)) {
-      saveNoticeRows(request.id, null);
+      saveNoticeRows(liveRequest.id, null);
       setIsDirty(false);
       return;
     }
-    saveNoticeRows(request.id, editableRows);
+    saveNoticeRows(liveRequest.id, editableRows);
     setIsDirty(false);
   };
 
@@ -712,7 +723,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
 
   const handleResetRows = () => {
     setEditableRows(defaultRows);
-    setIsDirty(!rowsEqual(defaultRows, savedNoticeRows ?? defaultRows) || Boolean(request.noticeRowsCustomized));
+    setIsDirty(!rowsEqual(defaultRows, savedNoticeRows ?? defaultRows) || Boolean(liveRequest.noticeRowsCustomized));
   };
 
   const rowPages = chunkNoticeRows(rows, MAX_NOTICE_TABLE_ROWS);
@@ -723,7 +734,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const handlePrint = () => {
     if (isDirty) persistNoticeRows();
     const school = systemConfig.schoolName || '學校';
-    printWithDocumentTitle(`${school}_${title}_${request.requestNumber}`);
+    printWithDocumentTitle(`${school}_${title}_${liveRequest.requestNumber}`);
   };
 
   return (

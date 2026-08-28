@@ -2426,16 +2426,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const saveNoticeRows = (requestId: string, rows: SubstituteNoticeRow[] | null) => {
-    setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id !== requestId) return r;
-        if (rows && rows.length > 0) {
-          return { ...r, noticeRows: rows, noticeRowsCustomized: true };
-        }
-        const { noticeRows: _rows, noticeRowsCustomized: _custom, ...rest } = r;
-        return rest;
-      })
-    );
+    const applyPatch = (r: SubstituteRequest): SubstituteRequest => {
+      if (r.id !== requestId) return r;
+      if (rows && rows.length > 0) {
+        return { ...r, noticeRows: rows, noticeRowsCustomized: true };
+      }
+      const { noticeRows: _rows, noticeRowsCustomized: _custom, ...rest } = r;
+      return rest;
+    };
+    setRequests((prev) => prev.map(applyPatch));
+    setPrintModalRequest((prev) => (prev?.id === requestId ? applyPatch(prev) : prev));
   };
 
   const clearAllRequests = () => {
