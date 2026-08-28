@@ -488,8 +488,8 @@ export function leavePaymentDisplayLabel(
     if (lt === 'invigilation') {
       return {
         kind: 'public',
-        label: '公費派代',
-        detail: '監考任務：基本鐘點公費派代（代課清冊）；申請人兼課不扣減',
+        label: '監考任務',
+        detail: '無代課教師；監考教師領基本鐘點，兼課不扣減',
       };
     }
     return {
@@ -588,6 +588,21 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
   return total;
 }
 
+/** 監考任務：無代課教師，申請人領基本鐘點入代課清冊 */
+export function isInvigilationApplicantPayroll(
+  request: Pick<SubstituteRequest, 'leaveType' | 'reason' | 'substituteTeacherId'>
+): boolean {
+  return normalizeLeaveType(request.leaveType, request.reason) === 'invigilation' && !request.substituteTeacherId;
+}
+
+/** 代課清冊受款人：一般為代課教師；監考任務為申請人本人 */
+export function resolveSubstitutePayrollTeacherId(
+  request: Pick<SubstituteRequest, 'leaveType' | 'reason' | 'substituteTeacherId' | 'applicantTeacherId'>
+): string | undefined {
+  if (isInvigilationApplicantPayroll(request)) return request.applicantTeacherId;
+  return request.substituteTeacherId || undefined;
+}
+
 /** 結算月公費代課節數（代課清冊） */
 export function countSubstitutePublicPayrollPeriodsInMonth(
   request: SubstituteRequest,
@@ -598,7 +613,7 @@ export function countSubstitutePublicPayrollPeriodsInMonth(
   billableOptions?: LeaveBillableOptions
 ): number {
   if (request.status !== 'approved' || request.requestType !== 'substitute') return 0;
-  if (!request.substituteTeacherId) return 0;
+  if (!resolveSubstitutePayrollTeacherId(request)) return 0;
 
   if (!request.leaveDateStart) {
     if (resolveRequestPaymentType(request, ctx, excludeDates, billableOptions) !== 'public') return 0;

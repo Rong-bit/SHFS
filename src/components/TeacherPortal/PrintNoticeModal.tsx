@@ -3,7 +3,7 @@ import { CourseSession, DayOfWeek, SubstituteRequest } from '../../types';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
 import { resolveLeaveDateEnd } from '../../utils/leaveDates';
-import { leaveTypeRemarkShort } from '../../utils/leaveTypes';
+import { leaveTypeRemarkShort, isInvigilationLeaveRequest } from '../../utils/leaveTypes';
 import { dateToIsoLocal } from '../../utils/holidays';
 import {
   isTemporarySwap,
@@ -302,6 +302,8 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   let greeting = `您好！${teacherLabel(request.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`;
   let rows: NoticeRow[] = [];
 
+  const isInvigilation = isInvigilationLeaveRequest(request);
+
   if (request.requestType === 'reschedule') {
     title = '調課通知單';
     addressee = teacherLabel(request.applicantTeacherName, '申請');
@@ -339,6 +341,19 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       sessionRow(originalSession, applicantDate),
       sessionRow(request.swapTargetSession, partnerDate),
     ];
+  } else if (isInvigilation) {
+    title = '監考通知單';
+    addressee = teacherLabel(request.applicantTeacherName, '申請');
+    greeting = `因${leaveShort}任務，以下原授課時段無法親自授課（本單無指定代課教師，監考教師領基本鐘點），`;
+    const dates =
+      leaveStart && leaveEnd && originalSession.dayOfWeek
+        ? listDatesMatchingWeekday(leaveStart, leaveEnd, originalSession.dayOfWeek)
+        : leaveStart
+          ? [leaveStart]
+          : [''];
+    const dateList = dates.length ? dates : [leaveStart || ''];
+    const sessionsByPeriod = [...groupedSessions].sort((a, b) => a.period - b.period);
+    rows = dateList.flatMap((iso) => sessionsByPeriod.map((sess) => sessionRow(sess, iso || undefined)));
   } else {
     const dates =
       leaveStart && leaveEnd && originalSession.dayOfWeek

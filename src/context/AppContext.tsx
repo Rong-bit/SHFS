@@ -47,7 +47,9 @@ import {
   countApplicantConcurrentDeductPeriodsInMonth,
   countSubstitutePublicPayrollPeriodsInMonth,
   resolveRequestPaymentType,
+  resolveSubstitutePayrollTeacherId,
 } from '../utils/leavePayrollPolicy';
+import { isInvigilationLeaveRequest } from '../utils/leaveTypes';
 import { nonTeachingDateSet } from '../utils/holidays';
 import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
 import {
@@ -210,6 +212,7 @@ interface AppContextType {
     swapTargetSession?: CourseSession;
     substituteTeacherId?: string;
     actingHomeroomTeacherId?: string;
+    leaveType?: LeaveType;
     /** 批次核准時傳入累進課表 */
     sessionsOverride?: CourseSession[];
     /** 批次核准時傳入累進申請（含已核准佔用） */
@@ -1026,6 +1029,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     excludeRequestIds?: string[];
     leaveDateStart?: string;
     leaveDateEnd?: string;
+    leaveType?: LeaveType;
   }): ClashCheckResult => {
     const messages: string[] = [];
     let severity: 'none' | 'warning' | 'danger' = 'none';
@@ -1040,6 +1044,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       substituteTeacherId,
       leaveDateStart,
       leaveDateEnd,
+      leaveType,
     } = params;
 
     const schedule = params.sessionsOverride ?? sessions;
@@ -1453,6 +1458,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return ACTING_HOMEROOM_ONLY_CLASH_PASS;
       }
 
+      if (leaveType && isInvigilationLeaveRequest({ leaveType }) && !substituteTeacherId) {
+        return {
+          hasClash: false,
+          severity: 'none',
+          messages: [
+            '檢核通過：監考任務無須指定代課教師，申請人將列入代課清冊領基本鐘點。',
+          ],
+        };
+      }
+
       if (!substituteTeacherId) {
         return {
           hasClash: false,
@@ -1629,11 +1644,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq.status === 'approved') return { ok: false, reason: '已核准' };
 
     const isActingHomeroomOnly = isActingHomeroomOnlyRequest(targetReq);
+    const isInvigilationOnly =
+      isInvigilationLeaveRequest(targetReq) && !targetReq.substituteTeacherId;
 
     if (
       targetReq.requestType === 'substitute' &&
       !targetReq.substituteTeacherId &&
-      !isActingHomeroomOnly
+      !isActingHomeroomOnly &&
+      !isInvigilationOnly
     ) {
       return { ok: false, reason: '尚未指定代課教師' };
     }
@@ -1694,13 +1712,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       swapTargetSession: resolvedSwap,
       substituteTeacherId: targetReq.substituteTeacherId,
       actingHomeroomTeacherId: targetReq.actingHomeroomTeacherId,
+      leaveType: targetReq.leaveType,
       sessionsOverride: workingSessions,
       requestsOverride: workingRequests,
       excludeRequestIds: [requestId],
       leaveDateStart: targetReq.leaveDateStart || targetReq.effectiveDate,
       leaveDateEnd: targetReq.leaveDateEnd || targetReq.effectiveDate,
     });
-    if (clashStatus.hasClash && !isActingHomeroomOnly) {
+    if (clashStatus.hasClash && !isActingHomeroomOnly && !isInvigilationOnly) {
       return { ok: false, reason: clashStatus.messages[0] || '存在衝堂衝突' };
     }
 
@@ -1708,7 +1727,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 保留申請快照之時段；resolve 僅用於衝堂／找現行 id，不可寫回單據蓋掉原時段
     const approvedReq: SubstituteRequest = {
       ...targetReq,
-      originalSession: isActingHomeroomOnly
+      originalSession: isActingHomeroomOnly || isInvigilationOnly
         ? targetReq.originalSession
         : isPlaceholderSession(targetReq.originalSession)
         ? resolvedOrig
@@ -1911,12 +1930,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         Boolean(data.actingHomeroomTeacherId) &&
         !data.substituteTeacherId &&
         isPlaceholderSession(data.originalSession);
+      const isInvigilationOnly =
+        data.requestType === 'substitute' &&
+        isInvigilationLeaveRequest(data) &&
+        !data.substituteTeacherId;
 
       if (
         data.requestType === 'substitute' &&
         data.autoApprove !== false &&
         !data.substituteTeacherId &&
-        !isActingHomeroomOnly
+        !isActingHomeroomOnly &&
+        !isInvigilationOnly
       ) {
         throw new Error('逕行核定請假派代須指定代課教師');
       }
@@ -1979,13 +2003,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         swapTargetSession: data.swapTargetSession,
         substituteTeacherId: data.substituteTeacherId,
         actingHomeroomTeacherId: data.actingHomeroomTeacherId,
+        leaveType: data.leaveType,
         sessionsOverride: progressiveSessions,
         requestsOverride: progressiveRequests,
         leaveDateStart: data.leaveDateStart || data.effectiveDate,
         leaveDateEnd: data.leaveDateEnd || data.effectiveDate,
       });
 
-      if (data.autoApprove !== false && clashStatus.hasClash && !isActingHomeroomOnly) {
+      if (data.autoApprove !== false && clashStatus.hasClash && !isActingHomeroomOnly && !isInvigilationOnly) {
         throw new Error(clashStatus.messages[0] || '存在衝堂衝突，無法逕行核定');
       }
 
@@ -1996,7 +2021,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newRequest = {
         ...data,
         // 保留申請／逕行派代當下之時段快照（僅代導師佔位不可 resolve 成實課）
-        originalSession: isActingHomeroomOnly
+        originalSession: isActingHomeroomOnly || isInvigilationOnly
           ? data.originalSession
           : isPlaceholderSession(data.originalSession)
             ? resolvedOrig
@@ -2218,7 +2243,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.alert('僅代導師單須指定代導師。');
       return false;
     }
-    if (!hasPlaceholder && !nextSubId) {
+    if (!hasPlaceholder && !nextSubId && !isInvigilationLeaveRequest({ leaveType: nextLeaveType })) {
       window.alert('請假派代須指定代課教師。');
       return false;
     }
@@ -3035,7 +3060,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       requests
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
         .forEach((r) => {
-          if (!r.substituteTeacherId) return;
+          const payrollTeacherId = resolveSubstitutePayrollTeacherId(r);
+          if (!payrollTeacherId) return;
 
           const periodOpts = {
             ...leaveCalendarOpts,
@@ -3052,7 +3078,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (publicPeriods <= 0) return;
 
           const rate = rateForRequest(r);
-          if (r.substituteTeacherId === teacher.id) {
+          if (payrollTeacherId === teacher.id) {
             publicSubstitutePeriods += publicPeriods;
             publicSubstituteAmount += rate * publicPeriods;
           }

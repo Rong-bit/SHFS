@@ -19,7 +19,20 @@ export const SICK_LEAVE_POLICY_NOTE =
   `病假連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日（曆日）起改公費派代；未達門檻者不入代課清冊。`;
 
 export const INVIGILATION_LEAVE_POLICY_NOTE =
-  '監考任務：基鐘與兼課課堂皆可派代，一律公費入代課清冊（基本鐘點費率）；申請人兼課不扣減。';
+  '監考任務：無須指定代課教師（監考教師領基本鐘點）；基鐘與兼課課堂皆可登錄並列印通知單，申請人兼課不扣減。';
+
+export const isInvigilationLeaveRequest = (request: { leaveType?: LeaveType }) =>
+  normalizeLeaveTypeForForm(request.leaveType || 'official') === 'invigilation';
+
+/** 監考任務、僅代導師單等：不必指定代課教師 */
+export const requiresSubstituteTeacherForLeave = (
+  leaveType: LeaveType,
+  options?: { actingHomeroomOnly?: boolean }
+): boolean => {
+  if (options?.actingHomeroomOnly) return false;
+  if (isInvigilationLeaveRequest({ leaveType })) return false;
+  return true;
+};
 
 /** 表單預設：無日期時僅公假類固定公費；事病假預設教師自理 */
 export const paymentTypeForLeaveType = (leaveType: LeaveType): PaymentType => {

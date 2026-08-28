@@ -5,6 +5,8 @@ import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/actingHomeroomPayrollRegister';
+import { isInvigilationLeaveRequest } from '../../utils/leaveTypes';
+import { isInvigilationLeaveRequest } from '../../utils/leaveTypes';
 import { ModalShell } from '../Common/ModalShell';
 import { 
   ClipboardCheck, 
@@ -276,6 +278,16 @@ export const PendingApprovals: React.FC = () => {
                             </strong>
                             <span className="text-xs text-slate-600 ml-2">
                               （當日無排課，僅辦代導師）
+                            </span>
+                          </>
+                        ) : isInvigilationLeaveRequest(req) ? (
+                          <>
+                            <span>代課教師：</span>
+                            <strong className="text-sky-900 text-base ml-1">
+                              無代課教師（申請人領基本鐘點）
+                            </strong>
+                            <span className="text-xs text-slate-600 ml-2">
+                              (公費派代 {req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)
                             </span>
                           </>
                         ) : (

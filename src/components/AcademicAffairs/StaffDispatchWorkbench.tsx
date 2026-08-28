@@ -15,8 +15,10 @@ import { isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepart
 import {
   defaultReasonForLeaveType,
   INVIGILATION_LEAVE_POLICY_NOTE,
+  isInvigilationLeaveRequest,
   LEAVE_TYPE_FORM_OPTIONS,
   PERSONAL_LEAVE_POLICY_NOTE,
+  requiresSubstituteTeacherForLeave,
   SICK_LEAVE_POLICY_NOTE,
 } from '../../utils/leaveTypes';
 import {
@@ -150,10 +152,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
         editLeaveDateMode === 'range'
           ? editLeaveDateEnd || editLeaveDateStart
           : editLeaveDateStart,
-      substituteTeacherId: isPlaceholderSession(editingRequest.originalSession)
+      substituteTeacherId: isPlaceholderSession(editingRequest.originalSession) || editLeaveType === 'invigilation'
         ? ''
         : editSubstituteTeacherId,
-      substituteTeacherName: isPlaceholderSession(editingRequest.originalSession)
+      substituteTeacherName: isPlaceholderSession(editingRequest.originalSession) || editLeaveType === 'invigilation'
         ? ''
         : sub?.name || '',
       actingHomeroomTeacherId: editActingHomeroomTeacherId,
@@ -408,11 +410,22 @@ export const StaffDispatchWorkbench: React.FC = () => {
       leaveFilterDays.length > 0 &&
       applicantSessions.length === 0
   );
+  const invigilationMode = isInvigilationLeaveRequest({ leaveType });
+  const substituteTeacherRequired = requiresSubstituteTeacherForLeave(leaveType, {
+    actingHomeroomOnly: canActingHomeroomOnly,
+  });
 
   // 課堂／候選變更時自動補人選：使用者已點選則不覆寫；僅空值或現人選衝堂時補最佳
   // 請假日無課（無可派代課堂）時清除殘留預選，避免「沒有原課堂卻有代課教師」
   React.useEffect(() => {
     if (requestType !== 'substitute') return;
+    if (invigilationMode) {
+      if (substituteTeacherId) {
+        setSubstituteTeacherId('');
+        setHasUserChosenSubstituteTeacher(false);
+      }
+      return;
+    }
     if (applicantSessions.length === 0) {
       if (substituteTeacherId) {
         setSubstituteTeacherId('');
@@ -440,6 +453,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     substituteTeacherId,
     hasUserChosenSubstituteTeacher,
     candidateSubstitutes,
+    invigilationMode,
   ]);
 
   // 切換申請教師／單節選堂／模式時，允許重新智慧媒合（多選勾選變化不重置，避免覆寫人選）
@@ -493,6 +507,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const handleLeaveTypeChange = (type: LeaveType) => {
     setLeaveType(type);
     setReason(defaultReasonForLeaveType(type));
+    if (isInvigilationLeaveRequest({ leaveType: type })) {
+      setSubstituteTeacherId('');
+      setHasUserChosenSubstituteTeacher(false);
+    }
   };
 
   const payrollCtx = useMemo(
@@ -699,6 +717,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
         substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
         actingHomeroomTeacherId:
           requestType === 'substitute' ? actingHomeroomTeacherId || undefined : undefined,
+        leaveType: requestType === 'substitute' ? leaveType : undefined,
         leaveDateStart:
           requestType === 'substitute'
             ? leaveDateStart || undefined
@@ -813,7 +832,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
 
     if (requestType === 'substitute') {
-      if (!actingHomeroomOnly && !substituteTeacherId) {
+      if (!substituteTeacherRequired && !substituteTeacherId) {
+        // 監考任務或僅代導師：無須代課教師
+      } else if (substituteTeacherRequired && !substituteTeacherId) {
         alert('請假派代須指定代課教師。');
         return;
       }
@@ -1892,6 +1913,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       <div className="p-4 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl">
                         請假日無授課課堂，無需指定代課教師。請指定代導師後送出即可。
                       </div>
+                    ) : invigilationMode ? (
+                      <div className="p-4 text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-xl">
+                        監考任務無須指定代課教師；申請人將列入代課清冊領基本鐘點。
+                      </div>
                     ) : (
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
@@ -2336,7 +2361,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     clashPreview.hasClash ||
                     wellnessHoursExceeded ||
                     (requestType === 'substitute' &&
-                      !canActingHomeroomOnly &&
+                      substituteTeacherRequired &&
                       !substituteTeacherId) ||
                     (requestType === 'substitute' &&
                       canActingHomeroomOnly &&
@@ -2346,7 +2371,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     clashPreview.hasClash ||
                     wellnessHoursExceeded ||
                     (requestType === 'substitute' &&
-                      !canActingHomeroomOnly &&
+                      substituteTeacherRequired &&
                       !substituteTeacherId) ||
                     (requestType === 'substitute' &&
                       canActingHomeroomOnly &&
@@ -2365,7 +2390,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           canActingHomeroomOnly &&
                           actingHomeroomTeacherId
                         ? '確定僅派代導師（當日無課）'
-                      : requestType === 'substitute' && !substituteTeacherId
+                      : requestType === 'substitute' && substituteTeacherRequired && !substituteTeacherId
                         ? '請先指定代課教師'
                       : requestType === 'substitute' &&
                         sessionPickMode === 'periodRange' &&
@@ -2542,6 +2567,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                     <span className="text-slate-500">代導師：</span>
                                     <strong className="text-violet-900">
                                       {req.actingHomeroomTeacherName || '尚未指定'}
+                                    </strong>
+                                  </>
+                                ) : isInvigilationLeaveRequest(req) ? (
+                                  <>
+                                    <span className="text-slate-500">代課：</span>
+                                    <strong className="text-sky-900">
+                                      無代課教師（申請人領基本鐘點）
                                     </strong>
                                   </>
                                 ) : (
@@ -2744,6 +2776,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   const next = e.target.value as LeaveType;
                   setEditLeaveType(next);
                   setEditReason(defaultReasonForLeaveType(next));
+                  if (isInvigilationLeaveRequest({ leaveType: next })) {
+                    setEditSubstituteTeacherId('');
+                  }
                 }}
                 className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
               >
@@ -2837,6 +2872,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
               {isPlaceholderSession(editingRequest.originalSession) ? (
                 <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
                   當日無排課佔位單，無法指定代課教師（可改代導師／假別／請假日／事由）。
+                </p>
+              ) : editLeaveType === 'invigilation' ? (
+                <p className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-xl p-3">
+                  監考任務無須指定代課教師；申請人將列入代課清冊領基本鐘點。
                 </p>
               ) : (
                 <TeacherSearchCombobox

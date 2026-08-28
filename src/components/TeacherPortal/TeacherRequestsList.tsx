@@ -5,6 +5,8 @@ import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
+import { isInvigilationLeaveRequest } from '../../utils/leaveTypes';
+import { isInvigilationLeaveRequest } from '../../utils/leaveTypes';
 import { 
   Printer, 
   Trash2, 
@@ -186,6 +188,14 @@ export const TeacherRequestsList: React.FC = () => {
                             {req.actingHomeroomTeacherName || '尚未指定'}
                           </strong>
                           <span className="text-xs text-slate-500 ml-2">（當日無排課）</span>
+                        </>
+                      ) : isInvigilationLeaveRequest(req) ? (
+                        <>
+                          <span>監考任務：</span>
+                          <strong className="text-sky-900 font-bold text-sm ml-1">
+                            無代課教師（申請人領基本鐘點）
+                          </strong>
+                          <span className="text-xs text-slate-500 ml-2">(公費支給)</span>
                         </>
                       ) : (
                         <>
