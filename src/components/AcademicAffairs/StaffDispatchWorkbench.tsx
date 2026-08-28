@@ -219,10 +219,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [leaveDateMode, setLeaveDateMode] = useState<'single' | 'range'>('single');
   const [leaveDateStart, setLeaveDateStart] = useState<string>('');
   const [leaveDateEnd, setLeaveDateEnd] = useState<string>('');
-  /** 單節｜同日連續節次（如第2～7節實習） */
+  /** 單節｜同日連續節次（如第1～7節） */
   const [sessionPickMode, setSessionPickMode] = useState<'single' | 'periodRange'>('single');
   const [rangeDayOfWeek, setRangeDayOfWeek] = useState<DayOfWeek>(1);
-  const [rangePeriodStart, setRangePeriodStart] = useState<number>(2);
+  const [rangePeriodStart, setRangePeriodStart] = useState<number>(1);
   const [rangePeriodEnd, setRangePeriodEnd] = useState<number>(7);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
 
@@ -1320,7 +1320,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
             }`}
           >
             <Plus className="w-4 h-4" />
-            <span>➕ 教學組代為經辦 · 快速派代與調課</span>
+            <span>教學組代為經辦 · 快速派代與調課</span>
           </button>
 
           <button
@@ -1644,7 +1644,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               : 'bg-white text-slate-600 border-slate-300'
                           }`}
                         >
-                          連續節次（如第2～7節實習）
+                          連續節次（如第1～7節）
                         </button>
                       </div>
                     </div>
@@ -1652,6 +1652,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                   {requestType === 'substitute' && sessionPickMode === 'periodRange' && (
                     <div className="mb-3 p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
+                      <p className="text-xs font-bold text-indigo-900">
+                        如第{Math.min(rangePeriodStart, rangePeriodEnd)}～
+                        {Math.max(rangePeriodStart, rangePeriodEnd)}節
+                      </p>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="block text-[10px] text-slate-500 mb-0.5">星期</label>
@@ -1725,7 +1729,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   {requestType === 'substitute' && sessionPickMode === 'periodRange' ? (
                     periodRangeSessions.length === 0 ? (
                       <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                        該範圍內沒有排定課堂。請調整星期或起迄節次（實習課常見為第2～7節）。
+                        該範圍內沒有排定課堂。請調整星期或起迄節次（例如第1～7節）。
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
