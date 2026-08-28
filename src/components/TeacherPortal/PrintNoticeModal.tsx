@@ -12,6 +12,7 @@ import {
 import { Printer, X } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
+import teachingSectionStampUrl from '../../assets/teaching-section-stamp.png';
 
 interface PrintNoticeModalProps {
   request: SubstituteRequest;
@@ -94,6 +95,16 @@ const NOTICE_PRINT_CSS = `
 .substitute-notice-print-page {
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+.substitute-notice-page-stamp {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 30mm;
+  height: auto;
+  pointer-events: none;
+  z-index: 5;
 }
 .substitute-notice-copy {
   color: #000;
@@ -147,17 +158,6 @@ const NOTICE_PRINT_CSS = `
 .substitute-notice-copy-lower {
   padding-top: 0.5cm;
   box-sizing: border-box;
-  position: relative;
-}
-.substitute-notice-copy-stamp {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 28mm;
-  height: auto;
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0.95;
 }
 .substitute-notice-table col.col-date { width: 18%; }
 .substitute-notice-table col.col-week { width: 9%; }
@@ -226,6 +226,7 @@ const NOTICE_PRINT_CSS = `
     padding: 8mm 12mm !important;
     box-sizing: border-box !important;
     page-break-after: always;
+    position: relative !important;
   }
   .substitute-notice-print-page:last-child {
     page-break-after: auto;
@@ -242,16 +243,16 @@ const NOTICE_PRINT_CSS = `
   }
   .substitute-notice-copy-lower {
     padding-top: 0.5cm;
-    position: relative;
   }
-  .substitute-notice-copy-stamp {
+  .substitute-notice-page-stamp {
     position: absolute !important;
     right: 0 !important;
     bottom: 0 !important;
-    width: 28mm !important;
+    width: 30mm !important;
     height: auto !important;
     opacity: 1 !important;
     pointer-events: none !important;
+    z-index: 5 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -413,14 +414,6 @@ const NoticeCopy: React.FC<{
     </div>
     )}
 
-    {isLowerCopy && (
-      <img
-        src="/teaching-section-stamp.png"
-        alt=""
-        className="substitute-notice-copy-stamp"
-        aria-hidden
-      />
-    )}
   </div>
   );
 };
@@ -584,6 +577,12 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 issueDateLabel={issueDateLabel}
                 showSignatureBlock={false}
                 isLowerCopy
+              />
+              <img
+                src={teachingSectionStampUrl}
+                alt=""
+                className="substitute-notice-page-stamp"
+                aria-hidden
               />
             </div>
           );
