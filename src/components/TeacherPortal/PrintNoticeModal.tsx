@@ -99,9 +99,9 @@ const NOTICE_PRINT_CSS = `
 }
 .substitute-notice-page-stamp {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 30mm;
+  right: 1cm;
+  bottom: 1cm;
+  width: 37.5mm;
   height: auto;
   pointer-events: none;
   z-index: 5;
@@ -246,9 +246,9 @@ const NOTICE_PRINT_CSS = `
   }
   .substitute-notice-page-stamp {
     position: absolute !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 30mm !important;
+    right: 1cm !important;
+    bottom: 1cm !important;
+    width: 37.5mm !important;
     height: auto !important;
     opacity: 1 !important;
     pointer-events: none !important;
