@@ -4,6 +4,11 @@ import { Lock, KeyRound, Eye, EyeOff, ShieldCheck, User, X, AlertCircle, Check }
 import { UserRole } from '../../types';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { verifyPassword } from '../../utils/passwordCrypto';
+import {
+  markLocalAuthTrusted,
+  roleAuthTrustKey,
+  teacherAuthTrustKey,
+} from '../../utils/localAuthTrust';
 import { ModalShell } from './ModalShell';
 
 export interface LoginTarget {
@@ -177,12 +182,16 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setIsSuccess(true);
       setTimeout(() => {
         if (target.type === 'teacher' && target.teacherId) {
+          markLocalAuthTrusted(teacherAuthTrustKey(target.teacherId));
           completeAuthenticatedLogin({ role: 'teacher', teacherId: target.teacherId });
+        } else if (target.type === 'teacher_action' && target.teacherId) {
+          markLocalAuthTrusted(teacherAuthTrustKey(target.teacherId));
         } else if (target.type === 'role' && target.targetRole) {
           const staffId =
             (target.targetRole === 'academic' || target.targetRole === 'accounting') && selectedStaffId
               ? selectedStaffId
               : target.academicStaffId;
+          markLocalAuthTrusted(roleAuthTrustKey(target.targetRole, staffId));
           completeAuthenticatedLogin({
             role: target.targetRole,
             academicStaffId: staffId,
@@ -413,7 +422,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
         {/* Footer Note */}
         <div className="bg-slate-950/60 px-6 py-2.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-          <span>🔒 密碼可於【系統管理員 ➔ 系統維護 ➔ 登入密碼】中自訂或開關</span>
+          <span>🔒 本機曾登入過的身分 30 天內免再輸入密碼 · 可於【系統管理員 ➔ 系統維護 ➔ 登入密碼】自訂或關閉驗證</span>
         </div>
     </ModalShell>
   );

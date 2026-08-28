@@ -58,6 +58,11 @@ import {
   resolveAuthConfigForSave,
 } from '../utils/passwordCrypto';
 import {
+  isLocalAuthTrusted,
+  roleAuthTrustKey,
+  teacherAuthTrustKey,
+} from '../utils/localAuthTrust';
+import {
   applyRequestToSessions,
   applyRequestToSessionsDetailed,
   healLegacySubstituteOwnership,
@@ -230,7 +235,6 @@ interface AppContextType {
   setIsLoginAuthOpen: (open: boolean) => void;
   loginAuthTarget: any;
   setLoginAuthTarget: (target: any) => void;
-  authenticatedTeacherIds: string[];
   requestRoleSwitchWithAuth: (role: UserRole, academicStaffId?: string) => void;
   requestTeacherSwitchWithAuth: (teacherId: string) => void;
   requestTeacherActionAuth: (teacherId: string, actionCallback: () => void, actionName?: string) => void;
@@ -403,7 +407,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Authentication & Password Check States
   const [isLoginAuthOpen, setIsLoginAuthOpen] = useState<boolean>(false);
   const [loginAuthTarget, setLoginAuthTarget] = useState<any>(null);
-  const [authenticatedTeacherIds, setAuthenticatedTeacherIds] = useState<string[]>([]);
 
   const completeAuthenticatedLogin = (payload: {
     role: UserRole;
@@ -430,19 +433,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    const resolvedStaffId =
+      academicStaffId ||
+      ((targetRole === 'academic' || targetRole === 'accounting') ? currentAcademicStaffId : undefined);
+
     if (targetRole === currentRole && (!academicStaffId || academicStaffId === currentAcademicStaffId)) {
       return;
     }
     const requirePass = systemConfig.authConfig?.requirePassword !== false;
     if (!requirePass) {
       setCurrentRole(targetRole);
-      if (academicStaffId) setCurrentAcademicStaffId(academicStaffId);
+      if (resolvedStaffId && (targetRole === 'academic' || targetRole === 'accounting')) {
+        setCurrentAcademicStaffId(resolvedStaffId);
+      }
       return;
     }
+
+    const trustKey = roleAuthTrustKey(targetRole, resolvedStaffId);
+    if (trustKey && isLocalAuthTrusted(trustKey)) {
+      completeAuthenticatedLogin({
+        role: targetRole,
+        academicStaffId:
+          targetRole === 'academic' || targetRole === 'accounting' ? resolvedStaffId : undefined,
+      });
+      return;
+    }
+
     setLoginAuthTarget({
       type: 'role',
       targetRole,
-      academicStaffId,
+      academicStaffId: resolvedStaffId,
     });
     setIsLoginAuthOpen(true);
   };
@@ -459,6 +479,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const requirePass = systemConfig.authConfig?.requirePassword !== false;
 
     if (!targetTeacherId || !requirePass) {
+      actionCallback();
+      return;
+    }
+
+    const trustKey = teacherAuthTrustKey(targetTeacherId);
+    if (isLocalAuthTrusted(trustKey)) {
       actionCallback();
       return;
     }
@@ -3151,7 +3177,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsLoginAuthOpen,
         loginAuthTarget,
         setLoginAuthTarget,
-        authenticatedTeacherIds,
         requestRoleSwitchWithAuth,
         requestTeacherSwitchWithAuth,
         requestTeacherActionAuth,
