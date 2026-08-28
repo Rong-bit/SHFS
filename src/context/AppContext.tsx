@@ -26,7 +26,7 @@ import {
 } from '../data/mockData';
 import { ParsedImportRow, inferIsPractical, splitTeacherNames } from '../utils/scheduleImporter';
 import { formatLocalDateTime } from '../utils/dateTime';
-import { normalizeSchoolEmail } from '../utils/schoolEmail';
+import { normalizePeopleEmails, normalizeSchoolEmail } from '../utils/schoolEmail';
 import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
 import { temporarySwapPeriodDeltaInMonth, validateSwapRequestFields } from '../utils/temporarySwap';
@@ -284,7 +284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [academicStaffList, setAcademicStaffList] = useState<AcademicStaff[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.STAFF_LIST);
     const list: AcademicStaff[] = saved ? JSON.parse(saved) : INITIAL_ACADEMIC_STAFF;
-    return list.map((s) => ({ ...s, email: normalizeSchoolEmail(s.email) }));
+    return normalizePeopleEmails(list);
   });
 
   const [currentAcademicStaffId, setCurrentAcademicStaffId] = useState<string>(() => {
@@ -295,7 +295,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.TEACHERS);
     const list: Teacher[] = saved ? JSON.parse(saved) : INITIAL_TEACHERS;
-    const withEmail = list.map((t) => ({ ...t, email: normalizeSchoolEmail(t.email) }));
+    const withEmail = normalizePeopleEmails(list);
     const savedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     const sessionList: CourseSession[] = savedSessions ? JSON.parse(savedSessions) : INITIAL_SESSIONS;
     let basePeriods = normalizeStandardBasePeriods(INITIAL_SYSTEM_CONFIG.standardBasePeriods);
@@ -666,10 +666,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       systemConfigRef.current.authConfig,
       academicStaffListRef.current
     );
-    const remoteTeachers = (merged.teachers || []).map((t) => ({
-      ...t,
-      email: normalizeSchoolEmail(t.email),
-    }));
+    const remoteTeachers = normalizePeopleEmails(merged.teachers || []);
     const remoteSessions = (merged.sessions || []).map((s) => ({
       ...s,
       isPractical:
@@ -707,9 +704,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }),
     });
     if (merged.academicStaffList?.length) {
-      setAcademicStaffList(
-        merged.academicStaffList.map((s) => ({ ...s, email: normalizeSchoolEmail(s.email) }))
-      );
+      setAcademicStaffList(normalizePeopleEmails(merged.academicStaffList));
     }
     lastCloudSyncAtRef.current = merged.updatedAt;
     setLastCloudSyncAt(merged.updatedAt);
