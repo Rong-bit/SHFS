@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { dateToIsoLocal, isNonTeachingDate } from './holidays';
 import { parseRequestSeq } from './requestNumbers';
+import { isDateInSettlementMonth } from './settlementPeriod';
 
 /** YYYY-MM-DD → 週一=1 … 週五=5；週末回傳 null */
 export function dateToDayOfWeek(isoDate: string): DayOfWeek | null {
@@ -122,6 +123,8 @@ export type LeaveBillableOptions = {
   period?: number;
   temporaryMoves?: TemporaryScheduleMove[] | null;
   partialStops?: PartialNonTeachingDay[] | null;
+  /** 每月結算週數（預設 4） */
+  weeksInMonth?: number;
 };
 
 function asExcludeSet(excludeDates?: ExcludeDates): Set<string> {
@@ -277,11 +280,15 @@ export function countMatchingWeekdaysInMonth(
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
 
   let count = 0;
+  const weeksInMonth = billableOptions?.weeksInMonth ?? 4;
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
     if (cur.getDay() !== dayOfWeek) continue;
-    if (cur.getMonth() + 1 !== month) continue;
-    if (year != null && cur.getFullYear() !== year) continue;
     const iso = dateToIsoLocal(cur);
+    if (year != null) {
+      if (!isDateInSettlementMonth(iso, month, year, weeksInMonth)) continue;
+    } else if (cur.getMonth() + 1 !== month) {
+      continue;
+    }
     if (!isLeaveDatePeriodBillable(iso, excludeDates, billableOptions)) continue;
     count += 1;
   }
@@ -352,12 +359,14 @@ export function countApplicantApprovedLeaveCoverPeriodsInMonth(
     includeLegacyWithoutDates?: (r: LeaveCoverRequest) => boolean;
     temporaryMoves?: TemporaryScheduleMove[] | null;
     partialStops?: PartialNonTeachingDay[] | null;
+    weeksInMonth?: number;
   }
 ): number {
   const match = options?.matchSession ?? (() => true);
   const calendarOpts: LeaveBillableOptions = {
     temporaryMoves: options?.temporaryMoves,
     partialStops: options?.partialStops,
+    weeksInMonth: options?.weeksInMonth,
   };
   let total = 0;
   for (const r of requests) {

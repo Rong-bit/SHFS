@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { calendarYearForSettlementMonth, displayTeacherTitle, expectedRocAcademicYear, SCHOOL_DEPARTMENTS, settlementWeeksForMonth } from '../../utils/schoolDepartments';
+import { calendarYearForSettlementMonth, displayTeacherTitle, expectedRocAcademicYear, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import { formatPayrollMonthRangeLabel } from '../../utils/overloadPayrollRegister';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { countSalaryCodes } from '../../utils/salaryCodes';
 import * as XLSX from 'xlsx';
@@ -32,18 +33,6 @@ export const AccountingSettlement: React.FC = () => {
   const [showCounselingPayrollRegister, setShowCounselingPayrollRegister] = useState(false);
   const [showActingHomeroomPayrollRegister, setShowActingHomeroomPayrollRegister] = useState(false);
   const settlementHolidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-  const settlementCalendar = {
-    holidaySet: settlementHolidaySet,
-    temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-    partialStops: systemConfig.partialNonTeachingDays || [],
-  };
-  const settlementWeeks = settlementWeeksForMonth(
-    selectedMonth,
-    new Date(),
-    settlementHolidaySet,
-    systemConfig.academicYear,
-    settlementCalendar
-  );
   const settlementYear = calendarYearForSettlementMonth(
     selectedMonth,
     new Date(),
@@ -165,7 +154,7 @@ export const AccountingSettlement: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">
             基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜
             第八節課輔 <strong>{systemConfig.nightHourlyRate} 元/節</strong> ｜ 
-            本月週數依 <strong>{selectedMonth} 月（西元 {settlementYear}）週一至週五實際日數（約 {settlementWeeks.toFixed(1)} 週）</strong>
+            本月依 <strong>{formatPayrollMonthRangeLabel(selectedMonth, settlementYear, systemConfig.weeksInMonth ?? 4)}</strong>
             {academicYearStale && (
               <span className="block mt-1 text-amber-800">
                 系統學年度仍為 {systemConfig.academicYear}（建議 {expectedAy}），結算西元年已自動以西曆校正；請至「標準與參數 → 學校與行事曆」更新學年度以免單號／報表標題混淆。

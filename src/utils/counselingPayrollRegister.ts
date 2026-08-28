@@ -12,6 +12,7 @@ import {
   legacyRequestBelongsToSettlement,
 } from './leaveDates';
 import { nonTeachingDateSet } from './holidays';
+import { isDateInSettlementMonth } from './settlementPeriod';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 import {
   formatPayrollMonthRangeLabel,
@@ -89,16 +90,19 @@ function listBillableLeaveDatesInMonth(
   calendarOpts: {
     temporaryMoves?: SystemConfig['temporaryScheduleMoves'];
     partialStops?: SystemConfig['partialNonTeachingDays'];
+    weeksInMonth?: number;
   }
 ): string[] {
   if (!request.leaveDateStart || !request.originalSession) return [];
   const end = request.leaveDateEnd || request.leaveDateStart;
   const dayOfWeek = request.originalSession.dayOfWeek;
   const period = request.originalSession.period;
+  const weeksInMonth = calendarOpts.weeksInMonth ?? 4;
   const billableOpts = {
     period,
     temporaryMoves: calendarOpts.temporaryMoves,
     partialStops: calendarOpts.partialStops,
+    weeksInMonth,
   };
 
   const s = new Date(request.leaveDateStart.replace(/-/g, '/') + ' 12:00:00');
@@ -108,9 +112,8 @@ function listBillableLeaveDatesInMonth(
   const dates: string[] = [];
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
     if (cur.getDay() !== dayOfWeek) continue;
-    if (cur.getMonth() + 1 !== settlementMonth) continue;
-    if (cur.getFullYear() !== settlementYear) continue;
     const iso = dateToIsoLocal(cur);
+    if (!isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)) continue;
     if (!isLeaveDatePeriodBillable(iso, excludeDates, billableOpts)) continue;
     dates.push(iso);
   }
@@ -130,6 +133,7 @@ export function buildCounselingPayrollRemarks(
   const calendarOpts = {
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
+    weeksInMonth: systemConfig.weeksInMonth ?? 4,
   };
   const period8Days = teacherPeriod8Weekdays(sessions, teacherId);
   const parts: string[] = [];
@@ -138,7 +142,7 @@ export function buildCounselingPayrollRemarks(
     if (!stop.date || !stop.periods?.includes(8)) continue;
     const d = new Date(stop.date.replace(/-/g, '/') + ' 12:00:00');
     if (Number.isNaN(d.getTime())) continue;
-    if (d.getMonth() + 1 !== settlementMonth || d.getFullYear() !== settlementYear) continue;
+    if (!isDateInSettlementMonth(stop.date, settlementMonth, settlementYear, calendarOpts.weeksInMonth)) continue;
     const schoolDay = jsDayToSchoolDay(d.getDay());
     if (schoolDay < 1 || schoolDay > 5 || !period8Days.has(schoolDay)) continue;
     const label = stop.label?.trim() || '半日停課';

@@ -2,8 +2,8 @@ import { CourseSession, DepartmentType, Teacher, TeacherTitle } from '../types';
 import {
   CalendarSettlementOptions,
   slotOccurrenceCountsInMonth,
-  weekdayCountsFromSlotMap,
 } from './calendarSettlement';
+import { eachDateInSettlementPeriod, resolveSettlementPeriod } from './settlementPeriod';
 
 /** 本校課表會出現的科別（含示範資料用的餐飲／廣告） */
 export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
@@ -263,11 +263,12 @@ export const calendarYearForSettlementMonth = (
   return calendarYearFromWallClock(month, now);
 };
 
-/** 該月各星期幾出現次數（JS：0 日、1 一 … 6 六）；excludeDates 為 YYYY-MM-DD 放假日 */
+/** 該結算月各星期幾出現次數（連續 N 週區間；excludeDates 為 YYYY-MM-DD 放假日） */
 export const weekdayOccurrencesInMonth = (
   year: number,
   month: number,
-  excludeDates?: Iterable<string> | Set<string> | null
+  excludeDates?: Iterable<string> | Set<string> | null,
+  weeksInMonth = 4
 ) => {
   const exclude =
     excludeDates instanceof Set
@@ -275,30 +276,30 @@ export const weekdayOccurrencesInMonth = (
       : excludeDates
       ? new Set(excludeDates)
       : null;
-  const lastDay = new Date(year, month, 0).getDate();
+  const period = resolveSettlementPeriod(month, year, weeksInMonth);
   const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
-  for (let day = 1; day <= lastDay; day += 1) {
-    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    if (exclude?.has(iso)) continue;
-    const jsDay = new Date(year, month - 1, day).getDay();
+  eachDateInSettlementPeriod(period, (iso, jsDay) => {
+    if (exclude?.has(iso)) return;
     counts[jsDay] += 1;
-  }
+  });
   return counts;
 };
 
 export const countMondaysInMonth = (
   year: number,
   month: number,
-  excludeDates?: Iterable<string> | Set<string> | null
-) => weekdayOccurrencesInMonth(year, month, excludeDates)[1];
+  excludeDates?: Iterable<string> | Set<string> | null,
+  weeksInMonth = 4
+) => weekdayOccurrencesInMonth(year, month, excludeDates, weeksInMonth)[1];
 
-/** 週一至週五平均出現次數，用來折算每週基本鐘點／任務減授 */
+/** 結算週數：依系統設定每月固定 N 週（預設 4） */
 export const averageWeekdayWeeks = (
   year: number,
   month: number,
-  excludeDates?: Iterable<string> | Set<string> | null
+  excludeDates?: Iterable<string> | Set<string> | null,
+  weeksInMonth = 4
 ) => {
-  const c = weekdayOccurrencesInMonth(year, month, excludeDates);
+  const c = weekdayOccurrencesInMonth(year, month, excludeDates, weeksInMonth);
   return (c[1] + c[2] + c[3] + c[4] + c[5]) / 5;
 };
 
@@ -341,6 +342,7 @@ export const monthlyConcurrentPeriods = (
     holidaySet,
     temporaryMoves: calendar?.temporaryMoves,
     partialStops: calendar?.partialStops,
+    weeksInMonth: calendar?.weeksInMonth,
   });
   const slots = new Set<string>();
   sessions.forEach((s) => {
@@ -378,6 +380,7 @@ export const monthlyCounselingPeriods = (
     holidaySet,
     temporaryMoves: calendar?.temporaryMoves,
     partialStops: calendar?.partialStops,
+    weeksInMonth: calendar?.weeksInMonth,
   });
   const slots = new Set<string>();
   sessions.forEach((s) => {
@@ -411,36 +414,14 @@ export const monthlyOverloadPeriods = (
   );
 };
 
-/** 折算週數：平日平均出現次數；有暫時移課／半日停課時以 slot 計次回推 */
+/** 折算週數：每月固定 N 週（系統參數 weeksInMonth，預設 4） */
 export const settlementWeeksForMonth = (
   month: number,
   now = new Date(),
   excludeDates?: Iterable<string> | Set<string> | null,
   academicYear?: string | number,
   calendar?: CalendarSettlementOptions
-) => {
-  const year = calendarYearForSettlementMonth(month, now, academicYear);
-  if (
-    calendar?.temporaryMoves?.length ||
-    calendar?.partialStops?.length
-  ) {
-    const holidaySet =
-      calendar.holidaySet ??
-      (excludeDates instanceof Set
-        ? excludeDates
-        : excludeDates
-        ? new Set(excludeDates)
-        : new Set<string>());
-    const slotCounts = slotOccurrenceCountsInMonth(year, month, {
-      holidaySet,
-      temporaryMoves: calendar.temporaryMoves,
-      partialStops: calendar.partialStops,
-    });
-    const c = weekdayCountsFromSlotMap(slotCounts);
-    return (c[1] + c[2] + c[3] + c[4] + c[5]) / 5;
-  }
-  return averageWeekdayWeeks(year, month, excludeDates);
-};
+) => calendar?.weeksInMonth ?? 4;
 
 /** 每週超鐘點 = 課表標示兼課的節數 */
 export const weeklyOverloadPeriods = (

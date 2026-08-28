@@ -1,5 +1,6 @@
 import type { LeaveType, PaymentType, RequestStatus, SubstituteRequest, SystemConfig } from '../types';
 import { dateToIsoLocal } from './holidays';
+import { isDateInSettlementMonth } from './settlementPeriod';
 import {
   isLeaveDatePeriodBillable,
   resolveLeaveDateEnd,
@@ -200,10 +201,10 @@ export function listBillableLeaveDatesInMonth(
   excludeDates?: Set<string>,
   billableOptions?: LeaveBillableOptions
 ): string[] {
-  return listBillableLeaveDatesInRange(request, excludeDates, billableOptions).filter((iso) => {
-    const d = new Date(iso.replace(/-/g, '/') + ' 12:00:00');
-    return d.getMonth() + 1 === settlementMonth && d.getFullYear() === settlementYear;
-  });
+  const weeksInMonth = billableOptions?.weeksInMonth ?? 4;
+  return listBillableLeaveDatesInRange(request, excludeDates, billableOptions).filter((iso) =>
+    isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)
+  );
 }
 
 export function countPublicPayrollPeriodsInMonth(
@@ -536,6 +537,7 @@ type ConcurrentDeductOptions = {
   includeLegacyWithoutDates?: (r: SubstituteRequest) => boolean;
   temporaryMoves?: SystemConfig['temporaryScheduleMoves'];
   partialStops?: SystemConfig['partialNonTeachingDays'];
+  weeksInMonth?: number;
 };
 
 /** 請假兼課扣減：依對照表，身心調適假不扣；事病假僅公費派代日扣 */
@@ -552,6 +554,7 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
   const calendarOpts: LeaveBillableOptions = {
     temporaryMoves: options?.temporaryMoves,
     partialStops: options?.partialStops,
+    weeksInMonth: options?.weeksInMonth,
   };
   let total = 0;
   for (const r of requests) {

@@ -69,6 +69,7 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
     holidaySet,
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
+    weeksInMonth: systemConfig.weeksInMonth ?? 4,
   };
   const settlementYear = calendarYearForSettlementMonth(
     month,

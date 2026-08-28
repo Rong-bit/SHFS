@@ -2961,6 +2961,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       holidaySet,
       temporaryMoves: systemConfig.temporaryScheduleMoves || [],
       partialStops: systemConfig.partialNonTeachingDays || [],
+      weeksInMonth: systemConfig.weeksInMonth ?? 4,
     };
     const weeks = settlementWeeksForMonth(
       settlementMonth,
@@ -3011,6 +3012,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: systemConfig.partialNonTeachingDays || [],
+          weeksInMonth: systemConfig.weeksInMonth ?? 4,
         }
       );
       const swapConcurrentDelta = temporarySwapPeriodDeltaInMonth(
@@ -3024,7 +3026,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.dayOfWeek <= 5 &&
           s.period >= 1 &&
           s.period <= 7,
-        holidaySet
+        holidaySet,
+        systemConfig.weeksInMonth ?? 4
       );
       const monthlyOverload = Math.max(
         0,
@@ -3058,6 +3061,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: systemConfig.partialNonTeachingDays || [],
+          weeksInMonth: systemConfig.weeksInMonth ?? 4,
         }
       );
       const swapCounselingDelta = temporarySwapPeriodDeltaInMonth(
@@ -3066,7 +3070,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settlementMonth,
         settlementYear,
         (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
-        holidaySet
+        holidaySet,
+        systemConfig.weeksInMonth ?? 4
       );
       const monthlyCounseling = Math.max(
         0,
@@ -3092,6 +3097,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const leaveCalendarOpts = {
         temporaryMoves: systemConfig.temporaryScheduleMoves || [],
         partialStops: systemConfig.partialNonTeachingDays || [],
+        weeksInMonth: systemConfig.weeksInMonth ?? 4,
       };
 
       requests

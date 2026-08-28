@@ -61,6 +61,7 @@ export const SubstitutePayrollRegisterModal: React.FC<SubstitutePayrollRegisterM
     holidaySet,
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
+    weeksInMonth: systemConfig.weeksInMonth ?? 4,
   };
   const settlementYear = calendarYearForSettlementMonth(
     month,

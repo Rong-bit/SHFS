@@ -1,4 +1,5 @@
 import type { MonthlyTeacherSettlement, SubstituteRequest, SystemConfig } from '../types';
+import { formatPayrollMonthRangeLabel as formatSettlementMonthRangeLabel } from './settlementPeriod';
 import { leaveTypeRemarkShort } from './leaveTypes';
 import {
   buildLeavePayrollContext,
@@ -109,13 +110,8 @@ export const formatRocYear = (westernYear: number) => westernYear - 1911;
 export const formatPayrollMonthRangeLabel = (
   month: number,
   westernYear: number,
-  weeks: number
-) => {
-  const roc = formatRocYear(westernYear);
-  const lastDay = new Date(westernYear, month, 0).getDate();
-  const weekLabel = Number.isInteger(weeks) ? weeks : Math.round(weeks * 10) / 10;
-  return `${roc}年${month}月1日 ~ ${roc}年${month}月${lastDay}日 共(${weekLabel}週)`;
-};
+  weeksInMonth = 4
+) => formatSettlementMonthRangeLabel(month, westernYear, weeksInMonth);
 
 const formatMd = (dateStr: string) => {
   const [, m, d] = dateStr.split('-');

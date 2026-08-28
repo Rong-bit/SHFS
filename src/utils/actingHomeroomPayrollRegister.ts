@@ -3,6 +3,7 @@ import { isPlaceholderSession } from './resolveOriginalSession';
 import { actingHomeroomLeaveRemarkShort } from './leaveTypes';
 import { resolveLeaveDateEnd } from './leaveDates';
 import { dateToIsoLocal, isNonTeachingDate, nonTeachingDateSet } from './holidays';
+import { isDateInSettlementMonth } from './settlementPeriod';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 import {
   formatPayrollMonthRangeLabel,
@@ -113,7 +114,8 @@ export function listActingHomeroomDaysInMonth(
   leaveDateEnd: string | undefined,
   settlementMonth: number,
   settlementYear: number,
-  holidaySet: Set<string>
+  holidaySet: Set<string>,
+  weeksInMonth = 4
 ): string[] {
   if (!leaveDateStart) return [];
   const end = resolveLeaveDateEnd(leaveDateStart, leaveDateEnd) || leaveDateStart;
@@ -122,18 +124,14 @@ export function listActingHomeroomDaysInMonth(
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return [];
 
   const dates: string[] = [];
-  const pushMatching = (year: number) => {
-    for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-      const js = cur.getDay();
-      if (js < 1 || js > 5) continue;
-      if (cur.getMonth() + 1 !== settlementMonth) continue;
-      if (cur.getFullYear() !== year) continue;
-      const iso = dateToIsoLocal(cur);
-      if (isNonTeachingDate(iso, holidaySet)) continue;
-      dates.push(iso);
-    }
-  };
-  pushMatching(settlementYear);
+  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+    const js = cur.getDay();
+    if (js < 1 || js > 5) continue;
+    const iso = dateToIsoLocal(cur);
+    if (!isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)) continue;
+    if (isNonTeachingDate(iso, holidaySet)) continue;
+    dates.push(iso);
+  }
   return dates;
 }
 
@@ -275,7 +273,8 @@ export function buildActingHomeroomPayrollRows(
       r.leaveDateEnd,
       settlementMonth,
       settlementYear,
-      holidaySet
+      holidaySet,
+      systemConfig.weeksInMonth ?? 4
     );
     if (days.length === 0) continue;
 

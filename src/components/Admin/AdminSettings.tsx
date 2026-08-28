@@ -1194,7 +1194,7 @@ export const AdminSettings: React.FC = () => {
                     min={1}
                     required
                   />
-                  <span className="text-[10px] text-slate-400">結算依該月週一至週五實際日數（並扣除放假日）</span>
+                  <span className="text-[10px] text-slate-400">每月固定 N 週結算；超出曆月天數併入前後月份（自 8 月第一個週日起算）</span>
                 </div>
               </div>
             </div>

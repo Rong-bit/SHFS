@@ -59,6 +59,7 @@ export const ActingHomeroomPayrollRegisterModal: React.FC<
     holidaySet,
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
+    weeksInMonth: systemConfig.weeksInMonth ?? 4,
   };
   const settlementYear = calendarYearForSettlementMonth(
     month,

@@ -1,10 +1,13 @@
 import { DayOfWeek, PartialNonTeachingDay, TemporaryScheduleMove } from '../types';
 import { dateToIsoLocal } from './holidays';
+import { eachDateInSettlementPeriod, resolveSettlementPeriod } from './settlementPeriod';
 
 export type CalendarSettlementOptions = {
   holidaySet?: Set<string> | null;
   temporaryMoves?: TemporaryScheduleMove[] | null;
   partialStops?: PartialNonTeachingDay[] | null;
+  /** 每月結算週數（預設 4）；超出曆月天數併入前後結算月 */
+  weeksInMonth?: number;
 };
 
 const ALL_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -34,10 +37,6 @@ function isoJsDay(iso: string): number | null {
   return new Date(p.y, p.m - 1, p.d, 12, 0, 0).getDay();
 }
 
-function dateInYearMonth(iso: string, year: number, month: number): boolean {
-  const p = parseIsoParts(iso);
-  return Boolean(p && p.y === year && p.m === month);
-}
 
 function resolvePeriods(periods?: number[]): number[] {
   if (!periods || periods.length === 0) return [...ALL_PERIODS];
@@ -53,8 +52,18 @@ function bump(map: Map<string, number>, key: string, delta: number) {
   map.set(key, Math.max(0, (map.get(key) || 0) + delta));
 }
 
+function dateInSettlementPeriod(
+  iso: string,
+  year: number,
+  month: number,
+  weeksInMonth: number
+): boolean {
+  const period = resolveSettlementPeriod(month, year, weeksInMonth);
+  return iso >= period.startIso && iso <= period.endIso;
+}
+
 /**
- * 結算用：各「星期幾–節次」在該月應計幾次。
+ * 結算用：各「星期幾–節次」在該結算月（連續 N 週區間）應計幾次。
  * - 平日且非整天放假：各節 +1（再扣半日停課節次）
  * - 暫時移課：扣 sourceDate（若該日原先有計入），並在 targetDate 加回「source 星期」的節次（週六亦可）
  */
@@ -64,6 +73,8 @@ export function slotOccurrenceCountsInMonth(
   options?: CalendarSettlementOptions
 ): Map<string, number> {
   const holidaySet = options?.holidaySet ?? new Set<string>();
+  const weeksInMonth = options?.weeksInMonth ?? 4;
+  const period = resolveSettlementPeriod(month, year, weeksInMonth);
   const partialByDate = new Map<string, Set<number>>();
   for (const stop of options?.partialStops || []) {
     if (!stop?.date || !stop.periods?.length) continue;
@@ -75,46 +86,41 @@ export function slotOccurrenceCountsInMonth(
   }
 
   const counts = new Map<string, number>();
-  const lastDay = new Date(year, month, 0).getDate();
 
-  for (let day = 1; day <= lastDay; day += 1) {
-    const iso = dateToIsoLocal(new Date(year, month - 1, day, 12, 0, 0));
-    if (holidaySet.has(iso)) continue;
-    const dow = jsDayToDow(new Date(year, month - 1, day, 12, 0, 0).getDay());
-    if (dow == null) continue;
+  eachDateInSettlementPeriod(period, (iso, jsDay) => {
+    if (holidaySet.has(iso)) return;
+    const dow = jsDayToDow(jsDay);
+    if (dow == null) return;
     const blocked = partialByDate.get(iso);
-    for (const period of ALL_PERIODS) {
-      if (blocked?.has(period)) continue;
-      bump(counts, slotKey(dow, period), 1);
+    for (const periodNum of ALL_PERIODS) {
+      if (blocked?.has(periodNum)) continue;
+      bump(counts, slotKey(dow, periodNum), 1);
     }
-  }
+  });
 
   for (const move of options?.temporaryMoves || []) {
     if (!move?.sourceDate || !move?.targetDate) continue;
     const sourceDow = isoDayOfWeek(move.sourceDate);
-    // source 若為週末無法對應週一～五模板
     if (sourceDow == null) continue;
     const periods = resolvePeriods(move.periods);
 
-    // 扣掉原日：若原日在結算月、非週末、且非整天放假（放假日基底已跳過，不必再扣）
-    if (dateInYearMonth(move.sourceDate, year, month)) {
+    if (dateInSettlementPeriod(move.sourceDate, year, month, weeksInMonth)) {
       const srcJs = isoJsDay(move.sourceDate);
       if (srcJs != null && srcJs >= 1 && srcJs <= 5 && !holidaySet.has(move.sourceDate)) {
         const blocked = partialByDate.get(move.sourceDate);
-        for (const period of periods) {
-          if (blocked?.has(period)) continue; // 半日已扣過，勿重複
-          bump(counts, slotKey(sourceDow, period), -1);
+        for (const periodNum of periods) {
+          if (blocked?.has(periodNum)) continue;
+          bump(counts, slotKey(sourceDow, periodNum), -1);
         }
       }
     }
 
-    // 加到補課日：只要 target 落在結算月即可（含週六）；整天放假／半日停課之節次不加回
-    if (dateInYearMonth(move.targetDate, year, month)) {
+    if (dateInSettlementPeriod(move.targetDate, year, month, weeksInMonth)) {
       if (holidaySet.has(move.targetDate)) continue;
       const blockedTarget = partialByDate.get(move.targetDate);
-      for (const period of periods) {
-        if (blockedTarget?.has(period)) continue;
-        bump(counts, slotKey(sourceDow, period), 1);
+      for (const periodNum of periods) {
+        if (blockedTarget?.has(periodNum)) continue;
+        bump(counts, slotKey(sourceDow, periodNum), 1);
       }
     }
   }
