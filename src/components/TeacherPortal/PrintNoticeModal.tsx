@@ -12,6 +12,7 @@ import {
 import { Printer, X } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
+import { parseNoticeRowDateToIso } from '../../utils/noticePayroll';
 import teachingSectionStampUrl from '../../assets/teaching-section-stamp.png';
 
 interface PrintNoticeModalProps {
@@ -112,9 +113,35 @@ const NOTICE_PRINT_CSS = `
   right: 1cm;
   bottom: 0.5cm;
   width: 37.5mm;
-  height: auto;
+  aspect-ratio: 200 / 205;
   pointer-events: none;
   z-index: 5;
+}
+.substitute-notice-page-stamp-base {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.substitute-notice-page-stamp-date-mask {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 46.5%;
+  height: 13%;
+  background: #fff;
+}
+.substitute-notice-page-stamp-date {
+  position: absolute;
+  left: 50%;
+  top: 53%;
+  transform: translate(-50%, -50%);
+  font-family: "DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif;
+  font-size: 8.5pt;
+  line-height: 1;
+  color: #2a4f9c;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 .substitute-notice-copy {
   color: #000;
@@ -259,10 +286,15 @@ const NOTICE_PRINT_CSS = `
     right: 1cm !important;
     bottom: 0.5cm !important;
     width: 37.5mm !important;
+    aspect-ratio: 200 / 205 !important;
     height: auto !important;
     opacity: 1 !important;
     pointer-events: none !important;
     z-index: 5 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .substitute-notice-page-stamp-date-mask {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -298,6 +330,31 @@ function formatNoticeIssueRocDate(date: Date = new Date()): string {
   const roc = date.getFullYear() - 1911;
   return `${roc}.${date.getMonth() + 1}.${date.getDate()}`;
 }
+
+/** 戳章日期格式，例 115. 8. 28 */
+function formatStampRocDate(date: Date = new Date()): string {
+  const roc = date.getFullYear() - 1911;
+  return `${roc}. ${date.getMonth() + 1}. ${date.getDate()}`;
+}
+
+function resolveStampDateLabel(pageRows: NoticeRow[]): string {
+  for (const row of pageRows) {
+    const iso = parseNoticeRowDateToIso(row.date);
+    if (!iso) continue;
+    const [y, m, d] = iso.split('-').map(Number);
+    if (!y || !m || !d) continue;
+    return formatStampRocDate(new Date(y, m - 1, d));
+  }
+  return formatStampRocDate();
+}
+
+const NoticePageStamp: React.FC<{ dateLabel: string }> = ({ dateLabel }) => (
+  <div className="substitute-notice-page-stamp" aria-hidden>
+    <img src={teachingSectionStampUrl} alt="" className="substitute-notice-page-stamp-base" />
+    <div className="substitute-notice-page-stamp-date-mask" />
+    <span className="substitute-notice-page-stamp-date">{dateLabel}</span>
+  </div>
+);
 
 function weekdayFromIso(iso?: string): number | null {
   if (!iso) return null;
@@ -812,12 +869,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 showSignatureBlock={false}
                 isLowerCopy
               />
-              <img
-                src={teachingSectionStampUrl}
-                alt=""
-                className="substitute-notice-page-stamp"
-                aria-hidden
-              />
+              <NoticePageStamp dateLabel={resolveStampDateLabel(pageRows)} />
             </div>
           );
         })}
