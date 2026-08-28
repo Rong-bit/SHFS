@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   CourseSession, 
@@ -229,6 +229,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [rangePeriodStart, setRangePeriodStart] = useState<number>(1);
   const [rangePeriodEnd, setRangePeriodEnd] = useState<number>(7);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+
+  /** 連續起迄多次派代時，共用同一 batchGroupId 以合併一張通知單 */
+  const dispatchNoticeGroupIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    dispatchNoticeGroupIdRef.current = null;
+  }, [selectedTeacherId, leaveDateMode, leaveDateStart, leaveDateEnd]);
 
   // Reschedule specific（僅移入空堂）
   const [targetDay, setTargetDay] = useState<DayOfWeek>(1);
@@ -978,10 +985,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
           : leaveDateStart
         : undefined;
 
-    const batchGroupId =
-      requestType === 'substitute' && sessionsToDispatch.length > 1
-        ? `batch-${Date.now()}`
-        : undefined;
+    let batchGroupId: string | undefined;
+    if (requestType === 'substitute') {
+      if (leaveDateMode === 'range' || sessionsToDispatch.length > 1) {
+        if (!dispatchNoticeGroupIdRef.current) {
+          dispatchNoticeGroupIdRef.current = `batch-${Date.now()}`;
+        }
+        batchGroupId = dispatchNoticeGroupIdRef.current;
+      }
+    }
 
     let created;
     try {
@@ -1041,19 +1053,31 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
 
     const first = created[0];
+    const mergedNoticeHint =
+      batchGroupId && leaveDateMode === 'range'
+        ? '（與同批連續起迄派代合併一張通知單，可繼續選其他課堂）'
+        : batchGroupId
+          ? '（連續節次合併一張通知單）'
+          : '';
     setSuccessToast(
       created.length > 1
-        ? `已批次登錄 ${created.length} 筆連續節次派代（${first.requestNumber} 起）${
+        ? `已批次登錄 ${created.length} 筆派代（${first.requestNumber} 起）${
             autoApprove ? '並立即核定生效' : '並進入簽核清冊'
-          }！`
+          }${mergedNoticeHint}！`
         : `【${first.requestNumber}】調代課已成功由教學組登錄${
             autoApprove ? '並立即核定生效' : '並進入簽核清冊'
-          }！`
+          }${mergedNoticeHint}！`
     );
     setTimeout(() => setSuccessToast(null), 4000);
 
-    // Switch to list view to see result
-    setActiveSubView('list');
+    if (requestType === 'substitute') {
+      setSelectedSessionId('');
+      setSelectedSessionIds([]);
+      if (!actingHomeroomOnly) {
+        setSubstituteTeacherId('');
+        setHasUserChosenSubstituteTeacher(false);
+      }
+    }
   };
 
   const resolvedRequests = useMemo(
@@ -1532,6 +1556,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           </div>
                         )}
                       </div>
+                      {leaveDateMode === 'range' && leaveDateStart && leaveDateEnd && leaveDateEnd >= leaveDateStart && (
+                        <p className="mt-1.5 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+                          連續起迄模式下，每次派代後仍留在此頁；同老師、同起迄區間內多次派代會合併為一張通知單（超過 7 列自動分頁）。
+                        </p>
+                      )}
                       {selectedOriginalSession && leaveFilterDays.length === 0 && (
                         <p className="mt-1.5 text-[11px] text-slate-500">
                           {leaveDateMode === 'single'
@@ -2554,7 +2583,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             {req.requestType === 'substitute' && (
                               <div className="text-[11px] text-amber-800 font-semibold mt-0.5">
                                 請假：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
-                                {req.batchGroupId ? ' · 連續節次合併通知單' : ''}
+                                {req.batchGroupId ? ' · 合併通知單' : ''}
                               </div>
                             )}
                           </td>

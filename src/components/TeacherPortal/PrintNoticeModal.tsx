@@ -37,18 +37,61 @@ const EMPTY_NOTICE_ROW: NoticeRow = {
 };
 
 function normalizeNoticeRows(rows: NoticeRow[]): NoticeRow[] {
-  const limited = rows.slice(0, MAX_NOTICE_TABLE_ROWS);
-  const padded = [...limited];
+  const padded = [...rows];
   while (padded.length < MAX_NOTICE_TABLE_ROWS) {
     padded.push({ ...EMPTY_NOTICE_ROW });
   }
   return padded;
 }
 
+function sortNoticeRows(rows: NoticeRow[]): NoticeRow[] {
+  return [...rows].sort((a, b) => {
+    const dateA = a.date.replace(/\//g, '-');
+    const dateB = b.date.replace(/\//g, '-');
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    const periodA = Number(a.period) || 0;
+    const periodB = Number(b.period) || 0;
+    if (periodA !== periodB) return periodA - periodB;
+    return a.className.localeCompare(b.className, 'zh-Hant');
+  });
+}
+
+function buildLeaveRangeNoticeRows(
+  groupedSessions: CourseSession[],
+  leaveStart: string,
+  leaveEnd: string
+): NoticeRow[] {
+  const rows = groupedSessions.flatMap((sess) => {
+    const dates =
+      leaveStart && leaveEnd && sess.dayOfWeek
+        ? listDatesMatchingWeekday(leaveStart, leaveEnd, sess.dayOfWeek)
+        : leaveStart
+          ? [leaveStart]
+          : [''];
+    const dateList = dates.length ? dates : [leaveStart || ''];
+    return dateList.map((iso) => sessionRow(sess, iso || undefined));
+  });
+  return sortNoticeRows(rows);
+}
+
+function chunkNoticeRows(rows: NoticeRow[], size: number): NoticeRow[][] {
+  if (rows.length === 0) return [[]];
+  const chunks: NoticeRow[][] = [];
+  for (let i = 0; i < rows.length; i += size) {
+    chunks.push(rows.slice(i, i + size));
+  }
+  return chunks;
+}
+
 const NOTICE_PRINT_CSS = `
 .substitute-notice-print-root {
   font-family: "DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif;
   color: #000;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.substitute-notice-print-page {
   display: flex;
   flex-direction: column;
 }
@@ -154,6 +197,16 @@ const NOTICE_PRINT_CSS = `
   }
   .substitute-notice-print-root {
     width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    gap: 0 !important;
+  }
+  .substitute-notice-print-page {
+    width: 100% !important;
     height: 297mm !important;
     max-height: 297mm !important;
     overflow: hidden !important;
@@ -161,6 +214,10 @@ const NOTICE_PRINT_CSS = `
     flex-direction: column !important;
     padding: 8mm 12mm !important;
     box-sizing: border-box !important;
+    page-break-after: always;
+  }
+  .substitute-notice-print-page:last-child {
+    page-break-after: auto;
   }
   .substitute-notice-copy {
     flex: 0 0 50%;
@@ -410,29 +467,14 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     title = '監考通知單';
     addressee = teacherLabel(request.applicantTeacherName, '申請');
     greeting = `因${leaveShort}任務，以下原授課時段無法親自授課（本單無指定代課教師，監考教師領基本鐘點），`;
-    const dates =
-      leaveStart && leaveEnd && originalSession.dayOfWeek
-        ? listDatesMatchingWeekday(leaveStart, leaveEnd, originalSession.dayOfWeek)
-        : leaveStart
-          ? [leaveStart]
-          : [''];
-    const dateList = dates.length ? dates : [leaveStart || ''];
-    const sessionsByPeriod = [...groupedSessions].sort((a, b) => a.period - b.period);
-    rows = dateList.flatMap((iso) => sessionsByPeriod.map((sess) => sessionRow(sess, iso || undefined)));
+    rows = buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd);
   } else {
-    const dates =
-      leaveStart && leaveEnd && originalSession.dayOfWeek
-        ? listDatesMatchingWeekday(leaveStart, leaveEnd, originalSession.dayOfWeek)
-        : leaveStart
-          ? [leaveStart]
-          : [''];
-    const dateList = dates.length ? dates : [leaveStart || ''];
-    const sessionsByPeriod = [...groupedSessions].sort((a, b) => a.period - b.period);
-    rows = dateList.flatMap((iso) => sessionsByPeriod.map((sess) => sessionRow(sess, iso || undefined)));
+    rows = buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd);
   }
 
-  const previewLabel = `${title}列印預覽（校內格式 · 一頁兩聯 · 上聯留存）`;
-  const rowsTruncated = rows.length > MAX_NOTICE_TABLE_ROWS;
+  const rowPages = chunkNoticeRows(rows, MAX_NOTICE_TABLE_ROWS);
+  const multiPage = rowPages.length > 1;
+  const previewLabel = `${title}列印預覽（校內格式 · 一頁兩聯 · 上聯留存${multiPage ? ` · 共 ${rowPages.length} 張` : ''}）`;
   const issueDateLabel = formatNoticeIssueRocDate();
 
   const handlePrint = () => {
@@ -478,31 +520,41 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       </div>
 
       <div className="substitute-notice-print-root bg-white px-6 py-5 print:p-0">
-        {rowsTruncated && (
-          <p className="print:hidden mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            課程超過 {MAX_NOTICE_TABLE_ROWS} 列，通知單僅顯示前 {MAX_NOTICE_TABLE_ROWS} 列；其餘請另開單或分批列印。
+        {multiPage && (
+          <p className="print:hidden mb-3 text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+            課程共 {rows.length} 列，已自動分成 {rowPages.length} 張通知單（每張最多 {MAX_NOTICE_TABLE_ROWS} 列）；列印時每張為獨立一頁。
           </p>
         )}
-        <NoticeCopy
-          title={title}
-          requestNumber={requestNumberLabel}
-          addressee={addressee}
-          greeting={greeting}
-          rows={rows}
-          issueDateLabel={issueDateLabel}
-          showSignatureBlock
-        />
-        <div className="substitute-notice-fold" aria-hidden />
-        <NoticeCopy
-          title={title}
-          requestNumber={requestNumberLabel}
-          addressee={addressee}
-          greeting={greeting}
-          rows={rows}
-          issueDateLabel={issueDateLabel}
-          showSignatureBlock={false}
-          isLowerCopy
-        />
+        {rowPages.map((pageRows, pageIdx) => {
+          const pageRequestNumber =
+            pageIdx === 0
+              ? requestNumberLabel
+              : `${requestNumberLabel}（續${pageIdx + 1}）`;
+          return (
+            <div key={pageIdx} className="substitute-notice-print-page">
+              <NoticeCopy
+                title={title}
+                requestNumber={pageRequestNumber}
+                addressee={addressee}
+                greeting={greeting}
+                rows={pageRows}
+                issueDateLabel={issueDateLabel}
+                showSignatureBlock
+              />
+              <div className="substitute-notice-fold" aria-hidden />
+              <NoticeCopy
+                title={title}
+                requestNumber={pageRequestNumber}
+                addressee={addressee}
+                greeting={greeting}
+                rows={pageRows}
+                issueDateLabel={issueDateLabel}
+                showSignatureBlock={false}
+                isLowerCopy
+              />
+            </div>
+          );
+        })}
       </div>
 
       <div className="print:hidden bg-slate-100 px-6 py-3 border-t border-slate-200 flex justify-end space-x-3">

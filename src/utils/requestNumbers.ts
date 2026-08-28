@@ -30,7 +30,7 @@ export function normalizeSystemConfigSemester(
   return String(normalizeSemesterValue(semester, currentMonth)) as '1' | '2';
 }
 
-/** 解析單號；新格式 {學年度}-{學期}-{流水號}，例 115-1-001；仍相容 VOC 與舊版月分格式 */
+/** 解析單號；新格式 {學年度}-{學期}-{流水號}，例 115-1-0001；仍相容 VOC 與舊版月分格式 */
 export function parseRequestSeq(requestNumber: string): ParsedRequestNumber | null {
   const modern = requestNumber.match(/^(\d+)-([12])-(\d+)$/);
   if (modern) {
@@ -67,7 +67,7 @@ export function parseRequestSeq(requestNumber: string): ParsedRequestNumber | nu
   return null;
 }
 
-/** 將舊版月分單號轉為 學年度-學期-三位流水號 */
+/** 將舊版月分單號轉為 學年度-學期-四位流水號 */
 export function migrateRequestNumber(requestNumber: string): string {
   const parsed = parseRequestSeq(requestNumber);
   if (!parsed) return requestNumber;
@@ -93,7 +93,7 @@ export function nextRequestSequence(
   return max + 1;
 }
 
-/** 假單編號：{學年度}-{學期}-{流水號}，例 115-1-001 */
+/** 假單編號：{學年度}-{學期}-{流水號}，例 115-1-0001 */
 export function formatRequestNumber(
   academicYear: string | number,
   semester: string | number,
@@ -101,5 +101,5 @@ export function formatRequestNumber(
   referenceMonth?: number
 ): string {
   const sem = normalizeSemesterValue(semester, referenceMonth);
-  return `${academicYear}-${sem}-${String(seq).padStart(3, '0')}`;
+  return `${academicYear}-${sem}-${String(seq).padStart(4, '0')}`;
 }

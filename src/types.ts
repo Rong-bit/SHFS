@@ -110,7 +110,7 @@ export interface ClashCheckResult {
 
 export interface SubstituteRequest {
   id: string;
-  requestNumber: string; // 115-1-001（學年度-學期-流水號）
+  requestNumber: string; // 115-1-0001（學年度-學期-流水號）
   requestType: RequestType;
   applicantTeacherId: string;
   applicantTeacherName: string;
@@ -167,7 +167,7 @@ export interface SubstituteRequest {
   actingHomeroomTeacherId?: string;
   actingHomeroomTeacherName?: string;
 
-  /** 連續節次批次派代共用群組 ID；有值時通知單合併列印 */
+  /** 連續節次或連續起迄批次派代共用群組 ID；有值時通知單合併列印 */
   batchGroupId?: string;
   
   status: RequestStatus;
