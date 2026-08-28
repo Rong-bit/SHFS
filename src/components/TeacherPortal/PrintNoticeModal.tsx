@@ -12,7 +12,6 @@ import {
 import { Printer, X } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
-import { parseNoticeRowDateToIso } from '../../utils/noticePayroll';
 import teachingSectionStampUrl from '../../assets/teaching-section-stamp.png';
 
 interface PrintNoticeModalProps {
@@ -331,21 +330,10 @@ function formatNoticeIssueRocDate(date: Date = new Date()): string {
   return `${roc}.${date.getMonth() + 1}.${date.getDate()}`;
 }
 
-/** 戳章日期格式，例 115. 8. 28 */
+/** 戳章日期格式，例 115. 8. 28（與表格下開立日期同源） */
 function formatStampRocDate(date: Date = new Date()): string {
   const roc = date.getFullYear() - 1911;
   return `${roc}. ${date.getMonth() + 1}. ${date.getDate()}`;
-}
-
-function resolveStampDateLabel(pageRows: NoticeRow[]): string {
-  for (const row of pageRows) {
-    const iso = parseNoticeRowDateToIso(row.date);
-    if (!iso) continue;
-    const [y, m, d] = iso.split('-').map(Number);
-    if (!y || !m || !d) continue;
-    return formatStampRocDate(new Date(y, m - 1, d));
-  }
-  return formatStampRocDate();
 }
 
 const NoticePageStamp: React.FC<{ dateLabel: string }> = ({ dateLabel }) => (
@@ -786,7 +774,9 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const rowPages = chunkNoticeRows(rows, MAX_NOTICE_TABLE_ROWS);
   const multiPage = rowPages.length > 1;
   const previewLabel = `${title}列印預覽（校內格式 · 一頁兩聯 · 上聯留存${multiPage ? ` · 共 ${rowPages.length} 張` : ''}）`;
-  const issueDateLabel = formatNoticeIssueRocDate();
+  const noticeIssueDate = new Date();
+  const issueDateLabel = formatNoticeIssueRocDate(noticeIssueDate);
+  const stampDateLabel = formatStampRocDate(noticeIssueDate);
 
   const handlePrint = () => {
     if (isDirty) persistNoticeRows();
@@ -869,7 +859,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 showSignatureBlock={false}
                 isLowerCopy
               />
-              <NoticePageStamp dateLabel={resolveStampDateLabel(pageRows)} />
+              <NoticePageStamp dateLabel={stampDateLabel} />
             </div>
           );
         })}
