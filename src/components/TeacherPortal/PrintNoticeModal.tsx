@@ -96,10 +96,10 @@ const NOTICE_PRINT_CSS = `
   height: 1.35em;
 }
 .substitute-notice-fold {
-  flex: 0 0 0;
+  flex: 0 0 0.5cm;
   border-top: 1px dashed #666;
   margin: 0;
-  height: 0;
+  height: 0.5cm;
 }
 .substitute-notice-table col.col-date { width: 18%; }
 .substitute-notice-table col.col-week { width: 9%; }
@@ -121,7 +121,7 @@ const NOTICE_PRINT_CSS = `
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm 12mm 10mm 12mm;
+    margin: 0;
   }
   html, body {
     width: auto !important;
@@ -150,16 +150,18 @@ const NOTICE_PRINT_CSS = `
   }
   .substitute-notice-print-root {
     width: 100% !important;
-    height: 277mm !important;
-    max-height: 277mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
+    padding: 8mm 12mm !important;
+    box-sizing: border-box !important;
   }
   .substitute-notice-copy {
-    flex: 0 0 calc(50% - 0.5px);
-    height: calc(50% - 0.5px);
-    max-height: calc(50% - 0.5px);
+    flex: 0 0 calc(50% - 0.25cm);
+    height: calc(50% - 0.25cm);
+    max-height: calc(50% - 0.25cm);
     min-height: 0;
     overflow: hidden;
     box-sizing: border-box;
@@ -167,13 +169,10 @@ const NOTICE_PRINT_CSS = `
     padding-bottom: 1mm;
   }
   .substitute-notice-fold {
-    flex: 0 0 0;
+    flex: 0 0 0.5cm;
     border-top: 1px dashed #666;
-    height: 0;
+    height: 0.5cm;
     margin: 0;
-  }
-  .substitute-notice-copy + .substitute-notice-fold + .substitute-notice-copy {
-    margin-top: 0;
   }
 }
 `;
@@ -249,7 +248,8 @@ const NoticeCopy: React.FC<{
   greeting: string;
   rows: NoticeRow[];
   issueDateLabel: string;
-}> = ({ title, requestNumber, addressee, greeting, rows, issueDateLabel }) => {
+  showSignatureBlock?: boolean;
+}> = ({ title, requestNumber, addressee, greeting, rows, issueDateLabel, showSignatureBlock = true }) => {
   const tableRows = normalizeNoticeRows(rows);
 
   return (
@@ -311,6 +311,7 @@ const NoticeCopy: React.FC<{
 
     <div className="substitute-notice-issue-date">{issueDateLabel}</div>
 
+    {showSignatureBlock && (
     <div className="substitute-notice-sign">
       <div className="flex">
         <div className="w-[34%]">承辦人：</div>
@@ -320,6 +321,7 @@ const NoticeCopy: React.FC<{
       <div className="mt-1">教學組長：</div>
       <div className="mt-1">教務主任：</div>
     </div>
+    )}
   </div>
   );
 };
@@ -421,7 +423,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
     rows = dateList.flatMap((iso) => sessionsByPeriod.map((sess) => sessionRow(sess, iso || undefined)));
   }
 
-  const previewLabel = `${title}列印預覽（校內格式 · 一頁兩聯 · 印章留白）`;
+  const previewLabel = `${title}列印預覽（校內格式 · 一頁兩聯 · 上聯留存）`;
   const rowsTruncated = rows.length > MAX_NOTICE_TABLE_ROWS;
   const issueDateLabel = formatNoticeIssueRocDate();
 
@@ -462,6 +464,9 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
             </button>
           </div>
         </div>
+        <p className="print:hidden text-[10px] text-slate-400 mt-2 leading-snug">
+          列印對話框請關閉「頁首與頁尾」，避免出現網址或頁碼。
+        </p>
       </div>
 
       <div className="substitute-notice-print-root bg-white px-6 py-5 print:p-0">
@@ -477,6 +482,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           greeting={greeting}
           rows={rows}
           issueDateLabel={issueDateLabel}
+          showSignatureBlock
         />
         <div className="substitute-notice-fold" aria-hidden />
         <NoticeCopy
@@ -486,6 +492,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           greeting={greeting}
           rows={rows}
           issueDateLabel={issueDateLabel}
+          showSignatureBlock={false}
         />
       </div>
 
