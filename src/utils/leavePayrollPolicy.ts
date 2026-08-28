@@ -24,6 +24,7 @@ export const WELLNESS_HOURS_PER_LEAVE_DAY = 7;
 /** 對照表涵蓋的假別（UI 選單用） */
 export const IN_SCOPE_LEAVE_TYPES: LeaveType[] = [
   'official',
+  'invigilation',
   'marriage',
   'maternity',
   'wellness',
@@ -130,7 +131,7 @@ export function isSickLeaveSpellPublicPayroll(start?: string, end?: string): boo
 /** 永遠公費派代之假別（不含事假／病假門檻判斷） */
 export function isAlwaysPublicLeaveType(leaveType?: LeaveType, reason?: string): boolean {
   const lt = normalizeLeaveType(leaveType, reason);
-  return lt === 'official' || lt === 'marriage' || lt === 'maternity' || lt === 'wellness';
+  return lt === 'official' || lt === 'invigilation' || lt === 'marriage' || lt === 'maternity' || lt === 'wellness';
 }
 
 export function isLeaveDatePublicPayroll(
@@ -160,6 +161,7 @@ export function shouldDeductConcurrentOnLeaveDate(
   ctx: LeavePayrollContext
 ): boolean {
   const lt = normalizeLeaveType(request.leaveType, request.reason);
+  if (lt === 'invigilation') return false;
   if (lt === 'wellness') return false;
   return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
 }
@@ -483,6 +485,13 @@ export function leavePaymentDisplayLabel(
 ): { kind: 'public' | 'self_pay'; label: string; detail: string } {
   const lt = normalizeLeaveType(leaveType, reason);
   if (paymentType === 'public') {
+    if (lt === 'invigilation') {
+      return {
+        kind: 'public',
+        label: '公費派代',
+        detail: '監考任務：基本鐘點公費派代（代課清冊）；申請人兼課不扣減',
+      };
+    }
     return {
       kind: 'public',
       label: '公費派代',

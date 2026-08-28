@@ -4,6 +4,7 @@ import {
   buildLeavePayrollContext,
   countConcurrentDeductPeriodsInMonth,
   listBillableLeaveDatesInMonth,
+  normalizeLeaveType,
   shouldDeductConcurrentOnLeaveDate,
 } from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
@@ -186,6 +187,7 @@ export function buildConcurrentPayrollRemarks(
     if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
     if (r.applicantTeacherId !== teacherId) continue;
     if (!r.substituteTeacherId) continue;
+    if (normalizeLeaveType(r.leaveType, r.reason) === 'invigilation') continue;
 
     pushDateLines(r, `請${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`);
   }

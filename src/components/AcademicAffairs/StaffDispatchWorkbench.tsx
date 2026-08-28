@@ -13,6 +13,8 @@ import {
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import {
+  defaultReasonForLeaveType,
+  INVIGILATION_LEAVE_POLICY_NOTE,
   LEAVE_TYPE_FORM_OPTIONS,
   PERSONAL_LEAVE_POLICY_NOTE,
   SICK_LEAVE_POLICY_NOTE,
@@ -490,6 +492,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // Auto-switch payment type default when leave type changes
   const handleLeaveTypeChange = (type: LeaveType) => {
     setLeaveType(type);
+    setReason(defaultReasonForLeaveType(type));
   };
 
   const payrollCtx = useMemo(
@@ -1419,6 +1422,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         {leaveType === 'sick' && (
                           <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                             {SICK_LEAVE_POLICY_NOTE}
+                          </p>
+                        )}
+                        {leaveType === 'invigilation' && (
+                          <p className="mt-1.5 text-[10px] text-sky-900 leading-snug bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5">
+                            {INVIGILATION_LEAVE_POLICY_NOTE}
                           </p>
                         )}
                       </div>
@@ -2732,7 +2740,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
               <label className="block text-xs font-bold text-slate-700 mb-1">假別</label>
               <select
                 value={editLeaveType}
-                onChange={(e) => setEditLeaveType(e.target.value as LeaveType)}
+                onChange={(e) => {
+                  const next = e.target.value as LeaveType;
+                  setEditLeaveType(next);
+                  setEditReason(defaultReasonForLeaveType(next));
+                }}
                 className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
               >
                 {LEAVE_TYPE_FORM_OPTIONS.map((opt) => (
@@ -2749,6 +2761,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   status={editWellnessHoursStatus}
                   showUsage={Boolean(editLeaveDateStart)}
                 />
+              )}
+              {editLeaveType === 'invigilation' && (
+                <p className="mt-1.5 text-[10px] text-sky-900 leading-snug bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5">
+                  {INVIGILATION_LEAVE_POLICY_NOTE}
+                </p>
               )}
             </div>
 
