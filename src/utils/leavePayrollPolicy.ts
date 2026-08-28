@@ -25,7 +25,6 @@ export const WELLNESS_HOURS_PER_LEAVE_DAY = 7;
 /** 對照表涵蓋的假別（UI 選單用） */
 export const IN_SCOPE_LEAVE_TYPES: LeaveType[] = [
   'official',
-  'invigilation',
   'marriage',
   'maternity',
   'wellness',
@@ -62,6 +61,7 @@ export function normalizeLeaveType(leaveType?: LeaveType, reason?: string): Leav
   if (reason && /婚假/.test(reason)) return 'marriage';
   if (leaveType === 'training' || leaveType === 'bereavement') return 'official';
   if (leaveType === 'other') return 'personal';
+  if ((leaveType as string | undefined) === 'invigilation') return 'official';
   if (!leaveType) return 'official';
   return leaveType;
 }
@@ -132,7 +132,7 @@ export function isSickLeaveSpellPublicPayroll(start?: string, end?: string): boo
 /** 永遠公費派代之假別（不含事假／病假門檻判斷） */
 export function isAlwaysPublicLeaveType(leaveType?: LeaveType, reason?: string): boolean {
   const lt = normalizeLeaveType(leaveType, reason);
-  return lt === 'official' || lt === 'invigilation' || lt === 'marriage' || lt === 'maternity' || lt === 'wellness';
+  return lt === 'official' || lt === 'marriage' || lt === 'maternity' || lt === 'wellness';
 }
 
 export function isLeaveDatePublicPayroll(
@@ -162,7 +162,6 @@ export function shouldDeductConcurrentOnLeaveDate(
   ctx: LeavePayrollContext
 ): boolean {
   const lt = normalizeLeaveType(request.leaveType, request.reason);
-  if (lt === 'invigilation') return false;
   if (lt === 'wellness') return false;
   return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
 }
@@ -486,13 +485,6 @@ export function leavePaymentDisplayLabel(
 ): { kind: 'public' | 'self_pay'; label: string; detail: string } {
   const lt = normalizeLeaveType(leaveType, reason);
   if (paymentType === 'public') {
-    if (lt === 'invigilation') {
-      return {
-        kind: 'public',
-        label: '監考任務',
-        detail: '無代課教師；監考教師領基本鐘點，兼課不扣減',
-      };
-    }
     return {
       kind: 'public',
       label: '公費派代',
@@ -591,18 +583,10 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
   return total;
 }
 
-/** 監考任務：無代課教師，申請人領基本鐘點入代課清冊 */
-export function isInvigilationApplicantPayroll(
-  request: Pick<SubstituteRequest, 'leaveType' | 'reason' | 'substituteTeacherId'>
-): boolean {
-  return normalizeLeaveType(request.leaveType, request.reason) === 'invigilation' && !request.substituteTeacherId;
-}
-
-/** 代課清冊受款人：一般為代課教師；監考任務為申請人本人 */
+/** 代課清冊受款人：代課教師 */
 export function resolveSubstitutePayrollTeacherId(
-  request: Pick<SubstituteRequest, 'leaveType' | 'reason' | 'substituteTeacherId' | 'applicantTeacherId'>
+  request: Pick<SubstituteRequest, 'substituteTeacherId'>
 ): string | undefined {
-  if (isInvigilationApplicantPayroll(request)) return request.applicantTeacherId;
   return request.substituteTeacherId || undefined;
 }
 

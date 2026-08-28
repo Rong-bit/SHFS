@@ -14,7 +14,6 @@ import {
   AcademicStaff,
   LeaveType,
   PaymentType,
-  InvigilationNoticeRow,
 } from '../types';
 import {
   INITIAL_TEACHERS,
@@ -50,7 +49,6 @@ import {
   resolveRequestPaymentType,
   resolveSubstitutePayrollTeacherId,
 } from '../utils/leavePayrollPolicy';
-import { isInvigilationLeaveRequest } from '../utils/leaveTypes';
 import { nonTeachingDateSet } from '../utils/holidays';
 import {
   allocateRequestNumbersForBatch,
@@ -176,8 +174,6 @@ interface AppContextType {
       actingHomeroomTeacherName?: string;
     }
   ) => boolean;
-  /** 儲存監考通知單表格（僅列印用，不影響鐘點結算） */
-  saveInvigilationNoticeRows: (requestId: string, rows: InvigilationNoticeRow[]) => void;
   clearAllRequests: () => void;
   updateSystemConfig: (newConfig: Partial<SystemConfig>) => void;
   resetToMockData: () => void;
@@ -1485,16 +1481,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return ACTING_HOMEROOM_ONLY_CLASH_PASS;
       }
 
-      if (leaveType && isInvigilationLeaveRequest({ leaveType }) && !substituteTeacherId) {
-        return {
-          hasClash: false,
-          severity: 'none',
-          messages: [
-            '檢核通過：監考任務無須指定代課教師，申請人將列入代課清冊領基本鐘點。',
-          ],
-        };
-      }
-
       if (!substituteTeacherId) {
         return {
           hasClash: false,
@@ -1678,14 +1664,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq.status === 'approved') return { ok: false, reason: '已核准' };
 
     const isActingHomeroomOnly = isActingHomeroomOnlyRequest(targetReq);
-    const isInvigilationOnly =
-      isInvigilationLeaveRequest(targetReq) && !targetReq.substituteTeacherId;
 
     if (
       targetReq.requestType === 'substitute' &&
       !targetReq.substituteTeacherId &&
-      !isActingHomeroomOnly &&
-      !isInvigilationOnly
+      !isActingHomeroomOnly
     ) {
       return { ok: false, reason: '尚未指定代課教師' };
     }
@@ -1753,7 +1736,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       leaveDateStart: targetReq.leaveDateStart || targetReq.effectiveDate,
       leaveDateEnd: targetReq.leaveDateEnd || targetReq.effectiveDate,
     });
-    if (clashStatus.hasClash && !isActingHomeroomOnly && !isInvigilationOnly) {
+    if (clashStatus.hasClash && !isActingHomeroomOnly) {
       return { ok: false, reason: clashStatus.messages[0] || '存在衝堂衝突' };
     }
 
@@ -1761,7 +1744,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 保留申請快照之時段；resolve 僅用於衝堂／找現行 id，不可寫回單據蓋掉原時段
     const approvedReq: SubstituteRequest = {
       ...targetReq,
-      originalSession: isActingHomeroomOnly || isInvigilationOnly
+      originalSession: isActingHomeroomOnly
         ? targetReq.originalSession
         : isPlaceholderSession(targetReq.originalSession)
         ? resolvedOrig
@@ -1971,17 +1954,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         Boolean(data.actingHomeroomTeacherId) &&
         !data.substituteTeacherId &&
         isPlaceholderSession(data.originalSession);
-      const isInvigilationOnly =
-        data.requestType === 'substitute' &&
-        isInvigilationLeaveRequest(data) &&
-        !data.substituteTeacherId;
 
       if (
         data.requestType === 'substitute' &&
         data.autoApprove !== false &&
         !data.substituteTeacherId &&
-        !isActingHomeroomOnly &&
-        !isInvigilationOnly
+        !isActingHomeroomOnly
       ) {
         throw new Error('逕行核定請假派代須指定代課教師');
       }
@@ -2051,7 +2029,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         leaveDateEnd: data.leaveDateEnd || data.effectiveDate,
       });
 
-      if (data.autoApprove !== false && clashStatus.hasClash && !isActingHomeroomOnly && !isInvigilationOnly) {
+      if (data.autoApprove !== false && clashStatus.hasClash && !isActingHomeroomOnly) {
         throw new Error(clashStatus.messages[0] || '存在衝堂衝突，無法逕行核定');
       }
 
@@ -2061,7 +2039,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newRequest = {
         ...data,
         // 保留申請／逕行派代當下之時段快照（僅代導師佔位不可 resolve 成實課）
-        originalSession: isActingHomeroomOnly || isInvigilationOnly
+        originalSession: isActingHomeroomOnly
           ? data.originalSession
           : isPlaceholderSession(data.originalSession)
             ? resolvedOrig
@@ -2283,7 +2261,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.alert('僅代導師單須指定代導師。');
       return false;
     }
-    if (!hasPlaceholder && !nextSubId && !isInvigilationLeaveRequest({ leaveType: nextLeaveType })) {
+    if (!hasPlaceholder && !nextSubId) {
       window.alert('請假派代須指定代課教師。');
       return false;
     }
@@ -2438,12 +2416,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSessions(progressiveSessions);
     setRequests((prev) => prev.map((r) => (ids.has(r.id) ? applyPatch(r) : r)));
     return true;
-  };
-
-  const saveInvigilationNoticeRows = (requestId: string, rows: InvigilationNoticeRow[]) => {
-    setRequests((prev) =>
-      prev.map((r) => (r.id === requestId ? { ...r, invigilationNoticeRows: rows } : r))
-    );
   };
 
   const clearAllRequests = () => {
@@ -3229,7 +3201,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelRequest,
         deleteRequest,
         updateStaffDispatchFields,
-        saveInvigilationNoticeRows,
         clearAllRequests,
         updateSystemConfig,
         resetToMockData,

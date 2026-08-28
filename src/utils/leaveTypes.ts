@@ -18,19 +18,12 @@ export const PERSONAL_LEAVE_POLICY_NOTE =
 export const SICK_LEAVE_POLICY_NOTE =
   `病假連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日（曆日）起改公費派代；未達門檻者不入代課清冊。`;
 
-export const INVIGILATION_LEAVE_POLICY_NOTE =
-  '監考任務：無須指定代課教師（監考教師領基本鐘點）；基鐘與兼課課堂皆可登錄並列印通知單，申請人兼課不扣減。';
-
-export const isInvigilationLeaveRequest = (request: { leaveType?: LeaveType }) =>
-  normalizeLeaveTypeForForm(request.leaveType || 'official') === 'invigilation';
-
-/** 監考任務、僅代導師單等：不必指定代課教師 */
+/** 僅代導師單等：不必指定代課教師 */
 export const requiresSubstituteTeacherForLeave = (
-  leaveType: LeaveType,
+  _leaveType: LeaveType,
   options?: { actingHomeroomOnly?: boolean }
 ): boolean => {
   if (options?.actingHomeroomOnly) return false;
-  if (isInvigilationLeaveRequest({ leaveType })) return false;
   return true;
 };
 
@@ -41,7 +34,6 @@ export const paymentTypeForLeaveType = (leaveType: LeaveType): PaymentType => {
     case 'marriage':
     case 'maternity':
     case 'wellness':
-    case 'invigilation':
       return 'public';
     default:
       return 'private';
@@ -51,6 +43,8 @@ export const paymentTypeForLeaveType = (leaveType: LeaveType): PaymentType => {
 export function normalizeLeaveTypeForForm(leaveType: LeaveType): LeaveType {
   if (leaveType === 'training' || leaveType === 'bereavement') return 'official';
   if (leaveType === 'other') return 'personal';
+  // 舊資料相容：已移除的監考任務假別視為公假
+  if ((leaveType as string) === 'invigilation') return 'official';
   return leaveType;
 }
 
@@ -68,8 +62,6 @@ export const leaveTypeLabel = (leaveType?: LeaveType): string => {
       return '娩假 / 陪產假 (公費派代 · 按小時計)';
     case 'wellness':
       return `身心調適假 (公費派代 · 每學年 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時)`;
-    case 'invigilation':
-      return '監考任務 (公費派代 · 基本鐘點)';
     default:
       return '公假 / 公差';
   }
@@ -90,8 +82,6 @@ export const leaveTypeRemarkShort = (leaveType?: LeaveType, reason?: string): st
       return '婚假';
     case 'maternity':
       return /陪產/.test(reason || '') ? '陪產假' : '產假';
-    case 'invigilation':
-      return '監考';
     default:
       return '請假';
   }
@@ -120,8 +110,6 @@ export const actingHomeroomLeaveRemarkShort = (
       return '婚假';
     case 'maternity':
       return '產假';
-    case 'invigilation':
-      return '監考';
     default:
       return '請假';
   }
@@ -141,8 +129,6 @@ export const defaultReasonForLeaveType = (leaveType: LeaveType): string => {
       return '因就醫治療無法到校（未達連續三日者教師自理代課費）';
     case 'personal':
       return '個人事假（未達學年第八日者教師自理代課費）';
-    case 'invigilation':
-      return '因擔任考試監考任務';
     default:
       return '公務請假 (公費派代)';
   }
@@ -151,7 +137,6 @@ export const defaultReasonForLeaveType = (leaveType: LeaveType): string => {
 /** 教師／教學組請假假別選單 */
 export const LEAVE_TYPE_FORM_OPTIONS: { value: LeaveType; label: string }[] = [
   { value: 'official', label: '🏛️ 公假 / 公差 (公文指派、出差)' },
-  { value: 'invigilation', label: '📝 監考任務 (公費派代 · 基本鐘點)' },
   { value: 'marriage', label: '💒 婚假 (公費派代 · 按小時計)' },
   { value: 'maternity', label: '👶 娩假 / 陪產假 (公費派代 · 按小時計)' },
   { value: 'wellness', label: `🧘 身心調適假 (公費 · 每學年 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時)` },

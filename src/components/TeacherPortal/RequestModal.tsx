@@ -18,8 +18,6 @@ import {
 } from '../../utils/leaveDates';
 import {
   defaultReasonForLeaveType,
-  INVIGILATION_LEAVE_POLICY_NOTE,
-  isInvigilationLeaveRequest,
   LEAVE_TYPE_FORM_OPTIONS,
   PERSONAL_LEAVE_POLICY_NOTE,
   SICK_LEAVE_POLICY_NOTE,
@@ -464,10 +462,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   // When substitute mode + leave slot is ready, auto-pick a non-clashing substitute
   useEffect(() => {
     if (requestType !== 'substitute') return;
-    if (isInvigilationLeaveRequest({ leaveType })) {
-      if (substituteTeacherId) setSubstituteTeacherId('');
-      return;
-    }
     if (!effectiveOriginalSession || !currentTeacher) return;
     if (hasUserChosenSubstituteTeacher) return;
 
@@ -1231,10 +1225,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                         const next = e.target.value as LeaveType;
                         setLeaveType(next);
                         setReason(defaultReasonForLeaveType(next));
-                        if (isInvigilationLeaveRequest({ leaveType: next })) {
-                          setSubstituteTeacherId('');
-                          setHasUserChosenSubstituteTeacher(false);
-                        }
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
                     >
@@ -1258,11 +1248,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     {leaveType === 'sick' && (
                       <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                         {SICK_LEAVE_POLICY_NOTE}
-                      </p>
-                    )}
-                    {leaveType === 'invigilation' && (
-                      <p className="mt-1.5 text-[10px] text-sky-900 leading-snug bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5">
-                        {INVIGILATION_LEAVE_POLICY_NOTE}
                       </p>
                     )}
                   </div>
@@ -1291,11 +1276,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   </div>
                 </div>
 
-                {isInvigilationLeaveRequest({ leaveType }) ? (
-                  <div className="p-3 text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-xl">
-                    監考任務無須指定代課教師；您將列入代課清冊領基本鐘點。
-                  </div>
-                ) : (
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-semibold text-slate-700">
@@ -1439,7 +1419,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     </select>
                   </details>
                 </div>
-                )}
 
                 {isHomeroomTeacher(currentTeacher) && (
                   <div className="mt-3 p-3 bg-violet-50 border border-violet-200 rounded-xl space-y-2">

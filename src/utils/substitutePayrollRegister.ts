@@ -3,7 +3,6 @@ import { leaveTypeRemarkShort } from './leaveTypes';
 import {
   buildLeavePayrollContext,
   countSubstitutePublicPayrollPeriodsInMonth,
-  isInvigilationApplicantPayroll,
   isLeaveDatePublicPayroll,
   listBillableLeaveDatesInMonth,
 } from './leavePayrollPolicy';
@@ -72,17 +71,11 @@ export function buildSubstitutePayrollRemarks(
 
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
-    const invigilationPay = isInvigilationApplicantPayroll(r);
-    if (invigilationPay) {
-      if (r.applicantTeacherId !== teacherId) continue;
-    } else if (r.substituteTeacherId !== teacherId || !r.substituteTeacherId) {
-      continue;
-    }
+    if (r.substituteTeacherId !== teacherId || !r.substituteTeacherId) continue;
 
     const period = r.originalSession?.period;
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
-    const prefix = invigilationPay ? '' : `代${r.applicantTeacherName}${leaveShort}`;
-    const invigilationPrefix = invigilationPay ? leaveShort : '';
+    const prefix = `代${r.applicantTeacherName}${leaveShort}`;
     const periodOpts = { ...calendarOpts, period };
 
     if (r.leaveDateStart && period) {
@@ -96,11 +89,7 @@ export function buildSubstitutePayrollRemarks(
         isLeaveDatePublicPayroll(iso, r, payrollCtx, r.applicantTeacherId)
       );
       for (const iso of dates) {
-        if (invigilationPay) {
-          parts.push(`${formatMd(iso)}${invigilationPrefix}1節${formatPeriodLabel(period)}`);
-        } else {
-          parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);
-        }
+        parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);
       }
       continue;
     }
@@ -115,11 +104,7 @@ export function buildSubstitutePayrollRemarks(
     );
     if (periods <= 0) continue;
     const periodLabel = period ? formatPeriodLabel(period) : '';
-    if (invigilationPay) {
-      parts.push(`${invigilationPrefix}${periods}節${periodLabel}`);
-    } else {
-      parts.push(`${prefix}${periods}節${periodLabel}`);
-    }
+    parts.push(`${prefix}${periods}節${periodLabel}`);
   }
 
   return parts.join('.');

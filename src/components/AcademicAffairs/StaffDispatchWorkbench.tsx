@@ -14,8 +14,6 @@ import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import {
   defaultReasonForLeaveType,
-  INVIGILATION_LEAVE_POLICY_NOTE,
-  isInvigilationLeaveRequest,
   LEAVE_TYPE_FORM_OPTIONS,
   PERSONAL_LEAVE_POLICY_NOTE,
   requiresSubstituteTeacherForLeave,
@@ -152,10 +150,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
         editLeaveDateMode === 'range'
           ? editLeaveDateEnd || editLeaveDateStart
           : editLeaveDateStart,
-      substituteTeacherId: isPlaceholderSession(editingRequest.originalSession) || editLeaveType === 'invigilation'
+      substituteTeacherId: isPlaceholderSession(editingRequest.originalSession)
         ? ''
         : editSubstituteTeacherId,
-      substituteTeacherName: isPlaceholderSession(editingRequest.originalSession) || editLeaveType === 'invigilation'
+      substituteTeacherName: isPlaceholderSession(editingRequest.originalSession)
         ? ''
         : sub?.name || '',
       actingHomeroomTeacherId: editActingHomeroomTeacherId,
@@ -417,7 +415,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
       leaveFilterDays.length > 0 &&
       applicantSessions.length === 0
   );
-  const invigilationMode = isInvigilationLeaveRequest({ leaveType });
   const substituteTeacherRequired = requiresSubstituteTeacherForLeave(leaveType, {
     actingHomeroomOnly: canActingHomeroomOnly,
   });
@@ -426,13 +423,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // 請假日無課（無可派代課堂）時清除殘留預選，避免「沒有原課堂卻有代課教師」
   React.useEffect(() => {
     if (requestType !== 'substitute') return;
-    if (invigilationMode) {
-      if (substituteTeacherId) {
-        setSubstituteTeacherId('');
-        setHasUserChosenSubstituteTeacher(false);
-      }
-      return;
-    }
     if (applicantSessions.length === 0) {
       if (substituteTeacherId) {
         setSubstituteTeacherId('');
@@ -460,7 +450,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
     substituteTeacherId,
     hasUserChosenSubstituteTeacher,
     candidateSubstitutes,
-    invigilationMode,
   ]);
 
   // 切換申請教師／單節選堂／模式時，允許重新智慧媒合（多選勾選變化不重置，避免覆寫人選）
@@ -514,10 +503,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const handleLeaveTypeChange = (type: LeaveType) => {
     setLeaveType(type);
     setReason(defaultReasonForLeaveType(type));
-    if (isInvigilationLeaveRequest({ leaveType: type })) {
-      setSubstituteTeacherId('');
-      setHasUserChosenSubstituteTeacher(false);
-    }
   };
 
   const payrollCtx = useMemo(
@@ -840,7 +825,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
     if (requestType === 'substitute') {
       if (!substituteTeacherRequired && !substituteTeacherId) {
-        // 監考任務或僅代導師：無須代課教師
+        // 僅代導師：無須代課教師
       } else if (substituteTeacherRequired && !substituteTeacherId) {
         alert('請假派代須指定代課教師。');
         return;
@@ -1469,11 +1454,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             {SICK_LEAVE_POLICY_NOTE}
                           </p>
                         )}
-                        {leaveType === 'invigilation' && (
-                          <p className="mt-1.5 text-[10px] text-sky-900 leading-snug bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5">
-                            {INVIGILATION_LEAVE_POLICY_NOTE}
-                          </p>
-                        )}
                       </div>
 
                       <div>
@@ -1941,10 +1921,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     {canActingHomeroomOnly ? (
                       <div className="p-4 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl">
                         請假日無授課課堂，無需指定代課教師。請指定代導師後送出即可。
-                      </div>
-                    ) : invigilationMode ? (
-                      <div className="p-4 text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-xl">
-                        監考任務無須指定代課教師；申請人將列入代課清冊領基本鐘點。
                       </div>
                     ) : (
                       <>
@@ -2598,13 +2574,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                       {req.actingHomeroomTeacherName || '尚未指定'}
                                     </strong>
                                   </>
-                                ) : isInvigilationLeaveRequest(req) ? (
-                                  <>
-                                    <span className="text-slate-500">代課：</span>
-                                    <strong className="text-sky-900">
-                                      無代課教師（申請人領基本鐘點）
-                                    </strong>
-                                  </>
                                 ) : (
                                   <>
                                     <span className="text-slate-500">代課：</span>
@@ -2805,9 +2774,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   const next = e.target.value as LeaveType;
                   setEditLeaveType(next);
                   setEditReason(defaultReasonForLeaveType(next));
-                  if (isInvigilationLeaveRequest({ leaveType: next })) {
-                    setEditSubstituteTeacherId('');
-                  }
                 }}
                 className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
               >
@@ -2825,11 +2791,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   status={editWellnessHoursStatus}
                   showUsage={Boolean(editLeaveDateStart)}
                 />
-              )}
-              {editLeaveType === 'invigilation' && (
-                <p className="mt-1.5 text-[10px] text-sky-900 leading-snug bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5">
-                  {INVIGILATION_LEAVE_POLICY_NOTE}
-                </p>
               )}
             </div>
 
@@ -2901,10 +2862,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
               {isPlaceholderSession(editingRequest.originalSession) ? (
                 <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
                   當日無排課佔位單，無法指定代課教師（可改代導師／假別／請假日／事由）。
-                </p>
-              ) : editLeaveType === 'invigilation' ? (
-                <p className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-xl p-3">
-                  監考任務無須指定代課教師；申請人將列入代課清冊領基本鐘點。
                 </p>
               ) : (
                 <TeacherSearchCombobox
