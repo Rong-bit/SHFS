@@ -15,8 +15,11 @@ export const PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD = 8;
 /** 病假：連續請假達 3 日（曆日）起改公費派代 */
 export const SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD = 3;
 
-/** 身心調適假：每學年 21 小時（1 節＝1 小時） */
+/** 身心調適假：每學年 21 小時（1 日＝7 小時） */
 export const WELLNESS_LEAVE_HOURS_PER_YEAR = 21;
+
+/** 身心調適假：每請假曆日計 7 小時 */
+export const WELLNESS_HOURS_PER_LEAVE_DAY = 7;
 
 /** 對照表涵蓋的假別（UI 選單用） */
 export const IN_SCOPE_LEAVE_TYPES: LeaveType[] = [
@@ -299,27 +302,59 @@ export function resolvePaymentTypeForLeaveDraft(
   );
 }
 
-/** 身心調適假：學年已用＋本次時數（1 節＝1 小時） */
+type WellnessLeaveDraft = Pick<
+  SubstituteRequest,
+  'leaveDateStart' | 'leaveDateEnd' | 'originalSession' | 'applicantTeacherId'
+>;
+
+/** 學年內身心調適假可計費之請假曆日（去重） */
+function collectWellnessLeaveBillableDates(
+  ctx: LeavePayrollContext,
+  teacherId: string,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
+): Set<string> {
+  const { start, end } = academicYearIsoRange(ctx.academicYear);
+  const dates = new Set<string>();
+
+  const addFromDraft = (draft: WellnessLeaveDraft) => {
+    if (!draft.leaveDateStart || !draft.originalSession) return;
+    const billable = listBillableLeaveDatesInRange(draft, excludeDates, {
+      ...calendarOpts,
+      period: calendarOpts?.period ?? draft.originalSession.period,
+    });
+    for (const d of billable) {
+      if (d >= start && d <= end) dates.add(d);
+    }
+  };
+
+  for (const r of ctx.requests) {
+    if (r.requestType !== 'substitute' || r.applicantTeacherId !== teacherId) continue;
+    if (!requestInContext(r, ctx)) continue;
+    if (normalizeLeaveType(r.leaveType, r.reason) !== 'wellness') continue;
+    addFromDraft(r);
+  }
+  return dates;
+}
+
+function countWellnessLeaveDays(
+  ctx: LeavePayrollContext,
+  teacherId: string,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
+): number {
+  return collectWellnessLeaveBillableDates(ctx, teacherId, excludeDates, calendarOpts).size;
+}
+
+/** 身心調適假：學年已用時數（請假曆日 × 7 小時） */
 export function countWellnessHoursInAcademicYear(
   ctx: LeavePayrollContext,
   teacherId: string,
   excludeDates?: Set<string>,
   billableOptions?: LeaveBillableOptions
 ): number {
-  const { start, end } = academicYearIsoRange(ctx.academicYear);
-  let total = 0;
-  for (const r of ctx.requests) {
-    if (r.requestType !== 'substitute' || r.applicantTeacherId !== teacherId) continue;
-    if (!requestInContext(r, ctx)) continue;
-    if (normalizeLeaveType(r.leaveType, r.reason) !== 'wellness') continue;
-    if (!r.leaveDateStart) continue;
-    const dates = listBillableLeaveDatesInRange(r, excludeDates, {
-      ...billableOptions,
-      period: billableOptions?.period ?? r.originalSession?.period,
-    });
-    total += dates.filter((d) => d >= start && d <= end).length;
-  }
-  return total;
+  return countWellnessLeaveDays(ctx, teacherId, excludeDates, billableOptions) *
+    WELLNESS_HOURS_PER_LEAVE_DAY;
 }
 
 export function estimateWellnessHoursForDraft(
@@ -333,30 +368,110 @@ export function estimateWellnessHoursForDraft(
 ): number {
   if (!draft.leaveDateStart) return 0;
   const { start, end } = academicYearIsoRange(academicYear);
-  const dates = listBillableLeaveDatesInRange(draft, excludeDates, billableOptions);
-  return dates.filter((d) => d >= start && d <= end).length;
+  const dates = listBillableLeaveDatesInRange(draft, excludeDates, billableOptions).filter(
+    (d) => d >= start && d <= end
+  );
+  return new Set(dates).size * WELLNESS_HOURS_PER_LEAVE_DAY;
+}
+
+export type WellnessLeaveHoursStatus = {
+  usedHours: number;
+  draftHours: number;
+  totalHours: number;
+  usedDays: number;
+  draftDays: number;
+  limit: number;
+  remainingAfterDraft: number;
+  exceeded: boolean;
+  warningMessage: string | null;
+};
+
+function collectDraftWellnessLeaveDates(
+  drafts: WellnessLeaveDraft[],
+  academicYear: string | number,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
+): Set<string> {
+  const { start, end } = academicYearIsoRange(academicYear);
+  const dates = new Set<string>();
+  for (const draft of drafts) {
+    if (!draft.leaveDateStart || !draft.originalSession) continue;
+    const billable = listBillableLeaveDatesInRange(draft, excludeDates, {
+      ...calendarOpts,
+      period: calendarOpts?.period ?? draft.originalSession.period,
+    });
+    for (const d of billable) {
+      if (d >= start && d <= end) dates.add(d);
+    }
+  }
+  return dates;
+}
+
+/** 身心調適假學年時數（請假曆日 × 7 小時；多節同日只計 1 日） */
+export function getWellnessLeaveHoursStatus(
+  drafts: WellnessLeaveDraft[],
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
+): WellnessLeaveHoursStatus | null {
+  const applicantId = drafts[0]?.applicantTeacherId;
+  if (!applicantId) return null;
+
+  const usedDates = collectWellnessLeaveBillableDates(
+    ctx,
+    applicantId,
+    excludeDates,
+    calendarOpts
+  );
+  const draftDates = collectDraftWellnessLeaveDates(
+    drafts,
+    ctx.academicYear,
+    excludeDates,
+    calendarOpts
+  );
+
+  const allDates = new Set([...usedDates, ...draftDates]);
+  const usedDays = usedDates.size;
+  const draftDays = draftDates.size;
+  const usedHours = usedDays * WELLNESS_HOURS_PER_LEAVE_DAY;
+  const draftHours = draftDays * WELLNESS_HOURS_PER_LEAVE_DAY;
+  const totalHours = allDates.size * WELLNESS_HOURS_PER_LEAVE_DAY;
+  const exceeded = totalHours > WELLNESS_LEAVE_HOURS_PER_YEAR;
+  const remainingAfterDraft = WELLNESS_LEAVE_HOURS_PER_YEAR - totalHours;
+
+  return {
+    usedHours,
+    draftHours,
+    totalHours,
+    usedDays,
+    draftDays,
+    limit: WELLNESS_LEAVE_HOURS_PER_YEAR,
+    remainingAfterDraft,
+    exceeded,
+    warningMessage: exceeded
+      ? `身心調適假每學年限 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時）。本學年已用 ${usedHours} 小時，本次 ${draftHours} 小時，合計 ${totalHours} 小時，已超出上限 ${totalHours - WELLNESS_LEAVE_HOURS_PER_YEAR} 小時。`
+      : null,
+  };
 }
 
 export function validateWellnessLeaveHours(
-  draft: Pick<
-    SubstituteRequest,
-    'leaveDateStart' | 'leaveDateEnd' | 'originalSession' | 'applicantTeacherId'
-  >,
+  draft: WellnessLeaveDraft,
   ctx: LeavePayrollContext,
   excludeDates?: Set<string>,
-  calendarOpts?: LeaveBillableOptions & { academicYear?: string | number }
+  calendarOpts?: LeaveBillableOptions
 ): { ok: true } | { ok: false; message: string } {
-  const { start, end } = academicYearIsoRange(ctx.academicYear);
-  const used = countWellnessHoursInAcademicYear(ctx, draft.applicantTeacherId, excludeDates, calendarOpts);
-  const draftDates = listBillableLeaveDatesInRange(draft, excludeDates, calendarOpts).filter(
-    (d) => d >= start && d <= end
-  );
-  const draftHours = draftDates.length;
-  if (used + draftHours > WELLNESS_LEAVE_HOURS_PER_YEAR) {
-    return {
-      ok: false,
-      message: `身心調適假每學年限 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時（1 節＝1 小時）。本學年已用 ${used} 小時，本次 ${draftHours} 小時，合計超出上限。`,
-    };
+  return validateWellnessLeaveHoursForDrafts([draft], ctx, excludeDates, calendarOpts);
+}
+
+export function validateWellnessLeaveHoursForDrafts(
+  drafts: WellnessLeaveDraft[],
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
+): { ok: true } | { ok: false; message: string } {
+  const status = getWellnessLeaveHoursStatus(drafts, ctx, excludeDates, calendarOpts);
+  if (status?.exceeded && status.warningMessage) {
+    return { ok: false, message: status.warningMessage };
   }
   return { ok: true };
 }

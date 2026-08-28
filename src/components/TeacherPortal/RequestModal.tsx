@@ -20,14 +20,15 @@ import {
   LEAVE_TYPE_FORM_OPTIONS,
   PERSONAL_LEAVE_POLICY_NOTE,
   SICK_LEAVE_POLICY_NOTE,
-  WELLNESS_LEAVE_LEGAL_NOTE,
 } from '../../utils/leaveTypes';
 import {
   buildLeavePayrollContext,
+  getWellnessLeaveHoursStatus,
   leavePaymentDisplayLabel,
   resolvePaymentTypeForLeaveDraft,
-  validateWellnessLeaveHours,
+  validateWellnessLeaveHoursForDrafts,
 } from '../../utils/leavePayrollPolicy';
+import { WellnessLeaveHoursAlert } from '../Common/WellnessLeaveHoursAlert';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
@@ -257,6 +258,39 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   ]);
 
   const paymentDisplay = leavePaymentDisplayLabel(resolvedSubstitutePayment, leaveType, reason);
+
+  const wellnessHoursStatus = useMemo(() => {
+    if (leaveType !== 'wellness' || !currentTeacher || !leaveDateStart) return null;
+    const resolvedEnd =
+      leaveDateMode === 'range'
+        ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+        : leaveDateStart;
+    const sessions = leaveSessionsForSubmit.length > 0 ? leaveSessionsForSubmit : [];
+    if (sessions.length === 0) return null;
+    return getWellnessLeaveHoursStatus(
+      sessions.map((originalSession) => ({
+        leaveDateStart,
+        leaveDateEnd: resolvedEnd,
+        originalSession,
+        applicantTeacherId: currentTeacher.id,
+      })),
+      payrollCtx,
+      holidaySet,
+      calendarBillableOpts
+    );
+  }, [
+    leaveType,
+    currentTeacher,
+    leaveDateStart,
+    leaveDateEnd,
+    leaveDateMode,
+    leaveSessionsForSubmit,
+    payrollCtx,
+    holidaySet,
+    calendarBillableOpts,
+  ]);
+
+  const wellnessHoursExceeded = wellnessHoursStatus?.exceeded === true;
 
   const effectiveOriginalSession: CourseSession | undefined =
     requestType === 'substitute'
@@ -601,22 +635,20 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           leaveDateMode === 'range'
             ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
             : leaveDateStart;
-        for (const originalSession of sessionsToLeave) {
-          const wellnessCheck = validateWellnessLeaveHours(
-            {
-              leaveDateStart,
-              leaveDateEnd: resolvedEnd,
-              originalSession,
-              applicantTeacherId: currentTeacher.id,
-            },
-            payrollCtx,
-            holidaySet,
-            { ...calendarBillableOpts, period: originalSession.period }
-          );
-          if (wellnessCheck.ok === false) {
-            alert(wellnessCheck.message);
-            return;
-          }
+        const wellnessCheck = validateWellnessLeaveHoursForDrafts(
+          sessionsToLeave.map((originalSession) => ({
+            leaveDateStart,
+            leaveDateEnd: resolvedEnd,
+            originalSession,
+            applicantTeacherId: currentTeacher.id,
+          })),
+          payrollCtx,
+          holidaySet,
+          calendarBillableOpts
+        );
+        if (wellnessCheck.ok === false) {
+          alert(wellnessCheck.message);
+          return;
         }
       }
 
@@ -1196,9 +1228,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       ))}
                     </select>
                     {leaveType === 'wellness' && (
-                      <p className="mt-1.5 text-[10px] text-teal-800 leading-snug bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5">
-                        {WELLNESS_LEAVE_LEGAL_NOTE}
-                      </p>
+                      <WellnessLeaveHoursAlert
+                        status={wellnessHoursStatus}
+                        showUsage={Boolean(leaveDateStart && leaveSessionsForSubmit.length > 0)}
+                      />
                     )}
                     {leaveType === 'personal' && (
                       <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
@@ -1665,10 +1698,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
               id="btn-submit-substitution-request"
               disabled={
                 clashResult.hasClash ||
+                wellnessHoursExceeded ||
                 (requestType === 'substitute' && leaveSessionsForSubmit.length === 0)
               }
               className={`px-5 py-2.5 font-bold rounded-lg text-xs sm:text-sm shadow-sm transition flex items-center space-x-1.5 ${
-                clashResult.hasClash
+                clashResult.hasClash || wellnessHoursExceeded
                   ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                   : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 active:scale-95'
               }`}

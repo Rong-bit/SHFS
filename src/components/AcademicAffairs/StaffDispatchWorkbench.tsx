@@ -16,15 +16,16 @@ import {
   LEAVE_TYPE_FORM_OPTIONS,
   PERSONAL_LEAVE_POLICY_NOTE,
   SICK_LEAVE_POLICY_NOTE,
-  WELLNESS_LEAVE_LEGAL_NOTE,
 } from '../../utils/leaveTypes';
 import {
   buildLeavePayrollContext,
+  getWellnessLeaveHoursStatus,
   leavePaymentDisplayLabel,
   resolvePaymentTypeForLeaveDraft,
   resolveRequestPaymentType,
-  validateWellnessLeaveHours,
+  validateWellnessLeaveHoursForDrafts,
 } from '../../utils/leavePayrollPolicy';
+import { WellnessLeaveHoursAlert } from '../Common/WellnessLeaveHoursAlert';
 import { resolveOriginalSession, isPlaceholderSession } from '../../utils/resolveOriginalSession';
 import {
   countMatchingWeekdays,
@@ -133,6 +134,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const handleSaveEditRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRequest) return;
+    if (editLeaveType === 'wellness' && editWellnessHoursStatus?.exceeded) {
+      alert(editWellnessHoursStatus.warningMessage || '身心調適假已超出學年 21 小時上限。');
+      return;
+    }
     const sub = teachers.find((t) => t.id === editSubstituteTeacherId);
     const acting = teachers.find((t) => t.id === editActingHomeroomTeacherId);
     const ok = updateStaffDispatchFields(editingRequest.id, {
@@ -547,6 +552,45 @@ export const StaffDispatchWorkbench: React.FC = () => {
     reason
   );
 
+  const dispatchSessionsForWellness = useMemo(() => {
+    if (requestType !== 'substitute') return [] as CourseSession[];
+    if (sessionPickMode === 'periodRange') return batchSelectedSessions;
+    if (selectedOriginalSession) return [selectedOriginalSession];
+    return [];
+  }, [requestType, sessionPickMode, batchSelectedSessions, selectedOriginalSession]);
+
+  const wellnessHoursStatus = useMemo(() => {
+    if (leaveType !== 'wellness' || !applicantTeacher || !leaveDateStart) return null;
+    if (dispatchSessionsForWellness.length === 0) return null;
+    const resolvedEnd =
+      leaveDateMode === 'range'
+        ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
+        : leaveDateStart;
+    return getWellnessLeaveHoursStatus(
+      dispatchSessionsForWellness.map((originalSession) => ({
+        leaveDateStart,
+        leaveDateEnd: resolvedEnd,
+        originalSession,
+        applicantTeacherId: applicantTeacher.id,
+      })),
+      payrollCtx,
+      holidaySet,
+      calendarBillableOpts
+    );
+  }, [
+    leaveType,
+    applicantTeacher,
+    leaveDateStart,
+    leaveDateEnd,
+    leaveDateMode,
+    dispatchSessionsForWellness,
+    payrollCtx,
+    holidaySet,
+    calendarBillableOpts,
+  ]);
+
+  const wellnessHoursExceeded = wellnessHoursStatus?.exceeded === true;
+
   const requestPaymentCounts = useMemo(() => {
     const ctx = buildLeavePayrollContext(requests, systemConfig, {
       countStatuses: ['approved', 'pending'],
@@ -569,6 +613,55 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
     return { public: publicCount, private: privateCount };
   }, [requests, systemConfig, sessions]);
+
+  const editWellnessExcludeIds = useMemo(() => {
+    if (!editingRequest) return [] as string[];
+    if (editingRequest.batchGroupId) {
+      return requests
+        .filter((r) => r.batchGroupId === editingRequest.batchGroupId)
+        .map((r) => r.id);
+    }
+    return [editingRequest.id];
+  }, [editingRequest, requests]);
+
+  const editWellnessHoursStatus = useMemo(() => {
+    if (!editingRequest || editLeaveType !== 'wellness' || !editLeaveDateStart) return null;
+    const resolvedEnd =
+      editLeaveDateMode === 'range'
+        ? resolveLeaveDateEnd(editLeaveDateStart, editLeaveDateEnd)
+        : editLeaveDateStart;
+    const orig = resolveOriginalSession(editingRequest, sessions);
+    if (!orig) return null;
+    return getWellnessLeaveHoursStatus(
+      [
+        {
+          leaveDateStart: editLeaveDateStart,
+          leaveDateEnd: resolvedEnd,
+          originalSession: orig,
+          applicantTeacherId: editingRequest.applicantTeacherId,
+        },
+      ],
+      buildLeavePayrollContext(requests, systemConfig, {
+        excludeRequestIds: editWellnessExcludeIds,
+      }),
+      nonTeachingDateSet(systemConfig.nonTeachingDays),
+      {
+        temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+        partialStops: systemConfig.partialNonTeachingDays || [],
+        period: orig.period,
+      }
+    );
+  }, [
+    editingRequest,
+    editLeaveType,
+    editLeaveDateStart,
+    editLeaveDateEnd,
+    editLeaveDateMode,
+    editWellnessExcludeIds,
+    requests,
+    systemConfig,
+    sessions,
+  ]);
 
   // Preview clash check（連續節次：逐節檢核後合併）
   const clashPreview = useMemo(() => {
@@ -747,22 +840,20 @@ export const StaffDispatchWorkbench: React.FC = () => {
           leaveDateMode === 'range'
             ? resolveLeaveDateEnd(leaveDateStart, leaveDateEnd)
             : leaveDateStart;
-        for (const originalSession of sessionsToDispatch) {
-          const wellnessCheck = validateWellnessLeaveHours(
-            {
-              leaveDateStart,
-              leaveDateEnd: resolvedEnd,
-              originalSession,
-              applicantTeacherId: applicantTeacher.id,
-            },
-            payrollCtx,
-            holidaySet,
-            { ...calendarBillableOpts, period: originalSession.period }
-          );
-          if (wellnessCheck.ok === false) {
-            alert(wellnessCheck.message);
-            return;
-          }
+        const wellnessCheck = validateWellnessLeaveHoursForDrafts(
+          sessionsToDispatch.map((originalSession) => ({
+            leaveDateStart,
+            leaveDateEnd: resolvedEnd,
+            originalSession,
+            applicantTeacherId: applicantTeacher.id,
+          })),
+          payrollCtx,
+          holidaySet,
+          calendarBillableOpts
+        );
+        if (wellnessCheck.ok === false) {
+          alert(wellnessCheck.message);
+          return;
         }
       }
     }
@@ -1313,9 +1404,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           ))}
                         </select>
                         {leaveType === 'wellness' && (
-                          <p className="mt-1.5 text-[10px] text-teal-800 leading-snug bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5">
-                            {WELLNESS_LEAVE_LEGAL_NOTE}
-                          </p>
+                          <WellnessLeaveHoursAlert
+                            status={wellnessHoursStatus}
+                            showUsage={
+                              Boolean(leaveDateStart && dispatchSessionsForWellness.length > 0)
+                            }
+                          />
                         )}
                         {leaveType === 'personal' && (
                           <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
@@ -2228,6 +2322,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   type="submit"
                   disabled={
                     clashPreview.hasClash ||
+                    wellnessHoursExceeded ||
                     (requestType === 'substitute' &&
                       !canActingHomeroomOnly &&
                       !substituteTeacherId) ||
@@ -2237,6 +2332,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   }
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 ${
                     clashPreview.hasClash ||
+                    wellnessHoursExceeded ||
                     (requestType === 'substitute' &&
                       !canActingHomeroomOnly &&
                       !substituteTeacherId) ||
@@ -2650,6 +2746,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
               <p className="text-[11px] text-slate-500 mt-1">
                 鐘點費依對照表自動判定（儲存時重新計算，無法手動覆寫）。
               </p>
+              {editLeaveType === 'wellness' && (
+                <WellnessLeaveHoursAlert
+                  status={editWellnessHoursStatus}
+                  showUsage={Boolean(editLeaveDateStart)}
+                />
+              )}
             </div>
 
             <div>
@@ -2777,7 +2879,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-xs"
+                disabled={editLeaveType === 'wellness' && editWellnessHoursStatus?.exceeded}
+                className={`px-4 py-2 text-white text-xs font-bold rounded-xl shadow-xs ${
+                  editLeaveType === 'wellness' && editWellnessHoursStatus?.exceeded
+                    ? 'bg-slate-400 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-500'
+                }`}
               >
                 儲存修改
               </button>

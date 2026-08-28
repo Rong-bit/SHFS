@@ -3,11 +3,14 @@ import {
   PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD,
   SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD,
   WELLNESS_LEAVE_HOURS_PER_YEAR,
+  WELLNESS_HOURS_PER_LEAVE_DAY,
 } from './leavePayrollPolicy';
 
-/** 身心調適假：每學年 21 小時（得以時計），代課鐘點費公費派代 */
+export { WELLNESS_HOURS_PER_LEAVE_DAY, WELLNESS_LEAVE_HOURS_PER_YEAR };
+
+/** 身心調適假：每學年 21 小時（1 日＝7 小時），代課鐘點費公費派代 */
 export const WELLNESS_LEAVE_LEGAL_NOTE =
-  `依薪資對照表：每學年准給 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時（1 節＝1 小時，得以時計）；代課鐘點費由學校支給（公費派代）。`;
+  `依薪資對照表：每學年准給 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時，得以時計）；代課鐘點費由學校支給（公費派代）。`;
 
 export const PERSONAL_LEAVE_POLICY_NOTE =
   `事假學年累計第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 天起改公費派代；未達門檻者不入代課清冊，請假人自行與代課教師約定。`;
