@@ -103,3 +103,44 @@ export function formatRequestNumber(
   const sem = normalizeSemesterValue(semester, referenceMonth);
   return `${academicYear}-${sem}-${String(seq).padStart(4, '0')}`;
 }
+
+/**
+ * 同一 batchGroupId（連續節次／連續起迄）共用一個假單編號；
+ * 新群組只消耗一個流水號，後續同批或跨次派代沿用既有編號。
+ */
+export function allocateRequestNumbersForBatch(params: {
+  items: Array<{ batchGroupId?: string }>;
+  existing: Pick<SubstituteRequest, 'requestNumber' | 'batchGroupId'>[];
+  academicYear: string | number;
+  semester: string | number;
+  referenceMonth?: number;
+}): string[] {
+  const { items, existing, academicYear, semester, referenceMonth } = params;
+  const batchNumberCache = new Map<string, string>();
+
+  for (const req of existing) {
+    if (req.batchGroupId && req.requestNumber && !batchNumberCache.has(req.batchGroupId)) {
+      batchNumberCache.set(req.batchGroupId, req.requestNumber);
+    }
+  }
+
+  let nextSeq = nextRequestSequence(existing, academicYear, semester, referenceMonth);
+  const numbers: string[] = [];
+
+  for (const item of items) {
+    if (item.batchGroupId) {
+      let num = batchNumberCache.get(item.batchGroupId);
+      if (!num) {
+        num = formatRequestNumber(academicYear, semester, nextSeq, referenceMonth);
+        batchNumberCache.set(item.batchGroupId, num);
+        nextSeq += 1;
+      }
+      numbers.push(num);
+    } else {
+      numbers.push(formatRequestNumber(academicYear, semester, nextSeq, referenceMonth));
+      nextSeq += 1;
+    }
+  }
+
+  return numbers;
+}

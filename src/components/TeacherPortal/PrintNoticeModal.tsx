@@ -526,10 +526,9 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           </p>
         )}
         {rowPages.map((pageRows, pageIdx) => {
-          const pageRequestNumber =
-            pageIdx === 0
-              ? requestNumberLabel
-              : `${requestNumberLabel}（續${pageIdx + 1}）`;
+          const pageRequestNumber = multiPage
+            ? `${requestNumberLabel}（${pageIdx + 1}/${rowPages.length}）`
+            : requestNumberLabel;
           return (
             <div key={pageIdx} className="substitute-notice-print-page">
               <NoticeCopy

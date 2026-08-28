@@ -51,7 +51,13 @@ import {
 } from '../utils/leavePayrollPolicy';
 import { isInvigilationLeaveRequest } from '../utils/leaveTypes';
 import { nonTeachingDateSet } from '../utils/holidays';
-import { formatRequestNumber, migrateRequestNumber, nextRequestSequence, normalizeSemesterValue, normalizeSystemConfigSemester } from '../utils/requestNumbers';
+import {
+  allocateRequestNumbersForBatch,
+  formatRequestNumber,
+  migrateRequestNumber,
+  normalizeSemesterValue,
+  normalizeSystemConfigSemester,
+} from '../utils/requestNumbers';
 import {
   ensurePasswordHashed,
   hashAuthConfigPasswords,
@@ -1565,12 +1571,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const month = requestMonth ?? new Date().getMonth() + 1;
     const semester = normalizeSemesterValue(systemConfig.semester, systemConfig.currentMonth ?? month);
-    const baseSeq = nextRequestSequence(
-      requests,
-      systemConfig.academicYear,
+    const requestNumbers = allocateRequestNumbersForBatch({
+      items,
+      existing: requests,
+      academicYear: systemConfig.academicYear,
       semester,
-      systemConfig.currentMonth ?? month
-    );
+      referenceMonth: systemConfig.currentMonth ?? month,
+    });
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const nowStr = formatLocalDateTime();
 
@@ -1601,7 +1608,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
 
-      const seq = baseSeq + index;
+      const requestNumber = requestNumbers[index];
       const payrollCtx = buildLeavePayrollContext(
         [...progressiveRequests, ...prepared],
         systemConfig
@@ -1630,12 +1637,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...data,
         paymentType: resolvedPayment,
         id: `req-${stampPrefix}-${index}`,
-        requestNumber: formatRequestNumber(
-          systemConfig.academicYear,
-          semester,
-          seq,
-          systemConfig.currentMonth ?? month
-        ),
+        requestNumber,
         createdAt: nowStr,
         status: 'pending',
         clashStatus,
@@ -1927,7 +1929,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const month = requestMonth ?? systemConfig.currentMonth;
     const semester = normalizeSemesterValue(systemConfig.semester, month);
-    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, semester, month);
+    const requestNumbers = allocateRequestNumbersForBatch({
+      items,
+      existing: requests,
+      academicYear: systemConfig.academicYear,
+      semester,
+      referenceMonth: month,
+    });
     const nowStr = formatLocalDateTime();
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const staffName = (() => {
@@ -2003,12 +2011,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           leaveDateStart: data.leaveDateStart,
           leaveDateEnd: data.leaveDateEnd,
           originalSession: data.originalSession,
-          requestNumber: formatRequestNumber(
-            systemConfig.academicYear,
-            semester,
-            baseSeq + index,
-            month
-          ),
+          requestNumber: requestNumbers[index],
           createdAt: nowStr,
         };
         const { billable, missingLeaveDate } = countBillableDaysForSubstituteApprove(
@@ -2050,13 +2053,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const isAutoApproved = data.autoApprove !== false;
-      const seq = baseSeq + index;
-      const requestNumber = formatRequestNumber(
-        systemConfig.academicYear,
-        semester,
-        seq,
-        month
-      );
+      const requestNumber = requestNumbers[index];
 
       const newRequest = {
         ...data,
