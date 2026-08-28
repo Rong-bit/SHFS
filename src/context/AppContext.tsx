@@ -1546,7 +1546,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (items.length === 0) return [];
 
     const month = requestMonth ?? new Date().getMonth() + 1;
-    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, month);
+    const semester = Number(systemConfig.semester) || 1;
+    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, semester);
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const nowStr = formatLocalDateTime();
 
@@ -1606,7 +1607,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...data,
         paymentType: resolvedPayment,
         id: `req-${stampPrefix}-${index}`,
-        requestNumber: formatRequestNumber(systemConfig.academicYear, month, seq),
+        requestNumber: formatRequestNumber(systemConfig.academicYear, semester, seq),
         createdAt: nowStr,
         status: 'pending',
         clashStatus,
@@ -1897,7 +1898,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (items.length === 0) return [];
 
     const month = requestMonth ?? systemConfig.currentMonth;
-    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, month);
+    const semester = Number(systemConfig.semester) || 1;
+    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, semester);
     const nowStr = formatLocalDateTime();
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const staffName = (() => {
@@ -1973,7 +1975,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           leaveDateStart: data.leaveDateStart,
           leaveDateEnd: data.leaveDateEnd,
           originalSession: data.originalSession,
-          requestNumber: formatRequestNumber(systemConfig.academicYear, month, baseSeq + index),
+          requestNumber: formatRequestNumber(systemConfig.academicYear, semester, baseSeq + index),
           createdAt: nowStr,
         };
         const { billable, missingLeaveDate } = countBillableDaysForSubstituteApprove(
@@ -2016,7 +2018,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const isAutoApproved = data.autoApprove !== false;
       const seq = baseSeq + index;
-      const requestNumber = formatRequestNumber(systemConfig.academicYear, month, seq);
+      const requestNumber = formatRequestNumber(systemConfig.academicYear, semester, seq);
 
       const newRequest = {
         ...data,

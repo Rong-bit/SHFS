@@ -26,13 +26,37 @@ type NoticeRow = {
   subjectName: string;
 };
 
+const MAX_NOTICE_TABLE_ROWS = 7;
+
+const EMPTY_NOTICE_ROW: NoticeRow = {
+  date: '',
+  weekday: '',
+  period: '',
+  className: '',
+  subjectName: '',
+};
+
+function normalizeNoticeRows(rows: NoticeRow[]): NoticeRow[] {
+  const limited = rows.slice(0, MAX_NOTICE_TABLE_ROWS);
+  const padded = [...limited];
+  while (padded.length < MAX_NOTICE_TABLE_ROWS) {
+    padded.push({ ...EMPTY_NOTICE_ROW });
+  }
+  return padded;
+}
+
 const NOTICE_PRINT_CSS = `
 .substitute-notice-print-root {
   font-family: "DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif;
   color: #000;
+  display: flex;
+  flex-direction: column;
 }
 .substitute-notice-copy {
   color: #000;
+  max-height: 138.5mm;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .substitute-notice-title {
   font-size: 16pt;
@@ -65,11 +89,17 @@ const NOTICE_PRINT_CSS = `
 .substitute-notice-table th,
 .substitute-notice-table td {
   border: 1px solid #000;
-  padding: 3px 4px;
+  padding: 2px 4px;
   text-align: center;
   vertical-align: middle;
   font-weight: normal;
-  height: 1.55em;
+  height: 1.35em;
+}
+.substitute-notice-fold {
+  flex: 0 0 0;
+  border-top: 1px dashed #666;
+  margin: 0;
+  height: 0;
 }
 .substitute-notice-table col.col-date { width: 18%; }
 .substitute-notice-table col.col-week { width: 9%; }
@@ -79,8 +109,14 @@ const NOTICE_PRINT_CSS = `
 .substitute-notice-table col.col-hours { width: 12%; }
 .substitute-notice-sign {
   font-size: 16pt;
-  line-height: 1.45;
-  margin-top: 1.1em;
+  line-height: 1.35;
+  margin-top: 0.35em;
+}
+.substitute-notice-issue-date {
+  font-size: 16pt;
+  line-height: 1.35;
+  text-align: right;
+  margin-top: 0.35em;
 }
 @media print {
   @page {
@@ -114,13 +150,30 @@ const NOTICE_PRINT_CSS = `
   }
   .substitute-notice-print-root {
     width: 100% !important;
+    height: 277mm !important;
+    max-height: 277mm !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
   .substitute-notice-copy {
-    min-height: 128mm;
+    flex: 0 0 calc(50% - 0.5px);
+    height: calc(50% - 0.5px);
+    max-height: calc(50% - 0.5px);
+    min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
     page-break-inside: avoid;
+    padding-bottom: 1mm;
   }
-  .substitute-notice-copy + .substitute-notice-copy {
-    margin-top: 8mm;
+  .substitute-notice-fold {
+    flex: 0 0 0;
+    border-top: 1px dashed #666;
+    height: 0;
+    margin: 0;
+  }
+  .substitute-notice-copy + .substitute-notice-fold + .substitute-notice-copy {
+    margin-top: 0;
   }
 }
 `;
@@ -141,6 +194,12 @@ function formatNoticeDate(iso?: string): string {
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return iso.replace(/-/g, '/');
   return `${Number(y)}/${Number(m)}/${Number(d)}`;
+}
+
+/** 開立通知單日期，例 115.8.28 */
+function formatNoticeIssueRocDate(date: Date = new Date()): string {
+  const roc = date.getFullYear() - 1911;
+  return `${roc}.${date.getMonth() + 1}.${date.getDate()}`;
 }
 
 function weekdayFromIso(iso?: string): number | null {
@@ -189,7 +248,11 @@ const NoticeCopy: React.FC<{
   addressee: string;
   greeting: string;
   rows: NoticeRow[];
-}> = ({ title, requestNumber, addressee, greeting, rows }) => (
+  issueDateLabel: string;
+}> = ({ title, requestNumber, addressee, greeting, rows, issueDateLabel }) => {
+  const tableRows = normalizeNoticeRows(rows);
+
+  return (
   <div className="substitute-notice-copy">
     <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1.2fr)] items-end gap-2">
       <div />
@@ -233,29 +296,20 @@ const NoticeCopy: React.FC<{
         </tr>
       </thead>
       <tbody>
-        {rows.length === 0 ? (
-          <tr>
-            <td>&nbsp;</td>
-            <td />
-            <td />
-            <td />
-            <td />
-            <td />
+        {tableRows.map((row, idx) => (
+          <tr key={`${row.date}-${row.period}-${row.className}-${idx}`}>
+            <td>{row.date || '\u00A0'}</td>
+            <td>{row.weekday || '\u00A0'}</td>
+            <td>{row.period || '\u00A0'}</td>
+            <td>{row.className || '\u00A0'}</td>
+            <td>{row.subjectName || '\u00A0'}</td>
+            <td>{'\u00A0'}</td>
           </tr>
-        ) : (
-          rows.map((row, idx) => (
-            <tr key={`${row.date}-${row.period}-${row.className}-${idx}`}>
-              <td>{row.date}</td>
-              <td>{row.weekday}</td>
-              <td>{row.period}</td>
-              <td>{row.className}</td>
-              <td>{row.subjectName}</td>
-              <td />
-            </tr>
-          ))
-        )}
+        ))}
       </tbody>
     </table>
+
+    <div className="substitute-notice-issue-date">{issueDateLabel}</div>
 
     <div className="substitute-notice-sign">
       <div className="flex">
@@ -267,7 +321,8 @@ const NoticeCopy: React.FC<{
       <div className="mt-1">教務主任：</div>
     </div>
   </div>
-);
+  );
+};
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
   const { systemConfig, sessions, requests } = useApp();
@@ -367,6 +422,8 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   }
 
   const previewLabel = `${title}列印預覽（校內格式 · 一頁兩聯 · 印章留白）`;
+  const rowsTruncated = rows.length > MAX_NOTICE_TABLE_ROWS;
+  const issueDateLabel = formatNoticeIssueRocDate();
 
   const handlePrint = () => {
     const school = systemConfig.schoolName || '學校';
@@ -408,20 +465,27 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       </div>
 
       <div className="substitute-notice-print-root bg-white px-6 py-5 print:p-0">
+        {rowsTruncated && (
+          <p className="print:hidden mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            課程超過 {MAX_NOTICE_TABLE_ROWS} 列，通知單僅顯示前 {MAX_NOTICE_TABLE_ROWS} 列；其餘請另開單或分批列印。
+          </p>
+        )}
         <NoticeCopy
           title={title}
           requestNumber={requestNumberLabel}
           addressee={addressee}
           greeting={greeting}
           rows={rows}
+          issueDateLabel={issueDateLabel}
         />
-        <div className="print:hidden my-4 border-t border-dashed border-slate-300" aria-hidden />
+        <div className="substitute-notice-fold" aria-hidden />
         <NoticeCopy
           title={title}
           requestNumber={requestNumberLabel}
           addressee={addressee}
           greeting={greeting}
           rows={rows}
+          issueDateLabel={issueDateLabel}
         />
       </div>
 

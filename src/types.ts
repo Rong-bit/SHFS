@@ -110,7 +110,7 @@ export interface ClashCheckResult {
 
 export interface SubstituteRequest {
   id: string;
-  requestNumber: string; // VOC-114-10-001
+  requestNumber: string; // 115-1-001（學年度-學期-流水號）
   requestType: RequestType;
   applicantTeacherId: string;
   applicantTeacherName: string;

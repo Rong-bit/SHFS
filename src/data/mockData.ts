@@ -973,7 +973,7 @@ export const INITIAL_SESSIONS: CourseSession[] = [
 export const INITIAL_REQUESTS: SubstituteRequest[] = [
   {
     id: 'req-001',
-    requestNumber: 'VOC-114-10-001',
+    requestNumber: '114-1-001',
     requestType: 'substitute',
     applicantTeacherId: 't-ee-head',
     applicantTeacherName: '鄭志華 主任',
@@ -1005,7 +1005,7 @@ export const INITIAL_REQUESTS: SubstituteRequest[] = [
   },
   {
     id: 'req-002',
-    requestNumber: 'VOC-114-10-002',
+    requestNumber: '114-1-002',
     requestType: 'swap',
     applicantTeacherId: 't-cs-guide',
     applicantTeacherName: '林美惠 老師',
@@ -1053,7 +1053,7 @@ export const INITIAL_REQUESTS: SubstituteRequest[] = [
   },
   {
     id: 'req-004',
-    requestNumber: 'VOC-114-10-004',
+    requestNumber: '114-1-004',
     requestType: 'substitute',
     applicantTeacherId: 't-me-full',
     applicantTeacherName: '王大成 老師',

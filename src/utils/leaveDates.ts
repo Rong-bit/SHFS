@@ -396,19 +396,19 @@ export function inferRequestMonth(
   createdAt?: string,
   fallbackMonth?: number
 ): number {
-  const m = requestNumber?.match(/VOC-\d+-(\d+)-/i);
-  if (m) {
-    const n = Number(m[1]);
+  const parsed = requestNumber ? parseRequestSeq(requestNumber) : null;
+  if (parsed?.legacyMonth) {
+    const n = parsed.legacyMonth;
     if (n >= 1 && n <= 12) return n;
   }
   if (createdAt) {
-    const parsed = new Date(createdAt.replace(/-/g, '/'));
-    if (!Number.isNaN(parsed.getTime())) return parsed.getMonth() + 1;
+    const parsedDate = new Date(createdAt.replace(/-/g, '/'));
+    if (!Number.isNaN(parsedDate.getTime())) return parsedDate.getMonth() + 1;
   }
   return fallbackMonth ?? new Date().getMonth() + 1;
 }
 
-/** 單號學年＋月份對應西元年（8–12 月＝學年＋1911；1–7 月＝學年＋1912） */
+/** 單號學年對應西元年（舊版依月份；新版依建立時間） */
 export function inferRequestCalendarYear(
   requestNumber?: string,
   createdAt?: string
@@ -417,7 +417,14 @@ export function inferRequestCalendarYear(
   if (parsed) {
     const ay = Number(parsed.academicYear);
     if (Number.isFinite(ay) && ay > 90) {
-      return parsed.month >= 8 ? ay + 1911 : ay + 1912;
+      if (parsed.legacyMonth) {
+        return parsed.legacyMonth >= 8 ? ay + 1911 : ay + 1912;
+      }
+      if (createdAt) {
+        const d = new Date(createdAt.replace(/-/g, '/'));
+        if (!Number.isNaN(d.getTime())) return d.getFullYear();
+      }
+      return parsed.semester === 1 ? ay + 1911 : ay + 1912;
     }
   }
   if (createdAt) {
