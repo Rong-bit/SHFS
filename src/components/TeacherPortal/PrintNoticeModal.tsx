@@ -493,7 +493,8 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   } else if (isInvigilation) {
     title = '監考通知單';
     addressee = teacherLabel(request.applicantTeacherName, '申請');
-    greeting = `因${leaveShort}任務，以下原授課時段無法親自授課（本單無指定代課教師，監考教師領基本鐘點），`;
+    greeting =
+      '因監考任務，補發該監考時段的鐘點（該節監考教師不分基本鐘點或超鐘點，一律領基本鐘點），';
     rows = buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd);
   } else {
     rows = buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd);
