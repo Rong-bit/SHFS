@@ -127,14 +127,14 @@ const NOTICE_PRINT_CSS = `
   position: absolute;
   left: 8%;
   right: 8%;
-  top: 45%;
+  top: 40%;
   height: 18%;
   background: #fff;
 }
 .substitute-notice-page-stamp-date {
   position: absolute;
   left: 50%;
-  top: 53%;
+  top: 48%;
   transform: translate(-50%, -50%);
   font-family: "DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif;
   font-size: 17pt;
