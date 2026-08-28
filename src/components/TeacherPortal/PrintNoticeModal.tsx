@@ -1,5 +1,5 @@
-import React from 'react';
-import { CourseSession, DayOfWeek, SubstituteRequest } from '../../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CourseSession, DayOfWeek, SubstituteNoticeRow, SubstituteRequest } from '../../types';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
 import { resolveLeaveDateEnd } from '../../utils/leaveDates';
@@ -19,13 +19,7 @@ interface PrintNoticeModalProps {
   onClose: () => void;
 }
 
-type NoticeRow = {
-  date: string;
-  weekday: string;
-  period: string;
-  className: string;
-  subjectName: string;
-};
+type NoticeRow = SubstituteNoticeRow;
 
 const MAX_NOTICE_TABLE_ROWS = 7;
 
@@ -35,6 +29,7 @@ const EMPTY_NOTICE_ROW: NoticeRow = {
   period: '',
   className: '',
   subjectName: '',
+  hours: '',
 };
 
 function normalizeNoticeRows(rows: NoticeRow[]): NoticeRow[] {
@@ -326,6 +321,7 @@ function sessionRow(
     period: String(session.period),
     className: session.className || '',
     subjectName: session.subjectName || '',
+    hours: '',
   };
 }
 
@@ -392,7 +388,7 @@ const NoticeCopy: React.FC<{
             <td>{row.period || '\u00A0'}</td>
             <td>{row.className || '\u00A0'}</td>
             <td>{row.subjectName || '\u00A0'}</td>
-            <td>{'\u00A0'}</td>
+            <td>{row.hours || '\u00A0'}</td>
           </tr>
         ))}
       </tbody>
@@ -418,22 +414,184 @@ const NoticeCopy: React.FC<{
   );
 };
 
-export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { systemConfig, sessions, requests } = useApp();
+const WEEKDAY_OPTIONS = [
+  { value: '1', label: '一' },
+  { value: '2', label: '二' },
+  { value: '3', label: '三' },
+  { value: '4', label: '四' },
+  { value: '5', label: '五' },
+];
 
-  const printGroup =
-    request.status === 'approved' && request.batchGroupId
-      ? requests
-          .filter(
-            (r) => r.batchGroupId === request.batchGroupId && r.status === 'approved'
-          )
-          .sort(
-            (a, b) =>
-              a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
-              a.originalSession.period - b.originalSession.period
-          )
-      : [request];
-  const groupedSessions = printGroup.map((r) => resolveOriginalSession(r, sessions));
+const NoticeTableEditor: React.FC<{
+  rows: NoticeRow[];
+  onChange: (rows: NoticeRow[]) => void;
+  onReset: () => void;
+  onSave: () => void;
+}> = ({ rows, onChange, onReset, onSave }) => {
+  const updateRow = (index: number, field: keyof NoticeRow, value: string) => {
+    onChange(rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  };
+
+  const addRow = () => {
+    onChange([...rows, { ...EMPTY_NOTICE_ROW }]);
+  };
+
+  const removeRow = (index: number) => {
+    if (rows.length <= 1) return;
+    onChange(rows.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="print:hidden mb-4 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold text-indigo-900">課程表格（可人工調整）</p>
+          <p className="text-[10px] text-indigo-800 leading-snug mt-0.5">
+            日期、星期、節次、班級、科目、鐘點可手動輸入；列印前會自動儲存。預設由課表帶入，可按「還原課表」重設。
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onReset}
+            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-indigo-300 bg-white text-indigo-800 hover:bg-indigo-100"
+          >
+            還原課表
+          </button>
+          <button
+            type="button"
+            onClick={addRow}
+            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-indigo-300 bg-white text-indigo-800 hover:bg-indigo-100"
+          >
+            新增一列
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+          >
+            儲存表格
+          </button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse bg-white">
+          <thead>
+            <tr className="bg-indigo-100 text-indigo-900">
+              <th className="border border-indigo-200 px-2 py-1.5 font-semibold">日期</th>
+              <th className="border border-indigo-200 px-2 py-1.5 font-semibold w-16">星期</th>
+              <th className="border border-indigo-200 px-2 py-1.5 font-semibold w-16">節次</th>
+              <th className="border border-indigo-200 px-2 py-1.5 font-semibold">班級</th>
+              <th className="border border-indigo-200 px-2 py-1.5 font-semibold">科目</th>
+              <th className="border border-indigo-200 px-2 py-1.5 font-semibold w-16">鐘點</th>
+              <th className="border border-indigo-200 px-2 py-1.5 font-semibold w-14">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`notice-edit-${index}`}>
+                <td className="border border-indigo-200 p-1">
+                  <input
+                    type="text"
+                    value={row.date}
+                    onChange={(e) => updateRow(index, 'date', e.target.value)}
+                    placeholder="例 115/6/17"
+                    className="w-full min-w-[7rem] px-2 py-1 border border-slate-200 rounded text-xs"
+                  />
+                </td>
+                <td className="border border-indigo-200 p-1">
+                  <select
+                    value={row.weekday}
+                    onChange={(e) => updateRow(index, 'weekday', e.target.value)}
+                    className="w-full px-1 py-1 border border-slate-200 rounded text-xs"
+                  >
+                    <option value="">—</option>
+                    {WEEKDAY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="border border-indigo-200 p-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={row.period}
+                    onChange={(e) => updateRow(index, 'period', e.target.value)}
+                    placeholder="1-8"
+                    className="w-full px-2 py-1 border border-slate-200 rounded text-xs text-center"
+                  />
+                </td>
+                <td className="border border-indigo-200 p-1">
+                  <input
+                    type="text"
+                    value={row.className}
+                    onChange={(e) => updateRow(index, 'className', e.target.value)}
+                    placeholder="班級"
+                    className="w-full min-w-[5rem] px-2 py-1 border border-slate-200 rounded text-xs"
+                  />
+                </td>
+                <td className="border border-indigo-200 p-1">
+                  <input
+                    type="text"
+                    value={row.subjectName}
+                    onChange={(e) => updateRow(index, 'subjectName', e.target.value)}
+                    placeholder="科目"
+                    className="w-full min-w-[5rem] px-2 py-1 border border-slate-200 rounded text-xs"
+                  />
+                </td>
+                <td className="border border-indigo-200 p-1">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={row.hours}
+                    onChange={(e) => updateRow(index, 'hours', e.target.value)}
+                    placeholder="鐘點"
+                    className="w-full px-2 py-1 border border-slate-200 rounded text-xs text-center"
+                  />
+                </td>
+                <td className="border border-indigo-200 p-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => removeRow(index)}
+                    disabled={rows.length <= 1}
+                    className="text-[10px] text-rose-700 disabled:text-slate-300 font-semibold"
+                  >
+                    刪除
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
+  const { systemConfig, sessions, requests, saveNoticeRows } = useApp();
+
+  const printGroup = useMemo(
+    () =>
+      request.status === 'approved' && request.batchGroupId
+        ? requests
+            .filter(
+              (r) => r.batchGroupId === request.batchGroupId && r.status === 'approved'
+            )
+            .sort(
+              (a, b) =>
+                a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
+                a.originalSession.period - b.originalSession.period
+            )
+        : [request],
+    [request, requests]
+  );
+  const groupedSessions = useMemo(
+    () => printGroup.map((r) => resolveOriginalSession(r, sessions)),
+    [printGroup, sessions]
+  );
   const originalSession = groupedSessions[0] || resolveOriginalSession(request, sessions);
   const requestNumberLabel =
     printGroup.length > 1
@@ -443,54 +601,81 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       : request.requestNumber;
 
   const leaveShort = leaveTypeRemarkShort(request.leaveType, request.reason);
-  const leaveStart = request.leaveDateStart;
+  const leaveStart = request.leaveDateStart || '';
   const leaveEnd = resolveLeaveDateEnd(leaveStart, request.leaveDateEnd) || leaveStart;
 
-  let title = '代課通知單';
-  let addressee = teacherLabel(request.substituteTeacherName);
-  let greeting = `您好！${teacherLabel(request.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`;
-  let rows: NoticeRow[] = [];
-
-  if (request.requestType === 'reschedule') {
-    title = '調課通知單';
-    addressee = teacherLabel(request.applicantTeacherName, '申請');
-    greeting = `您好！您申請自行移課如下，請依新時段授課，`;
-    const target = request.targetReschedule;
-    rows = groupedSessions.map((sess) =>
-      sessionRow(
-        target
-          ? {
-              ...sess,
-              dayOfWeek: target.dayOfWeek,
-              period: target.period,
-              venueId: target.venueId,
-              venueName: target.venueName,
-            }
-          : sess
-      )
-    );
-  } else if (request.requestType === 'swap' && request.swapTargetSession) {
-    title = '調課通知單';
-    addressee = teacherLabel(request.swapTargetTeacherName, '對調');
-    greeting = `您好！${teacherLabel(request.applicantTeacherName, '申請')}申請同班對調如下，請依對調時段授課，`;
-    let applicantDate: string | undefined;
-    let partnerDate: string | undefined;
-    if (isTemporarySwap(request) && request.effectiveDate) {
-      const occ = resolveTemporarySwapOccurrenceDates(
-        request.effectiveDate,
-        originalSession.dayOfWeek,
-        request.swapTargetSession.dayOfWeek
-      );
-      applicantDate = occ.applicantDate;
-      partnerDate = occ.partnerDate;
+  const noticeMeta = useMemo(() => {
+    if (request.requestType === 'reschedule') {
+      const target = request.targetReschedule;
+      return {
+        title: '調課通知單',
+        addressee: teacherLabel(request.applicantTeacherName, '申請'),
+        greeting: `您好！您申請自行移課如下，請依新時段授課，`,
+        defaultRows: groupedSessions.map((sess) =>
+          sessionRow(
+            target
+              ? {
+                  ...sess,
+                  dayOfWeek: target.dayOfWeek,
+                  period: target.period,
+                  venueId: target.venueId,
+                  venueName: target.venueName,
+                }
+              : sess
+          )
+        ),
+      };
     }
-    rows = [
-      sessionRow(originalSession, applicantDate),
-      sessionRow(request.swapTargetSession, partnerDate),
-    ];
-  } else {
-    rows = buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd);
-  }
+
+    if (request.requestType === 'swap' && request.swapTargetSession) {
+      let applicantDate: string | undefined;
+      let partnerDate: string | undefined;
+      if (isTemporarySwap(request) && request.effectiveDate) {
+        const occ = resolveTemporarySwapOccurrenceDates(
+          request.effectiveDate,
+          originalSession.dayOfWeek,
+          request.swapTargetSession.dayOfWeek
+        );
+        applicantDate = occ.applicantDate;
+        partnerDate = occ.partnerDate;
+      }
+      return {
+        title: '調課通知單',
+        addressee: teacherLabel(request.swapTargetTeacherName, '對調'),
+        greeting: `您好！${teacherLabel(request.applicantTeacherName, '申請')}申請同班對調如下，請依對調時段授課，`,
+        defaultRows: [
+          sessionRow(originalSession, applicantDate),
+          sessionRow(request.swapTargetSession, partnerDate),
+        ],
+      };
+    }
+
+    return {
+      title: '代課通知單',
+      addressee: teacherLabel(request.substituteTeacherName),
+      greeting: `您好！${teacherLabel(request.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`,
+      defaultRows: buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd),
+    };
+  }, [request, groupedSessions, originalSession, leaveShort, leaveStart, leaveEnd]);
+
+  const { title, addressee, greeting, defaultRows } = noticeMeta;
+
+  const savedNoticeRows = useMemo(() => {
+    if (request.noticeRows?.length) return request.noticeRows;
+    return printGroup.find((r) => r.noticeRows?.length)?.noticeRows ?? null;
+  }, [request.noticeRows, printGroup]);
+
+  const [editableRows, setEditableRows] = useState<NoticeRow[]>(defaultRows);
+
+  useEffect(() => {
+    setEditableRows(savedNoticeRows ?? defaultRows);
+  }, [request.id, savedNoticeRows, defaultRows]);
+
+  const rows = editableRows;
+
+  const persistNoticeRows = () => {
+    saveNoticeRows(request.id, editableRows);
+  };
 
   const rowPages = chunkNoticeRows(rows, MAX_NOTICE_TABLE_ROWS);
   const multiPage = rowPages.length > 1;
@@ -498,6 +683,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const issueDateLabel = formatNoticeIssueRocDate();
 
   const handlePrint = () => {
+    persistNoticeRows();
     const school = systemConfig.schoolName || '學校';
     printWithDocumentTitle(`${school}_${title}_${request.requestNumber}`);
   };
@@ -540,6 +726,12 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       </div>
 
       <div className="substitute-notice-print-root bg-white px-6 py-5 print:p-0">
+        <NoticeTableEditor
+          rows={editableRows}
+          onChange={setEditableRows}
+          onReset={() => setEditableRows(defaultRows)}
+          onSave={persistNoticeRows}
+        />
         {multiPage && (
           <p className="print:hidden mb-3 text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
             課程共 {rows.length} 列，已自動分成 {rowPages.length} 張通知單（每張最多 {MAX_NOTICE_TABLE_ROWS} 列）；列印時每張為獨立一頁。
@@ -594,7 +786,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg shadow transition"
         >
           <Printer className="w-4 h-4" />
-            <span>列印通知單</span>
+            <span>儲存並列印通知單</span>
         </button>
       </div>
     </ModalShell>

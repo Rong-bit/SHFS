@@ -14,6 +14,7 @@ import {
   AcademicStaff,
   LeaveType,
   PaymentType,
+  SubstituteNoticeRow,
 } from '../types';
 import {
   INITIAL_TEACHERS,
@@ -174,6 +175,8 @@ interface AppContextType {
       actingHomeroomTeacherName?: string;
     }
   ) => boolean;
+  /** 儲存通知單表格列（日期、星期、節次、班級、科目、鐘點） */
+  saveNoticeRows: (requestId: string, rows: SubstituteNoticeRow[]) => void;
   clearAllRequests: () => void;
   updateSystemConfig: (newConfig: Partial<SystemConfig>) => void;
   resetToMockData: () => void;
@@ -2418,6 +2421,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
+  const saveNoticeRows = (requestId: string, rows: SubstituteNoticeRow[]) => {
+    setRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, noticeRows: rows } : r))
+    );
+  };
+
   const clearAllRequests = () => {
     const { sessions: nextSessions, blocked } = rollbackApprovedRequestsNewestFirstDetailed(
       sessions,
@@ -3201,6 +3210,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelRequest,
         deleteRequest,
         updateStaffDispatchFields,
+        saveNoticeRows,
         clearAllRequests,
         updateSystemConfig,
         resetToMockData,

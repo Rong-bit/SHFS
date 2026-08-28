@@ -99,6 +99,16 @@ export type LeaveType =
 
 export type PaymentType = 'public' | 'private'; // 公費派代 | 自費代課
 
+/** 調代課通知單表格列（列印用，可人工調整） */
+export type SubstituteNoticeRow = {
+  date: string;
+  weekday: string;
+  period: string;
+  className: string;
+  subjectName: string;
+  hours: string;
+};
+
 export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface ClashCheckResult {
@@ -168,6 +178,9 @@ export interface SubstituteRequest {
 
   /** 連續節次或連續起迄批次派代共用群組 ID；有值時通知單合併列印 */
   batchGroupId?: string;
+
+  /** 通知單表格列（人工調整後儲存；列印時優先使用） */
+  noticeRows?: SubstituteNoticeRow[];
   
   status: RequestStatus;
   rejectReason?: string;
