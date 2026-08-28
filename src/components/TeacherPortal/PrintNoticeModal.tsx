@@ -147,6 +147,17 @@ const NOTICE_PRINT_CSS = `
 .substitute-notice-copy-lower {
   padding-top: 0.5cm;
   box-sizing: border-box;
+  position: relative;
+}
+.substitute-notice-copy-stamp {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 28mm;
+  height: auto;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.95;
 }
 .substitute-notice-table col.col-date { width: 18%; }
 .substitute-notice-table col.col-week { width: 9%; }
@@ -231,6 +242,18 @@ const NOTICE_PRINT_CSS = `
   }
   .substitute-notice-copy-lower {
     padding-top: 0.5cm;
+    position: relative;
+  }
+  .substitute-notice-copy-stamp {
+    position: absolute !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 28mm !important;
+    height: auto !important;
+    opacity: 1 !important;
+    pointer-events: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .substitute-notice-fold {
     flex: 0 0 0;
@@ -374,7 +397,9 @@ const NoticeCopy: React.FC<{
       </tbody>
     </table>
 
-    <div className="substitute-notice-issue-date">{issueDateLabel}</div>
+    {!isLowerCopy && (
+      <div className="substitute-notice-issue-date">{issueDateLabel}</div>
+    )}
 
     {showSignatureBlock && (
     <div className="substitute-notice-sign">
@@ -386,6 +411,15 @@ const NoticeCopy: React.FC<{
       <div className="mt-1">教學組長：</div>
       <div className="mt-1">教務主任：</div>
     </div>
+    )}
+
+    {isLowerCopy && (
+      <img
+        src="/teaching-section-stamp.png"
+        alt=""
+        className="substitute-notice-copy-stamp"
+        aria-hidden
+      />
     )}
   </div>
   );
