@@ -1,7 +1,7 @@
 export const SCHOOL_EMAIL_DOMAIN = 'mail2.ccvs.kh.edu.tw';
 
 /** 表單 placeholder 用範例 */
-export const SCHOOL_EMAIL_EXAMPLE = `陳卉淩@${SCHOOL_EMAIL_DOMAIN}`;
+export const SCHOOL_EMAIL_EXAMPLE = `example@${SCHOOL_EMAIL_DOMAIN}`;
 
 const PLACEHOLDER_EMAIL_DOMAINS = [
   'school.edu.tw',

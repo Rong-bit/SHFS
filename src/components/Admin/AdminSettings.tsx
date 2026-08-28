@@ -2773,7 +2773,7 @@ export const AdminSettings: React.FC = () => {
                   value={teacherFormData.email}
                   onChange={(e) => setTeacherFormData({ ...teacherFormData, email: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
-                  placeholder={`如：${SCHOOL_EMAIL_EXAMPLE}`}
+                  placeholder={SCHOOL_EMAIL_EXAMPLE}
                 />
               </div>
 
@@ -2953,7 +2953,7 @@ export const AdminSettings: React.FC = () => {
                     value={staffFormData.email}
                     onChange={(e) => setStaffFormData({ ...staffFormData, email: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
-                    placeholder={`如：${SCHOOL_EMAIL_EXAMPLE}`}
+                    placeholder={SCHOOL_EMAIL_EXAMPLE}
                   />
                 </div>
               </div>

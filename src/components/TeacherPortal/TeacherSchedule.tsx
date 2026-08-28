@@ -709,7 +709,7 @@ export const TeacherSchedule: React.FC = () => {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-400">
-                電子郵件可留空；若有公務信箱請填寫（例：{SCHOOL_EMAIL_EXAMPLE}）。儲存後其他電腦同步也會一起更新。
+                電子郵件可留空；若有公務信箱請填寫（{SCHOOL_EMAIL_EXAMPLE}）。儲存後其他電腦同步也會一起更新。
               </p>
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">公務分機</label>
@@ -727,7 +727,7 @@ export const TeacherSchedule: React.FC = () => {
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder={`例如：${SCHOOL_EMAIL_EXAMPLE}`}
+                  placeholder={SCHOOL_EMAIL_EXAMPLE}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 text-sm focus:outline-none"
                 />
               </div>
