@@ -51,7 +51,7 @@ import {
 } from '../utils/leavePayrollPolicy';
 import { isInvigilationLeaveRequest } from '../utils/leaveTypes';
 import { nonTeachingDateSet } from '../utils/holidays';
-import { formatRequestNumber, nextRequestSequence } from '../utils/requestNumbers';
+import { formatRequestNumber, migrateRequestNumber, nextRequestSequence, normalizeSemesterValue, normalizeSystemConfigSemester } from '../utils/requestNumbers';
 import {
   ensurePasswordHashed,
   hashAuthConfigPasswords,
@@ -344,7 +344,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [requests, setRequests] = useState<SubstituteRequest[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.REQUESTS);
     const list: SubstituteRequest[] = saved ? JSON.parse(saved) : INITIAL_REQUESTS;
-    return list.map(sanitizeActingHomeroomOnlyClashStatus);
+    return list.map((r) =>
+      sanitizeActingHomeroomOnlyClashStatus({
+        ...r,
+        requestNumber: migrateRequestNumber(r.requestNumber),
+      })
+    );
   });
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(() => {
@@ -373,6 +378,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           parsed.standardBasePeriods || parsed.basePeriodsStandard
         ),
         authConfig: withMigratedAuthConfig(parsed.authConfig || INITIAL_SYSTEM_CONFIG.authConfig),
+        semester: normalizeSystemConfigSemester(
+          parsed.semester,
+          typeof parsed.currentMonth === 'number' ? parsed.currentMonth : new Date().getMonth() + 1
+        ),
       };
     } catch {
       return INITIAL_SYSTEM_CONFIG;
@@ -691,10 +700,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     setVenues(merged.venues || []);
     setSessions(remoteSessions);
-    setRequests((merged.requests || []).map(sanitizeActingHomeroomOnlyClashStatus));
+    setRequests((merged.requests || []).map((r) => sanitizeActingHomeroomOnlyClashStatus({
+      ...r,
+      requestNumber: migrateRequestNumber(r.requestNumber),
+    })));
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,
       ...(merged.systemConfig || {}),
+      semester: normalizeSystemConfigSemester(
+        merged.systemConfig?.semester,
+        typeof merged.systemConfig?.currentMonth === 'number'
+          ? merged.systemConfig.currentMonth
+          : INITIAL_SYSTEM_CONFIG.currentMonth
+      ),
       actingHomeroomDailyRate:
         typeof merged.systemConfig?.actingHomeroomDailyRate === 'number' &&
         Number.isFinite(merged.systemConfig.actingHomeroomDailyRate)
@@ -1546,8 +1564,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (items.length === 0) return [];
 
     const month = requestMonth ?? new Date().getMonth() + 1;
-    const semester = Number(systemConfig.semester) || 1;
-    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, semester);
+    const semester = normalizeSemesterValue(systemConfig.semester, systemConfig.currentMonth ?? month);
+    const baseSeq = nextRequestSequence(
+      requests,
+      systemConfig.academicYear,
+      semester,
+      systemConfig.currentMonth ?? month
+    );
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const nowStr = formatLocalDateTime();
 
@@ -1607,7 +1630,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...data,
         paymentType: resolvedPayment,
         id: `req-${stampPrefix}-${index}`,
-        requestNumber: formatRequestNumber(systemConfig.academicYear, semester, seq),
+        requestNumber: formatRequestNumber(
+          systemConfig.academicYear,
+          semester,
+          seq,
+          systemConfig.currentMonth ?? month
+        ),
         createdAt: nowStr,
         status: 'pending',
         clashStatus,
@@ -1898,8 +1926,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (items.length === 0) return [];
 
     const month = requestMonth ?? systemConfig.currentMonth;
-    const semester = Number(systemConfig.semester) || 1;
-    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, semester);
+    const semester = normalizeSemesterValue(systemConfig.semester, month);
+    const baseSeq = nextRequestSequence(requests, systemConfig.academicYear, semester, month);
     const nowStr = formatLocalDateTime();
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
     const staffName = (() => {
@@ -1975,7 +2003,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           leaveDateStart: data.leaveDateStart,
           leaveDateEnd: data.leaveDateEnd,
           originalSession: data.originalSession,
-          requestNumber: formatRequestNumber(systemConfig.academicYear, semester, baseSeq + index),
+          requestNumber: formatRequestNumber(
+            systemConfig.academicYear,
+            semester,
+            baseSeq + index,
+            month
+          ),
           createdAt: nowStr,
         };
         const { billable, missingLeaveDate } = countBillableDaysForSubstituteApprove(
@@ -2018,7 +2051,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const isAutoApproved = data.autoApprove !== false;
       const seq = baseSeq + index;
-      const requestNumber = formatRequestNumber(systemConfig.academicYear, semester, seq);
+      const requestNumber = formatRequestNumber(
+        systemConfig.academicYear,
+        semester,
+        seq,
+        month
+      );
 
       const newRequest = {
         ...data,

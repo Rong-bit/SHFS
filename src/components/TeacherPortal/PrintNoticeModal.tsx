@@ -96,10 +96,14 @@ const NOTICE_PRINT_CSS = `
   height: 1.35em;
 }
 .substitute-notice-fold {
-  flex: 0 0 0.5cm;
+  flex: 0 0 0;
   border-top: 1px dashed #666;
   margin: 0;
-  height: 0.5cm;
+  height: 0;
+}
+.substitute-notice-copy-lower {
+  padding-top: 0.5cm;
+  box-sizing: border-box;
 }
 .substitute-notice-table col.col-date { width: 18%; }
 .substitute-notice-table col.col-week { width: 9%; }
@@ -159,19 +163,22 @@ const NOTICE_PRINT_CSS = `
     box-sizing: border-box !important;
   }
   .substitute-notice-copy {
-    flex: 0 0 calc(50% - 0.25cm);
-    height: calc(50% - 0.25cm);
-    max-height: calc(50% - 0.25cm);
+    flex: 0 0 50%;
+    height: 50%;
+    max-height: 50%;
     min-height: 0;
     overflow: hidden;
     box-sizing: border-box;
     page-break-inside: avoid;
     padding-bottom: 1mm;
   }
+  .substitute-notice-copy-lower {
+    padding-top: 0.5cm;
+  }
   .substitute-notice-fold {
-    flex: 0 0 0.5cm;
+    flex: 0 0 0;
     border-top: 1px dashed #666;
-    height: 0.5cm;
+    height: 0;
     margin: 0;
   }
 }
@@ -249,11 +256,12 @@ const NoticeCopy: React.FC<{
   rows: NoticeRow[];
   issueDateLabel: string;
   showSignatureBlock?: boolean;
-}> = ({ title, requestNumber, addressee, greeting, rows, issueDateLabel, showSignatureBlock = true }) => {
+  isLowerCopy?: boolean;
+}> = ({ title, requestNumber, addressee, greeting, rows, issueDateLabel, showSignatureBlock = true, isLowerCopy = false }) => {
   const tableRows = normalizeNoticeRows(rows);
 
   return (
-  <div className="substitute-notice-copy">
+  <div className={`substitute-notice-copy${isLowerCopy ? ' substitute-notice-copy-lower' : ''}`}>
     <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1.2fr)] items-end gap-2">
       <div />
       <div className="substitute-notice-title">
@@ -493,6 +501,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           rows={rows}
           issueDateLabel={issueDateLabel}
           showSignatureBlock={false}
+          isLowerCopy
         />
       </div>
 
