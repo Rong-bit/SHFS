@@ -58,7 +58,8 @@ export function canReceiveActingHomeroomFee(
 }
 
 /**
- * 僅辦代導師、無授課派代（佔位／無代課教師）→ 應列印「代導師通知單」。
+ * 僅辦代導師、無授課派代（佔位／無代課教師）。
+ * 仍走代導師派代與印領清冊，但不列印通知單。
  */
 export function isActingHomeroomOnlyRequest(
   request: Pick<

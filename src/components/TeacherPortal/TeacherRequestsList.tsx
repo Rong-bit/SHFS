@@ -259,18 +259,14 @@ export const TeacherRequestsList: React.FC = () => {
               {/* Action Buttons */}
               <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
                 {/* Print button (enabled if approved) */}
-                {req.status === 'approved' && (
+                {req.status === 'approved' && !isActingHomeroomOnlyRequest(req) && (
                   <button
                     id={`btn-print-${req.id}`}
                     onClick={() => setPrintModalRequest(req)}
                     className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg shadow transition"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>
-                      {isActingHomeroomOnlyRequest(req)
-                        ? '列印代導師通知單'
-                        : '列印調代課通知單'}
-                    </span>
+                    <span>列印調代課通知單</span>
                   </button>
                 )}
 

@@ -194,8 +194,8 @@ export interface SystemConfig {
     sectionChief: number; // 組長基本鐘點（可設定）
     director: number; // 主任基本鐘點（可設定）
   };
-  schoolName: string; // 學校名稱（通知單抬頭）
-  /** 教務主任姓名（調代課通知單決行印章；空白則顯示「教務處 決行」） */
+  schoolName: string; // 學校名稱（匯出課表標題、列印檔名）
+  /** 教務主任姓名（備註用；通知單印章欄留白蓋實體章） */
   academicDirectorName?: string;
   academicYear: string; // 114
   semester: string; // 1

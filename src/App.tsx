@@ -8,6 +8,7 @@ import { AdminSettings } from './components/Admin/AdminSettings';
 import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
+import { isActingHomeroomOnlyRequest } from './utils/actingHomeroomPayrollRegister';
 
 const AppContent: React.FC = () => {
   const { 
@@ -57,8 +58,8 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {/* Official High School Printable Notice Form Modal */}
-      {printModalRequest && (
+      {/* 校內代課／調課通知單；僅代導師不列印通知單 */}
+      {printModalRequest && !isActingHomeroomOnlyRequest(printModalRequest) && (
         <PrintNoticeModal
           request={printModalRequest}
           onClose={() => setPrintModalRequest(null)}

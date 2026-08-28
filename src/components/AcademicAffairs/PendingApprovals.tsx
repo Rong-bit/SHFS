@@ -411,14 +411,12 @@ export const PendingApprovals: React.FC = () => {
                       </>
                     )}
 
-                    {req.status === 'approved' && (
+                    {req.status === 'approved' && !isActingOnly && (
                       <button
                         onClick={() => setPrintModalRequest(req)}
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow transition"
                       >
-                        {isActingOnly
-                          ? '列印代導師通知單'
-                          : '列印調代課通知單'}
+                        列印調代課通知單
                       </button>
                     )}
 

@@ -2616,20 +2616,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   <span>修改</span>
                                 </button>
                               )}
-                              {req.status === 'approved' && (
+                              {req.status === 'approved' && !isActingHomeroomOnlyRequest(req) && (
                                 <button
                                   onClick={() => setPrintModalRequest(req)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 transition"
-                                  title={
-                                    isActingHomeroomOnlyRequest(req)
-                                      ? '列印代導師通知單'
-                                      : '列印調代課通知單'
-                                  }
+                                  title="列印調代課通知單"
                                 >
                                   <Printer className="w-3 h-3" />
-                                  <span>
-                                    {isActingHomeroomOnlyRequest(req) ? '代導師單' : '通知單'}
-                                  </span>
+                                  <span>通知單</span>
                                 </button>
                               )}
 

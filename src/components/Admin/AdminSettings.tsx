@@ -1098,7 +1098,7 @@ export const AdminSettings: React.FC = () => {
           <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-200 shadow-xs">
             <label className="block text-sm font-bold text-indigo-900 mb-2 flex items-center space-x-2">
               <School className="w-4 h-4 text-indigo-600" />
-              <span>學校名稱（通知單抬頭 · 匯出課表標題）</span>
+              <span>學校名稱（匯出課表標題 · 列印檔名）</span>
             </label>
             <input
               type="text"
@@ -1107,9 +1107,9 @@ export const AdminSettings: React.FC = () => {
               className="w-full bg-white border border-indigo-300 rounded-xl p-3 text-lg font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
               placeholder="如：國立○○高級工業職業學校"
             />
-            <p className="text-[11px] text-indigo-600 mt-1.5">修改後將套用於代課通知單抬頭及匯出 Excel 課表標題。</p>
+            <p className="text-[11px] text-indigo-600 mt-1.5">修改後將套用於匯出 Excel 課表標題及通知單列印檔名。通知單本體依校內代課單格式，無學校抬頭。</p>
             <label className="block text-sm font-bold text-indigo-900 mt-4 mb-2">
-              教務主任姓名（調代課通知單決行印章）
+              教務主任姓名
             </label>
             <input
               type="text"
@@ -1121,7 +1121,7 @@ export const AdminSettings: React.FC = () => {
               placeholder="如：王大同"
             />
             <p className="text-[11px] text-indigo-600 mt-1.5">
-              填寫後通知單第四欄印章顯示「姓名＋決行」；空白則維持「教務處 決行」。
+              通知單印章欄（承辦人、教學組長、教務主任、人事室、校長）全數留白，以蓋實體章。
             </p>
           </div>
 
