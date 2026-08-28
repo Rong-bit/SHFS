@@ -100,6 +100,15 @@ export type LeaveType =
 
 export type PaymentType = 'public' | 'private'; // 公費派代 | 自費代課
 
+/** 監考通知單表格列（列印用） */
+export type InvigilationNoticeRow = {
+  date: string;
+  weekday: string;
+  period: string;
+  className: string;
+  subjectName: string;
+};
+
 export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface ClashCheckResult {
@@ -169,6 +178,9 @@ export interface SubstituteRequest {
 
   /** 連續節次或連續起迄批次派代共用群組 ID；有值時通知單合併列印 */
   batchGroupId?: string;
+
+  /** 監考通知單列印內容（人工調整）；僅供列印，不影響鐘點結算 */
+  invigilationNoticeRows?: InvigilationNoticeRow[];
   
   status: RequestStatus;
   rejectReason?: string;

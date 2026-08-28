@@ -14,6 +14,7 @@ import {
   AcademicStaff,
   LeaveType,
   PaymentType,
+  InvigilationNoticeRow,
 } from '../types';
 import {
   INITIAL_TEACHERS,
@@ -175,6 +176,8 @@ interface AppContextType {
       actingHomeroomTeacherName?: string;
     }
   ) => boolean;
+  /** 儲存監考通知單表格（僅列印用，不影響鐘點結算） */
+  saveInvigilationNoticeRows: (requestId: string, rows: InvigilationNoticeRow[]) => void;
   clearAllRequests: () => void;
   updateSystemConfig: (newConfig: Partial<SystemConfig>) => void;
   resetToMockData: () => void;
@@ -2437,6 +2440,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
+  const saveInvigilationNoticeRows = (requestId: string, rows: InvigilationNoticeRow[]) => {
+    setRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, invigilationNoticeRows: rows } : r))
+    );
+  };
+
   const clearAllRequests = () => {
     const { sessions: nextSessions, blocked } = rollbackApprovedRequestsNewestFirstDetailed(
       sessions,
@@ -3220,6 +3229,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelRequest,
         deleteRequest,
         updateStaffDispatchFields,
+        saveInvigilationNoticeRows,
         clearAllRequests,
         updateSystemConfig,
         resetToMockData,
