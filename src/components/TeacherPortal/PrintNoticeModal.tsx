@@ -70,6 +70,21 @@ function buildLeaveRangeNoticeRows(
   return sortNoticeRows(rows);
 }
 
+function rowsEqual(a: NoticeRow[], b: NoticeRow[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((row, i) => {
+    const other = b[i];
+    return (
+      row.date === other.date &&
+      row.weekday === other.weekday &&
+      row.period === other.period &&
+      row.className === other.className &&
+      row.subjectName === other.subjectName &&
+      row.hours === other.hours
+    );
+  });
+}
+
 function chunkNoticeRows(rows: NoticeRow[], size: number): NoticeRow[][] {
   if (rows.length === 0) return [[]];
   const chunks: NoticeRow[][] = [];
@@ -447,7 +462,7 @@ const NoticeTableEditor: React.FC<{
         <div>
           <p className="text-xs font-bold text-indigo-900">課程表格（可人工調整）</p>
           <p className="text-[10px] text-indigo-800 leading-snug mt-0.5">
-            日期、星期、節次、班級、科目、鐘點可手動輸入；列印前會自動儲存。預設由課表帶入，可按「還原課表」重設。
+            日期、星期、節次、班級、科目、鐘點可手動輸入；按「儲存表格」後，代課清冊會依此表格以基本鐘點計算。未儲存修改者，清冊仍依課表原邏輯。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -661,20 +676,43 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const { title, addressee, greeting, defaultRows } = noticeMeta;
 
   const savedNoticeRows = useMemo(() => {
-    if (request.noticeRows?.length) return request.noticeRows;
-    return printGroup.find((r) => r.noticeRows?.length)?.noticeRows ?? null;
-  }, [request.noticeRows, printGroup]);
+    if (request.noticeRowsCustomized && request.noticeRows?.length) {
+      return request.noticeRows;
+    }
+    const batchSaved = printGroup.find(
+      (r) => r.noticeRowsCustomized && r.noticeRows?.length
+    );
+    return batchSaved?.noticeRows ?? null;
+  }, [request.noticeRows, request.noticeRowsCustomized, printGroup]);
 
   const [editableRows, setEditableRows] = useState<NoticeRow[]>(defaultRows);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     setEditableRows(savedNoticeRows ?? defaultRows);
+    setIsDirty(false);
   }, [request.id, savedNoticeRows, defaultRows]);
 
   const rows = editableRows;
 
   const persistNoticeRows = () => {
+    if (rowsEqual(editableRows, defaultRows)) {
+      saveNoticeRows(request.id, null);
+      setIsDirty(false);
+      return;
+    }
     saveNoticeRows(request.id, editableRows);
+    setIsDirty(false);
+  };
+
+  const handleRowsChange = (next: NoticeRow[]) => {
+    setEditableRows(next);
+    setIsDirty(true);
+  };
+
+  const handleResetRows = () => {
+    setEditableRows(defaultRows);
+    setIsDirty(!rowsEqual(defaultRows, savedNoticeRows ?? defaultRows) || Boolean(request.noticeRowsCustomized));
   };
 
   const rowPages = chunkNoticeRows(rows, MAX_NOTICE_TABLE_ROWS);
@@ -683,7 +721,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const issueDateLabel = formatNoticeIssueRocDate();
 
   const handlePrint = () => {
-    persistNoticeRows();
+    if (isDirty) persistNoticeRows();
     const school = systemConfig.schoolName || '學校';
     printWithDocumentTitle(`${school}_${title}_${request.requestNumber}`);
   };
@@ -728,8 +766,8 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       <div className="substitute-notice-print-root bg-white px-6 py-5 print:p-0">
         <NoticeTableEditor
           rows={editableRows}
-          onChange={setEditableRows}
-          onReset={() => setEditableRows(defaultRows)}
+          onChange={handleRowsChange}
+          onReset={handleResetRows}
           onSave={persistNoticeRows}
         />
         {multiPage && (
@@ -786,7 +824,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg shadow transition"
         >
           <Printer className="w-4 h-4" />
-            <span>儲存並列印通知單</span>
+            <span>{isDirty ? '儲存並列印通知單' : '列印通知單'}</span>
         </button>
       </div>
     </ModalShell>

@@ -91,6 +91,10 @@ import {
   teacherHasSubstituteOccupancy,
   teacherWeeklyLoadTowardLimit,
 } from '../utils/substituteCandidates';
+import {
+  countNoticeRowsSubstitutePayrollInMonth,
+  resolveEffectiveNoticeRows,
+} from '../utils/noticePayroll';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -175,8 +179,8 @@ interface AppContextType {
       actingHomeroomTeacherName?: string;
     }
   ) => boolean;
-  /** 儲存通知單表格列（日期、星期、節次、班級、科目、鐘點） */
-  saveNoticeRows: (requestId: string, rows: SubstituteNoticeRow[]) => void;
+  /** 儲存通知單表格列；傳 null 表示清除人工調整、恢復代課清冊原計算 */
+  saveNoticeRows: (requestId: string, rows: SubstituteNoticeRow[] | null) => void;
   clearAllRequests: () => void;
   updateSystemConfig: (newConfig: Partial<SystemConfig>) => void;
   resetToMockData: () => void;
@@ -2421,9 +2425,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  const saveNoticeRows = (requestId: string, rows: SubstituteNoticeRow[]) => {
+  const saveNoticeRows = (requestId: string, rows: SubstituteNoticeRow[] | null) => {
     setRequests((prev) =>
-      prev.map((r) => (r.id === requestId ? { ...r, noticeRows: rows } : r))
+      prev.map((r) => {
+        if (r.id !== requestId) return r;
+        if (rows && rows.length > 0) {
+          return { ...r, noticeRows: rows, noticeRowsCustomized: true };
+        }
+        const { noticeRows: _rows, noticeRowsCustomized: _custom, ...rest } = r;
+        return rest;
+      })
     );
   };
 
@@ -3089,6 +3100,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         partialStops: systemConfig.partialNonTeachingDays || [],
         weeksInMonth: systemConfig.weeksInMonth ?? 4,
       };
+      const noticeBatchCounted = new Set<string>();
 
       requests
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
@@ -3100,17 +3112,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ...leaveCalendarOpts,
             period: r.originalSession?.period,
           };
-          const publicPeriods = countSubstitutePublicPayrollPeriodsInMonth(
-            r,
-            settlementMonth,
-            settlementYear,
-            payrollCtx,
-            holidaySet,
-            periodOpts
-          );
+
+          const effectiveNoticeRows = resolveEffectiveNoticeRows(r, requests);
+          let publicPeriods = 0;
+          let rate = rateForRequest(r);
+
+          if (effectiveNoticeRows) {
+            if (r.batchGroupId) {
+              if (noticeBatchCounted.has(r.batchGroupId)) return;
+              noticeBatchCounted.add(r.batchGroupId);
+            }
+            if (resolveRequestPaymentType(r, payrollCtx, holidaySet, periodOpts) !== 'public') {
+              return;
+            }
+            publicPeriods = countNoticeRowsSubstitutePayrollInMonth(
+              effectiveNoticeRows,
+              settlementMonth,
+              settlementYear,
+              leaveCalendarOpts.weeksInMonth
+            );
+            rate = hourlyRate;
+          } else {
+            publicPeriods = countSubstitutePublicPayrollPeriodsInMonth(
+              r,
+              settlementMonth,
+              settlementYear,
+              payrollCtx,
+              holidaySet,
+              periodOpts
+            );
+          }
+
           if (publicPeriods <= 0) return;
 
-          const rate = rateForRequest(r);
           if (payrollTeacherId === teacher.id) {
             publicSubstitutePeriods += publicPeriods;
             publicSubstituteAmount += rate * publicPeriods;

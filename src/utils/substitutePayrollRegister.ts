@@ -5,9 +5,16 @@ import {
   countSubstitutePublicPayrollPeriodsInMonth,
   isLeaveDatePublicPayroll,
   listBillableLeaveDatesInMonth,
+  resolveRequestPaymentType,
 } from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
+import {
+  listNoticeRowsInSettlementMonth,
+  parseNoticeRowDateToIso,
+  parseNoticeRowHours,
+  resolveEffectiveNoticeRows,
+} from './noticePayroll';
 import {
   formatPayrollMonthRangeLabel,
   formatRocYear,
@@ -68,6 +75,8 @@ export function buildSubstitutePayrollRemarks(
     countStatuses: ['approved'],
   });
   const parts: string[] = [];
+  const noticeBatchHandled = new Set<string>();
+  const weeksInMonth = systemConfig.weeksInMonth ?? 4;
 
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
@@ -77,6 +86,31 @@ export function buildSubstitutePayrollRemarks(
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
     const prefix = `代${r.applicantTeacherName}${leaveShort}`;
     const periodOpts = { ...calendarOpts, period };
+
+    const effectiveNoticeRows = resolveEffectiveNoticeRows(r, requests);
+    if (effectiveNoticeRows) {
+      if (r.batchGroupId) {
+        if (noticeBatchHandled.has(r.batchGroupId)) continue;
+        noticeBatchHandled.add(r.batchGroupId);
+      }
+      if (resolveRequestPaymentType(r, payrollCtx, holidaySet, periodOpts) !== 'public') {
+        continue;
+      }
+      const rowsInMonth = listNoticeRowsInSettlementMonth(
+        effectiveNoticeRows,
+        settlementMonth,
+        settlementYear,
+        weeksInMonth
+      );
+      for (const row of rowsInMonth) {
+        const iso = parseNoticeRowDateToIso(row.date);
+        if (!iso) continue;
+        const hours = parseNoticeRowHours(row.hours);
+        const periodLabel = row.period ? formatPeriodLabel(Number(row.period)) : '';
+        parts.push(`${formatMd(iso)}${prefix}${hours}節${periodLabel}`);
+      }
+      continue;
+    }
 
     if (r.leaveDateStart && period) {
       const dates = listBillableLeaveDatesInMonth(

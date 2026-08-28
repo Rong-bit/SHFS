@@ -181,6 +181,9 @@ export interface SubstituteRequest {
 
   /** 通知單表格列（人工調整後儲存；列印時優先使用） */
   noticeRows?: SubstituteNoticeRow[];
+
+  /** 為 true 時，代課清冊依 noticeRows 計算（基本鐘點）；未調整則仍依課表原邏輯 */
+  noticeRowsCustomized?: boolean;
   
   status: RequestStatus;
   rejectReason?: string;
