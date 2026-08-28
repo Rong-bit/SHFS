@@ -1332,7 +1332,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>📋 全校調代課登錄簿與公假代課清冊</span>
+            <span>全校調代課登錄簿與公假代課清冊</span>
             <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[10px] font-black">
               {requests.length}
             </span>
