@@ -49,6 +49,7 @@ import { ModalShell } from '../Common/ModalShell';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
+import { NoticeTableEditor, useSubstituteNoticeEditor } from '../TeacherPortal/SubstituteNoticeEditor';
 import { 
   UserCheck, 
   User, 
@@ -74,6 +75,77 @@ import {
   Edit2,
   X
 } from 'lucide-react';
+
+type RequestListGroup = {
+  key: string;
+  requests: SubstituteRequest[];
+  primary: SubstituteRequest;
+};
+
+function sortRequestsBySession(a: SubstituteRequest, b: SubstituteRequest) {
+  return (
+    a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
+    a.originalSession.period - b.originalSession.period
+  );
+}
+
+function groupRequestsForList(requests: SubstituteRequest[]): RequestListGroup[] {
+  const groups: RequestListGroup[] = [];
+  const seenBatch = new Set<string>();
+
+  for (const req of requests) {
+    if (req.batchGroupId) {
+      if (seenBatch.has(req.batchGroupId)) continue;
+      seenBatch.add(req.batchGroupId);
+      const batch = requests
+        .filter((r) => r.batchGroupId === req.batchGroupId)
+        .sort(sortRequestsBySession);
+      groups.push({
+        key: `batch-${req.batchGroupId}`,
+        requests: batch,
+        primary: batch[0],
+      });
+      continue;
+    }
+    groups.push({ key: req.id, requests: [req], primary: req });
+  }
+
+  return groups;
+}
+
+const RequestNoticeTab: React.FC<{
+  request: SubstituteRequest;
+  onPrint: () => void;
+}> = ({ request, onPrint }) => {
+  const { editableRows, isDirty, onRowsChange, onReset, onSave } = useSubstituteNoticeEditor(request);
+
+  const handlePrint = () => {
+    if (isDirty) onSave();
+    onPrint();
+  };
+
+  return (
+    <div className="space-y-3">
+      <NoticeTableEditor
+        rows={editableRows}
+        onChange={onRowsChange}
+        onReset={onReset}
+        onSave={onSave}
+        compact
+      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handlePrint}
+          className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow-xs transition"
+        >
+          <Printer className="w-4 h-4" />
+          <span>{isDirty ? '儲存並預覽列印' : '預覽並列印通知單'}</span>
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const StaffDispatchWorkbench: React.FC = () => {
   const {
@@ -115,12 +187,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [editLeaveDateEnd, setEditLeaveDateEnd] = useState('');
   const [editSubstituteTeacherId, setEditSubstituteTeacherId] = useState('');
   const [editActingHomeroomTeacherId, setEditActingHomeroomTeacherId] = useState('');
+  const [editModalTab, setEditModalTab] = useState<'request' | 'notice'>('request');
 
   const openEditRequest = (req: SubstituteRequest) => {
     if (req.requestType !== 'substitute') {
       alert('目前僅支援修改請假派代單。');
       return;
     }
+    setEditModalTab('request');
     setEditingRequest(req);
     setEditLeaveType(req.leaveType || 'official');
     setEditReason(req.reason || '');
@@ -1113,6 +1187,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
       return true;
     });
   }, [resolvedRequests, listFilter, searchTerm, requests, systemConfig]);
+
+  const groupedListRequests = useMemo(
+    () => groupRequestsForList(filteredRequests),
+    [filteredRequests]
+  );
 
   // Handle batch approval
   const handleBatchApprove = () => {
@@ -2505,13 +2584,20 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredRequests.map((req) => {
-                      const isPending = req.status === 'pending';
-                      const isSelected = selectedRequestIds.includes(req.id);
+                    groupedListRequests.map((group) => {
+                      const req = group.primary;
+                      const isMulti = group.requests.length > 1;
+                      const groupPendingIds = group.requests
+                        .filter((r) => r.status === 'pending')
+                        .map((r) => r.id);
+                      const isPending = groupPendingIds.length > 0;
+                      const isSelected =
+                        groupPendingIds.length > 0 &&
+                        groupPendingIds.every((id) => selectedRequestIds.includes(id));
 
                       return (
                         <tr
-                          key={req.id}
+                          key={group.key}
                           className={`hover:bg-slate-50 transition ${
                             isSelected ? 'bg-indigo-50/50' : ''
                           }`}
@@ -2523,9 +2609,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 checked={isSelected}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedRequestIds(prev => [...prev, req.id]);
+                                    setSelectedRequestIds((prev) => [
+                                      ...prev,
+                                      ...groupPendingIds.filter((id) => !prev.includes(id)),
+                                    ]);
                                   } else {
-                                    setSelectedRequestIds(prev => prev.filter(id => id !== req.id));
+                                    setSelectedRequestIds((prev) =>
+                                      prev.filter((id) => !groupPendingIds.includes(id))
+                                    );
                                   }
                                 }}
                                 className="rounded text-indigo-600 focus:ring-indigo-500"
@@ -2536,7 +2627,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           </td>
 
                           <td className="p-3 font-mono font-bold text-indigo-900">
-                            {req.requestNumber}
+                            <div>{req.requestNumber}</div>
+                            {isMulti && (
+                              <div className="text-[10px] font-semibold text-indigo-600 mt-0.5">
+                                共 {group.requests.length} 節
+                              </div>
+                            )}
                           </td>
 
                           <td className="p-3">
@@ -2545,19 +2641,33 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           </td>
 
                           <td className="p-3">
-                            <div className="font-semibold text-slate-800">
-                              {req.originalSession.className} 《{req.originalSession.subjectName}》
-                            </div>
-                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                              <span>{dayNames[req.originalSession.dayOfWeek]} 第{req.originalSession.period}節</span>
-                              <span>·</span>
-                              <span>{req.originalSession.venueName}</span>
-                              {isPracticalSession(req.originalSession) && (
-                                <span className="px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">實習</span>
-                              )}
-                            </div>
+                            {group.requests.map((item, idx) => (
+                              <div
+                                key={item.id}
+                                className={
+                                  idx > 0 ? 'mt-2.5 pt-2.5 border-t border-slate-100' : ''
+                                }
+                              >
+                                <div className="font-semibold text-slate-800">
+                                  {item.originalSession.className} 《{item.originalSession.subjectName}》
+                                </div>
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <span>
+                                    {dayNames[item.originalSession.dayOfWeek]} 第
+                                    {item.originalSession.period}節
+                                  </span>
+                                  <span>·</span>
+                                  <span>{item.originalSession.venueName}</span>
+                                  {isPracticalSession(item.originalSession) && (
+                                    <span className="px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">
+                                      實習
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                             {req.requestType === 'substitute' && (
-                              <div className="text-[11px] text-amber-800 font-semibold mt-0.5">
+                              <div className="text-[11px] text-amber-800 font-semibold mt-1.5">
                                 請假：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
                                 {req.batchGroupId ? ' · 合併通知單' : ''}
                               </div>
@@ -2652,7 +2762,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   type="button"
                                   onClick={() => openEditRequest(req)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 transition"
-                                  title="修改假別、事由、請假日、代課／代導師"
+                                  title={
+                                    req.status === 'approved' && !isActingHomeroomOnlyRequest(req)
+                                      ? '修改假別、事由、請假日、代課／代導師、通知單表格'
+                                      : '修改假別、事由、請假日、代課／代導師'
+                                  }
                                 >
                                   <Edit2 className="w-3 h-3" />
                                   <span>修改</span>
@@ -2660,6 +2774,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               )}
                               {req.status === 'approved' && !isActingHomeroomOnlyRequest(req) && (
                                 <button
+                                  type="button"
                                   onClick={() => setPrintModalRequest(req)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 transition"
                                   title="列印調代課通知單"
@@ -2737,13 +2852,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
         </div>
       )}
 
-      {editingRequest && (
+      {editingRequest && (() => {
+        const showNoticeTab =
+          editingRequest.status === 'approved' && !isActingHomeroomOnlyRequest(editingRequest);
+
+        return (
         <ModalShell
           scroll="panel"
           backdropClassName="bg-slate-900/60 backdrop-blur-xs"
-          panelClassName="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 max-h-[90vh] overflow-y-auto"
+          panelClassName={`bg-white rounded-2xl shadow-2xl w-full border border-slate-200 max-h-[90vh] overflow-y-auto ${
+            showNoticeTab && editModalTab === 'notice' ? 'max-w-3xl' : 'max-w-lg'
+          }`}
         >
-          <form onSubmit={handleSaveEditRequest} className="p-6 space-y-4">
+          <div className="p-6 space-y-4">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -2766,6 +2887,43 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </button>
             </div>
 
+            {showNoticeTab && (
+              <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setEditModalTab('request')}
+                  className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition ${
+                    editModalTab === 'request'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  申請資料
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditModalTab('notice')}
+                  className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition ${
+                    editModalTab === 'notice'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  通知單表格
+                </button>
+              </div>
+            )}
+
+            {editModalTab === 'notice' && showNoticeTab ? (
+              <RequestNoticeTab
+                request={editingRequest}
+                onPrint={() => {
+                  setPrintModalRequest(editingRequest);
+                  setEditingRequest(null);
+                }}
+              />
+            ) : (
+          <form onSubmit={handleSaveEditRequest} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">假別</label>
               <select
@@ -2930,8 +3088,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </button>
             </div>
           </form>
+            )}
+          </div>
         </ModalShell>
-      )}
+        );
+      })()}
 
       {deletingRequestId && (
         <ModalShell
