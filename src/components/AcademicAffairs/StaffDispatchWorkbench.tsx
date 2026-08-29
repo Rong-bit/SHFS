@@ -49,6 +49,12 @@ import { ModalShell } from '../Common/ModalShell';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
+import {
+  MAX_NOTICE_TABLE_ROWS,
+  NoticeTableEditor,
+  chunkNoticeRows,
+  useSubstituteNoticeEditor,
+} from '../TeacherPortal/SubstituteNoticeEditor';
 import { 
   UserCheck, 
   User, 
@@ -74,6 +80,30 @@ import {
   Edit2,
   X
 } from 'lucide-react';
+
+const RequestNoticeTab: React.FC<{ request: SubstituteRequest }> = ({ request }) => {
+  const { editableRows, onRowsChange, onReset, onSave } = useSubstituteNoticeEditor(request);
+  const rowPages = chunkNoticeRows(editableRows, MAX_NOTICE_TABLE_ROWS);
+  const multiPage = rowPages.length > 1;
+
+  return (
+    <div className="space-y-3">
+      <NoticeTableEditor
+        rows={editableRows}
+        onChange={onRowsChange}
+        onReset={onReset}
+        onSave={onSave}
+        compact
+      />
+      {multiPage && (
+        <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+          課程共 {editableRows.length} 列，已自動分成 {rowPages.length} 張通知單（每張最多{' '}
+          {MAX_NOTICE_TABLE_ROWS} 列）；列印時每張為獨立一頁。
+        </p>
+      )}
+    </div>
+  );
+};
 
 export const StaffDispatchWorkbench: React.FC = () => {
   const {
@@ -115,12 +145,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [editLeaveDateEnd, setEditLeaveDateEnd] = useState('');
   const [editSubstituteTeacherId, setEditSubstituteTeacherId] = useState('');
   const [editActingHomeroomTeacherId, setEditActingHomeroomTeacherId] = useState('');
+  const [editModalTab, setEditModalTab] = useState<'request' | 'notice'>('request');
 
   const openEditRequest = (req: SubstituteRequest) => {
     if (req.requestType !== 'substitute') {
       alert('目前僅支援修改請假派代單。');
       return;
     }
+    const showNoticeTab =
+      req.status === 'approved' && !isActingHomeroomOnlyRequest(req);
+    setEditModalTab(showNoticeTab ? 'notice' : 'request');
     setEditingRequest(req);
     setEditLeaveType(req.leaveType || 'official');
     setEditReason(req.reason || '');
@@ -2652,7 +2686,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   type="button"
                                   onClick={() => openEditRequest(req)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 transition"
-                                  title="修改假別、事由、請假日、代課／代導師"
+                                  title={
+                                    req.status === 'approved' && !isActingHomeroomOnlyRequest(req)
+                                      ? '修改申請資料與課程表格（儲存表格後代課清冊依基本鐘點計算）'
+                                      : '修改假別、事由、請假日、代課／代導師'
+                                  }
                                 >
                                   <Edit2 className="w-3 h-3" />
                                   <span>修改</span>
@@ -2737,13 +2775,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
         </div>
       )}
 
-      {editingRequest && (
+      {editingRequest && (() => {
+        const showNoticeTab =
+          editingRequest.status === 'approved' && !isActingHomeroomOnlyRequest(editingRequest);
+
+        return (
         <ModalShell
           scroll="panel"
           backdropClassName="bg-slate-900/60 backdrop-blur-xs"
-          panelClassName="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 max-h-[90vh] overflow-y-auto"
+          panelClassName={`bg-white rounded-2xl shadow-2xl w-full border border-slate-200 max-h-[90vh] overflow-y-auto ${
+            showNoticeTab && editModalTab === 'notice' ? 'max-w-3xl' : 'max-w-lg'
+          }`}
         >
-          <form onSubmit={handleSaveEditRequest} className="p-6 space-y-4">
+          <div className="p-6 space-y-4">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -2766,6 +2810,37 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </button>
             </div>
 
+            {showNoticeTab && (
+              <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setEditModalTab('request')}
+                  className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition ${
+                    editModalTab === 'request'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  申請資料
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditModalTab('notice')}
+                  className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition ${
+                    editModalTab === 'notice'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  課程表格
+                </button>
+              </div>
+            )}
+
+            {editModalTab === 'notice' && showNoticeTab ? (
+              <RequestNoticeTab request={editingRequest} />
+            ) : (
+          <form onSubmit={handleSaveEditRequest} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">假別</label>
               <select
@@ -2930,8 +3005,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </button>
             </div>
           </form>
+            )}
+          </div>
         </ModalShell>
-      )}
+        );
+      })()}
 
       {deletingRequestId && (
         <ModalShell
