@@ -44,8 +44,6 @@ const AppContent: React.FC = () => {
           </div>
           <div className="flex items-center space-x-4 text-slate-500 text-[11px]">
             <span>教育部技術型高中部定授課標準</span>
-            <span>公立學校鐘點費基準 (505元/節)</span>
-            <span>實習工場防護安全管理</span>
           </div>
         </div>
       </footer>
