@@ -32,7 +32,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`高職調代課與課點費管理系統 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`高職調代課與鐘點費管理系統 Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

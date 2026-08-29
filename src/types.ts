@@ -195,7 +195,7 @@ export interface SubstituteRequest {
 }
 
 export interface SystemConfig {
-  dayHourlyRate: number; // 日間部每節鐘點費 (420)
+  dayHourlyRate: number; // 日間部每節鐘點費 (505，114/9/1 起)
   nightHourlyRate: number; // 夜間部/課輔每節鐘點費 (500)
   /**
    * 代導師減授鐘點費每日金額（預設 404）。

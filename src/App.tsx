@@ -40,11 +40,11 @@ const AppContent: React.FC = () => {
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 text-xs py-4 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap justify-between items-center gap-2">
           <div>
-            高職調代課與課點費管理系統 © 2026
+            高職調代課與鐘點費管理系統 · 版權 © 2026 Huang Jun-rong
           </div>
           <div className="flex items-center space-x-4 text-slate-500 text-[11px]">
             <span>教育部技術型高中部定授課標準</span>
-            <span>公立學校鐘點費基準 (420元/節)</span>
+            <span>公立學校鐘點費基準 (505元/節)</span>
             <span>實習工場防護安全管理</span>
           </div>
         </div>

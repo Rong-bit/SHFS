@@ -83,7 +83,7 @@ export const PERIOD_DEFINITIONS: PeriodDefinition[] = [
 ];
 
 export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
-  dayHourlyRate: 420,
+  dayHourlyRate: 505,
   nightHourlyRate: 500,
   actingHomeroomDailyRate: 404,
   maxWeeklyOverloadPeriods: 9,

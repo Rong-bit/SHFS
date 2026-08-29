@@ -83,7 +83,7 @@ export const AccountingSettlement: React.FC = () => {
       '公費代課金額': s.publicSubstituteAmount,
       '自費代課(受領)金額': s.privateSubstituteEarnAmount,
       '事病假代課(扣款)金額': s.privateLeaveDeductionAmount,
-      '應領課點費總額 (元)': s.netPayableAmount,
+      '應領鐘點費總額 (元)': s.netPayableAmount,
       '每週兼代課估算 (節)': s.totalSubstituteWeeklyEstimated.toFixed(1),
       '兼代課9節上限檢核': s.isOverLimit ? '【警示】超過9節法定上限' : '符合法規',
     }));
@@ -104,7 +104,7 @@ export const AccountingSettlement: React.FC = () => {
       '公費代課金額': totalPublicSubAmount,
       '自費代課(受領)金額': totalPrivateSubAmount,
       '事病假代課(扣款)金額': totalPrivateLeaveDeduction,
-      '應領課點費總額 (元)': totalNetPayable,
+      '應領鐘點費總額 (元)': totalNetPayable,
       '每週兼代課估算 (節)': '' as any,
       '兼代課9節上限檢核': warningCount > 0 ? `共 ${warningCount} 人超額警示` : '全數合規',
     });
@@ -133,9 +133,9 @@ export const AccountingSettlement: React.FC = () => {
     ];
     worksheet['!cols'] = colWidths;
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, `${selectedMonth}月份課點費結算清冊`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, `${selectedMonth}月份鐘點費結算清冊`);
 
-    const fileName = `國立高職_${systemConfig.academicYear}學年第${systemConfig.semester}學期_${selectedMonth}月份_鐘點課點費主計結算清冊.xlsx`;
+    const fileName = `國立高職_${systemConfig.academicYear}學年第${systemConfig.semester}學期_${selectedMonth}月份_鐘點費主計結算清冊.xlsx`;
     XLSX.writeFile(workbook, fileName);
   };
 

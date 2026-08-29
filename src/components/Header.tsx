@@ -92,7 +92,7 @@ export const Header: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
-                高職調代課與課點費管理系統
+                高職調代課與鐘點費管理系統
               </p>
             </div>
           </div>

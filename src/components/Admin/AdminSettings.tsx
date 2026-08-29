@@ -133,7 +133,7 @@ export const AdminSettings: React.FC = () => {
   
   // Safe form config state
   const [formConfig, setFormConfig] = useState<SystemConfig>(() => ({
-    dayHourlyRate: systemConfig?.dayHourlyRate ?? 420,
+    dayHourlyRate: systemConfig?.dayHourlyRate ?? 505,
     nightHourlyRate: systemConfig?.nightHourlyRate ?? 500,
     actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
     maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
@@ -182,7 +182,7 @@ export const AdminSettings: React.FC = () => {
   // Sync if systemConfig changes
   useEffect(() => {
     setFormConfig({
-      dayHourlyRate: systemConfig?.dayHourlyRate ?? 420,
+      dayHourlyRate: systemConfig?.dayHourlyRate ?? 505,
       nightHourlyRate: systemConfig?.nightHourlyRate ?? 500,
       actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
       maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
@@ -909,7 +909,7 @@ export const AdminSettings: React.FC = () => {
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 節</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    公立高級中等學校日間部兼課、代課、超鐘點每節公定 420 元。
+                    公立高級中等學校日間部兼課、代課、超鐘點每節公定 505 元（114 年 9 月 1 日起）。
                   </p>
                 </div>
 
@@ -968,7 +968,7 @@ export const AdminSettings: React.FC = () => {
                     min={1}
                     required
                   />
-                  <span className="text-[10px] text-slate-400">法規上限 9 節（兼4+代5）</span>
+                  <span className="text-[10px] text-slate-400">法規上限 9 節（兼6+代5）</span>
                 </div>
 
               </div>
@@ -2584,7 +2584,7 @@ export const AdminSettings: React.FC = () => {
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="font-bold text-slate-900">2. 《公立高級中等學校兼課代課及超時授課鐘點費支給基準》</div>
-                  <p>公立高職日間部每節 420 元。兼任、代課每週合併計算不得超過 9 節（兼課 4 節、代課 5 節為限）。</p>
+                  <p>公立高職日間部每節 505 元（114 年 9 月 1 日起，依《公立中小學兼任及代課教師鐘點費支給基準表》）。兼任（超時）與代課每週合併以 9 節為原則（常見為兼課不超過 6 節、代課不超過 5 節；進修部等經核准情形另依主管機關規定）。</p>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
