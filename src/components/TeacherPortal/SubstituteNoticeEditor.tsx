@@ -45,9 +45,7 @@ function formatNoticeDate(iso?: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return iso.replace(/-/g, '/');
-  const westernYear = Number(y);
-  const roc = westernYear > 1911 ? westernYear - 1911 : westernYear;
-  return `${roc}/${Number(m)}/${Number(d)}`;
+  return `${Number(y)}/${Number(m)}/${Number(d)}`;
 }
 
 function weekdayFromIso(iso?: string): number | null {
@@ -407,7 +405,7 @@ export const NoticeTableEditor: React.FC<{
                     type="text"
                     value={row.date}
                     onChange={(e) => updateRow(index, 'date', e.target.value)}
-                    placeholder="例 115/6/17"
+                    placeholder="例 2026/8/25"
                     className="w-full min-w-[7rem] px-2 py-1 border border-slate-200 rounded text-xs"
                   />
                 </td>
