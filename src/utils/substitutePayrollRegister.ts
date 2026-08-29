@@ -10,8 +10,8 @@ import {
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
 import {
-  listNoticeRowsInSettlementMonth,
-  parseNoticeRowDateToIso,
+  countSubstitutePayrollWithNoticeRows,
+  getRelatedSubstituteRequests,
   parseNoticeRowHours,
   resolveEffectiveNoticeRows,
 } from './noticePayroll';
@@ -96,18 +96,47 @@ export function buildSubstitutePayrollRemarks(
       if (resolveRequestPaymentType(r, payrollCtx, holidaySet, periodOpts) !== 'public') {
         continue;
       }
-      const rowsInMonth = listNoticeRowsInSettlementMonth(
+      const related = getRelatedSubstituteRequests(r, requests);
+      const payrollResult = countSubstitutePayrollWithNoticeRows(
         effectiveNoticeRows,
+        related,
         settlementMonth,
         settlementYear,
-        weeksInMonth
+        weeksInMonth,
+        holidaySet,
+        calendarOpts,
+        () =>
+          countSubstitutePublicPayrollPeriodsInMonth(
+            r,
+            settlementMonth,
+            settlementYear,
+            payrollCtx,
+            holidaySet,
+            periodOpts
+          )
       );
-      for (const row of rowsInMonth) {
-        const iso = parseNoticeRowDateToIso(row.date);
-        if (!iso) continue;
-        const hours = parseNoticeRowHours(row.hours);
-        const periodLabel = row.period ? formatPeriodLabel(Number(row.period)) : '';
-        parts.push(`${formatMd(iso)}${prefix}${hours}節${periodLabel}`);
+      if (payrollResult.useBasicRate) {
+        for (const { row, iso } of payrollResult.resolvedRows) {
+          const hours = parseNoticeRowHours(row.hours);
+          const periodLabel = row.period ? formatPeriodLabel(Number(row.period)) : '';
+          parts.push(`${formatMd(iso)}${prefix}${hours}節${periodLabel}`);
+        }
+      } else if (r.leaveDateStart && period) {
+        const dates = listBillableLeaveDatesInMonth(
+          r,
+          settlementMonth,
+          settlementYear,
+          holidaySet,
+          periodOpts
+        ).filter((iso) =>
+          isLeaveDatePublicPayroll(iso, r, payrollCtx, r.applicantTeacherId)
+        );
+        for (const iso of dates) {
+          parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);
+        }
+      } else if (payrollResult.periods > 0) {
+        const periodLabel = period ? formatPeriodLabel(period) : '';
+        parts.push(`${prefix}${payrollResult.periods}節${periodLabel}`);
       }
       continue;
     }

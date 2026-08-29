@@ -92,7 +92,8 @@ import {
   teacherWeeklyLoadTowardLimit,
 } from '../utils/substituteCandidates';
 import {
-  countNoticeRowsSubstitutePayrollInMonth,
+  countSubstitutePayrollWithNoticeRows,
+  getRelatedSubstituteRequests,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
 
@@ -2426,16 +2427,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const saveNoticeRows = (requestId: string, rows: SubstituteNoticeRow[] | null) => {
-    const applyPatch = (r: SubstituteRequest): SubstituteRequest => {
-      if (r.id !== requestId) return r;
+    const target = requests.find((r) => r.id === requestId);
+    const batchGroupId = target?.batchGroupId;
+
+    const patchNoticeRows = (r: SubstituteRequest): SubstituteRequest => {
       if (rows && rows.length > 0) {
         return { ...r, noticeRows: rows, noticeRowsCustomized: true };
       }
       const { noticeRows: _rows, noticeRowsCustomized: _custom, ...rest } = r;
       return rest;
     };
-    setRequests((prev) => prev.map(applyPatch));
-    setPrintModalRequest((prev) => (prev?.id === requestId ? applyPatch(prev) : prev));
+
+    const inSameNoticeBatch = (r: SubstituteRequest) =>
+      r.id === requestId || (batchGroupId != null && r.batchGroupId === batchGroupId);
+
+    setRequests((prev) =>
+      prev.map((r) => (inSameNoticeBatch(r) ? patchNoticeRows(r) : r))
+    );
+    setPrintModalRequest((prev) =>
+      prev && inSameNoticeBatch(prev) ? patchNoticeRows(prev) : prev
+    );
   };
 
   const clearAllRequests = () => {
@@ -3125,13 +3136,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (resolveRequestPaymentType(r, payrollCtx, holidaySet, periodOpts) !== 'public') {
               return;
             }
-            publicPeriods = countNoticeRowsSubstitutePayrollInMonth(
+            const related = getRelatedSubstituteRequests(r, requests);
+            const payrollResult = countSubstitutePayrollWithNoticeRows(
               effectiveNoticeRows,
+              related,
               settlementMonth,
               settlementYear,
-              leaveCalendarOpts.weeksInMonth
+              leaveCalendarOpts.weeksInMonth,
+              holidaySet,
+              periodOpts,
+              () =>
+                countSubstitutePublicPayrollPeriodsInMonth(
+                  r,
+                  settlementMonth,
+                  settlementYear,
+                  payrollCtx,
+                  holidaySet,
+                  periodOpts
+                )
             );
-            rate = hourlyRate;
+            publicPeriods = payrollResult.periods;
+            rate = payrollResult.useBasicRate ? hourlyRate : rateForRequest(r);
           } else {
             publicPeriods = countSubstitutePublicPayrollPeriodsInMonth(
               r,
