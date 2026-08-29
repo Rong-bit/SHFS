@@ -211,8 +211,6 @@ export interface SystemConfig {
     director: number; // 主任基本鐘點（可設定）
   };
   schoolName: string; // 學校名稱（匯出課表標題、列印檔名）
-  /** 教務主任姓名（備註用；通知單印章欄留白蓋實體章） */
-  academicDirectorName?: string;
   academicYear: string; // 114
   semester: string; // 1
   currentMonth: number; // 10
