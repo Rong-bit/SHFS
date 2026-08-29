@@ -38,12 +38,13 @@ const AppContent: React.FC = () => {
 
       {/* Footer */}
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 text-xs py-4 print:hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap justify-between items-center gap-2">
-          <div>
-            高職調代課與鐘點費管理系統 · 版權 © 2026 Huang Jun-rong
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 sm:grid-cols-3 items-center gap-2 text-center sm:text-left">
+          <div className="sm:justify-self-start">高職調代課與鐘點費管理系統</div>
+          <div className="text-slate-500 sm:justify-self-center sm:text-center">
+            Copyright © 2026 Huang Jun-rong
           </div>
-          <div className="flex items-center space-x-4 text-slate-500 text-[11px]">
-            <span>教育部技術型高中部定授課標準</span>
+          <div className="text-slate-500 text-[11px] sm:justify-self-end sm:text-right">
+            教育部技術型高中部定授課標準
           </div>
         </div>
       </footer>
