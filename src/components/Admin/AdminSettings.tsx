@@ -2,8 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, NonTeachingDay, TemporaryScheduleMove, PartialNonTeachingDay } from '../../types';
 import {
+  countNonTeachingDaysOutsideAcademicYear,
+  fetchNationalHolidaysForAcademicYear,
+  fetchNationalHolidaysFromOpenData,
   mergeNonTeachingDays,
+  pruneNonTeachingDaysToAcademicYear,
   suggestNationalHolidays,
+  westernYearsForAcademicYear,
 } from '../../utils/holidays';
 import {
   mergeTemporaryScheduleMoves,
@@ -139,6 +144,8 @@ export const AdminSettings: React.FC = () => {
     currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
     weeksInMonth: systemConfig?.weeksInMonth ?? 4,
     nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
+    autoSyncNationalHolidays: systemConfig?.autoSyncNationalHolidays !== false,
+    nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
     temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
     partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
     authConfig: {
@@ -153,6 +160,17 @@ export const AdminSettings: React.FC = () => {
 
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayLabel, setNewHolidayLabel] = useState('放假');
+  const [holidayImportLoading, setHolidayImportLoading] = useState(false);
+  const academicRocYear = Number(formConfig.academicYear);
+  const holidayYearsLabel = Number.isFinite(academicRocYear)
+    ? westernYearsForAcademicYear(academicRocYear).join('、')
+    : '';
+  const visibleHolidays = Number.isFinite(academicRocYear)
+    ? pruneNonTeachingDaysToAcademicYear(formConfig.nonTeachingDays, academicRocYear)
+    : formConfig.nonTeachingDays || [];
+  const staleHolidayCount = Number.isFinite(academicRocYear)
+    ? countNonTeachingDaysOutsideAcademicYear(formConfig.nonTeachingDays, academicRocYear)
+    : 0;
   const [moveSourceDate, setMoveSourceDate] = useState('');
   const [moveTargetDate, setMoveTargetDate] = useState('');
   const [moveLabel, setMoveLabel] = useState('暫時移課／補課');
@@ -175,6 +193,8 @@ export const AdminSettings: React.FC = () => {
       currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
       nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
+      autoSyncNationalHolidays: systemConfig?.autoSyncNationalHolidays !== false,
+      nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
       temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
       partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
       authConfig: {
@@ -324,8 +344,13 @@ export const AdminSettings: React.FC = () => {
 
   const handleConfigSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const rocYear = Number(formConfig.academicYear);
+    const prunedHolidays = Number.isFinite(rocYear)
+      ? pruneNonTeachingDaysToAcademicYear(formConfig.nonTeachingDays, rocYear)
+      : formConfig.nonTeachingDays;
     const nextConfig = {
       ...formConfig,
+      nonTeachingDays: prunedHolidays,
       standardBasePeriods: normalizeStandardBasePeriods(formConfig.standardBasePeriods),
       teacherSalaryCodesByName: systemConfig.teacherSalaryCodesByName,
       teacherSalaryCodes: systemConfig.teacherSalaryCodes,
@@ -1194,8 +1219,30 @@ export const AdminSettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                列入此處的日期（週一至週五）在超鐘點、課輔月結與代課費／自費扣款計算時一律<strong>整天</strong>不計節。週末本來就不計，無需登錄。請依人事行政總處與校曆公告維護。
+                列入此處的日期（週一至週五）在超鐘點、課輔月結與代課費／自費扣款計算時一律<strong>整天</strong>不計節。週末本來就不計，無需登錄。國定假日可自人事行政總處開放資料自動匯入；校慶、彈性放假請手動新增並核對校曆。
               </p>
+              <label className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formConfig.autoSyncNationalHolidays !== false}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      autoSyncNationalHolidays: e.target.checked,
+                    })
+                  }
+                  className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span>
+                  <strong className="text-sky-900">新學年度自動匯入國定假日</strong>
+                  （依上方學年度載入國定假日，並自動清除非本學年度之舊資料；僅補缺少的平日，不覆蓋校慶等項目）
+                  {systemConfig.nationalHolidaysAutoLoadedAcademicYear ? (
+                    <span className="block text-[11px] text-sky-700 mt-0.5">
+                      上次自動匯入：{systemConfig.nationalHolidaysAutoLoadedAcademicYear} 學年度
+                    </span>
+                  ) : null}
+                </span>
+              </label>
               <div className="text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed space-y-1">
                 <p className="font-bold text-amber-900">操作建議（三種常見情境）</p>
                 <p>
@@ -1255,29 +1302,125 @@ export const AdminSettings: React.FC = () => {
                 </button>
                 <button
                   type="button"
+                  disabled={holidayImportLoading}
                   onClick={() => {
-                    const y = new Date().getFullYear();
-                    const suggested = suggestNationalHolidays(y);
-                    if (suggested.length === 0) {
-                      alert(`${y} 年暫無內建建議，請手動新增。`);
-                      return;
-                    }
-                    setFormConfig({
-                      ...formConfig,
-                      nonTeachingDays: mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
-                    });
-                    alert(`已合併 ${y} 年建議放假日 ${suggested.length} 筆（請再核對校曆後按「儲存設定」）。`);
+                    void (async () => {
+                      const rocYear = Number(formConfig.academicYear);
+                      if (!Number.isFinite(rocYear)) {
+                        alert('請先設定學年度');
+                        return;
+                      }
+                      setHolidayImportLoading(true);
+                      try {
+                        const suggested = await fetchNationalHolidaysForAcademicYear(rocYear);
+                        if (suggested.length === 0) {
+                          const fallback = suggestNationalHolidays(new Date().getFullYear());
+                          if (fallback.length === 0) {
+                            alert(`${rocYear} 學年度暫無公開行事曆資料，請手動新增。`);
+                            return;
+                          }
+                          setFormConfig({
+                            ...formConfig,
+                            nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
+                              mergeNonTeachingDays(formConfig.nonTeachingDays, fallback),
+                              rocYear
+                            ),
+                          });
+                          alert(
+                            `已合併內建建議放假日 ${fallback.length} 筆（請再核對校曆後按「儲存設定」）。`
+                          );
+                          return;
+                        }
+                        const years = westernYearsForAcademicYear(rocYear).join('、');
+                        setFormConfig({
+                          ...formConfig,
+                          nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
+                            mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
+                            rocYear
+                          ),
+                        });
+                        alert(
+                          `已合併 ${rocYear} 學年度（${years} 年）國定假日 ${suggested.length} 筆，並清除非本學年度舊資料（請再核對校曆後按「儲存設定」）。`
+                        );
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : '匯入國定假日失敗');
+                      } finally {
+                        setHolidayImportLoading(false);
+                      }
+                    })();
                   }}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
                 >
-                  匯入今年建議國定假日
+                  {holidayImportLoading ? '匯入中…' : `匯入${formConfig.academicYear}學年度國定假日`}
+                </button>
+                <button
+                  type="button"
+                  disabled={holidayImportLoading}
+                  onClick={() => {
+                    void (async () => {
+                      const y = new Date().getFullYear();
+                      const rocYear = Number(formConfig.academicYear);
+                      setHolidayImportLoading(true);
+                      try {
+                        const suggested = await fetchNationalHolidaysFromOpenData(y);
+                        setFormConfig({
+                          ...formConfig,
+                          nonTeachingDays: Number.isFinite(rocYear)
+                            ? pruneNonTeachingDaysToAcademicYear(
+                                mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
+                                rocYear
+                              )
+                            : mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
+                        });
+                        alert(
+                          `已合併 ${y} 年國定假日 ${suggested.length} 筆（請再核對校曆後按「儲存設定」）。`
+                        );
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : '匯入國定假日失敗');
+                      } finally {
+                        setHolidayImportLoading(false);
+                      }
+                    })();
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
+                >
+                  匯入今年國定假日
                 </button>
               </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+                <span>
+                  {Number.isFinite(academicRocYear) ? (
+                    <>
+                      <strong>{formConfig.academicYear} 學年度</strong>（西元 {holidayYearsLabel}）共{' '}
+                      <strong>{visibleHolidays.length}</strong> 筆放假日
+                    </>
+                  ) : (
+                    <>共 {(formConfig.nonTeachingDays || []).length} 筆放假日</>
+                  )}
+                </span>
+                {staleHolidayCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!Number.isFinite(academicRocYear)) return;
+                      const pruned = pruneNonTeachingDaysToAcademicYear(
+                        formConfig.nonTeachingDays,
+                        academicRocYear
+                      );
+                      setFormConfig({ ...formConfig, nonTeachingDays: pruned });
+                      alert(`已清除 ${staleHolidayCount} 筆非本學年度放假日（請按「儲存設定」）。`);
+                    }}
+                    className="text-rose-700 font-semibold hover:underline"
+                  >
+                    清除 {staleHolidayCount} 筆舊學年度資料
+                  </button>
+                ) : null}
+              </div>
               <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
-                {(formConfig.nonTeachingDays || []).length === 0 ? (
+                {visibleHolidays.length === 0 ? (
                   <p className="text-xs text-slate-400 p-3">尚未設定放假日；目前結算會把所有平日都計入。</p>
                 ) : (
-                  (formConfig.nonTeachingDays || []).map((d) => (
+                  visibleHolidays.map((d) => (
                     <div
                       key={d.date}
                       className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"

@@ -50,7 +50,12 @@ import {
   resolveRequestPaymentType,
   resolveSubstitutePayrollTeacherId,
 } from '../utils/leavePayrollPolicy';
-import { nonTeachingDateSet } from '../utils/holidays';
+import {
+  fetchNationalHolidaysForAcademicYear,
+  mergeNonTeachingDaysPreservingExisting,
+  nonTeachingDateSet,
+  pruneNonTeachingDaysToAcademicYear,
+} from '../utils/holidays';
 import {
   allocateRequestNumbersForBatch,
   formatRequestNumber,
@@ -674,6 +679,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(systemConfig));
   }, [systemConfig]);
+
+  /** 新學年度自動匯入人事總處國定假日（僅補缺少的平日，不覆蓋校慶等手動項目） */
+  useEffect(() => {
+    const rocYear = systemConfig.academicYear;
+    if (!rocYear) return;
+    if (systemConfig.autoSyncNationalHolidays === false) return;
+    if (systemConfig.nationalHolidaysAutoLoadedAcademicYear === rocYear) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const incoming = await fetchNationalHolidaysForAcademicYear(Number(rocYear));
+        if (cancelled) return;
+        setSystemConfig((prev) => {
+          if (prev.academicYear !== rocYear) return prev;
+          if (prev.autoSyncNationalHolidays === false) return prev;
+          if (prev.nationalHolidaysAutoLoadedAcademicYear === rocYear) return prev;
+          return {
+            ...prev,
+            nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
+              incoming.length > 0
+                ? mergeNonTeachingDaysPreservingExisting(prev.nonTeachingDays, incoming)
+                : prev.nonTeachingDays,
+              Number(rocYear)
+            ),
+            nationalHolidaysAutoLoadedAcademicYear: rocYear,
+          };
+        });
+      } catch (err) {
+        console.warn('自動匯入國定假日失敗', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [systemConfig.academicYear, systemConfig.autoSyncNationalHolidays]);
 
   const applySharedSchoolData = (remote: {
     updatedAt: number;

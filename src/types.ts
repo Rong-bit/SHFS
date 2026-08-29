@@ -217,6 +217,10 @@ export interface SystemConfig {
   weeksInMonth: number; // 4 週
   /** 不計鐘點之日（國定假日、校慶、彈性放假等），格式 YYYY-MM-DD */
   nonTeachingDays?: NonTeachingDay[];
+  /** 新學年度是否自動匯入人事總處國定假日（預設開啟） */
+  autoSyncNationalHolidays?: boolean;
+  /** 上次完成自動匯入的學年度（民國年字串） */
+  nationalHolidaysAutoLoadedAcademicYear?: string;
   /**
    * 暫時移課／補課：把 sourceDate 當天的週課表（依該日星期）改在 targetDate 上計鐘點。
    * 例：週四放假 → 週六或某週二補上「週四課表」；不永久改週模板。
