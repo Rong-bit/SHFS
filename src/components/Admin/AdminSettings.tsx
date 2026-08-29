@@ -134,7 +134,7 @@ export const AdminSettings: React.FC = () => {
   // Safe form config state
   const [formConfig, setFormConfig] = useState<SystemConfig>(() => ({
     dayHourlyRate: systemConfig?.dayHourlyRate ?? 505,
-    nightHourlyRate: systemConfig?.nightHourlyRate ?? 500,
+    nightHourlyRate: systemConfig?.nightHourlyRate ?? 660,
     actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
     maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
     standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
@@ -183,7 +183,7 @@ export const AdminSettings: React.FC = () => {
   useEffect(() => {
     setFormConfig({
       dayHourlyRate: systemConfig?.dayHourlyRate ?? 505,
-      nightHourlyRate: systemConfig?.nightHourlyRate ?? 500,
+      nightHourlyRate: systemConfig?.nightHourlyRate ?? 660,
       actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
       maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
       standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
@@ -929,7 +929,7 @@ export const AdminSettings: React.FC = () => {
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 節</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    第八節輔導課不計入日間超鐘點，改依此費率另計。
+                    第八節輔導課不計入日間超鐘點，改依此費率另計。預設 660 元（常見為學習輔導費要點之第八節上限；各校依主管機關核定調整）。
                   </p>
                 </div>
 

@@ -196,7 +196,7 @@ export interface SubstituteRequest {
 
 export interface SystemConfig {
   dayHourlyRate: number; // 日間部每節鐘點費 (505，114/9/1 起)
-  nightHourlyRate: number; // 夜間部/課輔每節鐘點費 (500)
+  nightHourlyRate: number; // 第八節課輔每節鐘點費 (660，依學習輔導費要點)
   /**
    * 代導師減授鐘點費每日金額（預設 404）。
    * 法令參考：鐘點費×日數÷5×（專任基本−導師基本）；學校可改為固定日費。
