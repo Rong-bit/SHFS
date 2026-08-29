@@ -184,7 +184,14 @@ function resolveNoticeRowDateIso(
   consumed: Set<string>
 ): string | null {
   const parsed = parseNoticeRowDateToIso(row.date);
-  if (parsed) return parsed;
+  if (parsed) {
+    const period = Number(row.period) || 0;
+    const className = row.className.trim();
+    const slotKey = `${parsed}|${period}|${className}`;
+    if (consumed.has(slotKey)) return null;
+    consumed.add(slotKey);
+    return parsed;
+  }
   return inferNoticeRowDateIso(row, opts, consumed);
 }
 

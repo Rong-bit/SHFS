@@ -9,10 +9,28 @@ import {
   isTemporarySwap,
   resolveTemporarySwapOccurrenceDates,
 } from '../../utils/temporarySwap';
+import { parseNoticeRowDateToIso } from '../../utils/noticePayroll';
 
 export type NoticeRow = SubstituteNoticeRow;
 
 export const MAX_NOTICE_TABLE_ROWS = 7;
+
+const WEEKDAY_PRINT_LABELS: Record<string, string> = {
+  '1': '一',
+  '2': '二',
+  '3': '三',
+  '4': '四',
+  '5': '五',
+};
+
+export function formatNoticeWeekdayLabel(weekday: string): string {
+  const trimmed = weekday.trim();
+  if (!trimmed) return '';
+  if (WEEKDAY_PRINT_LABELS[trimmed]) return WEEKDAY_PRINT_LABELS[trimmed];
+  const n = Number(trimmed);
+  if (Number.isFinite(n) && n >= 1 && n <= 5) return WEEKDAY_PRINT_LABELS[String(n)] || trimmed;
+  return trimmed;
+}
 
 const EMPTY_NOTICE_ROW: NoticeRow = {
   date: '',
@@ -27,7 +45,9 @@ function formatNoticeDate(iso?: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return iso.replace(/-/g, '/');
-  return `${Number(y)}/${Number(m)}/${Number(d)}`;
+  const westernYear = Number(y);
+  const roc = westernYear > 1911 ? westernYear - 1911 : westernYear;
+  return `${roc}/${Number(m)}/${Number(d)}`;
 }
 
 function weekdayFromIso(iso?: string): number | null {
@@ -69,9 +89,10 @@ function sessionRow(session: CourseSession, dateIso?: string): NoticeRow {
 }
 
 function sortNoticeRows(rows: NoticeRow[]): NoticeRow[] {
+  const sortKey = (date: string) => parseNoticeRowDateToIso(date) ?? date.replace(/\//g, '-');
   return [...rows].sort((a, b) => {
-    const dateA = a.date.replace(/\//g, '-');
-    const dateB = b.date.replace(/\//g, '-');
+    const dateA = sortKey(a.date);
+    const dateB = sortKey(b.date);
     if (dateA !== dateB) return dateA.localeCompare(dateB);
     const periodA = Number(a.period) || 0;
     const periodB = Number(b.period) || 0;
@@ -276,6 +297,11 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
     );
   };
 
+  const discardChanges = () => {
+    setEditableRows(savedNoticeRows ?? defaultRows);
+    setIsDirty(false);
+  };
+
   const displayRows = savedNoticeRows ?? defaultRows;
 
   return {
@@ -291,6 +317,7 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
     onRowsChange: handleRowsChange,
     onReset: handleResetRows,
     onSave: persistNoticeRows,
+    discardChanges,
   };
 }
 
@@ -332,7 +359,7 @@ export const NoticeTableEditor: React.FC<{
         <div>
           <p className="text-xs font-bold text-indigo-900">課程表格（可人工調整）</p>
           <p className="text-[10px] text-indigo-800 leading-snug mt-0.5">
-            日期、星期、節次、班級、科目、鐘點可手動輸入；按「儲存表格」後，代課清冊會依此表格以基本鐘點計算。未儲存修改者，清冊仍依課表原邏輯。
+            日期、星期、節次、班級、科目、鐘點可手動輸入；按「儲存表格」後，代課清冊會依此表格以基本鐘點計算。未儲存修改者，清冊仍依課表原邏輯。列印前請先儲存表格。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

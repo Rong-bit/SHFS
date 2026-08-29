@@ -2307,6 +2307,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
+    const leaveChanged =
+      (primary.leaveDateStart || '') !== (nextLeaveStart || '') ||
+      (primary.leaveDateEnd || '') !== (nextLeaveEnd || '');
+
     const ids = new Set(group.map((r) => r.id));
     const applyPatch = (r: SubstituteRequest): SubstituteRequest => {
       const orig = r.originalSession;
@@ -2318,7 +2322,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: `s-placeholder-acting-${r.applicantTeacherId}-${nextLeaveStart}`,
             }
           : orig;
-      return sanitizeActingHomeroomOnlyClashStatus({
+      const patched = sanitizeActingHomeroomOnlyClashStatus({
         ...r,
         leaveType: nextLeaveType,
         paymentType: nextPayment,
@@ -2331,14 +2335,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         actingHomeroomTeacherName: nextActingName,
         originalSession: nextSession,
       });
+      if (!leaveChanged || (!patched.noticeRowsCustomized && !patched.noticeRows?.length)) {
+        return patched;
+      }
+      const { noticeRows: _rows, noticeRowsCustomized: _custom, ...rest } = patched;
+      return rest;
     };
 
     const oldSubId = primary.substituteTeacherId || '';
     const newSubId = nextSubId || '';
     const subChanged = oldSubId !== newSubId || (primary.substituteTeacherName || '') !== (nextSubName || '');
-    const leaveChanged =
-      (primary.leaveDateStart || '') !== (nextLeaveStart || '') ||
-      (primary.leaveDateEnd || '') !== (nextLeaveEnd || '');
     const approvedInGroup = group.filter((r) => r.status === 'approved');
     const needReschedule = approvedInGroup.length > 0 && subChanged;
 

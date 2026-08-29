@@ -8,6 +8,7 @@ import teachingSectionStampUrl from '../../assets/teaching-section-stamp.png';
 import {
   MAX_NOTICE_TABLE_ROWS,
   chunkNoticeRows,
+  formatNoticeWeekdayLabel,
   useSubstituteNoticeEditor,
 } from './SubstituteNoticeEditor';
 
@@ -326,7 +327,7 @@ const NoticeCopy: React.FC<{
         {tableRows.map((row, idx) => (
           <tr key={`${row.date}-${row.period}-${row.className}-${idx}`}>
             <td>{row.date || '\u00A0'}</td>
-            <td>{row.weekday || '\u00A0'}</td>
+            <td>{formatNoticeWeekdayLabel(row.weekday) || '\u00A0'}</td>
             <td>{row.period || '\u00A0'}</td>
             <td>{row.className || '\u00A0'}</td>
             <td>{row.subjectName || '\u00A0'}</td>
@@ -420,7 +421,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           </div>
         </div>
         <p className="print:hidden text-[10px] text-slate-400 mt-2 leading-snug">
-          列印對話框請關閉「頁首與頁尾」，避免出現網址或頁碼。
+          列印對話框請關閉「頁首與頁尾」，避免出現網址或頁碼。課程表格請先在「修改」分頁儲存後再列印。
         </p>
       </div>
 

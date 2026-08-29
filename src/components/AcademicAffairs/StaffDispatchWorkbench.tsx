@@ -81,10 +81,23 @@ import {
   X
 } from 'lucide-react';
 
-const RequestNoticeTab: React.FC<{ request: SubstituteRequest }> = ({ request }) => {
-  const { editableRows, onRowsChange, onReset, onSave } = useSubstituteNoticeEditor(request);
+const RequestNoticeTab: React.FC<{
+  request: SubstituteRequest;
+  onDirtyChange?: (dirty: boolean) => void;
+  onBindDiscard?: (discard: () => void) => void;
+}> = ({ request, onDirtyChange, onBindDiscard }) => {
+  const { editableRows, isDirty, onRowsChange, onReset, onSave, discardChanges } =
+    useSubstituteNoticeEditor(request);
   const rowPages = chunkNoticeRows(editableRows, MAX_NOTICE_TABLE_ROWS);
   const multiPage = rowPages.length > 1;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    onBindDiscard?.(discardChanges);
+  }, [discardChanges, onBindDiscard]);
 
   return (
     <div className="space-y-3">
@@ -146,6 +159,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [editSubstituteTeacherId, setEditSubstituteTeacherId] = useState('');
   const [editActingHomeroomTeacherId, setEditActingHomeroomTeacherId] = useState('');
   const [editModalTab, setEditModalTab] = useState<'request' | 'notice'>('request');
+  const [noticeTableDirty, setNoticeTableDirty] = useState(false);
+  const noticeDiscardRef = useRef<(() => void) | null>(null);
 
   const openEditRequest = (req: SubstituteRequest) => {
     if (req.requestType !== 'substitute') {
@@ -155,6 +170,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
     const showNoticeTab =
       req.status === 'approved' && !isActingHomeroomOnlyRequest(req);
     setEditModalTab(showNoticeTab ? 'notice' : 'request');
+    setNoticeTableDirty(false);
+    noticeDiscardRef.current = null;
     setEditingRequest(req);
     setEditLeaveType(req.leaveType || 'official');
     setEditReason(req.reason || '');
@@ -2779,6 +2796,31 @@ export const StaffDispatchWorkbench: React.FC = () => {
         const showNoticeTab =
           editingRequest.status === 'approved' && !isActingHomeroomOnlyRequest(editingRequest);
 
+        const tryCloseEditModal = () => {
+          if (showNoticeTab && noticeTableDirty) {
+            const ok = window.confirm(
+              '課程表格有未儲存的修改，關閉後將還原為上次儲存的內容。確定關閉？'
+            );
+            if (!ok) return;
+            noticeDiscardRef.current?.();
+          }
+          setEditingRequest(null);
+          setNoticeTableDirty(false);
+        };
+
+        const trySwitchEditTab = (tab: 'request' | 'notice') => {
+          if (tab === editModalTab) return;
+          if (editModalTab === 'notice' && tab === 'request' && noticeTableDirty) {
+            const ok = window.confirm(
+              '課程表格有未儲存的修改，切換分頁後將還原為上次儲存的內容。確定切換？'
+            );
+            if (!ok) return;
+            noticeDiscardRef.current?.();
+            setNoticeTableDirty(false);
+          }
+          setEditModalTab(tab);
+        };
+
         return (
         <ModalShell
           scroll="panel"
@@ -2803,7 +2845,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setEditingRequest(null)}
+                onClick={tryCloseEditModal}
                 className="text-slate-400 hover:text-slate-700 text-sm font-bold px-2"
               >
                 關閉
@@ -2814,7 +2856,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
               <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
                 <button
                   type="button"
-                  onClick={() => setEditModalTab('request')}
+                  onClick={() => trySwitchEditTab('request')}
                   className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition ${
                     editModalTab === 'request'
                       ? 'bg-white text-indigo-700 shadow-sm'
@@ -2825,7 +2867,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEditModalTab('notice')}
+                  onClick={() => trySwitchEditTab('notice')}
                   className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition ${
                     editModalTab === 'notice'
                       ? 'bg-white text-indigo-700 shadow-sm'
@@ -2837,9 +2879,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
               </div>
             )}
 
-            {editModalTab === 'notice' && showNoticeTab ? (
-              <RequestNoticeTab request={editingRequest} />
-            ) : (
+            {showNoticeTab && (
+              <div className={editModalTab === 'notice' ? 'space-y-3' : 'hidden'}>
+                <RequestNoticeTab
+                  request={editingRequest}
+                  onDirtyChange={setNoticeTableDirty}
+                  onBindDiscard={(discard) => {
+                    noticeDiscardRef.current = discard;
+                  }}
+                />
+              </div>
+            )}
+
+            {(editModalTab === 'request' || !showNoticeTab) && (
           <form onSubmit={handleSaveEditRequest} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">假別</label>
@@ -2987,7 +3039,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setEditingRequest(null)}
+                onClick={tryCloseEditModal}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
               >
                 取消
