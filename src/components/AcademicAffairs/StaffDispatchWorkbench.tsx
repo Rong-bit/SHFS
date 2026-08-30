@@ -1185,6 +1185,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const countRequestGroups = (list: Array<{ batchGroupId?: string; requestNumber?: string; id: string }>) =>
     new Set(list.map(requestGroupKey)).size;
 
+  const displayedPendingIds = useMemo(
+    () =>
+      groupedListRows.flatMap((g) =>
+        g.items.filter((r) => r.status === 'pending').map((r) => r.id)
+      ),
+    [groupedListRows]
+  );
+
   // Handle batch approval
   const handleBatchApprove = () => {
     if (selectedRequestIds.length === 0) return;
@@ -1202,11 +1210,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   // Handle toggle select all
   const handleToggleSelectAll = () => {
-    const pendingIds = filteredRequests.filter((r) => r.status === 'pending').map((r) => r.id);
-    if (selectedRequestIds.length === pendingIds.length && pendingIds.length > 0) {
+    if (
+      displayedPendingIds.length > 0 &&
+      selectedRequestIds.length === displayedPendingIds.length &&
+      displayedPendingIds.every((id) => selectedRequestIds.includes(id))
+    ) {
       setSelectedRequestIds([]);
     } else {
-      setSelectedRequestIds(pendingIds);
+      setSelectedRequestIds(displayedPendingIds);
     }
   };
 
@@ -1438,7 +1449,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
             <FileText className="w-4 h-4" />
             <span>全校調代課登錄簿與公假代課清冊</span>
             <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[10px] font-black">
-              {requests.length}
+              {countRequestGroups(requests)}
             </span>
           </button>
         </div>
@@ -2557,9 +2568,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       <input
                         type="checkbox"
                         checked={
-                          selectedRequestIds.length > 0 &&
-                          selectedRequestIds.length ===
-                            filteredRequests.filter((r) => r.status === 'pending').length
+                          displayedPendingIds.length > 0 &&
+                          selectedRequestIds.length === displayedPendingIds.length &&
+                          displayedPendingIds.every((id) => selectedRequestIds.includes(id))
                         }
                         onChange={handleToggleSelectAll}
                         className="rounded text-indigo-600 focus:ring-indigo-500"
@@ -2616,6 +2627,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         ...new Set(items.map((r) => r.actingHomeroomTeacherName).filter(Boolean)),
                       ] as string[];
                       const mixedPayment = items.some((r) => r.resolvedPayment !== req.resolvedPayment);
+                      const printTarget =
+                        items.find(
+                          (r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r)
+                        ) || null;
 
                       return (
                         <tr
@@ -2789,9 +2804,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   <span>修改</span>
                                 </button>
                               )}
-                              {req.status === 'approved' && !isActingHomeroomOnlyRequest(req) && (
+                              {printTarget && (
                                 <button
-                                  onClick={() => setPrintModalRequest(req)}
+                                  onClick={() => setPrintModalRequest(printTarget)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 transition"
                                   title="列印調代課通知單"
                                 >
