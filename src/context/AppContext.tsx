@@ -1858,18 +1858,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const approveRequest = (requestId: string, reviewerName: string = '陳雅筑 組長 (教學組)'): boolean => {
     const targetReq = requests.find((r) => r.id === requestId);
     if (!targetReq) return false;
-    if (targetReq.status === 'approved') return false;
 
-    // 連續節次：核准與刪除／取消同為整批，避免半核准再取消踩雷
+    // 連續節次：核准與刪除／取消同為整批，避免半核准再取消踩雷。
+    // 合併列可能點到已核准的第一節，仍應核定同批剩餘 pending。
     if (targetReq.batchGroupId) {
       const pendingIds = requests
         .filter((r) => r.batchGroupId === targetReq.batchGroupId && r.status === 'pending')
         .map((r) => r.id);
       if (pendingIds.length === 0) return false;
-      if (pendingIds.length > 1) {
+      if (pendingIds.length > 1 || targetReq.status === 'approved') {
         return batchApproveRequestsAllOrNothing(pendingIds, reviewerName) > 0;
       }
     }
+
+    if (targetReq.status === 'approved') return false;
 
     const result = approveSingleRequest(requestId, reviewerName, sessions, requests);
     if (result.ok === false) {
