@@ -38,6 +38,7 @@ import {
   formatTemporarySwapEffectLabel,
   validateTemporarySwapEffectiveDate,
 } from '../../utils/temporarySwap';
+import { settlementMonthForEventIso } from '../../utils/settlementPeriod';
 import { ModalShell } from '../Common/ModalShell';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher } from '../../utils/actingHomeroomPayrollRegister';
@@ -92,14 +93,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const [leaveType, setLeaveType] = useState<LeaveType>('personal');
   // 申請事由：不預設內容，讓老師自行填寫
   const [reason, setReason] = useState<string>('');
-
-  // 歸屬月份：當月，或 7 天內跨月時可選上月
-  const now = new Date();
-  const thisMonth = now.getMonth() + 1;
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const canSelectLastMonth = sevenDaysAgo.getMonth() !== now.getMonth();
-  const lastMonth = sevenDaysAgo.getMonth() + 1;
-  const [requestMonth, setRequestMonth] = useState<number>(thisMonth);
 
   // For Reschedule (行政／自行移課＝僅移入空堂)
   const [targetDay, setTargetDay] = useState<DayOfWeek>(2);
@@ -583,6 +576,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentTeacher) return;
+    const requestMonth = settlementMonthForEventIso(
+      leaveDateStart || swapEffectiveDate,
+      systemConfig.weeksInMonth ?? 4
+    );
 
     if (teacherSessions.length === 0 && requestType !== 'substitute') {
       alert('目前找不到你的排課資料，僅支援請假派代。請切換到「請假派代」後再送出。');
@@ -1625,30 +1622,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                 placeholder="請輸入具體請假或調課事由..."
                 className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs sm:text-sm focus:ring-1 focus:ring-amber-500 focus:outline-none"
               />
-            </div>
-
-            {/* 歸屬月份 */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                歸屬結算月份
-              </label>
-              <div className="flex items-center gap-2">
-                <select
-                  value={requestMonth}
-                  onChange={(e) => setRequestMonth(Number(e.target.value))}
-                  className="bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-bold focus:ring-1 focus:ring-amber-500 focus:outline-none"
-                >
-                  <option value={thisMonth}>{thisMonth} 月（本月）</option>
-                  {canSelectLastMonth && (
-                    <option value={lastMonth}>{lastMonth} 月（補登上週跨月）</option>
-                  )}
-                </select>
-                <span className="text-[10px] text-slate-400">
-                  {canSelectLastMonth
-                    ? '距今 7 天內跨月，可選擇上月補登'
-                    : '僅限當月申請'}
-                </span>
-              </div>
             </div>
           </div>
 

@@ -38,6 +38,7 @@ import {
   leaveCoverLabelForSessionDisplay,
   leaveRangeCoversDate,
 } from '../../utils/leaveDates';
+import { isoDaysAgo, settlementPeriodContainingIso } from '../../utils/settlementPeriod';
 
 export const TeacherSchedule: React.FC = () => {
   const { 
@@ -105,7 +106,10 @@ export const TeacherSchedule: React.FC = () => {
   const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
   const basePeriods = currentTeacher.basePeriods;
   const overloadPeriods = overloadBreakdown.concurrent;
-  const thisMonth = new Date().getMonth() + 1;
+  const thisMonth = settlementPeriodContainingIso(
+    isoDaysAgo(0),
+    systemConfig.weeksInMonth ?? 4
+  ).settlementMonth;
   const monthSettlement = calculateMonthlySettlement(thisMonth).find(
     (s) => s.teacherId === currentTeacher.id
   );

@@ -2353,6 +2353,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (primary.leaveDateStart || '') !== (nextLeaveStart || '') ||
       (primary.leaveDateEnd || '') !== (nextLeaveEnd || '');
 
+    const oldSubId = primary.substituteTeacherId || '';
+    const newSubId = nextSubId || '';
+    const subChanged =
+      oldSubId !== newSubId || (primary.substituteTeacherName || '') !== (nextSubName || '');
+    const distinctSubIds = new Set(
+      group.map((r) => r.substituteTeacherId || '').filter((id) => Boolean(id))
+    );
+    const mixedSubs = distinctSubIds.size > 1;
+
     const ids = new Set(group.map((r) => r.id));
     const applyPatch = (r: SubstituteRequest): SubstituteRequest => {
       const orig = r.originalSession;
@@ -2364,6 +2373,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: `s-placeholder-acting-${r.applicantTeacherId}-${nextLeaveStart}`,
             }
           : orig;
+      const keepOwnSub = mixedSubs && !subChanged;
+      const updateThisSub =
+        !mixedSubs || ((r.substituteTeacherId || '') === oldSubId && subChanged);
+      const rowSubId = keepOwnSub || !updateThisSub ? r.substituteTeacherId : nextSubId;
+      const rowSubName = keepOwnSub || !updateThisSub ? r.substituteTeacherName : nextSubName;
       const patched = sanitizeActingHomeroomOnlyClashStatus({
         ...r,
         leaveType: nextLeaveType,
@@ -2371,8 +2385,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reason: nextReason,
         leaveDateStart: nextLeaveStart || undefined,
         leaveDateEnd: nextLeaveEnd || undefined,
-        substituteTeacherId: nextSubId,
-        substituteTeacherName: nextSubName,
+        substituteTeacherId: rowSubId,
+        substituteTeacherName: rowSubName,
         actingHomeroomTeacherId: nextActingId,
         actingHomeroomTeacherName: nextActingName,
         originalSession: nextSession,
@@ -2384,9 +2398,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return rest;
     };
 
-    const oldSubId = primary.substituteTeacherId || '';
-    const newSubId = nextSubId || '';
-    const subChanged = oldSubId !== newSubId || (primary.substituteTeacherName || '') !== (nextSubName || '');
+    if (mixedSubs && subChanged) {
+      window.alert(
+        '此申請單含多位代課教師；僅更新與您目前開啟那一節相同代課者之課堂，其餘代課教師維持不變。'
+      );
+    }
+
     const approvedInGroup = group.filter((r) => r.status === 'approved');
     const needReschedule = approvedInGroup.length > 0 && subChanged;
 

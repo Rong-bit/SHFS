@@ -40,11 +40,12 @@ import {
 } from '../../utils/leaveDates';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
-import { formatPeriodsLabel } from '../../utils/periodLabels';
+import { formatDayPeriodSummary, formatPeriodsLabel } from '../../utils/periodLabels';
 import {
   formatTemporarySwapEffectLabel,
   validateTemporarySwapEffectiveDate,
 } from '../../utils/temporarySwap';
+import { settlementMonthForEventIso } from '../../utils/settlementPeriod';
 import { ModalShell } from '../Common/ModalShell';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
@@ -249,20 +250,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [requestType, setRequestType] = useState<RequestType>('substitute');
   const [leaveType, setLeaveType] = useState<LeaveType>('official');
   const [reason, setReason] = useState<string>('');
-
-  // 歸屬月份：本月、7 天內可選上月，以及系統管理員指定的補登月份
-  const thisMonth = new Date().getMonth() + 1;
-  const today = new Date();
-  const lastDayOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-  const diffDays = Math.floor((today.getTime() - lastDayOfLastMonth.getTime()) / 86400000);
-  const canSelectLastMonth = diffDays <= 7;
-  const lastMonth = thisMonth === 1 ? 12 : thisMonth - 1;
-  const adminMonth = systemConfig.currentMonth;
-  const canSelectAdminMonth =
-    Boolean(adminMonth) &&
-    adminMonth !== thisMonth &&
-    !(canSelectLastMonth && adminMonth === lastMonth);
-  const [dispatchMonth, setDispatchMonth] = useState<number>(thisMonth);
   const [autoApprove, setAutoApprove] = useState<boolean>(true);
 
   // Substitute specific
@@ -655,28 +642,28 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   const wellnessHoursExceeded = wellnessHoursStatus?.exceeded === true;
 
-  const requestPaymentCounts = useMemo(() => {
-    const ctx = buildLeavePayrollContext(requests, systemConfig, {
-      countStatuses: ['approved', 'pending'],
-    });
-    const hs = nonTeachingDateSet(systemConfig.nonTeachingDays);
-    const opts = {
-      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-      partialStops: systemConfig.partialNonTeachingDays || [],
-    };
-    let publicCount = 0;
-    let privateCount = 0;
-    for (const r of requests) {
-      if (r.requestType !== 'substitute') continue;
-      const resolved = resolveRequestPaymentType(r, ctx, hs, {
-        ...opts,
-        period: resolveOriginalSession(r, sessions)?.period,
-      });
-      if (resolved === 'public') publicCount += 1;
-      else privateCount += 1;
+  const editBatchSiblingRequests = useMemo(() => {
+    if (!editingRequest) return [] as SubstituteRequest[];
+    if (editingRequest.batchGroupId) {
+      return requests.filter((r) => r.batchGroupId === editingRequest.batchGroupId);
     }
-    return { public: publicCount, private: privateCount };
-  }, [requests, systemConfig, sessions]);
+    return requests.filter(
+      (r) =>
+        r.id === editingRequest.id ||
+        (editingRequest.requestNumber && r.requestNumber === editingRequest.requestNumber)
+    );
+  }, [editingRequest, requests]);
+
+  const editMixedSubstituteTeachers = useMemo(() => {
+    const names = [
+      ...new Set(
+        editBatchSiblingRequests
+          .map((r) => r.substituteTeacherName)
+          .filter((n): n is string => Boolean(n))
+      ),
+    ];
+    return names.length > 1 ? names : [];
+  }, [editBatchSiblingRequests]);
 
   const editWellnessExcludeIds = useMemo(() => {
     if (!editingRequest) return [] as string[];
@@ -841,6 +828,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // Handle direct dispatch submission
   const handleSubmitDispatch = (e: React.FormEvent) => {
     e.preventDefault();
+    const dispatchMonth = settlementMonthForEventIso(
+      leaveDateStart || swapEffectiveDate,
+      systemConfig.weeksInMonth ?? 4
+    );
 
     const actingHomeroomOnly =
       requestType === 'substitute' &&
@@ -1121,8 +1112,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
     [requests, sessions]
   );
 
-  // Filtered requests in list view
-  const filteredRequests = useMemo(() => {
+  // Annotated + filtered requests in list view
+  const annotatedRequests = useMemo(() => {
     const listPayrollCtx = buildLeavePayrollContext(requests, systemConfig, {
       countStatuses: ['approved', 'pending'],
     });
@@ -1131,25 +1122,28 @@ export const StaffDispatchWorkbench: React.FC = () => {
       temporaryMoves: systemConfig.temporaryScheduleMoves || [],
       partialStops: systemConfig.partialNonTeachingDays || [],
     };
-    return resolvedRequests
-      .map((r) => ({
-        ...r,
-        resolvedPayment:
-          r.requestType === 'substitute'
-            ? resolveRequestPaymentType(r, listPayrollCtx, listHolidaySet, {
-                ...listCalendarOpts,
-                period: r.originalSession?.period,
-              })
-            : r.paymentType,
-      }))
-      .filter((r) => {
-      // Filter tab
+    return resolvedRequests.map((r) => ({
+      ...r,
+      resolvedPayment:
+        r.requestType === 'substitute'
+          ? resolveRequestPaymentType(r, listPayrollCtx, listHolidaySet, {
+              ...listCalendarOpts,
+              period: r.originalSession?.period,
+            })
+          : r.paymentType,
+    }));
+  }, [resolvedRequests, requests, systemConfig]);
+
+  const requestGroupKey = (r: { batchGroupId?: string; requestNumber?: string; id: string }) =>
+    r.batchGroupId || r.requestNumber || r.id;
+
+  const filteredRequests = useMemo(() => {
+    return annotatedRequests.filter((r) => {
       if (listFilter === 'pending' && r.status !== 'pending') return false;
       if (listFilter === 'public' && r.resolvedPayment !== 'public') return false;
       if (listFilter === 'private' && r.resolvedPayment !== 'private') return false;
       if (listFilter === 'practical' && !isPracticalSession(r.originalSession)) return false;
 
-      // Search term
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         const matchName = (r.applicantTeacherName || '').toLowerCase().includes(term);
@@ -1158,12 +1152,38 @@ export const StaffDispatchWorkbench: React.FC = () => {
         const matchClass = (r.originalSession?.className || '').toLowerCase().includes(term);
         const matchSubject = (r.originalSession?.subjectName || '').toLowerCase().includes(term);
         const matchNum = (r.requestNumber || '').toLowerCase().includes(term);
-        if (!matchName && !matchSub && !matchActing && !matchClass && !matchSubject && !matchNum) return false;
+        if (!matchName && !matchSub && !matchActing && !matchClass && !matchSubject && !matchNum) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [resolvedRequests, listFilter, searchTerm, requests, systemConfig]);
+  }, [annotatedRequests, listFilter, searchTerm]);
+
+  const groupedListRows = useMemo(() => {
+    const order: string[] = [];
+    const seen = new Set<string>();
+    for (const r of filteredRequests) {
+      const key = requestGroupKey(r);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      order.push(key);
+    }
+    return order.map((key) => {
+      const items = annotatedRequests
+        .filter((r) => requestGroupKey(r) === key)
+        .sort(
+          (a, b) =>
+            (a.originalSession?.dayOfWeek || 0) - (b.originalSession?.dayOfWeek || 0) ||
+            (a.originalSession?.period || 0) - (b.originalSession?.period || 0)
+        );
+      return { key, primary: items[0], items };
+    });
+  }, [annotatedRequests, filteredRequests]);
+
+  const countRequestGroups = (list: Array<{ batchGroupId?: string; requestNumber?: string; id: string }>) =>
+    new Set(list.map(requestGroupKey)).size;
 
   // Handle batch approval
   const handleBatchApprove = () => {
@@ -1628,24 +1648,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     placeholder="請輸入事由（例：代表學校參加全國技能競賽指導研習，公文號 114-08992）"
                     className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                   />
-                </div>
-
-                {/* 歸屬結算月份 */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">歸屬結算月份：</label>
-                  <select
-                    value={dispatchMonth}
-                    onChange={(e) => setDispatchMonth(Number(e.target.value))}
-                    className="bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  >
-                    <option value={thisMonth}>{thisMonth} 月（本月）</option>
-                    {canSelectLastMonth && (
-                      <option value={lastMonth}>{lastMonth} 月（補登上週跨月）</option>
-                    )}
-                    {canSelectAdminMonth && (
-                      <option value={adminMonth}>{adminMonth} 月（管理員指定補登）</option>
-                    )}
-                  </select>
                 </div>
               </div>
 
@@ -2474,11 +2476,35 @@ export const StaffDispatchWorkbench: React.FC = () => {
             {/* Filter Pills */}
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               {[
-                { key: 'all', label: `全部案件 (${requests.length})` },
-                { key: 'pending', label: `⏳ 待簽核 (${requests.filter(r => r.status === 'pending').length})` },
-                { key: 'public', label: `🏛️ 公費派代 (${requestPaymentCounts.public})` },
-                { key: 'private', label: `👤 教師自理 (${requestPaymentCounts.private})` },
-                { key: 'practical', label: `🔧 實習工場課 (${resolvedRequests.filter(r => isPracticalSession(r.originalSession)).length})` },
+                { key: 'all', label: `全部案件 (${countRequestGroups(annotatedRequests)})` },
+                {
+                  key: 'pending',
+                  label: `⏳ 待簽核 (${countRequestGroups(
+                    annotatedRequests.filter((r) => r.status === 'pending')
+                  )})`,
+                },
+                {
+                  key: 'public',
+                  label: `🏛️ 公費派代 (${countRequestGroups(
+                    annotatedRequests.filter(
+                      (r) => r.requestType === 'substitute' && r.resolvedPayment === 'public'
+                    )
+                  )})`,
+                },
+                {
+                  key: 'private',
+                  label: `👤 教師自理 (${countRequestGroups(
+                    annotatedRequests.filter(
+                      (r) => r.requestType === 'substitute' && r.resolvedPayment === 'private'
+                    )
+                  )})`,
+                },
+                {
+                  key: 'practical',
+                  label: `🔧 實習工場課 (${countRequestGroups(
+                    annotatedRequests.filter((r) => isPracticalSession(r.originalSession))
+                  )})`,
+                },
               ].map((f) => (
                 <button
                   key={f.key}
@@ -2532,7 +2558,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         type="checkbox"
                         checked={
                           selectedRequestIds.length > 0 &&
-                          selectedRequestIds.length === filteredRequests.filter(r => r.status === 'pending').length
+                          selectedRequestIds.length ===
+                            filteredRequests.filter((r) => r.status === 'pending').length
                         }
                         onChange={handleToggleSelectAll}
                         className="rounded text-indigo-600 focus:ring-indigo-500"
@@ -2549,20 +2576,54 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredRequests.length === 0 ? (
+                  {groupedListRows.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="p-10 text-center text-slate-400">
                         查無符合篩選條件之調代課紀錄
                       </td>
                     </tr>
                   ) : (
-                    filteredRequests.map((req) => {
-                      const isPending = req.status === 'pending';
-                      const isSelected = selectedRequestIds.includes(req.id);
+                    groupedListRows.map(({ key, primary: req, items }) => {
+                      const pendingItems = items.filter((r) => r.status === 'pending');
+                      const isPending = pendingItems.length > 0;
+                      const pendingIds = pendingItems.map((r) => r.id);
+                      const isSelected =
+                        pendingIds.length > 0 &&
+                        pendingIds.every((id) => selectedRequestIds.includes(id));
+                      const periodSummary = formatDayPeriodSummary(
+                        items.map((r) => r.originalSession).filter(Boolean),
+                        dayNames
+                      );
+                      const classLabels = [
+                        ...new Set(
+                          items
+                            .map((r) => {
+                              const s = r.originalSession;
+                              return s ? `${s.className} 《${s.subjectName}》` : '';
+                            })
+                            .filter(Boolean)
+                        ),
+                      ];
+                      const hasPractical = items.some((r) => isPracticalSession(r.originalSession));
+                      const venueLabels = [
+                        ...new Set(items.map((r) => r.originalSession?.venueName).filter(Boolean)),
+                      ];
+                      const subNames = [
+                        ...new Set(
+                          items
+                            .filter((r) => !isActingHomeroomOnlyRequest(r))
+                            .map((r) => r.substituteTeacherName)
+                            .filter(Boolean)
+                        ),
+                      ] as string[];
+                      const actingNames = [
+                        ...new Set(items.map((r) => r.actingHomeroomTeacherName).filter(Boolean)),
+                      ] as string[];
+                      const mixedPayment = items.some((r) => r.resolvedPayment !== req.resolvedPayment);
 
                       return (
                         <tr
-                          key={req.id}
+                          key={key}
                           className={`hover:bg-slate-50 transition ${
                             isSelected ? 'bg-indigo-50/50' : ''
                           }`}
@@ -2574,9 +2635,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 checked={isSelected}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedRequestIds(prev => [...prev, req.id]);
+                                    setSelectedRequestIds((prev) => [
+                                      ...new Set([...prev, ...pendingIds]),
+                                    ]);
                                   } else {
-                                    setSelectedRequestIds(prev => prev.filter(id => id !== req.id));
+                                    setSelectedRequestIds((prev) =>
+                                      prev.filter((id) => !pendingIds.includes(id))
+                                    );
                                   }
                                 }}
                                 className="rounded text-indigo-600 focus:ring-indigo-500"
@@ -2588,6 +2653,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3 font-mono font-bold text-indigo-900">
                             {req.requestNumber}
+                            {items.length > 1 && (
+                              <div className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">
+                                {items.length} 節合併
+                              </div>
+                            )}
                           </td>
 
                           <td className="p-3">
@@ -2596,21 +2666,49 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           </td>
 
                           <td className="p-3">
-                            <div className="font-semibold text-slate-800">
-                              {req.originalSession.className} 《{req.originalSession.subjectName}》
-                            </div>
-                            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                              <span>{dayNames[req.originalSession.dayOfWeek]} 第{req.originalSession.period}節</span>
-                              <span>·</span>
-                              <span>{req.originalSession.venueName}</span>
-                              {isPracticalSession(req.originalSession) && (
-                                <span className="px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">實習</span>
-                              )}
-                            </div>
+                            {items.length === 1 ? (
+                              <>
+                                <div className="font-semibold text-slate-800">
+                                  {req.originalSession.className} 《{req.originalSession.subjectName}》
+                                </div>
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <span>
+                                    {dayNames[req.originalSession.dayOfWeek]} 第
+                                    {req.originalSession.period}節
+                                  </span>
+                                  <span>·</span>
+                                  <span>{req.originalSession.venueName}</span>
+                                  {isPracticalSession(req.originalSession) && (
+                                    <span className="px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">
+                                      實習
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="font-semibold text-slate-800 leading-snug">
+                                  {classLabels.join('、')}
+                                </div>
+                                <div className="text-[11px] text-slate-500 mt-0.5">
+                                  {periodSummary}
+                                  {hasPractical && (
+                                    <span className="ml-1 px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">
+                                      實習
+                                    </span>
+                                  )}
+                                </div>
+                                {venueLabels.length > 0 && (
+                                  <div className="text-[11px] text-slate-400 mt-0.5">
+                                    {venueLabels.join('、')}
+                                  </div>
+                                )}
+                              </>
+                            )}
                             {req.requestType === 'substitute' && (
                               <div className="text-[11px] text-amber-800 font-semibold mt-0.5">
                                 請假：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
-                                {req.batchGroupId ? ' · 合併通知單' : ''}
+                                {items.length > 1 || req.batchGroupId ? ' · 合併通知單' : ''}
                               </div>
                             )}
                           </td>
@@ -2618,22 +2716,22 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           <td className="p-3">
                             {req.requestType === 'substitute' && (
                               <div>
-                                {isActingHomeroomOnlyRequest(req) ? (
+                                {items.every((r) => isActingHomeroomOnlyRequest(r)) ? (
                                   <>
                                     <span className="text-slate-500">代導師：</span>
                                     <strong className="text-violet-900">
-                                      {req.actingHomeroomTeacherName || '尚未指定'}
+                                      {actingNames.join('、') || '尚未指定'}
                                     </strong>
                                   </>
                                 ) : (
                                   <>
                                     <span className="text-slate-500">代課：</span>
                                     <strong className="text-indigo-900">
-                                      {req.substituteTeacherName || '由教學組媒合'}
+                                      {subNames.join('、') || '由教學組媒合'}
                                     </strong>
-                                    {req.actingHomeroomTeacherName && (
+                                    {actingNames.length > 0 && (
                                       <div className="text-[11px] text-violet-800 mt-0.5">
-                                        代導師：{req.actingHomeroomTeacherName}
+                                        代導師：{actingNames.join('、')}
                                       </div>
                                     )}
                                   </>
@@ -2670,30 +2768,34 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded font-bold text-[11px] ${
-                              req.resolvedPayment === 'public'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-amber-100 text-amber-800'
+                              mixedPayment
+                                ? 'bg-slate-100 text-slate-700'
+                                : req.resolvedPayment === 'public'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-amber-100 text-amber-800'
                             }`}>
-                              {req.resolvedPayment === 'public' ? '🏛️ 公費' : '👤 自理'}
+                              {mixedPayment
+                                ? '公費／自理'
+                                : req.resolvedPayment === 'public'
+                                  ? '🏛️ 公費'
+                                  : '👤 自理'}
                             </span>
                           </td>
 
                           <td className="p-3 text-center">
-                            {req.status === 'approved' && (
-                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[11px]">
-                                ✓ 已核准
-                              </span>
-                            )}
-                            {req.status === 'pending' && (
+                            {isPending ? (
                               <span className="px-2 py-0.5 bg-amber-100 text-amber-900 font-bold rounded-full text-[11px] animate-pulse">
                                 ⏳ 待審核
                               </span>
-                            )}
-                            {req.status === 'rejected' && (
+                            ) : req.status === 'approved' ? (
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[11px]">
+                                ✓ 已核准
+                              </span>
+                            ) : req.status === 'rejected' ? (
                               <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-bold rounded-full text-[11px]">
                                 ✕ 已駁回
                               </span>
-                            )}
+                            ) : null}
                           </td>
 
                           <td className="p-3 text-center">
@@ -2724,7 +2826,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 </button>
                               )}
 
-                              {req.status === 'pending' && (
+                              {isPending && (
                                 <button
                                   onClick={() => {
                                     const academicOnly = academicStaffList.filter(
@@ -2990,6 +3092,22 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
                   當日無排課佔位單，無法指定代課教師（可改代導師／假別／請假日／事由）。
                 </p>
+              ) : editMixedSubstituteTeachers.length > 0 ? (
+                <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 space-y-1">
+                  <p className="font-bold">此合併單含多位代課教師</p>
+                  <p>{editMixedSubstituteTeachers.join('、')}</p>
+                  <p className="text-[11px] text-amber-800">
+                    可改假別／請假日／事由；若變更代課教師，僅套用到與您開啟那一節相同代課者的課堂。
+                  </p>
+                  <TeacherSearchCombobox
+                    teachers={teachers.filter((t) => t.id !== editingRequest.applicantTeacherId)}
+                    currentTeacherId={editSubstituteTeacherId}
+                    onSelectTeacher={setEditSubstituteTeacherId}
+                    placeholder="僅變更本節代課教師之相同課堂…"
+                    variant="light"
+                    fullWidth
+                  />
+                </div>
               ) : (
                 <TeacherSearchCombobox
                   teachers={teachers.filter((t) => t.id !== editingRequest.applicantTeacherId)}

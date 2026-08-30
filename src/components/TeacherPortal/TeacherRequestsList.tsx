@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { formatDayPeriodSummary } from '../../utils/periodLabels';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { 
@@ -11,24 +12,55 @@ import {
   CheckCircle2, 
   Clock, 
   XCircle, 
-  AlertCircle,
   FileText,
-  Filter,
-  ArrowRight,
-  UserCheck,
   ArrowLeftRight
 } from 'lucide-react';
+
+const requestGroupKey = (r: SubstituteRequest) =>
+  r.batchGroupId || r.requestNumber || r.id;
 
 export const TeacherRequestsList: React.FC = () => {
   const { currentTeacher, requests, cancelRequest, setPrintModalRequest, systemConfig } = useApp();
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const myRequests = requests.filter((r) => r.applicantTeacherId === currentTeacher?.id);
+  const myRequests = useMemo(
+    () => requests.filter((r) => r.applicantTeacherId === currentTeacher?.id),
+    [requests, currentTeacher?.id]
+  );
 
-  const filteredRequests = myRequests.filter((r) => {
-    if (statusFilter === 'all') return true;
-    return r.status === statusFilter;
-  });
+  const filteredRequests = useMemo(
+    () =>
+      myRequests.filter((r) => {
+        if (statusFilter === 'all') return true;
+        return r.status === statusFilter;
+      }),
+    [myRequests, statusFilter]
+  );
+
+  const groupedRows = useMemo(() => {
+    const order: string[] = [];
+    const seen = new Set<string>();
+    for (const r of filteredRequests) {
+      const key = requestGroupKey(r);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      order.push(key);
+    }
+    return order.map((key) => {
+      const items = myRequests
+        .filter((r) => requestGroupKey(r) === key)
+        .sort(
+          (a, b) =>
+            (a.originalSession?.dayOfWeek || 0) - (b.originalSession?.dayOfWeek || 0) ||
+            (a.originalSession?.period || 0) - (b.originalSession?.period || 0)
+        );
+      return { key, primary: items[0], items };
+    }).filter((row) => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'pending') return row.items.some((r) => r.status === 'pending');
+      return row.items.every((r) => r.status === statusFilter);
+    });
+  }, [filteredRequests, myRequests, statusFilter]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -69,6 +101,11 @@ export const TeacherRequestsList: React.FC = () => {
     return p ? `${p.label}` : `第${pNum}節`;
   };
 
+  const groupCount = useMemo(
+    () => new Set(myRequests.map(requestGroupKey)).size,
+    [myRequests]
+  );
+
   return (
     <div className="space-y-4">
       
@@ -80,7 +117,7 @@ export const TeacherRequestsList: React.FC = () => {
             我的調代課申請紀錄
           </h3>
           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
-            共 {myRequests.length} 筆
+            共 {groupCount} 筆
           </span>
         </div>
 
@@ -108,7 +145,7 @@ export const TeacherRequestsList: React.FC = () => {
       </div>
 
       {/* Requests List */}
-      {filteredRequests.length === 0 ? (
+      {groupedRows.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400">
           <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
           <p className="text-sm font-medium">目前暫無符合條件之調代課申請單據</p>
@@ -116,16 +153,63 @@ export const TeacherRequestsList: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredRequests.map((req) => (
+          {groupedRows.map(({ key, primary: req, items }) => {
+            const isPending = items.some((r) => r.status === 'pending');
+            const displayStatus = isPending
+              ? 'pending'
+              : items.every((r) => r.status === 'approved')
+                ? 'approved'
+                : items.every((r) => r.status === 'rejected')
+                  ? 'rejected'
+                  : items.every((r) => r.status === 'cancelled')
+                    ? 'cancelled'
+                    : req.status;
+            const periodSummary = formatDayPeriodSummary(
+              items.map((r) => r.originalSession).filter(Boolean),
+              dayNames
+            );
+            const classLabels = [
+              ...new Set(
+                items
+                  .map((r) => {
+                    const s = r.originalSession;
+                    return s ? `${s.className} · 《${s.subjectName}》` : '';
+                  })
+                  .filter(Boolean)
+              ),
+            ];
+            const subNames = [
+              ...new Set(
+                items
+                  .filter((r) => !isActingHomeroomOnlyRequest(r))
+                  .map((r) => r.substituteTeacherName)
+                  .filter(Boolean)
+              ),
+            ] as string[];
+            const actingNames = [
+              ...new Set(items.map((r) => r.actingHomeroomTeacherName).filter(Boolean)),
+            ] as string[];
+            const canPrint =
+              items.some((r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r));
+            const printTarget =
+              items.find((r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r)) || req;
+            const canCancel = items.some((r) => r.status === 'pending');
+
+            return (
             <div
-              key={req.id}
+              key={key}
               className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:border-slate-300 transition"
             >
               <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
-                <div className="flex items-center space-x-2.5">
+                <div className="flex items-center space-x-2.5 flex-wrap">
                   <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200">
                     {req.requestNumber}
                   </span>
+                  {items.length > 1 && (
+                    <span className="text-[11px] text-slate-500 font-semibold">
+                      {items.length} 節合併
+                    </span>
+                  )}
                   <span className="text-xs font-semibold text-slate-600">
                     {req.requestType === 'substitute'
                       ? '👤 請假派代'
@@ -133,23 +217,23 @@ export const TeacherRequestsList: React.FC = () => {
                       ? '🔄 同班對調'
                       : '⏱️ 自行移課'}
                   </span>
-                  {isActingHomeroomOnlyRequest(req) ? (
+                  {items.every((r) => isActingHomeroomOnlyRequest(r)) ? (
                     <span className="text-[11px] px-2 py-0.5 bg-violet-50 text-violet-800 border border-violet-200 rounded font-semibold">
                       代導師費 ({systemConfig.actingHomeroomDailyRate ?? 404}元/日)
                     </span>
                   ) : req.paymentType === 'public' ? (
                     <span className="text-[11px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">
-                      公費派代 ({req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)
+                      公費派代
                     </span>
                   ) : (
                     <span className="text-[11px] px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded font-semibold">
-                      自費代課 ({req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)
+                      自費代課
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center space-x-3">
-                  {getStatusBadge(req.status)}
+                  {getStatusBadge(displayStatus)}
                   <span className="text-xs text-slate-400">{req.createdAt}</span>
                 </div>
               </div>
@@ -160,12 +244,23 @@ export const TeacherRequestsList: React.FC = () => {
                 {/* Original Slot */}
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                   <div className="text-xs font-bold text-slate-500 mb-1">原課堂時段與科目</div>
-                  <div className="font-bold text-slate-800 text-sm">
-                    {req.originalSession.className} · 《{req.originalSession.subjectName}》
-                  </div>
-                  <div className="text-xs text-slate-600 mt-1">
-                    {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)} ｜ {req.originalSession.venueName}
-                  </div>
+                  {items.length === 1 ? (
+                    <>
+                      <div className="font-bold text-slate-800 text-sm">
+                        {req.originalSession.className} · 《{req.originalSession.subjectName}》
+                      </div>
+                      <div className="text-xs text-slate-600 mt-1">
+                        {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)} ｜ {req.originalSession.venueName}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="font-bold text-slate-800 text-sm leading-snug">
+                        {classLabels.join('、')}
+                      </div>
+                      <div className="text-xs text-slate-600 mt-1">{periodSummary}</div>
+                    </>
+                  )}
                   {req.requestType === 'substitute' && (
                     <div className="text-xs text-amber-800 font-semibold mt-1">
                       請假日期：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
@@ -178,27 +273,26 @@ export const TeacherRequestsList: React.FC = () => {
                   <div className="text-xs font-bold text-indigo-700 mb-1">調代課安排內容</div>
                   
                   {req.requestType === 'substitute' && (
-                    <div className="text-slate-800">
-                      {isActingHomeroomOnlyRequest(req) ? (
-                        <>
-                          <span>代導師：</span>
-                          <strong className="text-violet-900 font-bold text-sm ml-1">
-                            {req.actingHomeroomTeacherName || '尚未指定'}
+                    <div className="space-y-1">
+                      {items.every((r) => isActingHomeroomOnlyRequest(r)) ? (
+                        <div className="flex items-center space-x-2 text-sm">
+                          <span className="text-slate-600">代導師：</span>
+                          <strong className="text-violet-900">
+                            {actingNames.join('、') || '尚未指定'}
                           </strong>
-                          <span className="text-xs text-slate-500 ml-2">（當日無排課）</span>
-                        </>
+                        </div>
                       ) : (
                         <>
-                          <span>指派代課教師：</span>
-                          <strong className="text-indigo-900 font-bold text-sm ml-1">
-                            {req.substituteTeacherName || '由教學組媒合無課教師'}
-                          </strong>
-                          <span className="text-xs text-slate-500 ml-2">
-                            ({req.paymentType === 'public' ? '公費支給' : '個人代扣支付'})
-                          </span>
-                          {req.actingHomeroomTeacherName && (
-                            <div className="text-xs text-violet-800 mt-1">
-                              代導師：{req.actingHomeroomTeacherName}
+                          <div className="flex items-center space-x-2 text-sm">
+                            <span className="text-slate-600">代課教師：</span>
+                            <strong className="text-indigo-900">
+                              {subNames.join('、') || '由教學組媒合'}
+                            </strong>
+                          </div>
+                          {actingNames.length > 0 && (
+                            <div className="flex items-center space-x-2 text-sm">
+                              <span className="text-slate-600">代導師：</span>
+                              <strong className="text-violet-900">{actingNames.join('、')}</strong>
                             </div>
                           )}
                         </>
@@ -207,27 +301,24 @@ export const TeacherRequestsList: React.FC = () => {
                   )}
 
                   {req.requestType === 'reschedule' && req.targetReschedule && (
-                    <div className="text-slate-800">
-                      <span>移至時段：</span>
-                      <strong className="text-indigo-900 font-bold ml-1">
+                    <div className="flex items-center space-x-2 text-sm">
+                      <span className="text-slate-600">移至：</span>
+                      <strong>
                         {dayNames[req.targetReschedule.dayOfWeek]} {getPeriodLabel(req.targetReschedule.period)}
                       </strong>
-                      <span className="ml-2 text-slate-600">@ {req.targetReschedule.venueName}</span>
+                      <span className="text-slate-500">（{req.targetReschedule.venueName}）</span>
                     </div>
                   )}
 
-                  {req.requestType === 'swap' && req.swapTargetSession && (
-                    <div className="text-slate-800">
-                      <span>
-                        與 <strong>{req.swapTargetTeacherName}</strong> 同班對調
-                        （{req.swapMode === 'permanent' || (!req.swapMode && !req.effectiveDate) ? '永久' : '暫時'}）：
-                      </span>
-                      <span className="ml-1 text-slate-700">
-                        {req.swapTargetSession.className} 《{req.swapTargetSession.subjectName}》
-                        （{dayNames[req.swapTargetSession.dayOfWeek]} {getPeriodLabel(req.swapTargetSession.period)}）
-                      </span>
-                      {req.effectiveDate && (
-                        <div className="text-xs text-indigo-700 mt-0.5">
+                  {req.requestType === 'swap' && (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-600" />
+                        <span className="text-slate-600">對調對象：</span>
+                        <strong>{req.swapTargetTeacherName}</strong>
+                      </div>
+                      {req.effectiveDate && req.swapTargetSession && (
+                        <div className="text-xs text-indigo-700">
                           {formatTemporarySwapEffectLabel(
                             req.effectiveDate,
                             req.originalSession.dayOfWeek,
@@ -238,81 +329,46 @@ export const TeacherRequestsList: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="text-xs text-slate-600 mt-1">
-                    事由：<span className="text-slate-800">{req.reason}</span>
-                  </div>
+                  {req.reason && (
+                    <div className="text-xs text-slate-500 mt-2 border-t border-indigo-100 pt-2">
+                      事由：{req.reason}
+                    </div>
+                  )}
                 </div>
-
               </div>
 
-              {/* Rejection reason if rejected */}
-              {req.status === 'rejected' && req.rejectReason && (
-                <div className="bg-rose-50 border border-rose-200 rounded-lg p-2.5 text-xs text-rose-800 flex items-start space-x-2 my-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">教務處駁回原因：</span>
-                    <span>{req.rejectReason}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
-                {/* Print button (enabled if approved) */}
-                {req.status === 'approved' && !isActingHomeroomOnlyRequest(req) && (
+              {/* Actions */}
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                {canPrint && (
                   <button
-                    id={`btn-print-${req.id}`}
-                    onClick={() => setPrintModalRequest(req)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg shadow transition"
+                    type="button"
+                    onClick={() => setPrintModalRequest(printTarget)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>列印調代課通知單</span>
+                    <span>列印通知單</span>
                   </button>
                 )}
-
-                {/* Cancel button if pending */}
-                {req.status === 'pending' && (
+                {canCancel && (
                   <button
+                    type="button"
                     onClick={() => {
-                      const pendingCount = req.batchGroupId
-                        ? requests.filter(
-                            (r) =>
-                              r.batchGroupId === req.batchGroupId &&
-                              r.status === 'pending' &&
-                              r.applicantTeacherId === currentTeacher?.id
-                          ).length
-                        : 1;
-                      const msg =
-                        pendingCount > 1
-                          ? `此為連續節次申請（共 ${pendingCount} 節待審），將整批一次撤回。確定？`
-                          : '確定要撤回此調代課申請嗎？';
-                      if (window.confirm(msg)) {
+                      if (window.confirm('確定撤回此申請？（合併單將整批撤回）')) {
                         cancelRequest(req.id);
                       }
                     }}
-                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-xs font-semibold rounded-lg transition"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200 transition"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>
-                      {req.batchGroupId &&
-                      requests.filter(
-                        (r) =>
-                          r.batchGroupId === req.batchGroupId &&
-                          r.status === 'pending' &&
-                          r.applicantTeacherId === currentTeacher?.id
-                      ).length > 1
-                        ? '整批撤回'
-                        : '撤回申請'}
-                    </span>
+                    <span>撤回申請</span>
                   </button>
                 )}
               </div>
-
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
-
     </div>
   );
 };

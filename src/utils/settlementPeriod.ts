@@ -72,6 +72,58 @@ export function isDateInSettlementMonth(
   return isDateInSettlementPeriod(iso, period);
 }
 
+const ACADEMIC_MONTH_ORDER = [8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7] as const;
+
+function parseIsoParts(iso: string): { year: number; month: number } | null {
+  const [year, month] = (iso || '').split('-').map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+  return { year, month };
+}
+
+/**
+ * 找出包含該日的結算期（連續 N 週）。
+ * 例：115 學年 4 週、8/1 為週六 → 8/30 屬 9 月期（8/30～9/26），不屬 8 月期（8/2～8/29）。
+ * 若落在兩期之間的空隙，改對應曆月結算期（與申請畫面預設一致）。
+ */
+export function settlementPeriodContainingIso(
+  iso: string,
+  weeksInMonth = 4
+): SettlementPeriod {
+  const parts = parseIsoParts(iso);
+  const fallbackYear = parts?.year ?? new Date().getFullYear();
+  const fallbackMonth = parts?.month ?? new Date().getMonth() + 1;
+  if (parts) {
+    for (const ay of [parts.year + 1, parts.year, parts.year - 1, parts.year - 2]) {
+      for (const month of ACADEMIC_MONTH_ORDER) {
+        const settlementYear = month >= 8 ? ay : ay + 1;
+        const period = resolveSettlementPeriod(month, settlementYear, weeksInMonth);
+        if (iso >= period.startIso && iso <= period.endIso) return period;
+      }
+    }
+  }
+  return resolveSettlementPeriod(fallbackMonth, fallbackYear, weeksInMonth);
+}
+
+export function settlementMonthForEventIso(
+  eventIso: string | undefined,
+  weeksInMonth = 4
+): number {
+  return settlementPeriodContainingIso(eventIso || isoDaysAgo(0), weeksInMonth).settlementMonth;
+}
+
+export function isoDaysAgo(days: number, from = new Date()): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() - days, 12, 0, 0);
+  return dateToIsoLocal(d);
+}
+
+export function formatSettlementMonthShortRange(period: Pick<SettlementPeriod, 'startIso' | 'endIso'>): string {
+  const [, sm, sd] = period.startIso.split('-');
+  const [, em, ed] = period.endIso.split('-');
+  return `${Number(sm)}/${Number(sd)}～${Number(em)}/${Number(ed)}`;
+}
+
 export function formatRocDateLabel(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   return `${y - 1911}年${m}月${d}日`;
