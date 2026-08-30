@@ -2590,10 +2590,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       const isSelected =
                         pendingIds.length > 0 &&
                         pendingIds.every((id) => selectedRequestIds.includes(id));
-                      const periodSummary = formatDayPeriodSummary(
-                        items.map((r) => r.originalSession).filter(Boolean),
-                        dayNames
-                      );
                       const classLabels = [
                         ...new Set(
                           items
@@ -2604,10 +2600,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             .filter(Boolean)
                         ),
                       ];
-                      const hasPractical = items.some((r) => isPracticalSession(r.originalSession));
-                      const venueLabels = [
-                        ...new Set(items.map((r) => r.originalSession?.venueName).filter(Boolean)),
-                      ];
+                      const periodSummary = formatDayPeriodSummary(
+                        items.map((r) => r.originalSession).filter(Boolean),
+                        dayNames
+                      );
                       const subNames = [
                         ...new Set(
                           items
@@ -2671,18 +2667,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 <div className="font-semibold text-slate-800">
                                   {req.originalSession.className} 《{req.originalSession.subjectName}》
                                 </div>
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                  <span>
-                                    {dayNames[req.originalSession.dayOfWeek]} 第
-                                    {req.originalSession.period}節
-                                  </span>
-                                  <span>·</span>
-                                  <span>{req.originalSession.venueName}</span>
-                                  {isPracticalSession(req.originalSession) && (
-                                    <span className="px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">
-                                      實習
-                                    </span>
-                                  )}
+                                <div className="text-[11px] text-slate-500 mt-0.5">
+                                  {dayNames[req.originalSession.dayOfWeek]} 第{req.originalSession.period}節
                                 </div>
                               </>
                             ) : (
@@ -2690,19 +2676,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 <div className="font-semibold text-slate-800 leading-snug">
                                   {classLabels.join('、')}
                                 </div>
-                                <div className="text-[11px] text-slate-500 mt-0.5">
-                                  {periodSummary}
-                                  {hasPractical && (
-                                    <span className="ml-1 px-1 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">
-                                      實習
-                                    </span>
-                                  )}
-                                </div>
-                                {venueLabels.length > 0 && (
-                                  <div className="text-[11px] text-slate-400 mt-0.5">
-                                    {venueLabels.join('、')}
-                                  </div>
-                                )}
+                                <div className="text-[11px] text-slate-500 mt-0.5">{periodSummary}</div>
                               </>
                             )}
                             {req.requestType === 'substitute' && (

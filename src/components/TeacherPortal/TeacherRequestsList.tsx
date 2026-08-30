@@ -164,20 +164,20 @@ export const TeacherRequestsList: React.FC = () => {
                   : items.every((r) => r.status === 'cancelled')
                     ? 'cancelled'
                     : req.status;
-            const periodSummary = formatDayPeriodSummary(
-              items.map((r) => r.originalSession).filter(Boolean),
-              dayNames
-            );
             const classLabels = [
               ...new Set(
                 items
                   .map((r) => {
                     const s = r.originalSession;
-                    return s ? `${s.className} · 《${s.subjectName}》` : '';
+                    return s ? `${s.className} 《${s.subjectName}》` : '';
                   })
                   .filter(Boolean)
               ),
             ];
+            const periodSummary = formatDayPeriodSummary(
+              items.map((r) => r.originalSession).filter(Boolean),
+              dayNames
+            );
             const subNames = [
               ...new Set(
                 items
@@ -250,7 +250,7 @@ export const TeacherRequestsList: React.FC = () => {
                         {req.originalSession.className} · 《{req.originalSession.subjectName}》
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
-                        {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)} ｜ {req.originalSession.venueName}
+                        {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)}
                       </div>
                     </>
                   ) : (

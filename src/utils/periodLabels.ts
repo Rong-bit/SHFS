@@ -33,10 +33,11 @@ export function formatPeriodsCompact(periods: number[]): string {
 
 const DEFAULT_DAY_NAMES = ['', '週一', '週二', '週三', '週四', '週五', '週六', '週日'];
 
-/** 例：週一 第3～4、7節；週二 第1～7節 · 共 10 節 */
+/** 例：週一 第3～4、7節；週二 第1～7節 */
 export function formatDayPeriodSummary(
   sessions: Array<{ dayOfWeek: number; period: number }>,
-  dayNames: string[] = DEFAULT_DAY_NAMES
+  dayNames: string[] = DEFAULT_DAY_NAMES,
+  options?: { withTotal?: boolean }
 ): string {
   const byDay = new Map<number, number[]>();
   for (const s of sessions) {
@@ -51,6 +52,45 @@ export function formatDayPeriodSummary(
     const label = dayNames[d] || `星期${d}`;
     return `${label} ${formatPeriodsCompact(byDay.get(d) || [])}`;
   });
-  const total = sessions.length;
-  return `${parts.join('；')} · 共 ${total} 節`;
+  const body = parts.join('；');
+  if (options?.withTotal === false) return body;
+  return `${body} · 共 ${sessions.length} 節`;
+}
+
+export type AffectedSessionSlice = {
+  className?: string;
+  subjectName?: string;
+  venueName?: string;
+  dayOfWeek: number;
+  period: number;
+  practical?: boolean;
+};
+
+/** 依班級＋科目分行，避免節次與場地對不上 */
+export function groupAffectedSessionLines(
+  sessions: AffectedSessionSlice[],
+  dayNames: string[] = DEFAULT_DAY_NAMES
+): Array<{ title: string; schedule: string; venue: string; practical: boolean; count: number }> {
+  const groups = new Map<string, AffectedSessionSlice[]>();
+  const order: string[] = [];
+  for (const s of sessions) {
+    const key = `${s.className || ''}｜${s.subjectName || ''}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(s);
+  }
+  return order.map((key) => {
+    const items = groups.get(key) || [];
+    const first = items[0];
+    const venues = [...new Set(items.map((s) => s.venueName).filter(Boolean))] as string[];
+    return {
+      title: `${first?.className || '（未填班級）'}《${first?.subjectName || '（未填科目）'}》`,
+      schedule: formatDayPeriodSummary(items, dayNames, { withTotal: false }),
+      venue: venues.join('、'),
+      practical: items.some((s) => s.practical),
+      count: items.length,
+    };
+  });
 }
