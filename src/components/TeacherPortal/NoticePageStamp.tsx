@@ -9,11 +9,11 @@ const CX = 100;
 const CY = 102;
 const R = 93;
 
-/** 上弧校名：盡量大，半徑貼近圓邊以抬高字帶 */
+/** 上弧校名：半徑略小讓字帶下移，緊貼上緣內弧 */
 const ARC_FONT_SIZE = 24;
-const ARC_RADIUS = 86;
+const ARC_RADIUS = 77;
 
-const OFFICE_FONT_SIZE = 20;
+const OFFICE_FONT_SIZE = 24;
 const DATE_FONT_SIZE = 20;
 const NOTICE_FONT_SIZE = 24;
 
@@ -92,7 +92,7 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
 
         <text
           x={CX}
-          y={76}
+          y={80}
           textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_BLUE}
