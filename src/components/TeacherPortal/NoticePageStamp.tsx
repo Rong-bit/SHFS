@@ -3,20 +3,19 @@ import React from 'react';
 const STAMP_BLUE = '#2a4f9c';
 const STAMP_KAI =
   '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif';
+const STAMP_DATE_FONT = 'Arial, "Helvetica Neue", "Noto Sans TC", sans-serif';
 
 const CX = 100;
 const CY = 102;
 const R = 93;
 
-const STAMP_FONT_SIZE = 20;
-/** 上弧半徑：略大讓兩端字抬高，避免與第一條橫線相切 */
-const ARC_RADIUS = 72;
+/** 上弧校名：盡量大，半徑貼近圓邊以抬高字帶 */
+const ARC_FONT_SIZE = 24;
+const ARC_RADIUS = 86;
 
-const stampTextProps = {
-  fill: STAMP_BLUE,
-  fontFamily: STAMP_KAI,
-  fontSize: STAMP_FONT_SIZE,
-};
+const OFFICE_FONT_SIZE = 19;
+const DATE_FONT_SIZE = 20;
+const NOTICE_FONT_SIZE = 21;
 
 function circleChord(y: number) {
   const dy = y - CY;
@@ -25,10 +24,10 @@ function circleChord(y: number) {
 }
 
 /** 沿圓頂排字（避免 textPath 上下顛倒） */
-function ArcSchoolName({ text, radius }: { text: string; radius: number }) {
+function ArcSchoolName({ text, radius, fontSize }: { text: string; radius: number; fontSize: number }) {
   const chars = [...text];
-  const startDeg = 160;
-  const endDeg = 20;
+  const startDeg = 158;
+  const endDeg = 22;
   const span = startDeg - endDeg;
 
   return (
@@ -45,7 +44,9 @@ function ArcSchoolName({ text, radius }: { text: string; radius: number }) {
             key={`${ch}-${i}`}
             x={x}
             y={y}
-            {...stampTextProps}
+            fill={STAMP_BLUE}
+            fontFamily={STAMP_KAI}
+            fontSize={fontSize}
             textAnchor="middle"
             dominantBaseline="middle"
             transform={`rotate(${rotate}, ${x}, ${y})`}
@@ -71,8 +72,8 @@ type NoticePageStampProps = {
 export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) => {
   const label = STAMP_SCHOOL_NAME;
 
-  const lineTop = 96;
-  const lineBottom = 128;
+  const lineTop = 88;
+  const lineBottom = 124;
   const topChord = circleChord(lineTop);
   const bottomChord = circleChord(lineBottom);
 
@@ -86,9 +87,17 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
       >
         <circle cx={CX} cy={CY} r={R} fill="none" stroke={STAMP_BLUE} strokeWidth="2.2" />
 
-        <ArcSchoolName text={label} radius={ARC_RADIUS} />
+        <ArcSchoolName text={label} radius={ARC_RADIUS} fontSize={ARC_FONT_SIZE} />
 
-        <text x={CX} y={80} textAnchor="middle" dominantBaseline="middle" {...stampTextProps}>
+        <text
+          x={CX}
+          y={76}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={STAMP_BLUE}
+          fontFamily={STAMP_KAI}
+          fontSize={OFFICE_FONT_SIZE}
+        >
           教務處
         </text>
 
@@ -111,22 +120,26 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
 
         <text
           x={CX}
-          y={111}
+          y={106}
           textAnchor="middle"
           dominantBaseline="middle"
-          letterSpacing="0.04em"
-          {...stampTextProps}
+          fill={STAMP_BLUE}
+          fontFamily={STAMP_DATE_FONT}
+          fontSize={DATE_FONT_SIZE}
+          letterSpacing="0.06em"
         >
           {dateLabel}
         </text>
 
         <text
           x={CX}
-          y={154}
+          y={151}
           textAnchor="middle"
           dominantBaseline="middle"
-          letterSpacing="0.05em"
-          {...stampTextProps}
+          fill={STAMP_BLUE}
+          fontFamily={STAMP_KAI}
+          fontSize={NOTICE_FONT_SIZE}
+          letterSpacing="0.06em"
         >
           派代通知單
         </text>
