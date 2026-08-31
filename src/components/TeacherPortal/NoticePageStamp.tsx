@@ -9,7 +9,7 @@ const CX = 100;
 const CY = 102;
 const R = 93;
 /** 兩橫線距圓心水平直徑等距 */
-const LINE_OFFSET = 16;
+const LINE_OFFSET = 18;
 
 const ARC_FONT_SIZE = 23;
 const ARC_RADIUS = 75;
@@ -92,7 +92,7 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
 
         <text
           x={CX}
-          y={75}
+          y={70}
           textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_BLUE}
