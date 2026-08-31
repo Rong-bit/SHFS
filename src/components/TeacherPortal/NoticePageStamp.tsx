@@ -1,15 +1,29 @@
-import React, { useId } from 'react';
+import React, { useId, useMemo } from 'react';
 
-const STAMP_BLUE = '#2a4f9c';
-const STAMP_FONT =
+const STAMP_BLUE = '#2d4f9c';
+const STAMP_KAI =
   '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif';
+const STAMP_DATE =
+  '"Arial Narrow", "Helvetica Neue", Arial, "Noto Sans TC", sans-serif';
 
-function arcFontSize(schoolName: string): number {
+const CX = 100;
+const CY = 102;
+const R = 93;
+
+function arcMetrics(schoolName: string) {
   const len = schoolName.length;
-  if (len <= 8) return 15;
-  if (len <= 10) return 13;
-  if (len <= 12) return 11.5;
-  return 10;
+  if (len <= 8) return { fontSize: 14.5, pathY: 66, textLength: 168 };
+  if (len <= 10) return { fontSize: 12.5, pathY: 64, textLength: 172 };
+  if (len <= 12) return { fontSize: 11, pathY: 62, textLength: 176 };
+  if (len <= 14) return { fontSize: 9.5, pathY: 60, textLength: 180 };
+  return { fontSize: 8.5, pathY: 58, textLength: 184 };
+}
+
+/** 圓內水平弦端點（橫線貼近圓邊） */
+function circleChord(y: number, inset = 3) {
+  const dy = y - CY;
+  const half = Math.sqrt(Math.max(0, R * R - dy * dy));
+  return { x1: CX - half + inset, x2: CX + half - inset };
 }
 
 type NoticePageStampProps = {
@@ -17,11 +31,20 @@ type NoticePageStampProps = {
   dateLabel: string;
 };
 
-/** 圓形教務戳章（SVG 動態生成，取代固定 PNG） */
+/** 圓形教務戳章（SVG 動態生成，版面對齊實體印鑑） */
 export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ schoolName, dateLabel }) => {
   const arcId = useId().replace(/:/g, '');
   const label = schoolName.trim() || '學校';
-  const arcSize = arcFontSize(label);
+  const arc = useMemo(() => arcMetrics(label), [label]);
+  const arcPath = `M 18 ${arc.pathY} A 82 82 0 0 1 182 ${arc.pathY}`;
+
+  const lineTop = 90;
+  const lineBottom = 130;
+  const topChord = circleChord(lineTop);
+  const bottomChord = circleChord(lineBottom);
+  const dateY = (lineTop + lineBottom) / 2 + 5;
+  const officeY = lineTop - 11;
+  const noticeY = lineBottom + 21;
 
   return (
     <div className="substitute-notice-page-stamp" aria-hidden>
@@ -32,88 +55,80 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ schoolName, da
         role="img"
       >
         <defs>
-          <path id={arcId} d="M 28 82 A 72 72 0 0 1 172 82" fill="none" />
-          <filter id={`${arcId}-grain`} x="-5%" y="-5%" width="110%" height="110%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" result="noise" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.35" />
-          </filter>
+          <path id={arcId} d={arcPath} fill="none" />
         </defs>
 
-        <circle
-          cx="100"
-          cy="102"
-          r="94"
-          fill="none"
-          stroke={STAMP_BLUE}
-          strokeWidth="2.2"
-          filter={`url(#${arcId}-grain)`}
-        />
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke={STAMP_BLUE} strokeWidth="2.6" />
 
-        <text
-          fill={STAMP_BLUE}
-          fontFamily={STAMP_FONT}
-          fontSize={arcSize}
-          letterSpacing="0.02em"
-          filter={`url(#${arcId}-grain)`}
-        >
-          <textPath href={`#${arcId}`} startOffset="50%" textAnchor="middle">
+        <text fill={STAMP_BLUE} fontFamily={STAMP_KAI} fontSize={arc.fontSize} fontWeight="600">
+          <textPath
+            href={`#${arcId}`}
+            startOffset="50%"
+            textAnchor="middle"
+            textLength={arc.textLength}
+            lengthAdjust="spacingAndGlyphs"
+          >
             {label}
           </textPath>
         </text>
 
         <text
-          x="100"
-          y="74"
+          x={CX}
+          y={officeY}
           textAnchor="middle"
+          dominantBaseline="middle"
           fill={STAMP_BLUE}
-          fontFamily={STAMP_FONT}
-          fontSize="17"
-          filter={`url(#${arcId}-grain)`}
+          fontFamily={STAMP_KAI}
+          fontSize="16.5"
+          fontWeight="600"
         >
           教務處
         </text>
 
+        {/* 上、下兩條橫線：分隔上／中／下三區 */}
         <line
-          x1="22"
-          y1="88"
-          x2="178"
-          y2="88"
+          x1={topChord.x1}
+          y1={lineTop}
+          x2={topChord.x2}
+          y2={lineTop}
           stroke={STAMP_BLUE}
-          strokeWidth="1.6"
-          filter={`url(#${arcId}-grain)`}
+          strokeWidth="2.4"
+          strokeLinecap="square"
         />
         <line
-          x1="22"
-          y1="126"
-          x2="178"
-          y2="126"
+          x1={bottomChord.x1}
+          y1={lineBottom}
+          x2={bottomChord.x2}
+          y2={lineBottom}
           stroke={STAMP_BLUE}
-          strokeWidth="1.6"
-          filter={`url(#${arcId}-grain)`}
+          strokeWidth="2.4"
+          strokeLinecap="square"
         />
 
         <text
-          x="100"
-          y="114"
+          x={CX}
+          y={dateY}
           textAnchor="middle"
+          dominantBaseline="middle"
           fill={STAMP_BLUE}
-          fontFamily={STAMP_FONT}
-          fontSize="17"
-          letterSpacing="0.06em"
-          filter={`url(#${arcId}-grain)`}
+          fontFamily={STAMP_DATE}
+          fontSize="19"
+          fontWeight="600"
+          letterSpacing="0.1em"
         >
           {dateLabel}
         </text>
 
         <text
-          x="100"
-          y="154"
+          x={CX}
+          y={noticeY}
           textAnchor="middle"
+          dominantBaseline="middle"
           fill={STAMP_BLUE}
-          fontFamily={STAMP_FONT}
-          fontSize="17"
-          letterSpacing="0.08em"
-          filter={`url(#${arcId}-grain)`}
+          fontFamily={STAMP_KAI}
+          fontSize="16.5"
+          fontWeight="600"
+          letterSpacing="0.12em"
         >
           派代通知單
         </text>
