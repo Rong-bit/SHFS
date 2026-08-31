@@ -8,7 +8,9 @@ const CX = 100;
 const CY = 102;
 const R = 93;
 
-const STAMP_FONT_SIZE = 17.5;
+const STAMP_FONT_SIZE = 20;
+/** 上弧半徑略小，讓校名帶落在圓頂下方、貼近教務處 */
+const ARC_RADIUS = 63;
 
 const stampTextProps = {
   fill: STAMP_BLUE,
@@ -25,8 +27,8 @@ function circleChord(y: number) {
 /** 沿圓頂排字（避免 textPath 上下顛倒） */
 function ArcSchoolName({ text, radius }: { text: string; radius: number }) {
   const chars = [...text];
-  const startDeg = 162;
-  const endDeg = 18;
+  const startDeg = 164;
+  const endDeg = 16;
   const span = startDeg - endDeg;
 
   return (
@@ -69,8 +71,8 @@ type NoticePageStampProps = {
 export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) => {
   const label = STAMP_SCHOOL_NAME;
 
-  const lineTop = 91;
-  const lineBottom = 127;
+  const lineTop = 87;
+  const lineBottom = 123;
   const topChord = circleChord(lineTop);
   const bottomChord = circleChord(lineBottom);
 
@@ -84,9 +86,9 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
       >
         <circle cx={CX} cy={CY} r={R} fill="none" stroke={STAMP_BLUE} strokeWidth="2.2" />
 
-        <ArcSchoolName text={label} radius={R - 9} />
+        <ArcSchoolName text={label} radius={ARC_RADIUS} />
 
-        <text x={CX} y={76} textAnchor="middle" dominantBaseline="middle" {...stampTextProps}>
+        <text x={CX} y={70} textAnchor="middle" dominantBaseline="middle" {...stampTextProps}>
           教務處
         </text>
 
@@ -109,10 +111,10 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
 
         <text
           x={CX}
-          y={109}
+          y={105}
           textAnchor="middle"
           dominantBaseline="middle"
-          letterSpacing="0.05em"
+          letterSpacing="0.04em"
           {...stampTextProps}
         >
           {dateLabel}
@@ -120,10 +122,10 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
 
         <text
           x={CX}
-          y={152}
+          y={150}
           textAnchor="middle"
           dominantBaseline="middle"
-          letterSpacing="0.06em"
+          letterSpacing="0.05em"
           {...stampTextProps}
         >
           派代通知單
