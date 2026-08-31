@@ -13,9 +13,9 @@ const R = 93;
 const ARC_FONT_SIZE = 24;
 const ARC_RADIUS = 86;
 
-const OFFICE_FONT_SIZE = 19;
+const OFFICE_FONT_SIZE = 20;
 const DATE_FONT_SIZE = 20;
-const NOTICE_FONT_SIZE = 21;
+const NOTICE_FONT_SIZE = 24;
 
 function circleChord(y: number) {
   const dy = y - CY;
@@ -26,8 +26,9 @@ function circleChord(y: number) {
 /** 沿圓頂排字（避免 textPath 上下顛倒） */
 function ArcSchoolName({ text, radius, fontSize }: { text: string; radius: number; fontSize: number }) {
   const chars = [...text];
-  const startDeg = 158;
-  const endDeg = 22;
+  /** 縮小弧度跨度，校名緊密貼成上弧 */
+  const startDeg = 148;
+  const endDeg = 32;
   const span = startDeg - endDeg;
 
   return (
@@ -133,7 +134,7 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
 
         <text
           x={CX}
-          y={151}
+          y={153}
           textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_BLUE}
