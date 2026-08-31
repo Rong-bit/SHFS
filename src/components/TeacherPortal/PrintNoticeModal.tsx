@@ -428,10 +428,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 showSignatureBlock={false}
                 isLowerCopy
               />
-              <NoticePageStamp
-                schoolName={systemConfig.schoolName || '學校'}
-                dateLabel={stampDateLabel}
-              />
+              <NoticePageStamp dateLabel={stampDateLabel} />
             </div>
           );
         })}
