@@ -3,6 +3,7 @@ import { dateToDayOfWeek, type LeaveBillableOptions } from './leaveDates';
 import {
   isLeaveDatePublicPayroll,
   listBillableLeaveDatesInMonth,
+  listBillableLeaveDatesInRange,
   type LeavePayrollContext,
 } from './leavePayrollPolicy';
 import { isDateInSettlementMonth } from './settlementPeriod';
@@ -220,18 +221,27 @@ export function listResolvedNoticeRowsInSettlementMonth(
   return resolved;
 }
 
-/** 通知單表格列：僅計入該假別、該日已達公費門檻者（事假按日、病假看連續天數） */
+/** 通知單表格列：僅計入對應請假單、該日可計費且已達公費門檻者 */
 export function filterResolvedNoticeRowsForPublicPayroll(
   resolvedRows: ResolvedNoticePayrollRow[],
   relatedRequests: SubstituteRequest[],
-  ctx: LeavePayrollContext
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
 ): ResolvedNoticePayrollRow[] {
   return resolvedRows.filter(({ row, iso }) => {
     const matching = findMatchingRequests(row, relatedRequests);
-    const requestsToCheck = matching.length > 0 ? matching : relatedRequests;
-    return requestsToCheck.some((r) =>
-      isLeaveDatePublicPayroll(iso, r, ctx, r.applicantTeacherId)
-    );
+    if (matching.length === 0) return false;
+    return matching.some((r) => {
+      if (!r.leaveDateStart || !r.originalSession) return false;
+      const periodOpts: LeaveBillableOptions = {
+        ...calendarOpts,
+        period: r.originalSession.period,
+      };
+      const billable = listBillableLeaveDatesInRange(r, excludeDates, periodOpts);
+      if (!billable.includes(iso)) return false;
+      return isLeaveDatePublicPayroll(iso, r, ctx, r.applicantTeacherId);
+    });
   });
 }
 
@@ -300,7 +310,9 @@ export function countSubstitutePayrollWithNoticeRows(
   const resolvedRows = filterResolvedNoticeRowsForPublicPayroll(
     listResolvedNoticeRowsInSettlementMonth(effectiveNoticeRows, resolveOpts),
     relatedRequests,
-    payrollCtx
+    payrollCtx,
+    holidaySet,
+    calendarOpts
   );
   const customizedPeriods = resolvedRows.reduce(
     (sum, { row }) => sum + parseNoticeRowHours(row.hours),

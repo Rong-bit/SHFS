@@ -23,6 +23,11 @@ const WEEKDAY_PRINT_LABELS: Record<string, string> = {
   '5': '五',
 };
 
+/** 通知單鐘點欄：兼課顯示「兼課」，其餘留白（不顯示數字節數） */
+export function formatNoticeHoursDisplay(hours: string): string {
+  return hours.trim() === '兼課' ? '兼課' : '';
+}
+
 export function formatNoticeWeekdayLabel(weekday: string): string {
   const trimmed = weekday.trim();
   if (!trimmed) return '';
@@ -74,6 +79,10 @@ function listDatesMatchingWeekday(
   return dates;
 }
 
+function noticeHoursLabelForSession(session: Pick<CourseSession, 'isConcurrent'>): string {
+  return session.isConcurrent ? '兼課' : '';
+}
+
 function sessionRow(session: CourseSession, dateIso?: string): NoticeRow {
   const weekday = weekdayFromIso(dateIso) ?? session.dayOfWeek;
   return {
@@ -82,7 +91,7 @@ function sessionRow(session: CourseSession, dateIso?: string): NoticeRow {
     period: String(session.period),
     className: session.className || '',
     subjectName: session.subjectName || '',
-    hours: '',
+    hours: noticeHoursLabelForSession(session),
   };
 }
 
@@ -357,7 +366,7 @@ export const NoticeTableEditor: React.FC<{
         <div>
           <p className="text-xs font-bold text-indigo-900">課程表格（可人工調整）</p>
           <p className="text-[10px] text-indigo-800 leading-snug mt-0.5">
-            日期、星期、節次、班級、科目、鐘點可手動輸入；按「儲存表格」後，代課清冊會依此表格以基本鐘點計算。未儲存修改者，清冊仍依課表原邏輯。列印前請先儲存表格。
+            日期、星期、節次、班級、科目可手動輸入；鐘點欄兼課課程為「兼課」、其餘留白。按「儲存表格」後，代課清冊會依此表格以基本鐘點計算。未儲存修改者，清冊仍依課表原邏輯。列印前請先儲存表格。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -452,14 +461,14 @@ export const NoticeTableEditor: React.FC<{
                   />
                 </td>
                 <td className="border border-indigo-200 p-1">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={row.hours}
+                  <select
+                    value={row.hours === '兼課' ? '兼課' : ''}
                     onChange={(e) => updateRow(index, 'hours', e.target.value)}
-                    placeholder="鐘點"
-                    className="w-full px-2 py-1 border border-slate-200 rounded text-xs text-center"
-                  />
+                    className="w-full px-1 py-1 border border-slate-200 rounded text-xs text-center"
+                  >
+                    <option value="">—</option>
+                    <option value="兼課">兼課</option>
+                  </select>
                 </td>
                 <td className="border border-indigo-200 p-1 text-center">
                   <button

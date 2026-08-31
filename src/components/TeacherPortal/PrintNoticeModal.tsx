@@ -8,6 +8,7 @@ import {
   MAX_NOTICE_TABLE_ROWS,
   chunkNoticeRows,
   formatNoticeWeekdayLabel,
+  formatNoticeHoursDisplay,
   useSubstituteNoticeEditor,
 } from './SubstituteNoticeEditor';
 import { NoticePageStamp } from './NoticePageStamp';
@@ -302,7 +303,7 @@ const NoticeCopy: React.FC<{
             <td>{row.period || '\u00A0'}</td>
             <td>{row.className || '\u00A0'}</td>
             <td>{row.subjectName || '\u00A0'}</td>
-            <td>{row.hours || '\u00A0'}</td>
+            <td>{formatNoticeHoursDisplay(row.hours) || '\u00A0'}</td>
           </tr>
         ))}
       </tbody>

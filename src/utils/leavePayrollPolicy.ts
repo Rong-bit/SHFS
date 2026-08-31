@@ -349,8 +349,14 @@ export function resolveRequestPaymentType(
 export function resolvePaymentTypeForLeaveDraft(
   draft: Pick<
     SubstituteRequest,
-    'id' | 'leaveType' | 'reason' | 'leaveDateStart' | 'leaveDateEnd' | 'originalSession' | 'applicantTeacherId' | 'requestType'
-  >,
+    | 'leaveType'
+    | 'reason'
+    | 'leaveDateStart'
+    | 'leaveDateEnd'
+    | 'originalSession'
+    | 'applicantTeacherId'
+    | 'requestType'
+  > & { id?: string },
   ctx: LeavePayrollContext,
   excludeDates?: Set<string>,
   billableOptions?: LeaveBillableOptions

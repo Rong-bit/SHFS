@@ -9,7 +9,7 @@ export type ParsedRequestNumber = {
 };
 
 /** 由曆月推估學期：上學期 8–1 月、下學期 2–7 月 */
-export function semesterFromCalendarMonth(month: number): number {
+export function semesterFromCalendarMonth(month: number): 1 | 2 {
   return month >= 2 && month <= 7 ? 2 : 1;
 }
 
