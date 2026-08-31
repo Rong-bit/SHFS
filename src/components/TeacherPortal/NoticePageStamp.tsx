@@ -8,17 +8,12 @@ const CX = 100;
 const CY = 102;
 const R = 93;
 
-const STAMP_FONT_SIZE = 14;
-const STAMP_TEXT_STROKE = 0.55;
+const STAMP_FONT_SIZE = 17.5;
 
 const stampTextProps = {
   fill: STAMP_BLUE,
   fontFamily: STAMP_KAI,
   fontSize: STAMP_FONT_SIZE,
-  fontWeight: 700 as const,
-  stroke: STAMP_BLUE,
-  strokeWidth: STAMP_TEXT_STROKE,
-  paintOrder: 'stroke fill' as const,
 };
 
 function circleChord(y: number) {
@@ -30,8 +25,8 @@ function circleChord(y: number) {
 /** 沿圓頂排字（避免 textPath 上下顛倒） */
 function ArcSchoolName({ text, radius }: { text: string; radius: number }) {
   const chars = [...text];
-  const startDeg = 158;
-  const endDeg = 22;
+  const startDeg = 162;
+  const endDeg = 18;
   const span = startDeg - endDeg;
 
   return (
@@ -74,8 +69,8 @@ type NoticePageStampProps = {
 export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) => {
   const label = STAMP_SCHOOL_NAME;
 
-  const lineTop = 90;
-  const lineBottom = 124;
+  const lineTop = 91;
+  const lineBottom = 127;
   const topChord = circleChord(lineTop);
   const bottomChord = circleChord(lineBottom);
 
@@ -87,11 +82,11 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
         xmlns="http://www.w3.org/2000/svg"
         role="img"
       >
-        <circle cx={CX} cy={CY} r={R} fill="none" stroke={STAMP_BLUE} strokeWidth="2.4" />
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke={STAMP_BLUE} strokeWidth="2.2" />
 
-        <ArcSchoolName text={label} radius={R - 16} />
+        <ArcSchoolName text={label} radius={R - 9} />
 
-        <text x={CX} y={77} textAnchor="middle" {...stampTextProps}>
+        <text x={CX} y={76} textAnchor="middle" dominantBaseline="middle" {...stampTextProps}>
           教務處
         </text>
 
@@ -101,7 +96,7 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
           x2={topChord.x2}
           y2={lineTop}
           stroke={STAMP_BLUE}
-          strokeWidth="2"
+          strokeWidth="1.8"
         />
         <line
           x1={bottomChord.x1}
@@ -109,15 +104,15 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
           x2={bottomChord.x2}
           y2={lineBottom}
           stroke={STAMP_BLUE}
-          strokeWidth="2"
+          strokeWidth="1.8"
         />
 
         <text
           x={CX}
-          y={108}
+          y={109}
           textAnchor="middle"
           dominantBaseline="middle"
-          letterSpacing="0.06em"
+          letterSpacing="0.05em"
           {...stampTextProps}
         >
           {dateLabel}
@@ -125,9 +120,10 @@ export const NoticePageStamp: React.FC<NoticePageStampProps> = ({ dateLabel }) =
 
         <text
           x={CX}
-          y={146}
+          y={152}
           textAnchor="middle"
-          letterSpacing="0.08em"
+          dominantBaseline="middle"
+          letterSpacing="0.06em"
           {...stampTextProps}
         >
           派代通知單
