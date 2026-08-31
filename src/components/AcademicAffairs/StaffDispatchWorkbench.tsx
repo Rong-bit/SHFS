@@ -289,6 +289,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [listFilter, setListFilter] = useState<'all' | 'pending' | 'public' | 'private' | 'practical'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [dispatchSuccess, setDispatchSuccess] = useState<{
+    message: string;
+    firstRequest: SubstituteRequest;
+    autoApproved: boolean;
+  } | null>(null);
 
   // Filtered teachers based on dept
   const filteredTeachers = useMemo(() => {
@@ -1087,16 +1092,18 @@ export const StaffDispatchWorkbench: React.FC = () => {
         : batchGroupId
           ? '（連續節次合併一張通知單）'
           : '';
-    setSuccessToast(
-      created.length > 1
-        ? `已批次登錄 ${created.length} 筆派代（${first.requestNumber} 起）${
-            autoApprove ? '並立即核定生效' : '並進入簽核清冊'
-          }${mergedNoticeHint}！`
-        : `【${first.requestNumber}】調代課已成功由教學組登錄${
-            autoApprove ? '並立即核定生效' : '並進入簽核清冊'
-          }${mergedNoticeHint}！`
-    );
-    setTimeout(() => setSuccessToast(null), 4000);
+    setDispatchSuccess({
+      message:
+        created.length > 1
+          ? `已批次登錄 ${created.length} 筆派代（${first.requestNumber} 起）${
+              autoApprove ? '並立即核定生效' : '並進入簽核清冊'
+            }${mergedNoticeHint}。`
+          : `【${first.requestNumber}】調代課已成功由教學組登錄${
+              autoApprove ? '並立即核定生效' : '並進入簽核清冊'
+            }${mergedNoticeHint}。`,
+      firstRequest: first,
+      autoApproved: autoApprove,
+    });
 
     if (requestType === 'substitute') {
       setSelectedSessionId('');
@@ -1226,15 +1233,71 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      
-      {/* Toast Notification */}
+
+      {dispatchSuccess && (
+        <ModalShell
+          scroll="panel"
+          backdropClassName="bg-slate-900/60 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200"
+        >
+          <div className="p-6">
+            <div className="flex items-center space-x-2 text-emerald-700 font-bold text-base">
+              <CheckCircle className="w-6 h-6 shrink-0" />
+              <span>派代登記成功</span>
+            </div>
+            <p className="text-sm text-slate-600 mt-3 leading-relaxed">{dispatchSuccess.message}</p>
+            {dispatchSuccess.autoApproved &&
+              dispatchSuccess.firstRequest.requestType === 'substitute' &&
+              !isActingHomeroomOnlyRequest(dispatchSuccess.firstRequest) && (
+                <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 mt-3">
+                  已核定生效，可列印代課通知單或至登錄簿查詢。
+                </p>
+              )}
+            <div className="flex flex-wrap justify-end gap-2 mt-5">
+              {dispatchSuccess.autoApproved &&
+                dispatchSuccess.firstRequest.requestType === 'substitute' &&
+                !isActingHomeroomOnlyRequest(dispatchSuccess.firstRequest) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrintModalRequest(dispatchSuccess.firstRequest);
+                      setDispatchSuccess(null);
+                    }}
+                    className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition flex items-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    列印通知單
+                  </button>
+                )}
+              <button
+                type="button"
+                onClick={() => {
+                  setDispatchSuccess(null);
+                  setActiveSubView('list');
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+              >
+                前往登錄簿
+              </button>
+              <button
+                type="button"
+                onClick={() => setDispatchSuccess(null)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition"
+              >
+                確定
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
       {successToast && (
         <div className="bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center justify-between text-xs sm:text-sm font-bold animate-fade-in">
           <div className="flex items-center space-x-2">
             <CheckCircle className="w-5 h-5 text-amber-300" />
             <span>{successToast}</span>
           </div>
-          <button onClick={() => setSuccessToast(null)} className="text-white/80 hover:text-white">
+          <button type="button" onClick={() => setSuccessToast(null)} className="text-white/80 hover:text-white">
             ✕
           </button>
         </div>
