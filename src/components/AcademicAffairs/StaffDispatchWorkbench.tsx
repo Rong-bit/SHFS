@@ -600,7 +600,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const dispatchPaymentDisplay = leavePaymentDisplayLabel(
     resolvedDispatchPayment,
     leaveType,
-    reason
+    reason,
+    { isConcurrentSession: Boolean(dispatchSampleSession?.isConcurrent) }
   );
 
   const dispatchSessionsForWellness = useMemo(() => {

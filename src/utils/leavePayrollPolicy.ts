@@ -155,6 +155,15 @@ export function isLeaveDatePublicPayroll(
   return false;
 }
 
+/** 課表第 1～7 節且標示兼課（超鐘點） */
+export function isConcurrentTeachingSession(
+  session: SubstituteRequest['originalSession'] | undefined
+): boolean {
+  return Boolean(
+    session?.isConcurrent && session.period >= 1 && session.period <= 7
+  );
+}
+
 /** 兼課（超鐘點）請假是否扣 A 兼課費：身心調適假不扣；其餘僅公費派代日才扣 */
 export function shouldDeductConcurrentOnLeaveDate(
   date: string,
@@ -164,6 +173,16 @@ export function shouldDeductConcurrentOnLeaveDate(
   const lt = normalizeLeaveType(request.leaveType, request.reason);
   if (lt === 'wellness') return false;
   return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
+}
+
+/** 超鐘點代課：A 扣兼課、B 應加兼課（兼課清冊）；身心調適假超鐘點仍走代課清冊 */
+export function shouldTransferConcurrentToSubstituteOnLeaveDate(
+  date: string,
+  request: SubstituteRequest,
+  ctx: LeavePayrollContext
+): boolean {
+  if (!isConcurrentTeachingSession(request.originalSession)) return false;
+  return shouldDeductConcurrentOnLeaveDate(date, request, ctx);
 }
 
 export function listBillableLeaveDatesInRange(
@@ -248,6 +267,59 @@ export function countConcurrentDeductPeriodsInMonth(
     billableOptions
   );
   return dates.filter((d) => shouldDeductConcurrentOnLeaveDate(d, request, ctx)).length;
+}
+
+/** 單張請假單：代課教師 B 應加兼課節數（A 扣多少 B 拿多少） */
+export function countSubstituteConcurrentAddPeriodsInMonth(
+  request: SubstituteRequest,
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptions?: LeaveBillableOptions
+): number {
+  if (request.requestType !== 'substitute') return 0;
+  if (!resolveSubstitutePayrollTeacherId(request)) return 0;
+  if (!isConcurrentTeachingSession(request.originalSession)) return 0;
+
+  if (!request.leaveDateStart) {
+    if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') return 0;
+    if (resolveRequestPaymentType(request, ctx, excludeDates, billableOptions) !== 'public') {
+      return 0;
+    }
+    const inMonth = countLeaveSubstitutePeriodsInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      excludeDates,
+      billableOptions
+    );
+    if (inMonth === null) {
+      return legacyRequestBelongsToSettlement(
+        request.requestNumber,
+        request.createdAt,
+        settlementMonth,
+        settlementYear
+      )
+        ? countLeaveSubstitutePeriods(request, excludeDates, {
+            settlementMonth,
+            settlementYear,
+            ...billableOptions,
+          })
+        : 0;
+    }
+    return inMonth;
+  }
+
+  const dates = listBillableLeaveDatesInMonth(
+    request,
+    settlementMonth,
+    settlementYear,
+    excludeDates,
+    billableOptions
+  );
+  return dates.filter((d) => shouldTransferConcurrentToSubstituteOnLeaveDate(d, request, ctx))
+    .length;
 }
 
 /** 整張請假單是否含任一公費派代節次（UI／篩選用） */
@@ -481,14 +553,47 @@ export function validateWellnessLeaveHoursForDrafts(
 export function leavePaymentDisplayLabel(
   paymentType: PaymentType,
   leaveType?: LeaveType,
-  reason?: string
+  reason?: string,
+  options?: { isConcurrentSession?: boolean; noticeTableSaved?: boolean }
 ): { kind: 'public' | 'self_pay'; label: string; detail: string } {
   const lt = normalizeLeaveType(leaveType, reason);
   if (paymentType === 'public') {
+    if (options?.noticeTableSaved) {
+      return {
+        kind: 'public',
+        label: '公費派代',
+        detail: '已儲存課程表格：代課清冊依表格以基本鐘點計（兼課不另扣／加轉移）',
+      };
+    }
+    if (lt === 'wellness') {
+      return {
+        kind: 'public',
+        label: '公費派代',
+        detail: '身心調適假：基本鐘點與超鐘點（兼課）皆入代課清冊，請假人不扣兼課',
+      };
+    }
+    const concurrentTransfer = options?.isConcurrentSession;
+    if (concurrentTransfer) {
+      return {
+        kind: 'public',
+        label: '公費派代',
+        detail:
+          lt === 'personal'
+            ? `事假學年第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 天起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
+            : lt === 'sick'
+              ? `病假連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
+              : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）；基本鐘點入代課清冊',
+      };
+    }
     return {
       kind: 'public',
       label: '公費派代',
-      detail: '代課鐘點費由學校支給（代課清冊）',
+      detail:
+        lt === 'personal'
+          ? `事假學年第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 天起：基本鐘點入代課清冊`
+          : lt === 'sick'
+            ? `病假連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日起：基本鐘點入代課清冊`
+            : '基本鐘點：代課鐘點費由學校支給（代課清冊）',
     };
   }
   if (lt === 'personal') {
@@ -532,6 +637,34 @@ type ConcurrentDeductOptions = {
   weeksInMonth?: number;
 };
 
+function hasSavedNoticeRows(r: SubstituteRequest): boolean {
+  return Boolean(
+    r.noticeRowsCustomized &&
+      r.noticeRows?.some((row) =>
+        Boolean(
+          row.date.trim() ||
+            row.weekday.trim() ||
+            row.period.trim() ||
+            row.className.trim() ||
+            row.subjectName.trim() ||
+            row.hours.trim()
+        )
+      )
+  );
+}
+
+/** 已儲存通知單課程表格：代課清冊改依表格以基本鐘點計，不走兼課轉移 */
+export function requestUsesCustomizedNoticePayroll(
+  request: SubstituteRequest,
+  allRequests: SubstituteRequest[]
+): boolean {
+  if (hasSavedNoticeRows(request)) return true;
+  if (!request.batchGroupId) return false;
+  return allRequests.some(
+    (r) => r.batchGroupId === request.batchGroupId && hasSavedNoticeRows(r)
+  );
+}
+
 /** 請假兼課扣減：依對照表，身心調適假不扣；事病假僅公費派代日扣 */
 export function countApplicantConcurrentDeductPeriodsInMonth(
   requests: SubstituteRequest[],
@@ -553,6 +686,7 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (r.applicantTeacherId !== applicantTeacherId || !r.substituteTeacherId) continue;
     if (!match(r.originalSession)) continue;
+    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
 
     const periodOpts: LeaveBillableOptions = {
       ...calendarOpts,
@@ -572,6 +706,46 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
     }
 
     total += countConcurrentDeductPeriodsInMonth(
+      r,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      periodOpts
+    );
+  }
+  return total;
+}
+
+/** 代課教師 B 應加兼課（兼課清冊）：公假／婚娩假等超鐘點代課，A 扣多少 B 拿多少 */
+export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
+  requests: SubstituteRequest[],
+  substituteTeacherId: string,
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  options?: ConcurrentDeductOptions
+): number {
+  const match = options?.matchSession ?? (() => true);
+  const calendarOpts: LeaveBillableOptions = {
+    temporaryMoves: options?.temporaryMoves,
+    partialStops: options?.partialStops,
+    weeksInMonth: options?.weeksInMonth,
+  };
+  let total = 0;
+  for (const r of requests) {
+    if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
+    if (r.substituteTeacherId !== substituteTeacherId) continue;
+    if (!match(r.originalSession)) continue;
+    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
+
+    const periodOpts: LeaveBillableOptions = {
+      ...calendarOpts,
+      period: r.originalSession?.period,
+    };
+
+    total += countSubstituteConcurrentAddPeriodsInMonth(
       r,
       settlementMonth,
       settlementYear,
@@ -611,8 +785,9 @@ export function countSubstitutePublicPayrollPeriodsInMonth(
       excludeDates,
       billableOptions
     );
+    let publicTotal = 0;
     if (inMonth === null) {
-      return legacyRequestBelongsToSettlement(
+      publicTotal = legacyRequestBelongsToSettlement(
         request.requestNumber,
         request.createdAt,
         settlementMonth,
@@ -624,11 +799,21 @@ export function countSubstitutePublicPayrollPeriodsInMonth(
             ...billableOptions,
           })
         : 0;
+    } else {
+      publicTotal = inMonth;
     }
-    return inMonth;
+    const concurrentTransfer = countSubstituteConcurrentAddPeriodsInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      billableOptions
+    );
+    return Math.max(0, publicTotal - concurrentTransfer);
   }
 
-  return countPublicPayrollPeriodsInMonth(
+  const publicTotal = countPublicPayrollPeriodsInMonth(
     request,
     settlementMonth,
     settlementYear,
@@ -636,4 +821,13 @@ export function countSubstitutePublicPayrollPeriodsInMonth(
     excludeDates,
     billableOptions
   );
+  const concurrentTransfer = countSubstituteConcurrentAddPeriodsInMonth(
+    request,
+    settlementMonth,
+    settlementYear,
+    ctx,
+    excludeDates,
+    billableOptions
+  );
+  return Math.max(0, publicTotal - concurrentTransfer);
 }

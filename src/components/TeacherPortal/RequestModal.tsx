@@ -251,7 +251,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     calendarBillableOpts,
   ]);
 
-  const paymentDisplay = leavePaymentDisplayLabel(resolvedSubstitutePayment, leaveType, reason);
+  const paymentDisplay = leavePaymentDisplayLabel(resolvedSubstitutePayment, leaveType, reason, {
+    isConcurrentSession: Boolean(
+      (selectedSession ?? leaveSessionsForSubmit[0])?.isConcurrent
+    ),
+  });
 
   const wellnessHoursStatus = useMemo(() => {
     if (leaveType !== 'wellness' || !currentTeacher || !leaveDateStart) return null;

@@ -4,9 +4,11 @@ import { leaveTypeRemarkShort } from './leaveTypes';
 import {
   buildLeavePayrollContext,
   countConcurrentDeductPeriodsInMonth,
+  countSubstituteConcurrentAddPeriodsInMonth,
   listBillableLeaveDatesInMonth,
-  normalizeLeaveType,
+  requestUsesCustomizedNoticePayroll,
   shouldDeductConcurrentOnLeaveDate,
+  shouldTransferConcurrentToSubstituteOnLeaveDate,
 } from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
@@ -118,7 +120,7 @@ const formatMd = (dateStr: string) => {
   return `${Number(m)}/${Number(d)}`;
 };
 
-/** 備註：請假應減兼課；代課費另計於代課清冊（不重複加兼課） */
+/** 備註：請假應減兼課；代課超鐘點應加兼課（依薪資對照表） */
 export function buildConcurrentPayrollRemarks(
   teacherId: string,
   settlementMonth: number,
@@ -136,7 +138,12 @@ export function buildConcurrentPayrollRemarks(
   });
   const parts: string[] = [];
 
-  const pushDateLines = (r: SubstituteRequest, prefix: string) => {
+  const pushDateLines = (
+    r: SubstituteRequest,
+    prefix: string,
+    matchDate: (iso: string) => boolean,
+    countPeriods: () => number
+  ) => {
     const period = r.originalSession?.period;
     const periodLabel = period ? `(第${period}節)` : '';
     const periodOpts = { ...calendarOpts, period };
@@ -147,7 +154,7 @@ export function buildConcurrentPayrollRemarks(
           settlementYear,
           holidaySet,
           periodOpts
-        ).filter((d) => shouldDeductConcurrentOnLeaveDate(d, r, payrollCtx))
+        ).filter(matchDate)
       : [];
     if (dates.length > 0) {
       for (const iso of dates) {
@@ -155,14 +162,7 @@ export function buildConcurrentPayrollRemarks(
       }
       return;
     }
-    const periods = countConcurrentDeductPeriodsInMonth(
-      r,
-      settlementMonth,
-      settlementYear,
-      payrollCtx,
-      holidaySet,
-      periodOpts
-    );
+    const periods = countPeriods();
     if (periods <= 0) return;
     const start = r.leaveDateStart;
     const end = r.leaveDateEnd || r.leaveDateStart;
@@ -183,8 +183,48 @@ export function buildConcurrentPayrollRemarks(
     if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
     if (r.applicantTeacherId !== teacherId) continue;
     if (!r.substituteTeacherId) continue;
+    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
 
-    pushDateLines(r, `請${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`);
+    const periodOpts = { ...calendarOpts, period: r.originalSession.period };
+    pushDateLines(
+      r,
+      `請${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`,
+      (iso) => shouldDeductConcurrentOnLeaveDate(iso, r, payrollCtx),
+      () =>
+        countConcurrentDeductPeriodsInMonth(
+          r,
+          settlementMonth,
+          settlementYear,
+          payrollCtx,
+          holidaySet,
+          periodOpts
+        )
+    );
+  }
+
+  for (const r of requests) {
+    if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
+    if (!r.originalSession?.isConcurrent) continue;
+    if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
+    if (r.substituteTeacherId !== teacherId) continue;
+    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
+
+    const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
+    const periodOpts = { ...calendarOpts, period: r.originalSession.period };
+    pushDateLines(
+      r,
+      `代${r.applicantTeacherName}${leaveShort}兼課`,
+      (iso) => shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx),
+      () =>
+        countSubstituteConcurrentAddPeriodsInMonth(
+          r,
+          settlementMonth,
+          settlementYear,
+          payrollCtx,
+          holidaySet,
+          periodOpts
+        )
+    );
   }
 
   return parts.join('；');

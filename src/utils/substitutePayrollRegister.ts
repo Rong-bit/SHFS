@@ -6,6 +6,7 @@ import {
   isLeaveDatePublicPayroll,
   listBillableLeaveDatesInMonth,
   resolveRequestPaymentType,
+  shouldTransferConcurrentToSubstituteOnLeaveDate,
 } from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode } from './salaryCodes';
@@ -105,6 +106,7 @@ export function buildSubstitutePayrollRemarks(
         weeksInMonth,
         holidaySet,
         calendarOpts,
+        payrollCtx,
         () =>
           countSubstitutePublicPayrollPeriodsInMonth(
             r,
@@ -128,8 +130,10 @@ export function buildSubstitutePayrollRemarks(
           settlementYear,
           holidaySet,
           periodOpts
-        ).filter((iso) =>
-          isLeaveDatePublicPayroll(iso, r, payrollCtx, r.applicantTeacherId)
+        ).filter(
+          (iso) =>
+            isLeaveDatePublicPayroll(iso, r, payrollCtx, r.applicantTeacherId) &&
+            !shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx)
         );
         for (const iso of dates) {
           parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);
@@ -148,8 +152,10 @@ export function buildSubstitutePayrollRemarks(
         settlementYear,
         holidaySet,
         periodOpts
-      ).filter((iso) =>
-        isLeaveDatePublicPayroll(iso, r, payrollCtx, r.applicantTeacherId)
+      ).filter(
+        (iso) =>
+          isLeaveDatePublicPayroll(iso, r, payrollCtx, r.applicantTeacherId) &&
+          !shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx)
       );
       for (const iso of dates) {
         parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);

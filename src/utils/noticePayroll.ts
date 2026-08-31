@@ -1,6 +1,10 @@
 import type { SubstituteNoticeRow, SubstituteRequest } from '../types';
 import { dateToDayOfWeek, type LeaveBillableOptions } from './leaveDates';
-import { listBillableLeaveDatesInMonth } from './leavePayrollPolicy';
+import {
+  isLeaveDatePublicPayroll,
+  listBillableLeaveDatesInMonth,
+  type LeavePayrollContext,
+} from './leavePayrollPolicy';
 import { isDateInSettlementMonth } from './settlementPeriod';
 
 export function isMeaningfulNoticeRow(row: SubstituteNoticeRow): boolean {
@@ -216,6 +220,21 @@ export function listResolvedNoticeRowsInSettlementMonth(
   return resolved;
 }
 
+/** 通知單表格列：僅計入該假別、該日已達公費門檻者（事假按日、病假看連續天數） */
+export function filterResolvedNoticeRowsForPublicPayroll(
+  resolvedRows: ResolvedNoticePayrollRow[],
+  relatedRequests: SubstituteRequest[],
+  ctx: LeavePayrollContext
+): ResolvedNoticePayrollRow[] {
+  return resolvedRows.filter(({ row, iso }) => {
+    const matching = findMatchingRequests(row, relatedRequests);
+    const requestsToCheck = matching.length > 0 ? matching : relatedRequests;
+    return requestsToCheck.some((r) =>
+      isLeaveDatePublicPayroll(iso, r, ctx, r.applicantTeacherId)
+    );
+  });
+}
+
 export function countNoticeRowsSubstitutePayrollInMonth(
   rows: SubstituteNoticeRow[],
   settlementMonth: number,
@@ -267,6 +286,7 @@ export function countSubstitutePayrollWithNoticeRows(
   weeksInMonth: number,
   holidaySet: Set<string> | undefined,
   calendarOpts: LeaveBillableOptions | undefined,
+  payrollCtx: LeavePayrollContext,
   countOriginal: () => number
 ): NoticePayrollCountResult {
   const resolveOpts: NoticePayrollResolveOptions = {
@@ -277,9 +297,10 @@ export function countSubstitutePayrollWithNoticeRows(
     holidaySet,
     calendarOpts,
   };
-  const resolvedRows = listResolvedNoticeRowsInSettlementMonth(
-    effectiveNoticeRows,
-    resolveOpts
+  const resolvedRows = filterResolvedNoticeRowsForPublicPayroll(
+    listResolvedNoticeRowsInSettlementMonth(effectiveNoticeRows, resolveOpts),
+    relatedRequests,
+    payrollCtx
   );
   const customizedPeriods = resolvedRows.reduce(
     (sum, { row }) => sum + parseNoticeRowHours(row.hours),

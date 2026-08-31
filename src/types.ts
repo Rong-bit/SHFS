@@ -182,7 +182,7 @@ export interface SubstituteRequest {
   /** 通知單表格列（人工調整後儲存；列印時優先使用） */
   noticeRows?: SubstituteNoticeRow[];
 
-  /** 為 true 時，代課清冊依 noticeRows 計算（基本鐘點）；未調整則仍依課表原邏輯 */
+  /** 為 true 時，代課清冊依 noticeRows 以基本鐘點計；兼課不扣／不加轉移 */
   noticeRowsCustomized?: boolean;
   
   status: RequestStatus;
@@ -301,7 +301,7 @@ export interface MonthlyTeacherSettlement {
 
   /** 兼課鐘點費印領清冊：課表兼課月節數（扣假、移課前） */
   monthlyConcurrentBasePeriods: number;
-  /** 應加兼課（暫時互調增加等；代課兼課改由代課費／代課清冊支給） */
+  /** 應加兼課（暫時互調增加、代課超鐘點轉入等） */
   concurrentAddPeriods: number;
   /** 應減兼課（請假兼課、暫時互調減少等） */
   concurrentSubtractPeriods: number;

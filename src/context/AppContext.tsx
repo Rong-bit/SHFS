@@ -47,6 +47,7 @@ import {
   buildLeavePayrollContext,
   countApplicantConcurrentDeductPeriodsInMonth,
   countSubstitutePublicPayrollPeriodsInMonth,
+  countSubstituteTeacherConcurrentAddPeriodsInMonth,
   resolveRequestPaymentType,
   resolveSubstitutePayrollTeacherId,
 } from '../utils/leavePayrollPolicy';
@@ -3108,9 +3109,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         holidaySet,
         systemConfig.weeksInMonth ?? 4
       );
+      const substituteConcurrentAdd = countSubstituteTeacherConcurrentAddPeriodsInMonth(
+        requests,
+        teacher.id,
+        settlementMonth,
+        settlementYear,
+        payrollCtx,
+        holidaySet,
+        {
+          matchSession: (s) =>
+            Boolean(s.isConcurrent) &&
+            s.dayOfWeek >= 1 &&
+            s.dayOfWeek <= 5 &&
+            s.period >= 1 &&
+            s.period <= 7,
+          temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+          partialStops: systemConfig.partialNonTeachingDays || [],
+          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+        }
+      );
       const monthlyOverload = Math.max(
         0,
-        rawMonthlyOverload - leaveConcurrentDeduct + swapConcurrentDelta
+        rawMonthlyOverload -
+          leaveConcurrentDeduct +
+          swapConcurrentDelta +
+          substituteConcurrentAdd
       );
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
       const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id);
@@ -3212,6 +3235,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               leaveCalendarOpts.weeksInMonth,
               holidaySet,
               periodOpts,
+              payrollCtx,
               () =>
                 countSubstitutePublicPayrollPeriodsInMonth(
                   r,
@@ -3247,11 +3271,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const swapConcurrentSubtract = Math.max(0, -swapConcurrentDelta);
       const monthlyConcurrentBasePeriods = rawMonthlyOverload;
       const concurrentSubtractPeriods = leaveConcurrentDeduct + swapConcurrentSubtract;
-      // 應加僅計暫時互調增加；代課兼課堂次改由代課費／代課清冊支給，不重複計入兼課清冊
-      const concurrentAddPeriods = swapConcurrentAdd;
+      // 應加：暫時互調增加 ＋ 代課超鐘點（A 扣多少 B 加多少，兼課清冊）
+      const concurrentAddPeriods = swapConcurrentAdd + substituteConcurrentAdd;
       const monthlyConcurrentPeriods = Math.max(
         0,
-        monthlyConcurrentBasePeriods - leaveConcurrentDeduct + swapConcurrentDelta
+        monthlyConcurrentBasePeriods -
+          leaveConcurrentDeduct +
+          swapConcurrentDelta +
+          substituteConcurrentAdd
       );
       const concurrentPayrollAmount = monthlyConcurrentPeriods * hourlyRate;
 
