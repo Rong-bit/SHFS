@@ -4,13 +4,13 @@ import { useApp } from '../../context/AppContext';
 import { Printer, X } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
-import teachingSectionStampUrl from '../../assets/teaching-section-stamp.png';
 import {
   MAX_NOTICE_TABLE_ROWS,
   chunkNoticeRows,
   formatNoticeWeekdayLabel,
   useSubstituteNoticeEditor,
 } from './SubstituteNoticeEditor';
+import { NoticePageStamp } from './NoticePageStamp';
 
 interface PrintNoticeModalProps {
   request: SubstituteRequest;
@@ -58,31 +58,10 @@ const NOTICE_PRINT_CSS = `
   pointer-events: none;
   z-index: 5;
 }
-.substitute-notice-page-stamp-base {
+.substitute-notice-page-stamp-svg {
   width: 100%;
   height: 100%;
-  object-fit: contain;
   display: block;
-}
-.substitute-notice-page-stamp-date-mask {
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  top: 41%;
-  height: 18%;
-  background: #fff;
-}
-.substitute-notice-page-stamp-date {
-  position: absolute;
-  left: 50%;
-  top: 49%;
-  transform: translate(-50%, -50%);
-  font-family: "DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif;
-  font-size: 17pt;
-  line-height: 1;
-  color: #2a4f9c;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
 }
 .substitute-notice-copy {
   color: #000;
@@ -235,7 +214,7 @@ const NOTICE_PRINT_CSS = `
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .substitute-notice-page-stamp-date-mask {
+  .substitute-notice-page-stamp-svg {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -259,14 +238,6 @@ function formatStampRocDate(date: Date = new Date()): string {
   const roc = date.getFullYear() - 1911;
   return `${roc}. ${date.getMonth() + 1}. ${date.getDate()}`;
 }
-
-const NoticePageStamp: React.FC<{ dateLabel: string }> = ({ dateLabel }) => (
-  <div className="substitute-notice-page-stamp" aria-hidden>
-    <img src={teachingSectionStampUrl} alt="" className="substitute-notice-page-stamp-base" />
-    <div className="substitute-notice-page-stamp-date-mask" />
-    <span className="substitute-notice-page-stamp-date">{dateLabel}</span>
-  </div>
-);
 
 const NoticeCopy: React.FC<{
   title: string;
@@ -457,7 +428,10 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 showSignatureBlock={false}
                 isLowerCopy
               />
-              <NoticePageStamp dateLabel={stampDateLabel} />
+              <NoticePageStamp
+                schoolName={systemConfig.schoolName || '學校'}
+                dateLabel={stampDateLabel}
+              />
             </div>
           );
         })}
