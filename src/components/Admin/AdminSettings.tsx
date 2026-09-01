@@ -1246,7 +1246,7 @@ export const AdminSettings: React.FC = () => {
               <div className="text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed space-y-1">
                 <p className="font-bold text-amber-900">操作建議（三種常見情境）</p>
                 <p>
-                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。
+                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。鐘點仍依原規則發放，僅薪資編號 X 開頭者不發停課節次（例：X07390）；派代檢核仍排除該節次。
                 </p>
                 <p>
                   <strong>連假平日對調／週六補課</strong>：原日列入放假日，再用下方「暫時移課／補課」指定補課日（可選週六）。勿用教師端自行移課永久改週模板。

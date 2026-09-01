@@ -1,4 +1,4 @@
-import type { SystemConfig, Teacher } from '../types';
+import type { PartialNonTeachingDay, SystemConfig, Teacher } from '../types';
 
 /** 依姓名解析薪資編號（課表匯入後仍有效；相容舊版 teacherId 對照） */
 export function resolveTeacherSalaryCode(
@@ -10,6 +10,30 @@ export function resolveTeacherSalaryCode(
   if (byName) return byName;
   const legacy = config.teacherSalaryCodes?.[teacher.id];
   return legacy || '';
+}
+
+/**
+ * 半日／節次停課鐘點：薪資編號 X／x 開頭者不發（例：X07390）；其餘教師仍依原課表月計次。
+ * 派代／衝堂檢核仍一律套用停課設定，請勿用此函式。
+ */
+export function isPartialStopPayrollExcludedTeacher(
+  teacher: Pick<Teacher, 'id' | 'name'>,
+  config: Pick<SystemConfig, 'teacherSalaryCodesByName' | 'teacherSalaryCodes'>
+): boolean {
+  const code = resolveTeacherSalaryCode(teacher, config).trim();
+  return /^x/i.test(code);
+}
+
+/** 鐘點結算用：非 x 開頭者回傳空陣列（不停課扣節）；x 開頭者回傳完整停課設定 */
+export function partialStopsForPayroll(
+  allStops: PartialNonTeachingDay[] | null | undefined,
+  teacher: Pick<Teacher, 'id' | 'name'> | undefined,
+  config: Pick<SystemConfig, 'teacherSalaryCodesByName' | 'teacherSalaryCodes'>
+): PartialNonTeachingDay[] {
+  if (!allStops?.length) return [];
+  if (!teacher) return allStops;
+  if (isPartialStopPayrollExcludedTeacher(teacher, config)) return allStops;
+  return [];
 }
 
 export function mergeSalaryCodesByName(

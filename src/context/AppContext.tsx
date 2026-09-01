@@ -103,6 +103,7 @@ import {
   requestHasModifiedNoticePayrollRow,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
+import { partialStopsForPayroll } from '../utils/salaryCodes';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -3056,6 +3057,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return teachers.map((teacher) => {
+      const payrollPartialStops = partialStopsForPayroll(
+        systemConfig.partialNonTeachingDays,
+        teacher,
+        systemConfig
+      );
+      const teacherCalendarOpts = {
+        ...calendarOpts,
+        partialStops: payrollPartialStops,
+      };
+
       // 1. Weekly actual and overload（不含第八節課輔）
       const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id);
       const base = teacher.basePeriods;
@@ -3067,7 +3078,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         new Date(),
         holidaySet,
         systemConfig.academicYear,
-        calendarOpts
+        teacherCalendarOpts
       );
       // 請假日按日扣兼課（依對照表：身心調適假不扣；事病假僅公費派代日扣）
       const leaveConcurrentDeduct = countApplicantConcurrentDeductPeriodsInMonth(
@@ -3092,7 +3103,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               settlementYear
             ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-          partialStops: systemConfig.partialNonTeachingDays || [],
+          partialStops: payrollPartialStops,
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
         }
       );
@@ -3126,7 +3137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             s.period <= 7,
           skipRequest: (r) => requestHasModifiedNoticePayrollRow(r, requests),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-          partialStops: systemConfig.partialNonTeachingDays || [],
+          partialStops: payrollPartialStops,
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
         }
       );
@@ -3146,7 +3157,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         new Date(),
         holidaySet,
         systemConfig.academicYear,
-        calendarOpts
+        teacherCalendarOpts
       );
       const leaveCounselingDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
         requests,
@@ -3164,7 +3175,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               settlementYear
             ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-          partialStops: systemConfig.partialNonTeachingDays || [],
+          partialStops: payrollPartialStops,
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
         }
       );
@@ -3200,7 +3211,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const leaveCalendarOpts = {
         temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-        partialStops: systemConfig.partialNonTeachingDays || [],
         weeksInMonth: systemConfig.weeksInMonth ?? 4,
       };
       const noticeBatchCounted = new Set<string>();
@@ -3211,9 +3221,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const payrollTeacherId = resolveSubstitutePayrollTeacherId(r);
           if (!payrollTeacherId) return;
 
+          const applicant = teachers.find((t) => t.id === r.applicantTeacherId);
           const periodOpts = {
             ...leaveCalendarOpts,
             period: r.originalSession?.period,
+            partialStops: partialStopsForPayroll(
+              systemConfig.partialNonTeachingDays,
+              applicant,
+              systemConfig
+            ),
           };
 
           const effectiveNoticeRows = resolveEffectiveNoticeRows(r, requests);

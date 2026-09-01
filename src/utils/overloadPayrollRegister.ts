@@ -11,7 +11,8 @@ import {
 } from './leavePayrollPolicy';
 import { requestHasModifiedNoticePayrollRow } from './noticePayroll';
 import { nonTeachingDateSet } from './holidays';
-import { resolveTeacherSalaryCode } from './salaryCodes';
+import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
+import type { Teacher } from '../types';
 
 /**
  * 中間頁資料列（含空白補列）；非末頁小計後換頁。
@@ -126,12 +127,18 @@ export function buildConcurrentPayrollRemarks(
   settlementMonth: number,
   settlementYear: number,
   requests: SubstituteRequest[],
-  systemConfig: SystemConfig
+  systemConfig: SystemConfig,
+  teacher?: Pick<Teacher, 'id' | 'name'>
 ): string {
   const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+  const teacherPick = teacher ?? { id: teacherId, name: '' };
   const calendarOpts = {
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-    partialStops: systemConfig.partialNonTeachingDays || [],
+    partialStops: partialStopsForPayroll(
+      systemConfig.partialNonTeachingDays,
+      teacherPick,
+      systemConfig
+    ),
   };
   const payrollCtx = buildLeavePayrollContext(requests, systemConfig, {
     countStatuses: ['approved'],
@@ -263,7 +270,8 @@ export function buildOverloadPayrollRows(
         settlementMonth,
         settlementYear,
         requests,
-        systemConfig
+        systemConfig,
+        { id: s.teacherId, name: s.teacherName }
       ),
     }))
     .sort((a, b) => {

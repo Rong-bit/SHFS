@@ -247,13 +247,13 @@ export const AccountingSettlement: React.FC = () => {
           <div className="space-y-2">
             <p className="font-bold text-slate-900">月結算法與三種行事曆情境</p>
             <p>
-              超鐘點／課輔＝週課表模板 × 各「星期–節次」月計次數（扣整天放假、半日停課；暫時移課會把原日課表加到補課日，含週六）。
+              超鐘點／課輔＝週課表模板 × 各「星期–節次」月計次數（扣整天放假；半日停課僅扣薪資編號 x 開頭者；暫時移課會把原日課表加到補課日，含週六）。
               再依請假日按日扣減。教師端「自行移課」仍會永久改週模板，連假補課請改用「學校與行事曆」的暫時移課。
             </p>
             <ul className="list-disc pl-4 space-y-1.5 text-slate-600">
               <li>
                 <strong className="text-slate-800">下午佈置考場無課：</strong>
-                「標準與參數 → 學校與行事曆」→「半日／節次停課」勾選下午節次，只扣那些節。
+                「標準與參數 → 學校與行事曆」→「半日／節次停課」勾選下午節次；鐘點結算仍依原課表計次，僅薪資編號 X 開頭者（例：X07390）不發該節次。派代／衝堂檢核仍會排除停課節次。
               </li>
               <li>
                 <strong className="text-slate-800">連假平日改某日補上：</strong>
