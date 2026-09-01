@@ -1,6 +1,12 @@
 import type { CourseSession, DayOfWeek, SubstituteNoticeRow, SubstituteRequest } from '../types';
 import { dateToIsoLocal } from './holidays';
-import { dateToDayOfWeek, resolveLeaveDateEnd, type LeaveBillableOptions } from './leaveDates';
+import {
+  dateToDayOfWeek,
+  isLeaveDatePeriodBillable,
+  leaveRangeCoversDate,
+  resolveLeaveDateEnd,
+  type LeaveBillableOptions,
+} from './leaveDates';
 import {
   isLeaveDatePublicPayroll,
   listBillableLeaveDatesInMonth,
@@ -38,10 +44,49 @@ export function parseNoticeRowDateToIso(date: string): string | null {
 
 export function parseNoticeRowHours(hours: string): number {
   const trimmed = hours.trim();
-  if (!trimmed || trimmed === '兼課') return 1;
+  if (!trimmed || trimmed === '兼課' || trimmed === '—' || trimmed === '-') return 1;
   const n = Number.parseFloat(trimmed);
   if (Number.isFinite(n) && n > 0) return n;
   return 1;
+}
+
+const WEEKDAY_LABEL_TO_NUM: Record<string, number> = {
+  '1': 1,
+  '2': 2,
+  '3': 3,
+  '4': 4,
+  '5': 5,
+  一: 1,
+  二: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+};
+
+export function parseNoticeWeekday(weekday: string): number | null {
+  const t = weekday.trim();
+  if (!t) return null;
+  if (WEEKDAY_LABEL_TO_NUM[t] != null) return WEEKDAY_LABEL_TO_NUM[t];
+  const n = Number(t);
+  if (Number.isFinite(n) && n >= 1 && n <= 5) return n;
+  return null;
+}
+
+function normalizeNoticeHours(hours: string): string {
+  const t = hours.trim();
+  if (!t || t === '—' || t === '-') return '';
+  return t;
+}
+
+export function noticeRowKey(row: SubstituteNoticeRow): string {
+  return [
+    row.date.trim(),
+    row.weekday.trim(),
+    row.period.trim(),
+    row.className.trim(),
+    row.subjectName.trim(),
+    normalizeNoticeHours(row.hours),
+  ].join('|');
 }
 
 export function noticeRowFieldsEqual(a: SubstituteNoticeRow, b: SubstituteNoticeRow): boolean {
@@ -51,7 +96,7 @@ export function noticeRowFieldsEqual(a: SubstituteNoticeRow, b: SubstituteNotice
     a.period === b.period &&
     a.className === b.className &&
     a.subjectName === b.subjectName &&
-    a.hours === b.hours
+    normalizeNoticeHours(a.hours) === normalizeNoticeHours(b.hours)
   );
 }
 
@@ -202,7 +247,7 @@ function matchesNoticeSlot(
   const sess = request.originalSession;
   if (!sess) return false;
   const period = Number(row.period);
-  const weekday = Number(row.weekday);
+  const weekday = parseNoticeWeekday(row.weekday);
   const className = row.className.trim();
   if (row.period.trim() && Number.isFinite(period) && period > 0 && sess.period !== period) {
     return false;
@@ -287,19 +332,13 @@ function inferNoticeRowDateIso(
   const candidates = collectCandidateDatesForRow(row, opts);
   const period = row.period.trim();
   const className = row.className.trim();
-  const weekday = Number(row.weekday);
+  const weekday = parseNoticeWeekday(row.weekday);
 
   for (const iso of candidates) {
     if (!isDateInSettlementMonth(iso, opts.settlementMonth, opts.settlementYear, weeksInMonth)) {
       continue;
     }
-    if (
-      row.weekday.trim() &&
-      Number.isFinite(weekday) &&
-      weekday >= 1 &&
-      weekday <= 5 &&
-      dateToDayOfWeek(iso) !== weekday
-    ) {
+    if (weekday != null && dateToDayOfWeek(iso) !== weekday) {
       continue;
     }
     const slotKey = `${iso}|${period}|${className}`;
@@ -445,9 +484,9 @@ export function countSubstitutePayrollWithNoticeRows(
     effectiveNoticeRows,
     buildDefaultNoticeRowsFromRequests(relatedRequests)
   );
-  const modifiedByRow = new Map(classified.map((item) => [item.row, item.modified]));
+  const modifiedByRow = new Map(classified.map((item) => [noticeRowKey(item.row), item.modified]));
   const substituteRows = resolvedRows.filter(({ row }) => {
-    const modified = modifiedByRow.get(row);
+    const modified = modifiedByRow.get(noticeRowKey(row));
     if (modified) return true;
     // 未修改的兼課列維持兼課轉移，不入代課清冊
     return row.hours.trim() !== '兼課';
