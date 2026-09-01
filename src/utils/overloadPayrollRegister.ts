@@ -216,7 +216,15 @@ export function buildConcurrentPayrollRemarks(
     if (requestHasModifiedNoticePayrollRow(r, requests)) continue;
 
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
-    const periodOpts = { ...calendarOpts, period: r.originalSession.period };
+    const periodOpts = {
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: partialStopsForPayroll(
+        systemConfig.partialNonTeachingDays,
+        { id: r.applicantTeacherId, name: r.applicantTeacherName },
+        systemConfig
+      ),
+      period: r.originalSession.period,
+    };
     pushDateLines(
       r,
       `代${r.applicantTeacherName}${leaveShort}兼課`,

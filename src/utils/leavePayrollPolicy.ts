@@ -645,6 +645,10 @@ type ConcurrentDeductOptions = {
   weeksInMonth?: number;
   /** 已修改的通知單列改入代課清冊，該請假單不應加兼課 */
   skipRequest?: (r: SubstituteRequest) => boolean;
+  /** 代課應加兼課：依請假人（被代課程）判定停課是否扣節，與 A 應減配對 */
+  resolvePartialStopsForRequest?: (
+    r: SubstituteRequest
+  ) => SystemConfig['partialNonTeachingDays'];
 };
 
 function hasSavedNoticeRows(r: SubstituteRequest): boolean {
@@ -737,11 +741,6 @@ export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
   options?: ConcurrentDeductOptions
 ): number {
   const match = options?.matchSession ?? (() => true);
-  const calendarOpts: LeaveBillableOptions = {
-    temporaryMoves: options?.temporaryMoves,
-    partialStops: options?.partialStops,
-    weeksInMonth: options?.weeksInMonth,
-  };
   let total = 0;
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
@@ -750,8 +749,11 @@ export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
     if (options?.skipRequest?.(r)) continue;
 
     const periodOpts: LeaveBillableOptions = {
-      ...calendarOpts,
+      temporaryMoves: options?.temporaryMoves,
+      weeksInMonth: options?.weeksInMonth,
       period: r.originalSession?.period,
+      partialStops:
+        options?.resolvePartialStopsForRequest?.(r) ?? options?.partialStops ?? [],
     };
 
     total += countSubstituteConcurrentAddPeriodsInMonth(

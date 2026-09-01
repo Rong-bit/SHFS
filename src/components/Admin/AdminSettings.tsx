@@ -1606,7 +1606,7 @@ export const AdminSettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                指定日期的部分節次不計超鐘點／課輔；其他節次仍計。預設勾選第 5～8 節（下午含課輔），可自行調整。
+                指定日期的部分節次：派代／衝堂檢核會排除；鐘點結算僅薪資編號 X 開頭者（例 X07390）不發該節次，其餘教師仍依原課表計次。預設勾選第 5～8 節（下午含課輔），可自行調整。
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>

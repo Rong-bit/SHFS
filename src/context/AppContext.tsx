@@ -3137,8 +3137,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             s.period <= 7,
           skipRequest: (r) => requestHasModifiedNoticePayrollRow(r, requests),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-          partialStops: payrollPartialStops,
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          resolvePartialStopsForRequest: (r) =>
+            partialStopsForPayroll(
+              systemConfig.partialNonTeachingDays,
+              teachers.find((t) => t.id === r.applicantTeacherId) ?? {
+                id: r.applicantTeacherId,
+                name: r.applicantTeacherName,
+              },
+              systemConfig
+            ),
         }
       );
       const monthlyOverload = Math.max(
