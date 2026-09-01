@@ -568,7 +568,9 @@ export function leavePaymentDisplayLabel(
       return {
         kind: 'public',
         label: '公費派代',
-        detail: '已儲存課程表格：代課清冊依表格以基本鐘點計（兼課不另扣／加轉移）',
+        detail: options?.isConcurrentSession
+          ? '已儲存課程表格：僅修改列改入代課清冊；未改的兼課列仍應加兼課。請假人該節為兼課，仍應減兼課'
+          : '已儲存課程表格：僅修改列改入代課清冊；請假人該節為基鐘，照支原薪、不扣兼課',
       };
     }
     if (lt === 'wellness') {
@@ -641,6 +643,8 @@ type ConcurrentDeductOptions = {
   temporaryMoves?: SystemConfig['temporaryScheduleMoves'];
   partialStops?: SystemConfig['partialNonTeachingDays'];
   weeksInMonth?: number;
+  /** 已修改的通知單列改入代課清冊，該請假單不應加兼課 */
+  skipRequest?: (r: SubstituteRequest) => boolean;
 };
 
 function hasSavedNoticeRows(r: SubstituteRequest): boolean {
@@ -659,7 +663,7 @@ function hasSavedNoticeRows(r: SubstituteRequest): boolean {
   );
 }
 
-/** 已儲存通知單課程表格：代課清冊改依表格以基本鐘點計，不走兼課轉移 */
+/** 已儲存通知單課程表格：代課人改入代課清冊、不應加兼課。請假人僅原課表兼課節次才應減；基鐘照支原薪、不扣兼課。 */
 export function requestUsesCustomizedNoticePayroll(
   request: SubstituteRequest,
   allRequests: SubstituteRequest[]
@@ -671,7 +675,7 @@ export function requestUsesCustomizedNoticePayroll(
   );
 }
 
-/** 請假兼課扣減：依對照表，身心調適假不扣；事病假僅公費派代日扣 */
+/** 請假兼課扣減：僅課表標示兼課之節次。基鐘不扣；身心調適假不扣；事病假僅公費派代日扣。儲存通知單後兼課仍扣，讓該節改入代課清冊。 */
 export function countApplicantConcurrentDeductPeriodsInMonth(
   requests: SubstituteRequest[],
   applicantTeacherId: string,
@@ -692,7 +696,6 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (r.applicantTeacherId !== applicantTeacherId || !r.substituteTeacherId) continue;
     if (!match(r.originalSession)) continue;
-    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
 
     const periodOpts: LeaveBillableOptions = {
       ...calendarOpts,
@@ -723,7 +726,7 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
   return total;
 }
 
-/** 代課教師 B 應加兼課（兼課清冊）：公假／婚娩假等超鐘點代課，A 扣多少 B 拿多少 */
+/** 代課教師 B 應加兼課（兼課清冊）：公假／婚娩假等超鐘點代課，A 扣多少 B 拿多少。已儲存通知單者改入代課清冊，不加兼課。 */
 export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
   requests: SubstituteRequest[],
   substituteTeacherId: string,
@@ -744,7 +747,7 @@ export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (r.substituteTeacherId !== substituteTeacherId) continue;
     if (!match(r.originalSession)) continue;
-    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
+    if (options?.skipRequest?.(r)) continue;
 
     const periodOpts: LeaveBillableOptions = {
       ...calendarOpts,

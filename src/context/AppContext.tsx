@@ -100,6 +100,7 @@ import {
 import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
+  requestHasModifiedNoticePayrollRow,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
 
@@ -3123,6 +3124,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             s.dayOfWeek <= 5 &&
             s.period >= 1 &&
             s.period <= 7,
+          skipRequest: (r) => requestHasModifiedNoticePayrollRow(r, requests),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: systemConfig.partialNonTeachingDays || [],
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
