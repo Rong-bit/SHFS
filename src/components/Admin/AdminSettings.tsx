@@ -65,10 +65,13 @@ import {
 } from '../../utils/salaryCodeImporter';
 import {
   countSalaryCodes,
+  mergePayrollTitlesByName,
   mergeSalaryCodesByName,
   migrateSalaryCodesToName,
   removeTeacherSalaryCodeByName,
+  resolveTeacherPayrollTitle,
   resolveTeacherSalaryCode,
+  setTeacherPayrollTitleByName,
   setTeacherSalaryCodeByName,
 } from '../../utils/salaryCodes';
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
@@ -315,13 +318,23 @@ export const AdminSettings: React.FC = () => {
           systemConfig.teacherSalaryCodesByName,
           result.codesByName
         ),
+        ...(result.titlesImported > 0
+          ? {
+              teacherPayrollTitlesByName: mergePayrollTitlesByName(
+                systemConfig.teacherPayrollTitlesByName,
+                result.titlesByName
+              ),
+            }
+          : {}),
       });
+      const titleNote =
+        result.titlesImported > 0 ? `；職稱 ${result.titlesImported} 筆` : '';
       const unmatchedNote =
         result.unmatched.length > 0
           ? `；名冊尚無 ${result.unmatched.length} 人（已保留，課表匯入後自動對上）`
           : '';
       setSalaryCodeNotice(
-        `已匯入／更新 ${result.imported} 筆薪資編號（名冊可對 ${result.matchedInRoster} 人）${unmatchedNote}`
+        `已匯入／更新 ${result.imported} 筆薪資編號（名冊可對 ${result.matchedInRoster} 人）${titleNote}${unmatchedNote}`
       );
     } catch (err) {
       setSalaryCodeNotice(err instanceof Error ? err.message : '薪資編號匯入失敗');
@@ -335,7 +348,11 @@ export const AdminSettings: React.FC = () => {
       message: '將刪除所有已匯入的薪資編號對照，印領清冊將無法帶出編號。',
       warningMessage: '此操作不影響課表與師資名冊，可再次匯入 Excel 恢復。',
       onConfirm: () => {
-        updateSystemConfig({ teacherSalaryCodesByName: {}, teacherSalaryCodes: {} });
+        updateSystemConfig({
+          teacherSalaryCodesByName: {},
+          teacherSalaryCodes: {},
+          teacherPayrollTitlesByName: {},
+        });
         setSalaryCodeNotice('已清除全部薪資編號');
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       },
@@ -354,6 +371,7 @@ export const AdminSettings: React.FC = () => {
       standardBasePeriods: normalizeStandardBasePeriods(formConfig.standardBasePeriods),
       teacherSalaryCodesByName: systemConfig.teacherSalaryCodesByName,
       teacherSalaryCodes: systemConfig.teacherSalaryCodes,
+      teacherPayrollTitlesByName: systemConfig.teacherPayrollTitlesByName,
     };
     setFormConfig(nextConfig);
     updateSystemConfig(nextConfig);
@@ -1246,7 +1264,7 @@ export const AdminSettings: React.FC = () => {
               <div className="text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed space-y-1">
                 <p className="font-bold text-amber-900">操作建議（三種常見情境）</p>
                 <p>
-                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。鐘點仍依原規則發放，僅薪資編號 X 開頭者不發停課節次（例：X07390）；派代檢核仍排除該節次。
+                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。鐘點仍依原規則發放，僅薪資職稱「外聘人員」者不發停課節次；派代檢核仍排除該節次。
                 </p>
                 <p>
                   <strong>連假平日對調／週六補課</strong>：原日列入放假日，再用下方「暫時移課／補課」指定補課日（可選週六）。勿用教師端自行移課永久改週模板。
@@ -1606,7 +1624,7 @@ export const AdminSettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                指定日期的部分節次：派代／衝堂檢核會排除；鐘點結算僅薪資編號 X 開頭者（例 X07390）不發該節次，其餘教師仍依原課表計次。預設勾選第 5～8 節（下午含課輔），可自行調整。
+                指定日期的部分節次：派代／衝堂檢核會排除；鐘點結算僅薪資職稱「外聘人員」不發該節次，其餘教師仍依原課表計次。職稱請由薪資編號匯入檔「職稱」欄帶入。預設勾選第 5～8 節（下午含課輔），可自行調整。
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
@@ -2069,7 +2087,7 @@ export const AdminSettings: React.FC = () => {
                 </h3>
                 <p className="text-[11px] text-indigo-800 mt-1 leading-relaxed max-w-2xl">
                   以<strong>教師姓名</strong>保存，課表重新匯入<strong>不會清除</strong>；僅在重新匯入薪資編號或手動刪除時變更。
-                  兼課／代課／課輔三份印領清冊共用。
+                  兼課／代課／課輔三份印領清冊共用。匯入檔可含<strong>職稱</strong>欄（如外聘人員），供半日停課扣節判定。
                 </p>
                 {salaryCodeNotice && (
                   <p className="text-[11px] text-indigo-900 mt-2 font-medium">{salaryCodeNotice}</p>
@@ -2109,7 +2127,8 @@ export const AdminSettings: React.FC = () => {
                       onClick={() =>
                         exportSalaryCodesToExcel(
                           systemConfig.teacherSalaryCodesByName ||
-                            migrateSalaryCodesToName(teachers, systemConfig)
+                            migrateSalaryCodesToName(teachers, systemConfig),
+                          systemConfig.teacherPayrollTitlesByName
                         )
                       }
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-indigo-800 hover:bg-indigo-100"
@@ -2212,6 +2231,7 @@ export const AdminSettings: React.FC = () => {
                   <tr>
                     <th className="p-3.5 whitespace-nowrap min-w-[7.5rem]">教師姓名</th>
                     <th className="p-3.5 whitespace-nowrap min-w-[6.5rem]">薪資編號</th>
+                    <th className="p-3.5 whitespace-nowrap min-w-[6.5rem]">薪資職稱</th>
                     <th className="p-3.5 whitespace-nowrap min-w-[7.5rem]">職稱</th>
                     <th className="p-3.5 whitespace-nowrap min-w-[5.5rem]">群科科別</th>
                     <th className="p-3.5 text-center whitespace-nowrap min-w-[5rem]">任務減授</th>
@@ -2226,7 +2246,7 @@ export const AdminSettings: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {filteredTeachers.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="p-8 text-center text-slate-400">
+                      <td colSpan={12} className="p-8 text-center text-slate-400">
                         查無符合條件的教師資料
                       </td>
                     </tr>
@@ -2264,6 +2284,24 @@ export const AdminSettings: React.FC = () => {
                               placeholder="—"
                               className="w-[88px] font-mono text-center bg-white border border-slate-300 rounded-lg py-1 text-[11px]"
                               title="出納印領清冊薪資編號"
+                            />
+                          </td>
+                          <td className="p-3.5 whitespace-nowrap">
+                            <input
+                              type="text"
+                              defaultValue={resolveTeacherPayrollTitle(t, systemConfig)}
+                              key={`${t.id}-payroll-title-${resolveTeacherPayrollTitle(t, systemConfig)}`}
+                              onBlur={(e) => {
+                                const next = setTeacherPayrollTitleByName(
+                                  systemConfig.teacherPayrollTitlesByName,
+                                  t.name,
+                                  e.target.value
+                                );
+                                updateSystemConfig({ teacherPayrollTitlesByName: next });
+                              }}
+                              placeholder="—"
+                              className="w-[6.5rem] bg-white border border-slate-300 rounded-lg py-1 px-1.5 text-[11px]"
+                              title="薪資匯入職稱；外聘人員者半日停課不發鐘點"
                             />
                           </td>
                           <td className="p-3.5 whitespace-nowrap">

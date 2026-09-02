@@ -232,6 +232,8 @@ export interface SystemConfig {
   teacherSalaryCodes?: Record<string, string>;
   /** 教師薪資編號（姓名 → 薪資編號），課表匯入後仍有效 */
   teacherSalaryCodesByName?: Record<string, string>;
+  /** 薪資匯入職稱（姓名 → 職稱，如外聘人員）；用於半日停課扣節，與名冊職稱下拉無關 */
+  teacherPayrollTitlesByName?: Record<string, string>;
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
     defaultTeacherPassword: string; // 預設教師密碼雜湊（或遷移前明文）
