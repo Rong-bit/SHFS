@@ -4,11 +4,15 @@ import type { Teacher } from '../types';
 export type SalaryCodeImportResult = {
   /** 以教師姓名為 key（課表匯入後仍有效） */
   codesByName: Record<string, string>;
-  /** 薪資匯入職稱（姓名 → 職稱） */
+  /** 薪資匯入職稱（姓名 → 職稱，非空者） */
   titlesByName: Record<string, string>;
+  /** 匯入檔是否含職稱欄 */
+  hasTitleColumn: boolean;
+  /** 職稱欄留空、應清除舊職稱的姓名 */
+  titleClears: string[];
   /** 檔案內有效列數 */
   imported: number;
-  /** 檔案內含職稱欄的筆數 */
+  /** 檔案內寫入非空職稱的筆數 */
   titlesImported: number;
   /** 目前師資名冊中可對到的筆數 */
   matchedInRoster: number;
@@ -34,6 +38,8 @@ export function parseSalaryCodeWorkbook(
     return {
       codesByName: {},
       titlesByName: {},
+      hasTitleColumn: false,
+      titleClears: [],
       imported: 0,
       titlesImported: 0,
       matchedInRoster: 0,
@@ -52,7 +58,9 @@ export function parseSalaryCodeWorkbook(
   const rosterNames = new Set(teachers.map((t) => t.name.trim()));
   const codesByName: Record<string, string> = {};
   const titlesByName: Record<string, string> = {};
+  const titleClears: string[] = [];
   const unmatched: string[] = [];
+  const hasTitleColumn = titleCol >= 0;
   let titlesImported = 0;
 
   for (let i = 1; i < rows.length; i++) {
@@ -61,11 +69,13 @@ export function parseSalaryCodeWorkbook(
     const code = String(row[codeCol] || '').trim();
     if (!name || !code) continue;
     codesByName[name] = code;
-    if (titleCol >= 0) {
+    if (hasTitleColumn) {
       const title = String(row[titleCol] || '').trim();
       if (title) {
         titlesByName[name] = title;
         titlesImported += 1;
+      } else {
+        titleClears.push(name);
       }
     }
     if (teachers.length > 0 && !rosterNames.has(name)) {
@@ -79,7 +89,16 @@ export function parseSalaryCodeWorkbook(
       ? imported
       : Object.keys(codesByName).filter((n) => rosterNames.has(n)).length;
 
-  return { codesByName, titlesByName, imported, titlesImported, matchedInRoster, unmatched };
+  return {
+    codesByName,
+    titlesByName,
+    hasTitleColumn,
+    titleClears,
+    imported,
+    titlesImported,
+    matchedInRoster,
+    unmatched,
+  };
 }
 
 export async function readSalaryCodeFile(file: File): Promise<XLSX.WorkBook> {

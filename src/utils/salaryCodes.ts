@@ -52,7 +52,7 @@ export function partialStopsForPayroll(
   config: PayrollTeacherLookupConfig
 ): PartialNonTeachingDay[] {
   if (!allStops?.length) return [];
-  if (!teacher) return allStops;
+  if (!teacher) return [];
   if (isPartialStopPayrollExcludedTeacher(teacher, config)) return allStops;
   return [];
 }
@@ -80,6 +80,20 @@ export function mergePayrollTitlesByName(
     const t = String(title || '').trim();
     if (n && t) next[n] = t;
   });
+  return next;
+}
+
+/** 匯入職稱：合併非空值，並清除職稱欄留空者 */
+export function applyPayrollTitlesImport(
+  existing: Record<string, string> | undefined,
+  imported: Record<string, string>,
+  clears: string[] = []
+): Record<string, string> {
+  const next = mergePayrollTitlesByName(existing, imported);
+  for (const name of clears) {
+    const n = name.trim();
+    if (n) delete next[n];
+  }
   return next;
 }
 

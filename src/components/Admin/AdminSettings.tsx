@@ -64,8 +64,8 @@ import {
   readSalaryCodeFile,
 } from '../../utils/salaryCodeImporter';
 import {
+  applyPayrollTitlesImport,
   countSalaryCodes,
-  mergePayrollTitlesByName,
   mergeSalaryCodesByName,
   migrateSalaryCodesToName,
   removeTeacherSalaryCodeByName,
@@ -318,17 +318,21 @@ export const AdminSettings: React.FC = () => {
           systemConfig.teacherSalaryCodesByName,
           result.codesByName
         ),
-        ...(result.titlesImported > 0
+        ...(result.hasTitleColumn
           ? {
-              teacherPayrollTitlesByName: mergePayrollTitlesByName(
+              teacherPayrollTitlesByName: applyPayrollTitlesImport(
                 systemConfig.teacherPayrollTitlesByName,
-                result.titlesByName
+                result.titlesByName,
+                result.titleClears
               ),
             }
           : {}),
       });
-      const titleNote =
-        result.titlesImported > 0 ? `；職稱 ${result.titlesImported} 筆` : '';
+      const titleNote = result.hasTitleColumn
+        ? `；職稱 ${result.titlesImported} 筆${
+            result.titleClears.length > 0 ? `、清除 ${result.titleClears.length} 筆` : ''
+          }`
+        : '';
       const unmatchedNote =
         result.unmatched.length > 0
           ? `；名冊尚無 ${result.unmatched.length} 人（已保留，課表匯入後自動對上）`
@@ -345,15 +349,16 @@ export const AdminSettings: React.FC = () => {
     setConfirmDialog({
       isOpen: true,
       title: '清除全部薪資編號？',
-      message: '將刪除所有已匯入的薪資編號對照，印領清冊將無法帶出編號。',
-      warningMessage: '此操作不影響課表與師資名冊，可再次匯入 Excel 恢復。',
+      message:
+        '將刪除所有已匯入的薪資編號與薪資職稱對照，印領清冊將無法帶出編號，半日停課亦無法依「外聘人員」判定。',
+      warningMessage: '此操作不影響課表與師資名冊職稱下拉，可再次匯入 Excel 恢復。',
       onConfirm: () => {
         updateSystemConfig({
           teacherSalaryCodesByName: {},
           teacherSalaryCodes: {},
           teacherPayrollTitlesByName: {},
         });
-        setSalaryCodeNotice('已清除全部薪資編號');
+        setSalaryCodeNotice('已清除全部薪資編號與薪資職稱');
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       },
     });
