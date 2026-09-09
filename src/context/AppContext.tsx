@@ -103,7 +103,7 @@ import {
   noticeDateUsesModifiedSubstitutePayroll,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
-import { partialStopsForPayroll } from '../utils/salaryCodes';
+import { holidaySetForOverloadPayroll, partialStopsForPayroll } from '../utils/salaryCodes';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -3064,7 +3064,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacher,
         systemConfig
       );
-      const teacherCalendarOpts = {
+      // 超鐘點：編制內國定假日仍發；僅外聘人員扣放假日。課輔仍全員扣放假日。
+      const overloadHolidaySet = holidaySetForOverloadPayroll(
+        holidaySet,
+        teacher,
+        systemConfig
+      );
+      const overloadCalendarOpts = {
+        ...calendarOpts,
+        holidaySet: overloadHolidaySet,
+        partialStops: payrollPartialStops,
+      };
+      const counselingCalendarOpts = {
         ...calendarOpts,
         partialStops: payrollPartialStops,
       };
@@ -3078,9 +3089,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacher,
         settlementMonth,
         new Date(),
-        holidaySet,
+        overloadHolidaySet,
         systemConfig.academicYear,
-        teacherCalendarOpts
+        overloadCalendarOpts
       );
       // 請假日按日扣兼課（依對照表：身心調適假不扣；事病假僅公費派代日扣）
       const leaveConcurrentDeduct = countApplicantConcurrentDeductPeriodsInMonth(
@@ -3167,7 +3178,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         new Date(),
         holidaySet,
         systemConfig.academicYear,
-        teacherCalendarOpts
+        counselingCalendarOpts
       );
       const leaveCounselingDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
         requests,

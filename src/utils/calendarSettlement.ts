@@ -65,6 +65,7 @@ function dateInSettlementPeriod(
 /**
  * 結算用：各「星期幾–節次」在該結算月（連續 N 週區間）應計幾次。
  * - 平日且非整天放假：各節 +1（再扣半日停課節次）
+ * - 超鐘點編制內可傳空 holidaySet（國定假日仍計）；外聘／課輔／代課仍傳放假日
  * - 暫時移課：扣 sourceDate（若該日原先有計入），並在 targetDate 加回「source 星期」的節次（週六亦可）
  */
 export function slotOccurrenceCountsInMonth(

@@ -350,7 +350,7 @@ export const AdminSettings: React.FC = () => {
       isOpen: true,
       title: '清除全部薪資編號？',
       message:
-        '將刪除所有已匯入的薪資編號與薪資職稱對照，印領清冊將無法帶出編號，半日停課亦無法依「外聘人員」判定。',
+        '將刪除所有已匯入的薪資編號與薪資職稱對照，印領清冊將無法帶出編號，半日停課與放假日超鐘點亦無法依「外聘人員」判定。',
       warningMessage: '此操作不影響課表與師資名冊職稱下拉，可再次匯入 Excel 恢復。',
       onConfirm: () => {
         updateSystemConfig({
@@ -1010,7 +1010,7 @@ export const AdminSettings: React.FC = () => {
 
               <div className="space-y-4 text-xs sm:text-sm">
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
-                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五實際日數計費，並扣除放假日行事曆）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
+                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五課表週次計費。國定假日編制內仍發；僅薪資職稱「外聘人員」扣放假日。教師差假未授課之該節仍不發）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
                   專任、導師、組長、科主任、主任都可在下方填節數，按「儲存系統參數設定」後會套用到全校該職稱教師。團體活動 3 節中：班會／班級活動計入正課，對開社團 2 節不計入。
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1235,14 +1235,14 @@ export const AdminSettings: React.FC = () => {
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
                 <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
                   <Calendar className="w-4 h-4 text-rose-500" />
-                  <span>放假日行事曆（不計鐘點）</span>
+                  <span>放假日行事曆</span>
                 </h3>
                 <span className="text-[11px] px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full font-bold border border-rose-200">
                   國定假日／校慶／彈性放假
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                列入此處的日期（週一至週五）在超鐘點、課輔月結與代課費／自費扣款計算時一律<strong>整天</strong>不計節。週末本來就不計，無需登錄。國定假日可自人事行政總處開放資料自動匯入；校慶、彈性放假請手動新增並核對校曆。
+                列入此處的平日：<strong>課輔、代課</strong>一律整天不計；<strong>超鐘點（兼課）</strong>僅薪資職稱「外聘人員」不發，編制內仍依課表週次發給（含國定假日）。教師自己請假未授課之該節超時課仍不發。週末本來就不計，無需登錄。國定假日可自人事行政總處開放資料自動匯入；校慶、彈性放假請手動新增並核對校曆。
               </p>
               <label className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 cursor-pointer">
                 <input
@@ -2092,7 +2092,7 @@ export const AdminSettings: React.FC = () => {
                 </h3>
                 <p className="text-[11px] text-indigo-800 mt-1 leading-relaxed max-w-2xl">
                   以<strong>教師姓名</strong>保存，課表重新匯入<strong>不會清除</strong>；僅在重新匯入薪資編號或手動刪除時變更。
-                  兼課／代課／課輔三份印領清冊共用。匯入檔可含<strong>職稱</strong>欄（如外聘人員），供半日停課扣節判定。
+                  兼課／代課／課輔三份印領清冊共用。匯入檔可含<strong>職稱</strong>欄（如外聘人員），供半日停課與放假日超鐘點扣節判定。
                 </p>
                 {salaryCodeNotice && (
                   <p className="text-[11px] text-indigo-900 mt-2 font-medium">{salaryCodeNotice}</p>
@@ -2306,7 +2306,7 @@ export const AdminSettings: React.FC = () => {
                               }}
                               placeholder="—"
                               className="w-[6.5rem] bg-white border border-slate-300 rounded-lg py-1 px-1.5 text-[11px]"
-                              title="薪資匯入職稱；外聘人員者半日停課不發鐘點"
+                              title="薪資匯入職稱；外聘人員者半日停課與放假日超鐘點不發"
                             />
                           </td>
                           <td className="p-3.5 whitespace-nowrap">
@@ -2633,6 +2633,10 @@ export const AdminSettings: React.FC = () => {
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="font-bold text-slate-900">3. 《高級中等學校專業群科實習課程實施辦法》</div>
                   <p>實習工場操作危險機具與高防護設備應配置專業合格教師，實施分組教學與安全查核防護。</p>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                  <div className="font-bold text-slate-900">4. 教育部 101 年 5 月 21 日臺人(三)字第 1010079454 號函</div>
+                  <p>專任教師超時授課鐘點費，以學校行事曆排定之上課週數、按每週排定之超時節數發給，包括適逢國定假日未實際授課之節數；與當週實際授課情形無涉。教師因差假未實際授課之該超時節數不得核支。非整學期外聘／兼任依實際授課節數，放假日未上課不發。課輔、代課仍依實際上課計。</p>
                 </div>
               </div>
             </div>

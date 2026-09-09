@@ -322,7 +322,7 @@ export const monthlyTeachingPeriods = (
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
 
-/** 該月兼課節數：每個有兼課的時段 × 該「星期–節次」在當月應計次數（含暫時移課／半日停課） */
+/** 該月兼課節數：每個有兼課的時段 × 該「星期–節次」在當月應計次數（含暫時移課／半日停課；放假日由呼叫端決定是否扣除） */
 export const monthlyConcurrentPeriods = (
   sessions: CourseSession[],
   teacherId: string,

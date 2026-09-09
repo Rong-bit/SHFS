@@ -5,7 +5,7 @@ export type PayrollTeacherLookupConfig = Pick<
   'teacherSalaryCodesByName' | 'teacherSalaryCodes' | 'teacherPayrollTitlesByName'
 >;
 
-/** 半日停課不發鐘點的薪資職稱（匯入檔「職稱」欄） */
+/** 半日停課、整天放假超鐘點不發的薪資職稱（匯入檔「職稱」欄） */
 export const PARTIAL_STOP_EXCLUDED_PAYROLL_TITLE = '外聘人員';
 
 /** 依姓名解析薪資編號（課表匯入後仍有效；相容舊版 teacherId 對照） */
@@ -34,8 +34,8 @@ export function normalizePayrollTitle(title: string): string {
 }
 
 /**
- * 半日／節次停課鐘點：薪資職稱為「外聘人員」者不發；其餘教師仍依原課表月計次。
- * 派代／衝堂檢核仍一律套用停課設定，請勿用此函式。
+ * 薪資職稱為「外聘人員」：半日停課與整天放假之超鐘點不發；其餘教師仍依課表週次計。
+ * 派代／衝堂、課輔、代課仍一律套用行事曆，請勿用此函式取代那些路徑。
  */
 export function isPartialStopPayrollExcludedTeacher(
   teacher: Pick<Teacher, 'id' | 'name'>,
@@ -43,6 +43,26 @@ export function isPartialStopPayrollExcludedTeacher(
 ): boolean {
   const title = resolveTeacherPayrollTitle(teacher, config);
   return normalizePayrollTitle(title) === PARTIAL_STOP_EXCLUDED_PAYROLL_TITLE;
+}
+
+function asDateSet(dates?: Set<string> | Iterable<string> | null): Set<string> {
+  if (!dates) return new Set();
+  return dates instanceof Set ? dates : new Set(dates);
+}
+
+/**
+ * 整天放假之超鐘點：僅「外聘人員」扣放假日；編制內仍計（含國定假日）。
+ * 課輔、代課、派代請仍傳入完整放假日集合。
+ */
+export function holidaySetForOverloadPayroll(
+  allHolidays: Set<string> | Iterable<string> | null | undefined,
+  teacher: Pick<Teacher, 'id' | 'name'> | undefined,
+  config: PayrollTeacherLookupConfig
+): Set<string> {
+  const all = asDateSet(allHolidays);
+  if (!teacher) return new Set();
+  if (isPartialStopPayrollExcludedTeacher(teacher, config)) return all;
+  return new Set();
 }
 
 /** 鐘點結算用：非外聘人員回傳空陣列（不停課扣節）；外聘人員回傳完整停課設定 */

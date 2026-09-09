@@ -215,7 +215,7 @@ export interface SystemConfig {
   semester: string; // 1
   currentMonth: number; // 10
   weeksInMonth: number; // 4 週
-  /** 不計鐘點之日（國定假日、校慶、彈性放假等），格式 YYYY-MM-DD */
+  /** 不計鐘點之日（國定假日、校慶、彈性放假等），格式 YYYY-MM-DD。代課／課輔一律不計；超鐘點僅外聘人員不計。 */
   nonTeachingDays?: NonTeachingDay[];
   /** 新學年度是否自動匯入人事總處國定假日（預設開啟） */
   autoSyncNationalHolidays?: boolean;
@@ -232,7 +232,7 @@ export interface SystemConfig {
   teacherSalaryCodes?: Record<string, string>;
   /** 教師薪資編號（姓名 → 薪資編號），課表匯入後仍有效 */
   teacherSalaryCodesByName?: Record<string, string>;
-  /** 薪資匯入職稱（姓名 → 職稱，如外聘人員）；用於半日停課扣節，與名冊職稱下拉無關 */
+  /** 薪資匯入職稱（姓名 → 職稱，如外聘人員）；用於半日停課與放假日超鐘點扣節，與名冊職稱下拉無關 */
   teacherPayrollTitlesByName?: Record<string, string>;
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
@@ -243,7 +243,7 @@ export interface SystemConfig {
   };
 }
 
-/** 行事曆放假日（不計超鐘點／代課鐘點） */
+/** 行事曆放假日（代課／課輔不計；超鐘點僅外聘人員不計） */
 export interface NonTeachingDay {
   date: string; // YYYY-MM-DD
   label: string;

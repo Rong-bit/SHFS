@@ -160,7 +160,7 @@ export const AccountingSettlement: React.FC = () => {
                 系統學年度仍為 {systemConfig.academicYear}（建議 {expectedAy}），結算西元年已自動以西曆校正；請至「標準與參數 → 學校與行事曆」更新學年度以免單號／報表標題混淆。
               </span>
             )}
-            計，並已扣除系統設定之放假日 ｜ 
+            計，超鐘點國定假日編制內仍發（僅外聘人員扣放假日） ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
             <span className="block mt-1 text-slate-600">
               代課費規則（依薪資對照表）：公假／公差、婚假、娩假／陪產假、身心調適假，以及<strong>事假學年第 8 天起</strong>、<strong>病假連續 3 日起</strong>，由學校公費支應（代課清冊）；
@@ -247,8 +247,8 @@ export const AccountingSettlement: React.FC = () => {
           <div className="space-y-2">
             <p className="font-bold text-slate-900">月結算法與三種行事曆情境</p>
             <p>
-              超鐘點／課輔＝週課表模板 × 各「星期–節次」月計次數（扣整天放假；半日停課僅扣薪資職稱「外聘人員」；暫時移課會把原日課表加到補課日，含週六）。
-              再依請假日按日扣減。教師端「自行移課」仍會永久改週模板，連假補課請改用「學校與行事曆」的暫時移課。
+              超鐘點＝週課表模板 × 各「星期–節次」月計次數（國定假日編制內仍發，僅薪資職稱「外聘人員」扣放假日；半日停課亦僅扣外聘；暫時移課會把原日課表加到補課日，含週六）。
+              課輔／代課仍扣整天放假。再依請假日按日扣減。教師端「自行移課」仍會永久改週模板，連假補課請改用「學校與行事曆」的暫時移課。
             </p>
             <ul className="list-disc pl-4 space-y-1.5 text-slate-600">
               <li>
