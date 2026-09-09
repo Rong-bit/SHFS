@@ -86,6 +86,8 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
   const [copiedConsoleReport, setCopiedConsoleReport] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(true);
   const [consoleTab, setConsoleTab] = useState<'all' | 'errors' | 'warnings'>('all');
+  const [isClashListExpanded, setIsClashListExpanded] = useState(false);
+  const CLASH_PREVIEW_COUNT = 5;
 
   const resetState = () => {
     setFile(null);
@@ -96,6 +98,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
     setSuccessReport(null);
     setSearchKeyword('');
     setCopiedConsoleReport(false);
+    setIsClashListExpanded(false);
   };
 
   const handleCopyErrorReport = () => {
@@ -148,6 +151,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
     setIsLoading(true);
     setParseError(null);
     setIsSuccess(false);
+    setIsClashListExpanded(false);
 
     try {
       const result = await parseScheduleFile(selectedFile, teachers, venues);
@@ -178,6 +182,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
   // Load Built-in Demo Data (Simulate Excel Import for fast testing)
   const handleLoadDemoDataset = () => {
     setIsLoading(true);
+    setIsClashListExpanded(false);
     setTimeout(() => {
       const demoRows: ParsedImportRow[] = [
         {
@@ -645,6 +650,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                       onClick={() => {
                         setParseResult(null);
                         setFile(null);
+                        setIsClashListExpanded(false);
                       }}
                       className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center space-x-1"
                     >
@@ -700,18 +706,46 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Clash / Conflict Warnings */}
+                  {/* Clash / Conflict Warnings（只顯示一次；清單長時先預覽再展開） */}
                   {parseResult.clashesInFile.length > 0 && (
                     <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-xs space-y-2">
                       <div className="font-bold text-rose-900 flex items-center space-x-1.5">
                         <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                        <span>注意：檔案內發現 {parseResult.clashesInFile.length} 處時間衝突/衝堂</span>
+                        <span>
+                          注意：檔案內發現 {parseResult.clashesInFile.length} 處時間衝突/衝堂（不阻擋匯入）
+                        </span>
                       </div>
-                      <ul className="list-disc list-inside space-y-1 text-rose-800 font-medium pl-1">
-                        {parseResult.clashesInFile.map((msg, i) => (
+                      <ul
+                        className={`list-disc list-inside space-y-1 text-rose-800 font-medium pl-1 ${
+                          isClashListExpanded ? 'max-h-48 overflow-y-auto pr-1' : ''
+                        }`}
+                      >
+                        {(isClashListExpanded
+                          ? parseResult.clashesInFile
+                          : parseResult.clashesInFile.slice(0, CLASH_PREVIEW_COUNT)
+                        ).map((msg, i) => (
                           <li key={i}>{msg}</li>
                         ))}
                       </ul>
+                      {parseResult.clashesInFile.length > CLASH_PREVIEW_COUNT && (
+                        <button
+                          type="button"
+                          onClick={() => setIsClashListExpanded((open) => !open)}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 hover:text-rose-950 underline-offset-2 hover:underline"
+                        >
+                          {isClashListExpanded ? (
+                            <>
+                              <ChevronUp className="w-3.5 h-3.5" />
+                              收合清單
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                              展開其餘 {parseResult.clashesInFile.length - CLASH_PREVIEW_COUNT} 筆
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -803,7 +837,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                                   : 'text-slate-400 hover:text-slate-200'
                               }`}
                             >
-                              全部日誌 ({parseResult.invalidRows.length + (parseResult.clashesInFile.length > 0 ? 1 : 0) + (parseResult.validRows.some(r => r.warnings.length > 0) ? 1 : 0)})
+                              全部日誌 ({parseResult.invalidRows.length + (parseResult.validRows.some(r => r.warnings.length > 0) ? 1 : 0)})
                             </button>
                             {parseResult.invalidRows.length > 0 && (
                               <button
@@ -884,30 +918,18 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                             </div>
                           )}
 
-                          {/* Clash Warnings */}
-                          {parseResult.clashesInFile.length > 0 && (consoleTab === 'all' || consoleTab === 'warnings') && (
-                            <div className="bg-amber-950/40 border border-amber-800/80 rounded-xl p-3 text-xs space-y-1.5">
-                              <div className="text-amber-300 font-bold flex items-center space-x-1.5">
-                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                                <span>衝堂/時間衝突診斷：</span>
-                              </div>
-                              <ul className="list-disc list-inside space-y-1 text-amber-200/90 text-[11px] pl-1">
-                                {parseResult.clashesInFile.map((msg, i) => (
-                                  <li key={i}>{msg}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {/* Success State */}
-                          {parseResult.invalidRows.length === 0 && parseResult.clashesInFile.length === 0 && (
+                          {/* Success State（衝堂改列上方提醒，此處只談格式） */}
+                          {parseResult.invalidRows.length === 0 && (consoleTab === 'all' || consoleTab === 'warnings') && (
                             <div className="bg-emerald-950/30 border border-emerald-800/60 rounded-xl p-3.5 text-xs text-emerald-200 space-y-1">
                               <div className="font-bold flex items-center space-x-1.5 text-emerald-300">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                                 <span>[SUCCESS] 全數資料格式診斷合格</span>
                               </div>
                               <p className="text-[11px] text-emerald-300/80 pl-5 leading-relaxed">
-                                共 {parseResult.validRows.length} 堂課通過驗證。包含 {parseResult.practicalCoursesCount} 節高職專業實習連堂已完成工場配對。未發現任何格式缺失或教師衝堂，可直接點擊「確認匯入」寫入系統。
+                                共 {parseResult.validRows.length} 堂課通過格式驗證。包含 {parseResult.practicalCoursesCount} 節高職專業實習連堂已完成工場配對。
+                                {parseResult.clashesInFile.length > 0
+                                  ? '工場／時間衝突已列於上方提醒，不阻擋匯入。'
+                                  : '未發現格式缺失，可直接點擊「確認匯入」寫入系統。'}
                               </p>
                             </div>
                           )}
@@ -1137,7 +1159,10 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                   {/* Actions Footer */}
                   <div className="pt-2 flex items-center justify-between">
                     <button
-                      onClick={() => setParseResult(null)}
+                      onClick={() => {
+                        setParseResult(null);
+                        setIsClashListExpanded(false);
+                      }}
                       className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition"
                     >
                       返回重新上傳
