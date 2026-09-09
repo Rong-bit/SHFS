@@ -7,11 +7,15 @@ import React from 'react';
  * 改以 display:none 把非清冊節點移出列印流。
  */
 export const PAYROLL_REGISTER_PRINT_CSS = `
-/* 畫面預覽：空白補列短列高；儲存格強制置中 */
+/* 畫面預覽：空白補列短列高；儲存格強制置中（備註資料列靠左） */
 .payroll-register-print-table th,
 .payroll-register-print-table td {
   text-align: center !important;
   vertical-align: middle !important;
+}
+
+.payroll-register-print-table td.payroll-register-remarks-col {
+  text-align: left !important;
 }
 
 .payroll-register-print-table tr.payroll-register-blank-row td {
@@ -170,8 +174,7 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   .payroll-register-print-table tr { display: table-row !important; }
 
   .payroll-register-print-table th,
-  .payroll-register-print-table td,
-  .payroll-register-print-table .payroll-register-remarks-col {
+  .payroll-register-print-table td {
     display: table-cell !important;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -179,6 +182,10 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     padding: 0 2px !important;
     text-align: center !important;
     vertical-align: middle !important;
+  }
+
+  .payroll-register-print-table td.payroll-register-remarks-col {
+    text-align: left !important;
   }
 
   .payroll-register-print-table th {
@@ -227,6 +234,10 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     word-break: break-all;
   }
 
+  .payroll-register-print-table td.payroll-register-remarks-col {
+    text-align: left !important;
+  }
+
   .payroll-register-print-title {
     display: block !important;
     width: 100% !important;
@@ -266,6 +277,11 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
 
 export const CELL_CENTER: React.CSSProperties = {
   textAlign: 'center',
+  verticalAlign: 'middle',
+};
+
+export const CELL_LEFT: React.CSSProperties = {
+  textAlign: 'left',
   verticalAlign: 'middle',
 };
 

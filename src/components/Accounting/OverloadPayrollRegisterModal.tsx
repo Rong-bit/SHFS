@@ -17,7 +17,7 @@ import {
 } from '../../utils/overloadPayrollRegister';
 import { exportOverloadPayrollExcel } from '../../utils/payrollRegisterExcel';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
-import { PayrollRegisterPrintStyles, CELL_CENTER } from './PayrollRegisterPrintStyles';
+import { PayrollRegisterPrintStyles, CELL_CENTER, CELL_LEFT } from './PayrollRegisterPrintStyles';
 import { PayrollRegisterSignatureBlock } from './PayrollRegisterSignatureBlock';
 
 import type { MonthlyTeacherSettlement } from '../../types';
@@ -228,7 +228,7 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
                             </td>
                             <td
                               className="border border-slate-300 px-2 py-1 text-[10px] leading-snug payroll-register-remarks-col"
-                              style={CELL_CENTER}
+                              style={CELL_LEFT}
                             >
                               {blank ? '' : row.remarks}
                             </td>

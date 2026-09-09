@@ -133,8 +133,9 @@ function addDataRow(
   row.height = opts?.blank ? 12 : 14;
   row.eachCell((cell, colNumber) => {
     const isAmount = opts?.amountCol === colNumber && typeof cell.value === 'number';
+    const isRemarks = colNumber === values.length;
     styleDataCell(cell, {
-      align: 'center',
+      align: isRemarks ? 'left' : 'center',
       numFmt: isAmount ? '#,##0' : undefined,
     });
     if (isAmount) {
