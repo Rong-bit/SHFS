@@ -2860,7 +2860,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 transition"
                                   title={
                                     req.status === 'approved' && !isActingHomeroomOnlyRequest(req)
-                                      ? '修改申請資料與課程表格（儲存表格後代課清冊依基本鐘點計算）'
+                                      ? '修改申請資料與課程表格（儲存表格後改入代課清冊，兼課節次亦同）'
                                       : '修改假別、事由、請假日、代課／代導師'
                                   }
                                 >

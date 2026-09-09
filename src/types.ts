@@ -182,7 +182,7 @@ export interface SubstituteRequest {
   /** 通知單表格列（人工調整後儲存；列印時優先使用） */
   noticeRows?: SubstituteNoticeRow[];
 
-  /** 為 true 時，代課清冊依 noticeRows 以基本鐘點計；兼課不扣／不加轉移 */
+  /** 為 true 時，通知單曾人工儲存；僅修改列改入代課清冊，未改列仍依課表兼課／基鐘邏輯 */
   noticeRowsCustomized?: boolean;
   
   status: RequestStatus;
@@ -232,6 +232,8 @@ export interface SystemConfig {
   teacherSalaryCodes?: Record<string, string>;
   /** 教師薪資編號（姓名 → 薪資編號），課表匯入後仍有效 */
   teacherSalaryCodesByName?: Record<string, string>;
+  /** 薪資匯入職稱（姓名 → 職稱，如外聘人員）；用於半日停課扣節，與名冊職稱下拉無關 */
+  teacherPayrollTitlesByName?: Record<string, string>;
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
     defaultTeacherPassword: string; // 預設教師密碼雜湊（或遷移前明文）

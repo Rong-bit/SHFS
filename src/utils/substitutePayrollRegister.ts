@@ -9,7 +9,7 @@ import {
   shouldTransferConcurrentToSubstituteOnLeaveDate,
 } from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
-import { resolveTeacherSalaryCode } from './salaryCodes';
+import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
 import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
@@ -68,9 +68,8 @@ export function buildSubstitutePayrollRemarks(
   systemConfig: SystemConfig
 ): string {
   const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-  const calendarOpts = {
+  const baseCalendarOpts = {
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-    partialStops: systemConfig.partialNonTeachingDays || [],
   };
   const payrollCtx = buildLeavePayrollContext(requests, systemConfig, {
     countStatuses: ['approved'],
@@ -86,7 +85,15 @@ export function buildSubstitutePayrollRemarks(
     const period = r.originalSession?.period;
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
     const prefix = `代${r.applicantTeacherName}${leaveShort}`;
-    const periodOpts = { ...calendarOpts, period };
+    const periodOpts = {
+      ...baseCalendarOpts,
+      period,
+      partialStops: partialStopsForPayroll(
+        systemConfig.partialNonTeachingDays,
+        { id: r.applicantTeacherId, name: r.applicantTeacherName },
+        systemConfig
+      ),
+    };
 
     const effectiveNoticeRows = resolveEffectiveNoticeRows(r, requests);
     if (effectiveNoticeRows) {
@@ -105,7 +112,7 @@ export function buildSubstitutePayrollRemarks(
         settlementYear,
         weeksInMonth,
         holidaySet,
-        calendarOpts,
+        periodOpts,
         payrollCtx,
         () =>
           countSubstitutePublicPayrollPeriodsInMonth(

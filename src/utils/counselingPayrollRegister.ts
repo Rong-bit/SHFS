@@ -13,7 +13,8 @@ import {
 } from './leaveDates';
 import { nonTeachingDateSet } from './holidays';
 import { isDateInSettlementMonth } from './settlementPeriod';
-import { resolveTeacherSalaryCode } from './salaryCodes';
+import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
+import type { Teacher } from '../types';
 import {
   formatPayrollMonthRangeLabel,
   formatRocYear,
@@ -127,18 +128,25 @@ export function buildCounselingPayrollRemarks(
   settlementYear: number,
   sessions: CourseSession[],
   requests: SubstituteRequest[],
-  systemConfig: SystemConfig
+  systemConfig: SystemConfig,
+  teacher?: Pick<Teacher, 'id' | 'name'>
 ): string {
   const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+  const teacherPick = teacher ?? { id: teacherId, name: '' };
+  const payrollPartialStops = partialStopsForPayroll(
+    systemConfig.partialNonTeachingDays,
+    teacherPick,
+    systemConfig
+  );
   const calendarOpts = {
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-    partialStops: systemConfig.partialNonTeachingDays || [],
+    partialStops: payrollPartialStops,
     weeksInMonth: systemConfig.weeksInMonth ?? 4,
   };
   const period8Days = teacherPeriod8Weekdays(sessions, teacherId);
   const parts: string[] = [];
 
-  for (const stop of systemConfig.partialNonTeachingDays || []) {
+  for (const stop of payrollPartialStops) {
     if (!stop.date || !stop.periods?.includes(8)) continue;
     const d = new Date(stop.date.replace(/-/g, '/') + ' 12:00:00');
     if (Number.isNaN(d.getTime())) continue;
@@ -237,7 +245,8 @@ export function buildCounselingPayrollRows(
         settlementYear,
         sessions,
         requests,
-        systemConfig
+        systemConfig,
+        { id: s.teacherId, name: s.teacherName }
       ),
     }))
     .sort((a, b) => {

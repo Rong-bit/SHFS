@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { CheckCircle } from 'lucide-react';
 import { CourseSession, DayOfWeek, SubstituteNoticeRow, SubstituteRequest } from '../../types';
 import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
 import { useApp } from '../../context/AppContext';
@@ -10,6 +12,7 @@ import {
   resolveTemporarySwapOccurrenceDates,
 } from '../../utils/temporarySwap';
 import { parseNoticeRowDateToIso } from '../../utils/noticePayroll';
+import { ModalShell } from '../Common/ModalShell';
 
 export type NoticeRow = SubstituteNoticeRow;
 
@@ -343,6 +346,8 @@ export const NoticeTableEditor: React.FC<{
   onSave: () => void;
   compact?: boolean;
 }> = ({ rows, onChange, onReset, onSave, compact = false }) => {
+  const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
+
   const updateRow = (index: number, field: keyof NoticeRow, value: string) => {
     onChange(rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   };
@@ -356,7 +361,13 @@ export const NoticeTableEditor: React.FC<{
     onChange(rows.filter((_, i) => i !== index));
   };
 
+  const handleSave = () => {
+    onSave();
+    setSaveSuccessOpen(true);
+  };
+
   return (
+    <>
     <div
       className={`rounded-xl border border-indigo-200 bg-indigo-50/80 space-y-2 ${
         compact ? 'p-2.5' : 'p-3'
@@ -366,7 +377,7 @@ export const NoticeTableEditor: React.FC<{
         <div>
           <p className="text-xs font-bold text-indigo-900">課程表格（可人工調整）</p>
           <p className="text-[10px] text-indigo-800 leading-snug mt-0.5">
-            日期、星期、節次、班級、科目可手動輸入；鐘點欄兼課課程為「兼課」、其餘留白。按「儲存表格」後，代課清冊會依此表格以基本鐘點計算。未儲存修改者，清冊仍依課表原邏輯。列印前請先儲存表格。
+            日期、星期、節次、班級、科目可手動輸入；鐘點欄兼課為「兼課」、基鐘留白。按「儲存表格」後，僅有修改的列改入代課清冊（基本鐘點）；未改的列仍依課表原邏輯（兼課走兼課轉移，基鐘走代課清冊）。請假人該節若為兼課仍應減；若為基鐘則照支原薪、不扣兼課。列印前請先儲存表格。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -386,7 +397,7 @@ export const NoticeTableEditor: React.FC<{
           </button>
           <button
             type="button"
-            onClick={onSave}
+            onClick={handleSave}
             className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
           >
             儲存表格
@@ -486,5 +497,35 @@ export const NoticeTableEditor: React.FC<{
         </table>
       </div>
     </div>
+    {saveSuccessOpen &&
+      createPortal(
+        <ModalShell
+          zClassName="z-[80]"
+          scroll="panel"
+          backdropClassName="bg-slate-900/50 backdrop-blur-xs"
+          panelClassName="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200"
+        >
+          <div className="p-6">
+            <div className="flex items-center space-x-2 text-emerald-700 font-bold text-base">
+              <CheckCircle className="w-6 h-6 shrink-0" />
+              <span>課程表格已儲存</span>
+            </div>
+            <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+              已儲存。僅修改過的列改入代課清冊；未改的列仍依課表原邏輯。請假人該節若為兼課仍應減；若為基鐘則照支原薪、不扣兼課。
+            </p>
+            <div className="flex justify-end mt-5">
+              <button
+                type="button"
+                onClick={() => setSaveSuccessOpen(false)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition"
+              >
+                確定
+              </button>
+            </div>
+          </div>
+        </ModalShell>,
+        document.body
+      )}
+    </>
   );
 };

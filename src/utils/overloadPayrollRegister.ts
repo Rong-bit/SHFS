@@ -6,12 +6,13 @@ import {
   countConcurrentDeductPeriodsInMonth,
   countSubstituteConcurrentAddPeriodsInMonth,
   listBillableLeaveDatesInMonth,
-  requestUsesCustomizedNoticePayroll,
   shouldDeductConcurrentOnLeaveDate,
   shouldTransferConcurrentToSubstituteOnLeaveDate,
 } from './leavePayrollPolicy';
+import { requestHasModifiedNoticePayrollRow } from './noticePayroll';
 import { nonTeachingDateSet } from './holidays';
-import { resolveTeacherSalaryCode } from './salaryCodes';
+import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
+import type { Teacher } from '../types';
 
 /**
  * 中間頁資料列（含空白補列）；非末頁小計後換頁。
@@ -126,12 +127,18 @@ export function buildConcurrentPayrollRemarks(
   settlementMonth: number,
   settlementYear: number,
   requests: SubstituteRequest[],
-  systemConfig: SystemConfig
+  systemConfig: SystemConfig,
+  teacher?: Pick<Teacher, 'id' | 'name'>
 ): string {
   const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+  const teacherPick = teacher ?? { id: teacherId, name: '' };
   const calendarOpts = {
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-    partialStops: systemConfig.partialNonTeachingDays || [],
+    partialStops: partialStopsForPayroll(
+      systemConfig.partialNonTeachingDays,
+      teacherPick,
+      systemConfig
+    ),
   };
   const payrollCtx = buildLeavePayrollContext(requests, systemConfig, {
     countStatuses: ['approved'],
@@ -183,7 +190,6 @@ export function buildConcurrentPayrollRemarks(
     if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
     if (r.applicantTeacherId !== teacherId) continue;
     if (!r.substituteTeacherId) continue;
-    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
 
     const periodOpts = { ...calendarOpts, period: r.originalSession.period };
     pushDateLines(
@@ -207,10 +213,18 @@ export function buildConcurrentPayrollRemarks(
     if (!r.originalSession?.isConcurrent) continue;
     if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
     if (r.substituteTeacherId !== teacherId) continue;
-    if (requestUsesCustomizedNoticePayroll(r, requests)) continue;
+    if (requestHasModifiedNoticePayrollRow(r, requests)) continue;
 
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
-    const periodOpts = { ...calendarOpts, period: r.originalSession.period };
+    const periodOpts = {
+      temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+      partialStops: partialStopsForPayroll(
+        systemConfig.partialNonTeachingDays,
+        { id: r.applicantTeacherId, name: r.applicantTeacherName },
+        systemConfig
+      ),
+      period: r.originalSession.period,
+    };
     pushDateLines(
       r,
       `代${r.applicantTeacherName}${leaveShort}兼課`,
@@ -264,7 +278,8 @@ export function buildOverloadPayrollRows(
         settlementMonth,
         settlementYear,
         requests,
-        systemConfig
+        systemConfig,
+        { id: s.teacherId, name: s.teacherName }
       ),
     }))
     .sort((a, b) => {
