@@ -966,9 +966,13 @@ export const AdminSettings: React.FC = () => {
                   <p className="text-[11px] text-slate-500 mt-1">
                     第八節輔導課不計入日間超鐘點，改依此費率另計。預設 660 元（常見為學習輔導費要點之第八節上限；各校依主管機關核定調整）。
                   </p>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">課輔開課期間</label>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">課輔開課起日</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">開課起日</label>
                       <input
                         type="date"
                         value={formConfig.counselingStartDate || ''}
@@ -979,7 +983,7 @@ export const AdminSettings: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">課輔開課迄日</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">開課迄日</label>
                       <input
                         type="date"
                         value={formConfig.counselingEndDate || ''}
@@ -990,8 +994,8 @@ export const AdminSettings: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    課業輔導課有獨立開課起迄，不是開學即開始、也不一定上到期末。該結算期若整段都在開課區間內，即以 4 週計；若起迄切在期中，本期就不是完整月（幾週 × 每週第 8 節）。國定假日改列應減。空白＝該結算期全日都計。
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    課輔不是開學即開始、也不一定上到期末。填本學期實際上課起迄；切在結算期中間時，本期只計交集週數。空白＝該結算期全日都計。
                   </p>
                 </div>
 
