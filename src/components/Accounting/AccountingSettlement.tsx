@@ -78,7 +78,7 @@ export const AccountingSettlement: React.FC = () => {
       '每週兼課（超鐘點）節數': s.weeklyOverloadPeriods,
       '每週第八節課輔節數': s.weeklyCounselingPeriods,
       [`月課輔費 (依該月實際日數×${systemConfig.nightHourlyRate}元)`]: s.monthlyCounselingAmount,
-      [`月超鐘點費 (依該月週一至週五實際日數×${systemConfig.dayHourlyRate}元)`]: s.monthlyOverloadAmount,
+      [`月超鐘點費 (依課表週次×${systemConfig.dayHourlyRate}元；國定假日編制內仍發)`]: s.monthlyOverloadAmount,
       '公費代課節數': s.publicSubstitutePeriods,
       '公費代課金額': s.publicSubstituteAmount,
       '自費代課(受領)金額': s.privateSubstituteEarnAmount,
@@ -99,7 +99,7 @@ export const AccountingSettlement: React.FC = () => {
       '每週兼課（超鐘點）節數': 0 as any,
       '每週第八節課輔節數': 0 as any,
       [`月課輔費 (依該月實際日數×${systemConfig.nightHourlyRate}元)`]: totalCounselingAmount,
-      [`月超鐘點費 (依該月週一至週五實際日數×${systemConfig.dayHourlyRate}元)`]: totalOverloadAmount,
+      [`月超鐘點費 (依課表週次×${systemConfig.dayHourlyRate}元；國定假日編制內仍發)`]: totalOverloadAmount,
       '公費代課節數': 0 as any,
       '公費代課金額': totalPublicSubAmount,
       '自費代課(受領)金額': totalPrivateSubAmount,
@@ -280,7 +280,7 @@ export const AccountingSettlement: React.FC = () => {
             ${totalOverloadAmount.toLocaleString()}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            課表「兼課」節數依該月實際日數計費（不含第八節課輔）
+            課表「兼課」依課表週次計費（國定假日編制內仍發，僅外聘人員扣放假日；不含第八節課輔）
           </p>
         </div>
 

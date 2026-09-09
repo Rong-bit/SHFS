@@ -365,7 +365,7 @@ export const TeacherSchedule: React.FC = () => {
               <span className="text-xs text-slate-500 font-medium">元/月</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
-              超鐘點＝日間兼課 {overloadPeriods} 節／週 × {systemConfig.dayHourlyRate} 元；第八節課輔 {overloadBreakdown.counseling} 節／週 × {systemConfig.nightHourlyRate} 元。月費依本月該星期實際日數計。
+              超鐘點＝日間兼課 {overloadPeriods} 節／週 × {systemConfig.dayHourlyRate} 元（國定假日編制內仍發，僅外聘人員扣放假日）；第八節課輔 {overloadBreakdown.counseling} 節／週 × {systemConfig.nightHourlyRate} 元（仍扣放假日）。
             </p>
           </div>
 
