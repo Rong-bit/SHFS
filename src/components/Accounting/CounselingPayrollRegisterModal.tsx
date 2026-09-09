@@ -96,14 +96,13 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
   );
   const weekRound = counselingRange?.weeks ?? 0;
   const monthRangeLabel = (() => {
-    const base = formatPayrollMonthRangeLabel(month, settlementYear, weeks);
     const start = systemConfig.counselingStartDate?.trim();
     const end = systemConfig.counselingEndDate?.trim();
-    if (!start && !end) return base;
-    if (!counselingRange) return `${base}；本期無課輔開課日`;
-    const startLabel = start ? formatRocDateLabel(start) : '該期起';
-    const endLabel = end ? formatRocDateLabel(end) : '該期迄';
-    return `${base}；課輔 ${startLabel}～${endLabel}（本期 ${counselingRange.weeks} 週）`;
+    if (!start && !end) {
+      return formatPayrollMonthRangeLabel(month, settlementYear, weeks);
+    }
+    if (!counselingRange) return '本期無課輔開課日';
+    return `${formatRocDateLabel(counselingRange.startIso)}～${formatRocDateLabel(counselingRange.endIso)}（本期 ${counselingRange.weeks} 週）`;
   })();
   const rocYear = formatRocYear(settlementYear);
 
