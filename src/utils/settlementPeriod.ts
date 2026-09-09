@@ -138,6 +138,65 @@ export function formatPayrollMonthRangeLabel(
   return `${formatRocDateLabel(period.startIso)} ~ ${formatRocDateLabel(period.endIso)} 共(${period.weeks}週)`;
 }
 
+export function isoInInclusiveRange(
+  iso: string,
+  startIso?: string | null,
+  endIso?: string | null
+): boolean {
+  if (startIso && iso < startIso) return false;
+  if (endIso && iso > endIso) return false;
+  return true;
+}
+
+export function clipDateRange(
+  windowStart: string,
+  windowEnd: string,
+  clipStart?: string | null,
+  clipEnd?: string | null
+): { startIso: string; endIso: string } | null {
+  const start = clipStart && clipStart > windowStart ? clipStart : windowStart;
+  const end = clipEnd && clipEnd < windowEnd ? clipEnd : windowEnd;
+  if (start > end) return null;
+  return { startIso: start, endIso: end };
+}
+
+/** 區間內有平日的週數（以該週週一為鍵；課輔「幾星期」用） */
+export function countSchoolWeeksInIsoRange(startIso: string, endIso: string): number {
+  const s = new Date(startIso.replace(/-/g, '/') + ' 12:00:00');
+  const e = new Date(endIso.replace(/-/g, '/') + ' 12:00:00');
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
+  const weeks = new Set<string>();
+  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+    const js = cur.getDay();
+    if (js < 1 || js > 5) continue;
+    const monday = new Date(cur);
+    monday.setDate(cur.getDate() - (js - 1));
+    weeks.add(dateToIsoLocal(monday));
+  }
+  return weeks.size;
+}
+
+export function resolveCounselingActiveRange(
+  settlementMonth: number,
+  settlementYear: number,
+  weeksInMonth: number,
+  counselingStartDate?: string | null,
+  counselingEndDate?: string | null
+): { startIso: string; endIso: string; weeks: number } | null {
+  const period = resolveSettlementPeriod(settlementMonth, settlementYear, weeksInMonth);
+  const clipped = clipDateRange(
+    period.startIso,
+    period.endIso,
+    counselingStartDate?.trim() || null,
+    counselingEndDate?.trim() || null
+  );
+  if (!clipped) return null;
+  return {
+    ...clipped,
+    weeks: countSchoolWeeksInIsoRange(clipped.startIso, clipped.endIso),
+  };
+}
+
 export function eachDateInSettlementPeriod(
   period: Pick<SettlementPeriod, 'startIso' | 'endIso'>,
   fn: (iso: string, jsDay: number) => void

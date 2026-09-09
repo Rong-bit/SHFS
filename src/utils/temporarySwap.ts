@@ -1,7 +1,7 @@
 import { CourseSession, DayOfWeek, SubstituteRequest } from '../types';
 import { dateToIsoLocal, isNonTeachingDate } from './holidays';
 import { dateToDayOfWeek } from './leaveDates';
-import { isDateInSettlementMonth } from './settlementPeriod';
+import { isDateInSettlementMonth, isoInInclusiveRange } from './settlementPeriod';
 
 /** 是否為暫時同班對調（不改週模板、按日調整鐘點） */
 export function isTemporarySwap(req: Pick<SubstituteRequest, 'requestType' | 'swapMode' | 'effectiveDate'>): boolean {
@@ -131,11 +131,14 @@ export function temporarySwapPeriodDeltaInMonth(
   settlementYear: number,
   matchSession: (s: CourseSession) => boolean,
   holidaySet?: Set<string> | null,
-  weeksInMonth = 4
+  weeksInMonth = 4,
+  activeStartIso?: string | null,
+  activeEndIso?: string | null
 ): number {
   let delta = 0;
   const inMonth = (iso: string) =>
-    isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth);
+    isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth) &&
+    isoInInclusiveRange(iso, activeStartIso, activeEndIso);
   const billable = (iso: string) =>
     !holidaySet || !isNonTeachingDate(iso, holidaySet);
 

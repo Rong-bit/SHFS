@@ -1,20 +1,24 @@
 import type {
   CourseSession,
   MonthlyTeacherSettlement,
+  NonTeachingDay,
+  PartialNonTeachingDay,
   SubstituteRequest,
   SystemConfig,
+  Teacher,
+  TemporaryScheduleMove,
 } from '../types';
 import { leaveTypeRemarkShort } from './leaveTypes';
 import {
   countLeaveSubstitutePeriods,
   countLeaveSubstitutePeriodsInMonth,
+  dateToDayOfWeek,
   isLeaveDatePeriodBillable,
   legacyRequestBelongsToSettlement,
 } from './leaveDates';
 import { nonTeachingDateSet } from './holidays';
 import { isDateInSettlementMonth } from './settlementPeriod';
-import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
-import type { Teacher } from '../types';
+import { resolveTeacherSalaryCode } from './salaryCodes';
 import {
   formatPayrollMonthRangeLabel,
   formatRocYear,
@@ -68,8 +72,6 @@ const dateToIsoLocal = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
-const jsDayToSchoolDay = (jsDay: number) => jsDay;
-
 function teacherPeriod8Weekdays(
   sessions: CourseSession[],
   teacherId: string
@@ -83,6 +85,98 @@ function teacherPeriod8Weekdays(
   return days;
 }
 
+export type CounselingHolidayDeduct = { date: string; label: string };
+
+/**
+ * 課輔小計先按課表週次計（含國定假日那天的第 8 節），放假日改列應減。
+ * 若該日已暫時移走或半日停課含第 8 節，小計本來就不含，不重複扣。
+ */
+export function listCounselingHolidayDeducts(
+  sessions: CourseSession[],
+  teacherId: string,
+  settlementMonth: number,
+  settlementYear: number,
+  nonTeachingDays: NonTeachingDay[] | undefined,
+  options?: {
+    temporaryMoves?: TemporaryScheduleMove[] | null;
+    partialStops?: PartialNonTeachingDay[] | null;
+    weeksInMonth?: number;
+    activeStartIso?: string | null;
+    activeEndIso?: string | null;
+  }
+): CounselingHolidayDeduct[] {
+  const period8Days = teacherPeriod8Weekdays(sessions, teacherId);
+  if (period8Days.size === 0 || !nonTeachingDays?.length) return [];
+  const weeksInMonth = options?.weeksInMonth ?? 4;
+  const billableOpts = {
+    period: 8,
+    temporaryMoves: options?.temporaryMoves,
+    partialStops: options?.partialStops,
+    weeksInMonth,
+    activeStartIso: options?.activeStartIso,
+    activeEndIso: options?.activeEndIso,
+  };
+  const out: CounselingHolidayDeduct[] = [];
+  const seen = new Set<string>();
+  for (const day of nonTeachingDays) {
+    const iso = day?.date?.trim();
+    if (!iso || seen.has(iso)) continue;
+    if (!isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)) continue;
+    const dow = dateToDayOfWeek(iso);
+    if (dow == null || !period8Days.has(dow)) continue;
+    if (!isLeaveDatePeriodBillable(iso, new Set(), billableOpts)) continue;
+    seen.add(iso);
+    out.push({ date: iso, label: day.label?.trim() || '放假' });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * 段考／運動會等半日停課含第 8 節：課輔全員應減 1（不限外聘）。
+ * 整天放假已列應減者不重複扣；暫時移走的原日也不扣。
+ */
+export function listCounselingPartialStopDeducts(
+  sessions: CourseSession[],
+  teacherId: string,
+  settlementMonth: number,
+  settlementYear: number,
+  partialStops: PartialNonTeachingDay[] | undefined,
+  options?: {
+    holidaySet?: Set<string> | null;
+    temporaryMoves?: TemporaryScheduleMove[] | null;
+    weeksInMonth?: number;
+    activeStartIso?: string | null;
+    activeEndIso?: string | null;
+  }
+): CounselingHolidayDeduct[] {
+  const period8Days = teacherPeriod8Weekdays(sessions, teacherId);
+  if (period8Days.size === 0 || !partialStops?.length) return [];
+  const weeksInMonth = options?.weeksInMonth ?? 4;
+  const holidaySet = options?.holidaySet ?? new Set<string>();
+  const billableOpts = {
+    period: 8,
+    temporaryMoves: options?.temporaryMoves,
+    weeksInMonth,
+    activeStartIso: options?.activeStartIso,
+    activeEndIso: options?.activeEndIso,
+  };
+  const out: CounselingHolidayDeduct[] = [];
+  const seen = new Set<string>();
+  for (const stop of partialStops) {
+    const iso = stop?.date?.trim();
+    if (!iso || seen.has(iso)) continue;
+    if (!stop.periods?.includes(8)) continue;
+    if (holidaySet.has(iso)) continue;
+    if (!isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)) continue;
+    const dow = dateToDayOfWeek(iso);
+    if (dow == null || !period8Days.has(dow)) continue;
+    if (!isLeaveDatePeriodBillable(iso, new Set(), billableOpts)) continue;
+    seen.add(iso);
+    out.push({ date: iso, label: stop.label?.trim() || '停課輔' });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function listBillableLeaveDatesInMonth(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
   settlementMonth: number,
@@ -92,6 +186,8 @@ function listBillableLeaveDatesInMonth(
     temporaryMoves?: SystemConfig['temporaryScheduleMoves'];
     partialStops?: SystemConfig['partialNonTeachingDays'];
     weeksInMonth?: number;
+    activeStartIso?: string | null;
+    activeEndIso?: string | null;
   }
 ): string[] {
   if (!request.leaveDateStart || !request.originalSession) return [];
@@ -104,6 +200,8 @@ function listBillableLeaveDatesInMonth(
     temporaryMoves: calendarOpts.temporaryMoves,
     partialStops: calendarOpts.partialStops,
     weeksInMonth,
+    activeStartIso: calendarOpts.activeStartIso,
+    activeEndIso: calendarOpts.activeEndIso,
   };
 
   const s = new Date(request.leaveDateStart.replace(/-/g, '/') + ' 12:00:00');
@@ -129,32 +227,48 @@ export function buildCounselingPayrollRemarks(
   sessions: CourseSession[],
   requests: SubstituteRequest[],
   systemConfig: SystemConfig,
-  teacher?: Pick<Teacher, 'id' | 'name'>
+  _teacher?: Pick<Teacher, 'id' | 'name'>
 ): string {
   const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
-  const teacherPick = teacher ?? { id: teacherId, name: '' };
-  const payrollPartialStops = partialStopsForPayroll(
-    systemConfig.partialNonTeachingDays,
-    teacherPick,
-    systemConfig
-  );
+  const allPartialStops = systemConfig.partialNonTeachingDays || [];
   const calendarOpts = {
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-    partialStops: payrollPartialStops,
+    partialStops: allPartialStops,
     weeksInMonth: systemConfig.weeksInMonth ?? 4,
+    activeStartIso: systemConfig.counselingStartDate?.trim() || undefined,
+    activeEndIso: systemConfig.counselingEndDate?.trim() || undefined,
   };
-  const period8Days = teacherPeriod8Weekdays(sessions, teacherId);
   const parts: string[] = [];
 
-  for (const stop of payrollPartialStops) {
-    if (!stop.date || !stop.periods?.includes(8)) continue;
-    const d = new Date(stop.date.replace(/-/g, '/') + ' 12:00:00');
-    if (Number.isNaN(d.getTime())) continue;
-    if (!isDateInSettlementMonth(stop.date, settlementMonth, settlementYear, calendarOpts.weeksInMonth)) continue;
-    const schoolDay = jsDayToSchoolDay(d.getDay());
-    if (schoolDay < 1 || schoolDay > 5 || !period8Days.has(schoolDay)) continue;
-    const label = stop.label?.trim() || '半日停課';
-    parts.push(`${formatMd(stop.date)}${label}扣1節`);
+  for (const item of listCounselingHolidayDeducts(
+    sessions,
+    teacherId,
+    settlementMonth,
+    settlementYear,
+    systemConfig.nonTeachingDays,
+    {
+      ...calendarOpts,
+      partialStops: [],
+    }
+  )) {
+    parts.push(`${formatMd(item.date)}${item.label}未上課，扣1節。`);
+  }
+
+  for (const item of listCounselingPartialStopDeducts(
+    sessions,
+    teacherId,
+    settlementMonth,
+    settlementYear,
+    allPartialStops,
+    {
+      holidaySet,
+      temporaryMoves: calendarOpts.temporaryMoves,
+      weeksInMonth: calendarOpts.weeksInMonth,
+      activeStartIso: calendarOpts.activeStartIso,
+      activeEndIso: calendarOpts.activeEndIso,
+    }
+  )) {
+    parts.push(`${formatMd(item.date)}${item.label}未上課，扣1節。`);
   }
 
   for (const r of requests) {
@@ -173,7 +287,7 @@ export function buildCounselingPayrollRemarks(
         calendarOpts
       );
       for (const iso of dates) {
-        parts.push(`${formatMd(iso)}請${leaveShort}扣1節(第8節)`);
+        parts.push(`${formatMd(iso)}請${leaveShort}未上課，扣1節。`);
       }
       continue;
     }
@@ -201,7 +315,7 @@ export function buildCounselingPayrollRemarks(
           : 0
         : inMonth;
     if (periods <= 0) continue;
-    parts.push(`請${leaveShort}扣${periods}節(第8節)`);
+    parts.push(`請${leaveShort}未上課，扣${periods}節。`);
   }
 
   return parts.join(' ');

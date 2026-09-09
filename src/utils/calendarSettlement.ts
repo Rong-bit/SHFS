@@ -1,6 +1,6 @@
 import { DayOfWeek, PartialNonTeachingDay, TemporaryScheduleMove } from '../types';
 import { dateToIsoLocal } from './holidays';
-import { eachDateInSettlementPeriod, resolveSettlementPeriod } from './settlementPeriod';
+import { eachDateInSettlementPeriod, isoInInclusiveRange, resolveSettlementPeriod } from './settlementPeriod';
 
 export type CalendarSettlementOptions = {
   holidaySet?: Set<string> | null;
@@ -8,6 +8,10 @@ export type CalendarSettlementOptions = {
   partialStops?: PartialNonTeachingDay[] | null;
   /** 每月結算週數（預設 4）；超出曆月天數併入前後結算月 */
   weeksInMonth?: number;
+  /** 課輔等：只計此日起（含） */
+  activeStartIso?: string | null;
+  /** 課輔等：只計此日迄（含） */
+  activeEndIso?: string | null;
 };
 
 const ALL_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -87,8 +91,11 @@ export function slotOccurrenceCountsInMonth(
   }
 
   const counts = new Map<string, number>();
+  const inActiveWindow = (iso: string) =>
+    isoInInclusiveRange(iso, options?.activeStartIso, options?.activeEndIso);
 
   eachDateInSettlementPeriod(period, (iso, jsDay) => {
+    if (!inActiveWindow(iso)) return;
     if (holidaySet.has(iso)) return;
     const dow = jsDayToDow(jsDay);
     if (dow == null) return;
@@ -107,7 +114,13 @@ export function slotOccurrenceCountsInMonth(
 
     if (dateInSettlementPeriod(move.sourceDate, year, month, weeksInMonth)) {
       const srcJs = isoJsDay(move.sourceDate);
-      if (srcJs != null && srcJs >= 1 && srcJs <= 5 && !holidaySet.has(move.sourceDate)) {
+      if (
+        srcJs != null &&
+        srcJs >= 1 &&
+        srcJs <= 5 &&
+        inActiveWindow(move.sourceDate) &&
+        !holidaySet.has(move.sourceDate)
+      ) {
         const blocked = partialByDate.get(move.sourceDate);
         for (const periodNum of periods) {
           if (blocked?.has(periodNum)) continue;
@@ -117,6 +130,7 @@ export function slotOccurrenceCountsInMonth(
     }
 
     if (dateInSettlementPeriod(move.targetDate, year, month, weeksInMonth)) {
+      if (!inActiveWindow(move.targetDate)) continue;
       if (holidaySet.has(move.targetDate)) continue;
       const blockedTarget = partialByDate.get(move.targetDate);
       for (const periodNum of periods) {

@@ -215,6 +215,10 @@ export interface SystemConfig {
   semester: string; // 1
   currentMonth: number; // 10
   weeksInMonth: number; // 4 週
+  /** 課業輔導課開課起日（YYYY-MM-DD）；空白＝該結算期全日都計 */
+  counselingStartDate?: string;
+  /** 課業輔導課開課迄日（YYYY-MM-DD）；空白＝該結算期全日都計 */
+  counselingEndDate?: string;
   /** 不計鐘點之日（國定假日、校慶、彈性放假等），格式 YYYY-MM-DD。代課／課輔一律不計；超鐘點僅外聘人員不計。 */
   nonTeachingDays?: NonTeachingDay[];
   /** 新學年度是否自動匯入人事總處國定假日（預設開啟） */

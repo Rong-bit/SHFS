@@ -381,6 +381,8 @@ export const monthlyCounselingPeriods = (
     temporaryMoves: calendar?.temporaryMoves,
     partialStops: calendar?.partialStops,
     weeksInMonth: calendar?.weeksInMonth,
+    activeStartIso: calendar?.activeStartIso,
+    activeEndIso: calendar?.activeEndIso,
   });
   const slots = new Set<string>();
   sessions.forEach((s) => {

@@ -125,6 +125,9 @@ export type LeaveBillableOptions = {
   partialStops?: PartialNonTeachingDay[] | null;
   /** 每月結算週數（預設 4） */
   weeksInMonth?: number;
+  /** 課輔開課起迄：此窗外不計課輔請假扣節 */
+  activeStartIso?: string | null;
+  activeEndIso?: string | null;
 };
 
 function asExcludeSet(excludeDates?: ExcludeDates): Set<string> {
@@ -141,6 +144,8 @@ export function isLeaveDatePeriodBillable(
   excludeDates?: ExcludeDates,
   options?: LeaveBillableOptions
 ): boolean {
+  if (options?.activeStartIso && isoDate < options.activeStartIso) return false;
+  if (options?.activeEndIso && isoDate > options.activeEndIso) return false;
   const exclude = asExcludeSet(excludeDates);
   if (isNonTeachingDate(isoDate, exclude)) return false;
   const period = options?.period;
@@ -360,6 +365,8 @@ export function countApplicantApprovedLeaveCoverPeriodsInMonth(
     temporaryMoves?: TemporaryScheduleMove[] | null;
     partialStops?: PartialNonTeachingDay[] | null;
     weeksInMonth?: number;
+    activeStartIso?: string | null;
+    activeEndIso?: string | null;
   }
 ): number {
   const match = options?.matchSession ?? (() => true);
@@ -367,6 +374,8 @@ export function countApplicantApprovedLeaveCoverPeriodsInMonth(
     temporaryMoves: options?.temporaryMoves,
     partialStops: options?.partialStops,
     weeksInMonth: options?.weeksInMonth,
+    activeStartIso: options?.activeStartIso,
+    activeEndIso: options?.activeEndIso,
   };
   let total = 0;
   for (const r of requests) {

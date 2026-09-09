@@ -146,6 +146,8 @@ export const AdminSettings: React.FC = () => {
     semester: systemConfig?.semester ?? '1',
     currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
     weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+    counselingStartDate: systemConfig?.counselingStartDate || '',
+    counselingEndDate: systemConfig?.counselingEndDate || '',
     nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
     autoSyncNationalHolidays: systemConfig?.autoSyncNationalHolidays !== false,
     nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
@@ -195,6 +197,8 @@ export const AdminSettings: React.FC = () => {
       semester: systemConfig?.semester ?? '1',
       currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+    counselingStartDate: systemConfig?.counselingStartDate || '',
+    counselingEndDate: systemConfig?.counselingEndDate || '',
       nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
       autoSyncNationalHolidays: systemConfig?.autoSyncNationalHolidays !== false,
       nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
@@ -370,8 +374,16 @@ export const AdminSettings: React.FC = () => {
     const prunedHolidays = Number.isFinite(rocYear)
       ? pruneNonTeachingDaysToAcademicYear(formConfig.nonTeachingDays, rocYear)
       : formConfig.nonTeachingDays;
+    const counselingStartDate = formConfig.counselingStartDate?.trim() || undefined;
+    const counselingEndDate = formConfig.counselingEndDate?.trim() || undefined;
+    if (counselingStartDate && counselingEndDate && counselingStartDate > counselingEndDate) {
+      alert('課輔開課起日不可晚於迄日。');
+      return;
+    }
     const nextConfig = {
       ...formConfig,
+      counselingStartDate,
+      counselingEndDate,
       nonTeachingDays: prunedHolidays,
       standardBasePeriods: normalizeStandardBasePeriods(formConfig.standardBasePeriods),
       teacherSalaryCodesByName: systemConfig.teacherSalaryCodesByName,
@@ -954,6 +966,33 @@ export const AdminSettings: React.FC = () => {
                   <p className="text-[11px] text-slate-500 mt-1">
                     第八節輔導課不計入日間超鐘點，改依此費率另計。預設 660 元（常見為學習輔導費要點之第八節上限；各校依主管機關核定調整）。
                   </p>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">課輔開課起日</label>
+                      <input
+                        type="date"
+                        value={formConfig.counselingStartDate || ''}
+                        onChange={(e) =>
+                          setFormConfig({ ...formConfig, counselingStartDate: e.target.value || undefined })
+                        }
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-medium text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">課輔開課迄日</label>
+                      <input
+                        type="date"
+                        value={formConfig.counselingEndDate || ''}
+                        onChange={(e) =>
+                          setFormConfig({ ...formConfig, counselingEndDate: e.target.value || undefined })
+                        }
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-medium text-slate-900"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    課業輔導課有獨立開課起迄，不是開學即開始、也不一定上到期末。該結算期若整段都在開課區間內，即以 4 週計；若起迄切在期中，本期就不是完整月（幾週 × 每週第 8 節）。國定假日改列應減。空白＝該結算期全日都計。
+                  </p>
                 </div>
 
                 <div>
@@ -1269,7 +1308,7 @@ export const AdminSettings: React.FC = () => {
               <div className="text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed space-y-1">
                 <p className="font-bold text-amber-900">操作建議（三種常見情境）</p>
                 <p>
-                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。鐘點仍依原規則發放，僅薪資職稱「外聘人員」者不發停課節次；派代檢核仍排除該節次。
+                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。日間兼課僅薪資職稱「外聘人員」不發停課節次。<strong>段考／運動會停課輔</strong>請勾第 8 節，課輔清冊全員應減 1 並寫備註。派代檢核仍排除該節次。
                 </p>
                 <p>
                   <strong>連假平日對調／週六補課</strong>：原日列入放假日，再用下方「暫時移課／補課」指定補課日（可選週六）。勿用教師端自行移課永久改週模板。
@@ -1629,7 +1668,7 @@ export const AdminSettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                指定日期的部分節次：派代／衝堂檢核會排除；鐘點結算僅薪資職稱「外聘人員」不發該節次，其餘教師仍依原課表計次。職稱請由薪資編號匯入檔「職稱」欄帶入。預設勾選第 5～8 節（下午含課輔），可自行調整。
+                指定日期的部分節次：派代／衝堂檢核會排除。日間兼課僅薪資職稱「外聘人員」不發該節次。若勾選第 8 節（段考、運動會停課輔），課輔清冊全員應減 1，備註帶說明。預設勾選第 5～8 節，可自行調整。
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>

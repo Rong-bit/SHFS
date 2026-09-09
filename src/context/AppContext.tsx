@@ -104,6 +104,7 @@ import {
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
 import { holidaySetForOverloadPayroll, partialStopsForPayroll } from '../utils/salaryCodes';
+import { listCounselingHolidayDeducts, listCounselingPartialStopDeducts } from '../utils/counselingPayrollRegister';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -3075,9 +3076,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         holidaySet: overloadHolidaySet,
         partialStops: payrollPartialStops,
       };
-      const counselingCalendarOpts = {
+      const counselingStart = systemConfig.counselingStartDate?.trim() || undefined;
+      const counselingEnd = systemConfig.counselingEndDate?.trim() || undefined;
+      const counselingBaseCalendarOpts = {
         ...calendarOpts,
-        partialStops: payrollPartialStops,
+        holidaySet: new Set<string>(),
+        partialStops: [],
+        activeStartIso: counselingStart,
+        activeEndIso: counselingEnd,
       };
 
       // 1. Weekly actual and overload（不含第八節課輔）
@@ -3176,10 +3182,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacher.id,
         settlementMonth,
         new Date(),
-        holidaySet,
+        new Set(),
         systemConfig.academicYear,
-        counselingCalendarOpts
+        counselingBaseCalendarOpts
       );
+      const counselingHolidayDeduct = listCounselingHolidayDeducts(
+        sessions,
+        teacher.id,
+        settlementMonth,
+        settlementYear,
+        systemConfig.nonTeachingDays,
+        {
+          temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+          partialStops: [],
+          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          activeStartIso: counselingStart,
+          activeEndIso: counselingEnd,
+        }
+      ).length;
+      const counselingPartialStopDeduct = listCounselingPartialStopDeducts(
+        sessions,
+        teacher.id,
+        settlementMonth,
+        settlementYear,
+        systemConfig.partialNonTeachingDays,
+        {
+          holidaySet,
+          temporaryMoves: systemConfig.temporaryScheduleMoves || [],
+          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          activeStartIso: counselingStart,
+          activeEndIso: counselingEnd,
+        }
+      ).length;
       const leaveCounselingDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
         requests,
         teacher.id,
@@ -3196,8 +3230,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               settlementYear
             ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-          partialStops: payrollPartialStops,
+          partialStops: systemConfig.partialNonTeachingDays || [],
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          activeStartIso: counselingStart,
+          activeEndIso: counselingEnd,
         }
       );
       const swapCounselingDelta = temporarySwapPeriodDeltaInMonth(
@@ -3207,15 +3243,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settlementYear,
         (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
         holidaySet,
-        systemConfig.weeksInMonth ?? 4
+        systemConfig.weeksInMonth ?? 4,
+        counselingStart,
+        counselingEnd
       );
       const monthlyCounseling = Math.max(
         0,
-        rawMonthlyCounseling - leaveCounselingDeduct + swapCounselingDelta
+        rawMonthlyCounseling -
+          counselingHolidayDeduct -
+          counselingPartialStopDeduct -
+          leaveCounselingDeduct +
+          swapCounselingDelta
       );
       const monthlyCounselingAmount = monthlyCounseling * counselingRate;
       const counselingAddPeriods = Math.max(0, swapCounselingDelta);
-      const counselingSubtractPeriods = leaveCounselingDeduct + Math.max(0, -swapCounselingDelta);
+      const counselingSubtractPeriods =
+        counselingHolidayDeduct +
+        counselingPartialStopDeduct +
+        leaveCounselingDeduct +
+        Math.max(0, -swapCounselingDelta);
       const monthlyCounselingBasePeriods = rawMonthlyCounseling;
       const counselingPayrollAmount = monthlyCounselingAmount;
 
