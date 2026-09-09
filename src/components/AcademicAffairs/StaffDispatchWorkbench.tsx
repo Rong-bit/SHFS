@@ -266,13 +266,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [rangePeriodEnd, setRangePeriodEnd] = useState<number>(7);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
 
-  /** 連續起迄多次派代時，共用同一 batchGroupId 以合併一張通知單 */
-  const dispatchNoticeGroupIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    dispatchNoticeGroupIdRef.current = null;
-  }, [selectedTeacherId, leaveDateMode, leaveDateStart, leaveDateEnd]);
-
   // Reschedule specific（僅移入空堂）
   const [targetDay, setTargetDay] = useState<DayOfWeek>(1);
   const [targetPeriod, setTargetPeriod] = useState<number>(5);
@@ -1019,13 +1012,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
         : undefined;
 
     let batchGroupId: string | undefined;
-    if (requestType === 'substitute') {
-      if (leaveDateMode === 'range' || sessionsToDispatch.length > 1) {
-        if (!dispatchNoticeGroupIdRef.current) {
-          dispatchNoticeGroupIdRef.current = `batch-${Date.now()}`;
-        }
-        batchGroupId = dispatchNoticeGroupIdRef.current;
-      }
+    if (requestType === 'substitute' && sessionsToDispatch.length > 1) {
+      batchGroupId = `batch-${Date.now()}`;
     }
 
     let created;
@@ -1086,12 +1074,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
 
     const first = created[0];
-    const mergedNoticeHint =
-      batchGroupId && leaveDateMode === 'range'
-        ? '（與同批連續起迄派代合併一張通知單，可繼續選其他課堂）'
-        : batchGroupId
-          ? '（連續節次合併一張通知單）'
-          : '';
+    const mergedNoticeHint = batchGroupId ? '（連續節次合併一張通知單）' : '';
     setDispatchSuccess({
       message:
         created.length > 1

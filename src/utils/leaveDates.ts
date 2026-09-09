@@ -63,7 +63,7 @@ type LeaveCoverDisplayRequest = Pick<
 
 /** 課表格：本週對應日是否仍有已核准請假派代（過週不顯示，即使 notes 仍留永久註記） */
 export function findActiveLeaveCoverRequestForSession(
-  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId'>,
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'className'>,
   requests: LeaveCoverDisplayRequest[],
   now = new Date()
 ): LeaveCoverDisplayRequest | undefined {
@@ -78,7 +78,8 @@ export function findActiveLeaveCoverRequestForSession(
       (orig.id === session.id ||
         (orig.dayOfWeek === session.dayOfWeek &&
           orig.period === session.period &&
-          r.applicantTeacherId === session.teacherId)) &&
+          r.applicantTeacherId === session.teacherId &&
+          (!orig.className || !session.className || orig.className === session.className))) &&
       leaveRangeCoversDate(r.leaveDateStart, r.leaveDateEnd, weekDate)
     );
   });
@@ -89,13 +90,12 @@ export function findActiveLeaveCoverRequestForSession(
  * 核准時 notes 會永久寫入，顯示必須再依本週日期過濾，過週恢復平常課表。
  */
 export function leaveCoverLabelForSessionDisplay(
-  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'notes'>,
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'className' | 'notes'>,
   requests: LeaveCoverDisplayRequest[],
   now = new Date()
 ): string | null {
   const hit = findActiveLeaveCoverRequestForSession(session, requests, now);
   if (!hit) return null;
-  if (isLeaveCoverNote(session.notes)) return session.notes || null;
   const end = resolveLeaveDateEnd(hit.leaveDateStart, hit.leaveDateEnd);
   const range =
     hit.leaveDateStart
@@ -106,13 +106,13 @@ export function leaveCoverLabelForSessionDisplay(
 
 /** 全校課表等：非請假註記照常顯示；請假派代僅本週涵蓋日才顯示 */
 export function sessionNotesForCurrentWeekDisplay(
-  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'notes'>,
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'className' | 'notes'>,
   requests: LeaveCoverDisplayRequest[],
   now = new Date()
 ): string | null {
   if (!session.notes) return null;
   if (!isLeaveCoverNote(session.notes)) return session.notes;
-  return findActiveLeaveCoverRequestForSession(session, requests, now) ? session.notes : null;
+  return leaveCoverLabelForSessionDisplay(session, requests, now);
 }
 
 export type ExcludeDates = Set<string> | Iterable<string> | null | undefined;

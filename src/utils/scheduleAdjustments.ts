@@ -54,7 +54,8 @@ function matchesOriginalSession(s: CourseSession, req: SubstituteRequest, orig: 
   return (
     s.dayOfWeek === orig.dayOfWeek &&
     s.period === orig.period &&
-    s.teacherId === req.applicantTeacherId
+    s.teacherId === req.applicantTeacherId &&
+    (!orig.className || !s.className || orig.className === s.className)
   );
 }
 
@@ -276,7 +277,8 @@ export function applyRequestToSessionsDetailed(
               (s.dayOfWeek === resolvedOrig.dayOfWeek &&
                 s.period === resolvedOrig.period &&
                 s.teacherId === reqResolved.substituteTeacherId &&
-                isLeaveCoverNote(s.notes))
+                isLeaveCoverNote(s.notes) &&
+                (!resolvedOrig.className || s.className === resolvedOrig.className))
           )
         : [];
     const toFix = targets.length > 0 ? targets : legacyCovered;
@@ -290,11 +292,12 @@ export function applyRequestToSessionsDetailed(
 
     const note = leaveCoverNote(reqResolved);
     // 請假只標註，不改週課表任課（否則申請人課表會「消失該節」）
+    const subName = reqResolved.substituteTeacherName?.trim();
     const alreadyOk = toFix.every(
       (s) =>
         s.teacherId === reqResolved.applicantTeacherId &&
         isLeaveCoverNote(s.notes) &&
-        Boolean(s.notes?.includes(reqResolved.substituteTeacherName || ''))
+        (!subName || Boolean(s.notes?.includes(subName)))
     );
     if (alreadyOk) return { sessions, applied: true };
 
@@ -687,15 +690,32 @@ export function reapplyApprovedRequestsOldestFirst(
   return next;
 }
 
-/** 匯入後依「星期+節次+班級」對齊申請單上的 session id */
+/** 匯入後依「星期+節次+班級+教師」對齊申請單上的 session id */
 export function remapRequestSessions(
   requests: SubstituteRequest[],
-  sessions: CourseSession[]
+  sessions: CourseSession[],
+  options?: { knownTeacherIds?: Set<string> }
 ): SubstituteRequest[] {
   const byId = new Map(sessions.map((s) => [s.id, s]));
-  const bySlot = new Map(
-    sessions.map((s) => [`${s.dayOfWeek}-${s.period}-${s.className}`, s] as const)
-  );
+  const byTeacherIdSlot = new Map<string, CourseSession>();
+  const byTeacherNameSlot = new Map<string, CourseSession>();
+  sessions.forEach((s) => {
+    byTeacherIdSlot.set(`${s.dayOfWeek}-${s.period}-${s.className}-${s.teacherId}`, s);
+    const name = (s.teacherName || '').trim();
+    if (name) {
+      byTeacherNameSlot.set(`${s.dayOfWeek}-${s.period}-${s.className}-${name}`, s);
+    }
+  });
+
+  const slotHit = (snap: CourseSession): CourseSession | undefined => {
+    const byTid = byTeacherIdSlot.get(
+      `${snap.dayOfWeek}-${snap.period}-${snap.className}-${snap.teacherId}`
+    );
+    if (byTid) return byTid;
+    const name = (snap.teacherName || '').trim();
+    if (!name) return undefined;
+    return byTeacherNameSlot.get(`${snap.dayOfWeek}-${snap.period}-${snap.className}-${name}`);
+  };
 
   const resolve = (snap: CourseSession | undefined): CourseSession | undefined => {
     if (!snap) return snap;
@@ -704,45 +724,94 @@ export function remapRequestSessions(
       const live = byId.get(snap.id)!;
       return { ...snap, ...pickLiveFields(live, snap) };
     }
-    const hit = bySlot.get(`${snap.dayOfWeek}-${snap.period}-${snap.className}`);
+    const hit = slotHit(snap);
     if (hit) return { ...snap, id: hit.id, ...pickLiveFields(hit, snap) };
     return snap;
   };
 
+  const isMissingLive = (snap: CourseSession | undefined): boolean => {
+    if (!snap || isPlaceholderSession(snap)) return false;
+    const resolved = resolve(snap) || snap;
+    return !byId.has(resolved.id);
+  };
+
+  const cancelOrphan = (
+    r: SubstituteRequest,
+    originalSession: CourseSession,
+    swapTargetSession: CourseSession | undefined,
+    targetReschedule?: SubstituteRequest['targetReschedule']
+  ): SubstituteRequest => ({
+    ...r,
+    originalSession,
+    swapTargetSession,
+    ...(targetReschedule ? { targetReschedule } : {}),
+    status: 'cancelled' as const,
+    rejectReason: r.rejectReason || '課表匯入後原課堂已不存在，申請已自動作廢',
+  });
+
   return requests.map((r) => {
     if (isPlaceholderSession(r.originalSession)) {
+      const teacherStillHere =
+        !options?.knownTeacherIds ||
+        options.knownTeacherIds.has(r.applicantTeacherId) ||
+        sessions.some((s) => s.teacherName.trim() === (r.applicantTeacherName || '').trim());
+      if (
+        r.status === 'approved' &&
+        (r.requestType === 'reschedule' || r.requestType === 'swap' || r.requestType === 'substitute') &&
+        !teacherStillHere
+      ) {
+        return cancelOrphan(r, r.originalSession, r.swapTargetSession);
+      }
       return r;
     }
+
     const originalSession = resolve(r.originalSession) || r.originalSession;
     const swapTargetSession = r.swapTargetSession
       ? resolve(r.swapTargetSession) || r.swapTargetSession
       : undefined;
-    const orphaned =
-      !byId.has(originalSession.id) &&
-      !bySlot.has(
-        `${originalSession.dayOfWeek}-${originalSession.period}-${originalSession.className}`
-      );
 
-    if (!orphaned && originalSession === r.originalSession && swapTargetSession === r.swapTargetSession) {
-      return r;
+    let targetReschedule = r.targetReschedule;
+    let exchangeMissing = false;
+    if (targetReschedule?.exchangeSession) {
+      if (isMissingLive(targetReschedule.exchangeSession)) {
+        exchangeMissing = true;
+      } else {
+        const partner = resolve(targetReschedule.exchangeSession);
+        if (partner && byId.has(partner.id)) {
+          targetReschedule = {
+            ...targetReschedule,
+            exchangeSessionId: partner.id,
+            exchangeSession: {
+              ...targetReschedule.exchangeSession,
+              ...pickLiveFields(partner, targetReschedule.exchangeSession),
+            },
+          };
+        }
+      }
+    } else if (targetReschedule?.exchangeSessionId && !byId.has(targetReschedule.exchangeSessionId)) {
+      exchangeMissing = true;
     }
 
-    // 找不到對應課堂：已核准移課／互調／代課標記作廢，避免 orphan 單據繼續結算
+    const originalMissing = isMissingLive(r.originalSession);
+    const swapMissing = Boolean(r.swapTargetSession) && isMissingLive(r.swapTargetSession);
+
     if (
-      orphaned &&
+      (originalMissing || swapMissing || exchangeMissing) &&
       (r.requestType === 'reschedule' || r.requestType === 'swap' || r.requestType === 'substitute') &&
       r.status === 'approved'
     ) {
-      return {
-        ...r,
-        originalSession,
-        swapTargetSession,
-        status: 'cancelled' as const,
-        rejectReason: r.rejectReason || '課表匯入後原課堂已不存在，申請已自動作廢',
-      };
+      return cancelOrphan(r, originalSession, swapTargetSession, targetReschedule);
     }
 
-    return { ...r, originalSession, swapTargetSession };
+    if (
+      originalSession === r.originalSession &&
+      swapTargetSession === r.swapTargetSession &&
+      targetReschedule === r.targetReschedule
+    ) {
+      return r;
+    }
+
+    return { ...r, originalSession, swapTargetSession, targetReschedule };
   });
 }
 

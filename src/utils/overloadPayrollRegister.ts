@@ -9,7 +9,7 @@ import {
   shouldDeductConcurrentOnLeaveDate,
   shouldTransferConcurrentToSubstituteOnLeaveDate,
 } from './leavePayrollPolicy';
-import { requestHasModifiedNoticePayrollRow } from './noticePayroll';
+import { noticeDateUsesModifiedSubstitutePayroll } from './noticePayroll';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
 import type { Teacher } from '../types';
@@ -213,7 +213,6 @@ export function buildConcurrentPayrollRemarks(
     if (!r.originalSession?.isConcurrent) continue;
     if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
     if (r.substituteTeacherId !== teacherId) continue;
-    if (requestHasModifiedNoticePayrollRow(r, requests)) continue;
 
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
     const periodOpts = {
@@ -228,7 +227,9 @@ export function buildConcurrentPayrollRemarks(
     pushDateLines(
       r,
       `代${r.applicantTeacherName}${leaveShort}兼課`,
-      (iso) => shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx),
+      (iso) =>
+        shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx) &&
+        !noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
       () =>
         countSubstituteConcurrentAddPeriodsInMonth(
           r,

@@ -105,7 +105,7 @@ export function formatRequestNumber(
 }
 
 /**
- * 同一 batchGroupId（連續節次／連續起迄）共用一個假單編號；
+ * 同一 batchGroupId（連續節次一次勾選多堂）共用一個假單編號；
  * 新群組只消耗一個流水號，後續同批或跨次派代沿用既有編號。
  */
 export function allocateRequestNumbersForBatch(params: {

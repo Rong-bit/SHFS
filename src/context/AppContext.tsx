@@ -100,7 +100,7 @@ import {
 import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
-  requestHasModifiedNoticePayrollRow,
+  noticeDateUsesModifiedSubstitutePayroll,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
 import { partialStopsForPayroll } from '../utils/salaryCodes';
@@ -2759,14 +2759,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.removeItem(STORAGE_KEYS.REQUESTS);
       }
     } else {
-      // Append / Merge：同班同時段同教師保留原 session id，避免舊申請失效
+      // Append：同班同時段同教師更新並保留 id；其餘課堂（含協同）原樣保留
+      const teacherSlotKey = (s: CourseSession) =>
+        `${s.dayOfWeek}-${s.period}-${s.className}-${s.teacherId}`;
       const existingMap = new Map<string, CourseSession>();
-      sessions.forEach((s) => {
-        existingMap.set(`${s.dayOfWeek}-${s.period}-${s.className}-${s.teacherId}`, s);
-      });
+      sessions.forEach((s) => existingMap.set(teacherSlotKey(s), s));
 
       newSessionsList.forEach((s) => {
-        const key = `${s.dayOfWeek}-${s.period}-${s.className}-${s.teacherId}`;
+        const key = teacherSlotKey(s);
         const existing = existingMap.get(key);
         if (existing) {
           existingMap.set(key, { ...s, id: existing.id });
@@ -2795,7 +2795,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setVenues(updatedVenues);
     if (mode === 'append' || (mode === 'overwrite' && !clearRequests)) {
       // remap 後由舊到新重套用已核准異動，避免匯入抹掉 [代課]／移課卻仍結算
-      const remapped = remapRequestSessions(requests, finalSessions);
+      const remapped = remapRequestSessions(requests, finalSessions, {
+        knownTeacherIds: new Set(updatedTeachers.map((t) => t.id)),
+      });
       const withCovers = reapplyApprovedRequestsOldestFirst(finalSessions, remapped);
       const teachersAfterReapply = enrichTeachersFromSessions(
         updatedTeachers,
@@ -3135,7 +3137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             s.dayOfWeek <= 5 &&
             s.period >= 1 &&
             s.period <= 7,
-          skipRequest: (r) => requestHasModifiedNoticePayrollRow(r, requests),
+          skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
           resolvePartialStopsForRequest: (r) =>
@@ -3245,14 +3247,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           let rate = rateForRequest(r);
 
           if (effectiveNoticeRows) {
-            if (r.batchGroupId) {
-              if (noticeBatchCounted.has(r.batchGroupId)) return;
-              noticeBatchCounted.add(r.batchGroupId);
-            }
-            if (resolveRequestPaymentType(r, payrollCtx, holidaySet, periodOpts) !== 'public') {
-              return;
-            }
+            if (payrollTeacherId !== teacher.id) return;
+            const batchKey = r.batchGroupId ? `${r.batchGroupId}::${teacher.id}` : r.id;
+            if (noticeBatchCounted.has(batchKey)) return;
+            noticeBatchCounted.add(batchKey);
             const related = getRelatedSubstituteRequests(r, requests);
+            const relatedForTeacher = related.filter(
+              (item) => r.substituteTeacherId && item.substituteTeacherId === teacher.id
+            );
             const payrollResult = countSubstitutePayrollWithNoticeRows(
               effectiveNoticeRows,
               related,
@@ -3263,14 +3265,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               periodOpts,
               payrollCtx,
               () =>
-                countSubstitutePublicPayrollPeriodsInMonth(
-                  r,
-                  settlementMonth,
-                  settlementYear,
-                  payrollCtx,
-                  holidaySet,
-                  periodOpts
-                )
+                relatedForTeacher.reduce(
+                  (sum, req) =>
+                    sum +
+                    countSubstitutePublicPayrollPeriodsInMonth(
+                      req,
+                      settlementMonth,
+                      settlementYear,
+                      payrollCtx,
+                      holidaySet,
+                      {
+                        ...leaveCalendarOpts,
+                        period: req.originalSession?.period,
+                        partialStops: periodOpts.partialStops,
+                      }
+                    ),
+                  0
+                ),
+              teacher.id
             );
             publicPeriods = payrollResult.periods;
             rate = payrollResult.useBasicRate ? hourlyRate : rateForRequest(r);

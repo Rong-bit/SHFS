@@ -279,19 +279,48 @@ function findMatchingRequests(
   return related.filter((r) => Boolean(r.leaveDateStart && r.originalSession));
 }
 
+function listClassifiedNoticeRowsForRequest(
+  request: SubstituteRequest,
+  allRequests: SubstituteRequest[]
+): { row: SubstituteNoticeRow; modified: boolean }[] {
+  const saved = resolveEffectiveNoticeRows(request, allRequests);
+  if (!saved) return [];
+  const related = getRelatedSubstituteRequests(request, allRequests);
+  return classifySavedNoticeRows(saved, buildDefaultNoticeRowsFromRequests(related));
+}
+
 /** 此請假單對應的通知單列是否曾人工修改（僅該列改入代課清冊；未改列維持兼課轉移） */
 export function requestHasModifiedNoticePayrollRow(
   request: SubstituteRequest,
   allRequests: SubstituteRequest[]
 ): boolean {
-  const saved = resolveEffectiveNoticeRows(request, allRequests);
-  if (!saved) return false;
-  const related = getRelatedSubstituteRequests(request, allRequests);
-  const classified = classifySavedNoticeRows(saved, buildDefaultNoticeRowsFromRequests(related));
-  return classified.some(
+  return listClassifiedNoticeRowsForRequest(request, allRequests).some(
     ({ row, modified }) =>
       modified && findMatchingRequests(row, [request], { allowFallback: false }).length > 0
   );
+}
+
+/** 該請假日是否已改入代課清冊（未改的兼課列仍應加兼課） */
+export function noticeDateUsesModifiedSubstitutePayroll(
+  request: SubstituteRequest,
+  allRequests: SubstituteRequest[],
+  isoDate: string
+): boolean {
+  return listClassifiedNoticeRowsForRequest(request, allRequests).some(({ row, modified }) => {
+    if (!modified) return false;
+    if (findMatchingRequests(row, [request], { allowFallback: false }).length === 0) {
+      return false;
+    }
+    const parsed = parseNoticeRowDateToIso(row.date);
+    if (parsed) return parsed === isoDate;
+    const weekday = parseNoticeWeekday(row.weekday);
+    if (weekday != null && dateToDayOfWeek(isoDate) !== weekday) return false;
+    const period = Number(row.period);
+    if (row.period.trim() && Number.isFinite(period) && period > 0) {
+      if (request.originalSession?.period !== period) return false;
+    }
+    return true;
+  });
 }
 
 function collectCandidateDatesForRow(
@@ -463,7 +492,8 @@ export function countSubstitutePayrollWithNoticeRows(
   holidaySet: Set<string> | undefined,
   calendarOpts: LeaveBillableOptions | undefined,
   payrollCtx: LeavePayrollContext,
-  countOriginal: () => number
+  countOriginal: () => number,
+  forSubstituteTeacherId?: string
 ): NoticePayrollCountResult {
   const resolveOpts: NoticePayrollResolveOptions = {
     relatedRequests,
@@ -485,7 +515,16 @@ export function countSubstitutePayrollWithNoticeRows(
     buildDefaultNoticeRowsFromRequests(relatedRequests)
   );
   const modifiedByRow = new Map(classified.map((item) => [noticeRowKey(item.row), item.modified]));
+  const scopedRelated = forSubstituteTeacherId
+    ? relatedRequests.filter((r) => r.substituteTeacherId === forSubstituteTeacherId)
+    : relatedRequests;
   const substituteRows = resolvedRows.filter(({ row }) => {
+    if (
+      forSubstituteTeacherId &&
+      findMatchingRequests(row, scopedRelated, { allowFallback: false }).length === 0
+    ) {
+      return false;
+    }
     const modified = modifiedByRow.get(noticeRowKey(row));
     if (modified) return true;
     // 未修改的兼課列維持兼課轉移，不入代課清冊

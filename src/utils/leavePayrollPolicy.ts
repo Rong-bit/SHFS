@@ -645,6 +645,8 @@ type ConcurrentDeductOptions = {
   weeksInMonth?: number;
   /** 已修改的通知單列改入代課清冊，該請假單不應加兼課 */
   skipRequest?: (r: SubstituteRequest) => boolean;
+  /** 僅該請假日已改入代課清冊時，該日不應加兼課 */
+  skipDate?: (iso: string, r: SubstituteRequest) => boolean;
   /** 代課應加兼課：依請假人（被代課程）判定停課是否扣節，與 A 應減配對 */
   resolvePartialStopsForRequest?: (
     r: SubstituteRequest
@@ -756,12 +758,25 @@ export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
         options?.resolvePartialStopsForRequest?.(r) ?? options?.partialStops ?? [],
     };
 
+    const extraExclude = new Set(excludeDates);
+    if (options?.skipDate && r.leaveDateStart) {
+      for (const iso of listBillableLeaveDatesInMonth(
+        r,
+        settlementMonth,
+        settlementYear,
+        extraExclude,
+        periodOpts
+      )) {
+        if (options.skipDate(iso, r)) extraExclude.add(iso);
+      }
+    }
+
     total += countSubstituteConcurrentAddPeriodsInMonth(
       r,
       settlementMonth,
       settlementYear,
       ctx,
-      excludeDates,
+      extraExclude,
       periodOpts
     );
   }

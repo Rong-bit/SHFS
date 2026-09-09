@@ -176,7 +176,7 @@ export interface SubstituteRequest {
   actingHomeroomTeacherId?: string;
   actingHomeroomTeacherName?: string;
 
-  /** 連續節次或連續起迄批次派代共用群組 ID；有值時通知單合併列印 */
+  /** 連續節次一次勾選多堂時共用群組 ID；有值時通知單合併列印 */
   batchGroupId?: string;
 
   /** 通知單表格列（人工調整後儲存；列印時優先使用） */

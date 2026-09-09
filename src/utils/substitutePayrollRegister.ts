@@ -5,7 +5,6 @@ import {
   countSubstitutePublicPayrollPeriodsInMonth,
   isLeaveDatePublicPayroll,
   listBillableLeaveDatesInMonth,
-  resolveRequestPaymentType,
   shouldTransferConcurrentToSubstituteOnLeaveDate,
 } from './leavePayrollPolicy';
 import { nonTeachingDateSet } from './holidays';
@@ -97,14 +96,11 @@ export function buildSubstitutePayrollRemarks(
 
     const effectiveNoticeRows = resolveEffectiveNoticeRows(r, requests);
     if (effectiveNoticeRows) {
-      if (r.batchGroupId) {
-        if (noticeBatchHandled.has(r.batchGroupId)) continue;
-        noticeBatchHandled.add(r.batchGroupId);
-      }
-      if (resolveRequestPaymentType(r, payrollCtx, holidaySet, periodOpts) !== 'public') {
-        continue;
-      }
+      const batchKey = r.batchGroupId ? `${r.batchGroupId}::${teacherId}` : r.id;
+      if (noticeBatchHandled.has(batchKey)) continue;
+      noticeBatchHandled.add(batchKey);
       const related = getRelatedSubstituteRequests(r, requests);
+      const relatedForTeacher = related.filter((item) => item.substituteTeacherId === teacherId);
       const payrollResult = countSubstitutePayrollWithNoticeRows(
         effectiveNoticeRows,
         related,
@@ -115,14 +111,24 @@ export function buildSubstitutePayrollRemarks(
         periodOpts,
         payrollCtx,
         () =>
-          countSubstitutePublicPayrollPeriodsInMonth(
-            r,
-            settlementMonth,
-            settlementYear,
-            payrollCtx,
-            holidaySet,
-            periodOpts
-          )
+          relatedForTeacher.reduce(
+            (sum, req) =>
+              sum +
+              countSubstitutePublicPayrollPeriodsInMonth(
+                req,
+                settlementMonth,
+                settlementYear,
+                payrollCtx,
+                holidaySet,
+                {
+                  ...baseCalendarOpts,
+                  period: req.originalSession?.period,
+                  partialStops: periodOpts.partialStops,
+                }
+              ),
+            0
+          ),
+        teacherId
       );
       if (payrollResult.useBasicRate) {
         for (const { row, iso } of payrollResult.resolvedRows) {
