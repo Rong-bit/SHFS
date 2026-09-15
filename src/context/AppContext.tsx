@@ -163,7 +163,11 @@ interface AppContextType {
       }
     >,
     requestMonth?: number,
-    batchOptions?: { idNoncePrefix?: string }
+    batchOptions?: {
+      idNoncePrefix?: string;
+      reuseRequestNumber?: string;
+      attachBatchGroupToIds?: string[];
+    }
   ) => SubstituteRequest[];
   /** 核准成功回傳 true；佔位課堂無法對應課表時回傳 false */
   approveRequest: (requestId: string, reviewerName?: string) => boolean;
@@ -1965,7 +1969,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     >,
     requestMonth?: number,
-    batchOptions?: { idNoncePrefix?: string }
+    batchOptions?: {
+      idNoncePrefix?: string;
+      reuseRequestNumber?: string;
+      attachBatchGroupToIds?: string[];
+    }
   ): SubstituteRequest[] => {
     if (items.length === 0) return [];
 
@@ -1977,6 +1985,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       academicYear: systemConfig.academicYear,
       semester,
       referenceMonth: month,
+      reuseRequestNumber: batchOptions?.reuseRequestNumber,
     });
     const nowStr = formatLocalDateTime();
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
@@ -2129,7 +2138,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSessions(progressiveSessions);
     }
 
-    setRequests((prev) => [...prepared].reverse().concat(prev));
+    const attachIds = new Set(batchOptions?.attachBatchGroupToIds || []);
+    const attachGroupId = prepared[0]?.batchGroupId;
+    setRequests((prev) => {
+      const next = [...prepared].reverse().concat(prev);
+      if (!attachGroupId || attachIds.size === 0) return next;
+      return next.map((r) =>
+        attachIds.has(r.id) ? { ...r, batchGroupId: attachGroupId } : r
+      );
+    });
     return prepared;
   };
 

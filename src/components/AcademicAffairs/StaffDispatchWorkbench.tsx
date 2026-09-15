@@ -40,6 +40,7 @@ import {
 } from '../../utils/leaveDates';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
+import { findReusableLeaveNoticeBatch } from '../../utils/requestNumbers';
 import { formatDayPeriodSummary, formatPeriodsLabel } from '../../utils/periodLabels';
 import {
   formatTemporarySwapEffectLabel,
@@ -256,6 +257,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const [substituteTeacherId, setSubstituteTeacherId] = useState<string>('');
   const [actingHomeroomTeacherId, setActingHomeroomTeacherId] = useState<string>('');
   const [hasUserChosenSubstituteTeacher, setHasUserChosenSubstituteTeacher] = useState(false);
+  /** 連續節次：各課堂可指定不同代課老師，仍共用同一通知單編號 */
+  const [sessionSubstituteIds, setSessionSubstituteIds] = useState<Record<string, string>>({});
   const [leaveDateMode, setLeaveDateMode] = useState<'single' | 'range'>('single');
   const [leaveDateStart, setLeaveDateStart] = useState<string>('');
   const [leaveDateEnd, setLeaveDateEnd] = useState<string>('');
@@ -443,6 +446,56 @@ export const StaffDispatchWorkbench: React.FC = () => {
     leaveDateMode,
   ]);
 
+  const periodRangeLeaveEnd =
+    leaveDateMode === 'range' ? leaveDateEnd || leaveDateStart || undefined : leaveDateStart || undefined;
+
+  const periodRangeCandidateMap = useMemo(() => {
+    const map: Record<string, ReturnType<typeof rankSubstituteCandidates>> = {};
+    if (!applicantTeacher) return map;
+    periodRangeSessions.forEach((session) => {
+      map[session.id] = rankSubstituteCandidates({
+        teachers,
+        sessions,
+        requests,
+        excludeTeacherId: applicantTeacher.id,
+        targetDayOfWeek: session.dayOfWeek,
+        targetPeriod: session.period,
+        subjectName: session.subjectName,
+        applicantDepartment: applicantTeacher.department,
+        maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+        leaveDateStart: leaveDateStart || undefined,
+        leaveDateEnd: periodRangeLeaveEnd,
+      });
+    });
+    return map;
+  }, [
+    applicantTeacher,
+    periodRangeSessions,
+    teachers,
+    sessions,
+    requests,
+    systemConfig.maxWeeklyOverloadPeriods,
+    leaveDateStart,
+    periodRangeLeaveEnd,
+  ]);
+
+  const substituteIdForSession = (sessionId: string) => {
+    if (sessionPickMode === 'periodRange') {
+      return sessionSubstituteIds[sessionId] || substituteTeacherId;
+    }
+    return substituteTeacherId;
+  };
+
+  const applySubstituteToSelectedSessions = (teacherId: string) => {
+    setSessionSubstituteIds((prev) => {
+      const next = { ...prev };
+      batchSelectedSessions.forEach((session) => {
+        next[session.id] = teacherId;
+      });
+      return next;
+    });
+  };
+
   /** 導師請假日無授課課堂：僅需代導師，不必選原課堂／代課教師 */
   const canActingHomeroomOnly = Boolean(
     requestType === 'substitute' &&
@@ -455,6 +508,26 @@ export const StaffDispatchWorkbench: React.FC = () => {
     actingHomeroomOnly: canActingHomeroomOnly,
   });
 
+  const selectedSessionSubstituteIds = batchSelectedSessions.map((session) =>
+    substituteIdForSession(session.id)
+  );
+  const missingPeriodSubstitutes =
+    requestType === 'substitute' &&
+    sessionPickMode === 'periodRange' &&
+    substituteTeacherRequired &&
+    batchSelectedSessions.some((session) => !substituteIdForSession(session.id));
+  const dispatchSubstituteMissing =
+    requestType === 'substitute' &&
+    substituteTeacherRequired &&
+    (sessionPickMode === 'periodRange' ? missingPeriodSubstitutes : !substituteTeacherId);
+  const mixedDispatchSubstituteNames = [
+    ...new Set(
+      selectedSessionSubstituteIds
+        .map((id) => teachers.find((t) => t.id === id)?.name)
+        .filter((name): name is string => Boolean(name))
+    ),
+  ];
+
   // 課堂／候選變更時自動補人選：使用者已點選則不覆寫；僅空值或現人選衝堂時補最佳
   // 請假日無課（無可派代課堂）時清除殘留預選，避免「沒有原課堂卻有代課教師」
   React.useEffect(() => {
@@ -464,6 +537,29 @@ export const StaffDispatchWorkbench: React.FC = () => {
         setSubstituteTeacherId('');
         setHasUserChosenSubstituteTeacher(false);
       }
+      if (Object.keys(sessionSubstituteIds).length > 0) {
+        setSessionSubstituteIds({});
+      }
+      return;
+    }
+    if (sessionPickMode === 'periodRange') {
+      setSessionSubstituteIds((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        batchSelectedSessions.forEach((session) => {
+          if (next[session.id]) return;
+          const cands = periodRangeCandidateMap[session.id] || [];
+          const best =
+            cands.find((c) => !c.hasClash && c.isSameSubject) ||
+            cands.find((c) => !c.hasClash && c.isSameDept) ||
+            cands.find((c) => !c.hasClash);
+          if (best) {
+            next[session.id] = best.teacher.id;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
       return;
     }
     if (candidateSubstitutes.length === 0) return;
@@ -483,6 +579,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   }, [
     requestType,
     applicantSessions.length,
+    sessionPickMode,
+    batchSelectedSessions,
+    periodRangeCandidateMap,
+    sessionSubstituteIds,
     substituteTeacherId,
     hasUserChosenSubstituteTeacher,
     candidateSubstitutes,
@@ -491,6 +591,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // 切換申請教師／單節選堂／模式時，允許重新智慧媒合（多選勾選變化不重置，避免覆寫人選）
   React.useEffect(() => {
     setHasUserChosenSubstituteTeacher(false);
+    setSessionSubstituteIds({});
   }, [selectedTeacherId, sessionPickMode, selectedSessionId, requestType]);
 
   // Auto-select first session if not set；篩選後無課則清空選堂
@@ -743,7 +844,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
             : undefined,
         swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
         swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
-        substituteTeacherId: requestType === 'substitute' ? substituteTeacherId : undefined,
+        substituteTeacherId:
+          requestType === 'substitute' ? substituteIdForSession(originalSession.id) || undefined : undefined,
         actingHomeroomTeacherId:
           requestType === 'substitute' ? actingHomeroomTeacherId || undefined : undefined,
         leaveType: requestType === 'substitute' ? leaveType : undefined,
@@ -792,6 +894,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     swapTargetTeacherId,
     swapTargetSessionId,
     substituteTeacherId,
+    sessionSubstituteIds,
     actingHomeroomTeacherId,
     sessions,
     leaveDateStart,
@@ -867,7 +970,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
     if (requestType === 'substitute') {
       if (!substituteTeacherRequired && !substituteTeacherId) {
         // 僅代導師：無須代課教師
-      } else if (substituteTeacherRequired && !substituteTeacherId) {
+      } else if (substituteTeacherRequired && missingPeriodSubstitutes) {
+        alert('連續節次請為每一節指定代課教師（可為不同老師，通知單編號仍相同）。');
+        return;
+      } else if (substituteTeacherRequired && !substituteTeacherId && sessionPickMode !== 'periodRange') {
         alert('請假派代須指定代課教師。');
         return;
       }
@@ -970,8 +1076,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
           swapTargetTeacherId: requestType === 'swap' ? swapTargetTeacherId : undefined,
           swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
           substituteTeacherId:
-            requestType === 'substitute' && substituteTeacherId
-              ? substituteTeacherId
+            requestType === 'substitute'
+              ? substituteIdForSession(originalSession.id) || undefined
               : undefined,
           actingHomeroomTeacherId:
             requestType === 'substitute' ? actingHomeroomTeacherId || undefined : undefined,
@@ -999,7 +1105,6 @@ export const StaffDispatchWorkbench: React.FC = () => {
       }
     }
 
-    const subTeacher = teachers.find((t) => t.id === substituteTeacherId);
     const actingHomeroomTeacher = teachers.find((t) => t.id === actingHomeroomTeacherId);
     const swapTeacher = teachers.find((t) => t.id === swapTargetTeacherId);
     const swapSession = sessions.find((s) => s.id === swapTargetSessionId);
@@ -1011,8 +1116,21 @@ export const StaffDispatchWorkbench: React.FC = () => {
           : leaveDateStart
         : undefined;
 
-    let batchGroupId: string | undefined;
-    if (requestType === 'substitute' && sessionsToDispatch.length > 1) {
+    const reusableBatch =
+      requestType === 'substitute'
+        ? findReusableLeaveNoticeBatch({
+            existing: requests,
+            applicantTeacherId: applicantTeacher.id,
+            leaveDateStart,
+            leaveDateEnd: resolvedLeaveEnd,
+          })
+        : null;
+    let batchGroupId: string | undefined = reusableBatch?.batchGroupId;
+    if (
+      requestType === 'substitute' &&
+      !batchGroupId &&
+      (sessionsToDispatch.length > 1 || reusableBatch)
+    ) {
       batchGroupId = `batch-${Date.now()}`;
     }
 
@@ -1020,7 +1138,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
     try {
       const batchStamp = Date.now();
       created = createStaffDirectDispatches(
-        sessionsToDispatch.map((originalSession) => ({
+        sessionsToDispatch.map((originalSession) => {
+          const sessionSubId =
+            requestType === 'substitute'
+              ? substituteIdForSession(originalSession.id) || undefined
+              : undefined;
+          const sessionSubTeacher = sessionSubId
+            ? teachers.find((t) => t.id === sessionSubId)
+            : undefined;
+          return {
           requestType,
           applicantTeacherId: applicantTeacher.id,
           applicantTeacherName: applicantTeacher.name,
@@ -1031,14 +1157,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
           paymentType: resolvedDispatchPayment,
           reason,
           originalSession,
-          substituteTeacherId:
-            requestType === 'substitute' && substituteTeacherId
-              ? substituteTeacherId
-              : undefined,
-          substituteTeacherName:
-            requestType === 'substitute' && substituteTeacherId
-              ? subTeacher?.name
-              : undefined,
+          substituteTeacherId: sessionSubId,
+          substituteTeacherName: sessionSubTeacher?.name,
           actingHomeroomTeacherId:
             requestType === 'substitute' && isHomeroomTeacher(applicantTeacher)
               ? actingHomeroomTeacherId || undefined
@@ -1064,9 +1184,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
           effectiveDate:
             requestType === 'swap' && swapMode === 'temporary' ? swapEffectiveDate : undefined,
           autoApprove,
-        })),
+        };
+        }),
         dispatchMonth,
-        { idNoncePrefix: String(batchStamp) }
+        {
+          idNoncePrefix: String(batchStamp),
+          reuseRequestNumber: reusableBatch?.requestNumber,
+          attachBatchGroupToIds:
+            reusableBatch && !reusableBatch.batchGroupId ? reusableBatch.existingIds : undefined,
+        }
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : '派代失敗，請檢查資料後重試。');
@@ -1074,16 +1200,22 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }
 
     const first = created[0];
-    const mergedNoticeHint = batchGroupId ? '（連續節次合併一張通知單）' : '';
+    const mixedHint =
+      mixedDispatchSubstituteNames.length > 1
+        ? `；代課：${mixedDispatchSubstituteNames.join('、')}`
+        : '';
+    const mergedNoticeHint = batchGroupId
+      ? `（連續節次合併一張通知單${reusableBatch ? `，沿用 ${reusableBatch.requestNumber}` : ''}）`
+      : '';
     setDispatchSuccess({
       message:
         created.length > 1
           ? `已批次登錄 ${created.length} 筆派代（${first.requestNumber} 起）${
               autoApprove ? '並立即核定生效' : '並進入簽核清冊'
-            }${mergedNoticeHint}。`
+            }${mergedNoticeHint}${mixedHint}。`
           : `【${first.requestNumber}】調代課已成功由教學組登錄${
               autoApprove ? '並立即核定生效' : '並進入簽核清冊'
-            }${mergedNoticeHint}。`,
+            }${mergedNoticeHint}${mixedHint}。`,
       firstRequest: first,
       autoApproved: autoApprove,
     });
@@ -1094,6 +1226,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
       if (!actingHomeroomOnly) {
         setSubstituteTeacherId('');
         setHasUserChosenSubstituteTeacher(false);
+        setSessionSubstituteIds({});
       }
     }
   };
@@ -1667,7 +1800,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       </div>
                       {leaveDateMode === 'range' && leaveDateStart && leaveDateEnd && leaveDateEnd >= leaveDateStart && (
                         <p className="mt-1.5 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
-                          連續起迄模式下，每次派代後仍留在此頁；同老師、同起迄區間內多次派代會合併為一張通知單（超過 7 列自動分頁）。
+                          連續起迄模式下，每次派代後仍留在此頁；同一請假人、同一請假起迄（含各節不同代課老師）會合併為同一通知單編號（超過 7 列自動分頁）。
                         </p>
                       )}
                       {selectedOriginalSession && leaveFilterDays.length === 0 && (
@@ -1853,7 +1986,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         將一次派代「{dayNames[rangeDayOfWeek]} 第
                         {Math.min(rangePeriodStart, rangePeriodEnd)}～
                         {Math.max(rangePeriodStart, rangePeriodEnd)}節」內有課的節次（目前{' '}
-                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。同一位代課教師須在這些節次皆空堂。
+                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。
+                        各節可指定不同代課老師，仍共用同一通知單編號。
                       </p>
                     </div>
                   )}
@@ -1881,9 +2015,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         該範圍內沒有排定課堂。請調整星期或起迄節次（例如第1～7節）。
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-96 overflow-y-auto pr-1">
                         {periodRangeSessions.map((s) => {
                           const isSelected = selectedSessionIds.includes(s.id);
+                          const sessionSubId = substituteIdForSession(s.id);
                           return (
                             <div
                               key={s.id}
@@ -1932,6 +2067,27 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
                                 <SessionVenueSelect session={s} />
                               </div>
+                              {isSelected && (
+                                <div
+                                  className="mt-2"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <label className="block text-[10px] text-indigo-800 font-semibold mb-0.5">
+                                    本節代課教師
+                                  </label>
+                                  <TeacherSearchCombobox
+                                    teachers={teachers.filter((t) => t.id !== applicantTeacher?.id)}
+                                    currentTeacherId={sessionSubId}
+                                    onSelectTeacher={(id) => {
+                                      setSessionSubstituteIds((prev) => ({ ...prev, [s.id]: id }));
+                                    }}
+                                    placeholder="指定本節代課老師…"
+                                    variant="light"
+                                    fullWidth
+                                    compact
+                                  />
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -2026,7 +2182,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   {/* Smart candidate recommendations */}
                   <div className="space-y-2">
                     <label className="block text-xs font-bold text-slate-700">
-                      智慧推薦師資清單 (點選即指定)：
+                      {sessionPickMode === 'periodRange'
+                        ? '智慧推薦（點選套用到全部已勾選節次；各節也可在上方課堂卡片分別指定）：'
+                        : '智慧推薦師資清單 (點選即指定)：'}
                     </label>
 
                     {canActingHomeroomOnly ? (
@@ -2037,7 +2195,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
                           {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameSubject, isSameDept, weeklyOverload }) => {
-                            const isSelected = substituteTeacherId === cand.id;
+                            const isSelected =
+                              sessionPickMode === 'periodRange' && batchSelectedSessions.length > 0
+                                ? batchSelectedSessions.every(
+                                    (s) => substituteIdForSession(s.id) === cand.id
+                                  )
+                                : substituteTeacherId === cand.id;
 
                             return (
                               <div
@@ -2046,6 +2209,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   if (hasClash) return;
                                   setHasUserChosenSubstituteTeacher(true);
                                   setSubstituteTeacherId(cand.id);
+                                  if (sessionPickMode === 'periodRange') {
+                                    applySubstituteToSelectedSessions(cand.id);
+                                  }
                                 }}
                                 className={`p-3 rounded-xl border transition ${
                                   hasClash
@@ -2102,6 +2268,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             onSelectTeacher={(id) => {
                               setHasUserChosenSubstituteTeacher(true);
                               setSubstituteTeacherId(id);
+                              if (sessionPickMode === 'periodRange') {
+                                applySubstituteToSelectedSessions(id);
+                              }
                             }}
                             placeholder="輸入姓名或科別搜尋代課教師…"
                             variant="light"
@@ -2122,7 +2291,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             </button>
                           )}
                           <p className="text-[11px] text-slate-500">
-                            可直接輸入姓名搜尋，不限智慧推薦清單。點選推薦卡片或由此搜尋皆可指定。
+                            {sessionPickMode === 'periodRange'
+                              ? '推薦清單點選會套用到全部已勾選節次。若各節不同老師，請在上方各課堂卡片分別指定；通知單編號仍相同。'
+                              : '可直接輸入姓名搜尋，不限智慧推薦清單。點選推薦卡片或由此搜尋皆可指定。'}
                           </p>
                         </div>
                       </>
@@ -2390,7 +2561,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     <span className="text-slate-400 block">調代安排：</span>
                     {requestType === 'substitute' && (
                       <div className="text-slate-200">
-                        代課教師：<strong className="text-indigo-400 text-sm">{teachers.find(t => t.id === substituteTeacherId)?.name || '未指定'}</strong>
+                        代課教師：<strong className="text-indigo-400 text-sm">
+                          {sessionPickMode === 'periodRange' && mixedDispatchSubstituteNames.length > 0
+                            ? mixedDispatchSubstituteNames.join('、')
+                            : teachers.find(t => t.id === substituteTeacherId)?.name || '未指定'}
+                        </strong>
+                        {sessionPickMode === 'periodRange' && mixedDispatchSubstituteNames.length > 1 && (
+                          <div className="text-[11px] text-amber-300 mt-0.5">各節不同老師，通知單編號仍相同</div>
+                        )}
                         <div className="text-[11px] text-slate-400 mt-0.5">
                           {dispatchPaymentDisplay.kind === 'public'
                             ? `🏛️ 公費派代 (${(sessionPickMode === 'periodRange' ? batchSelectedSessions[0]?.period : selectedOriginalSession?.period) === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)`
@@ -2476,9 +2654,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   disabled={
                     clashPreview.hasClash ||
                     wellnessHoursExceeded ||
-                    (requestType === 'substitute' &&
-                      substituteTeacherRequired &&
-                      !substituteTeacherId) ||
+                    dispatchSubstituteMissing ||
                     (requestType === 'substitute' &&
                       canActingHomeroomOnly &&
                       !actingHomeroomTeacherId)
@@ -2486,9 +2662,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 ${
                     clashPreview.hasClash ||
                     wellnessHoursExceeded ||
-                    (requestType === 'substitute' &&
-                      substituteTeacherRequired &&
-                      !substituteTeacherId) ||
+                    dispatchSubstituteMissing ||
                     (requestType === 'substitute' &&
                       canActingHomeroomOnly &&
                       !actingHomeroomTeacherId)
@@ -2506,8 +2680,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           canActingHomeroomOnly &&
                           actingHomeroomTeacherId
                         ? '確定僅派代導師（當日無課）'
-                      : requestType === 'substitute' && substituteTeacherRequired && !substituteTeacherId
-                        ? '請先指定代課教師'
+                      : requestType === 'substitute' && dispatchSubstituteMissing
+                        ? sessionPickMode === 'periodRange'
+                          ? '請為每一節指定代課教師'
+                          : '請先指定代課教師'
                       : requestType === 'substitute' &&
                         sessionPickMode === 'periodRange' &&
                         batchSelectedSessions.length > 1

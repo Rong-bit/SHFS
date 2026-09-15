@@ -104,9 +104,62 @@ export function formatRequestNumber(
   return `${academicYear}-${sem}-${String(seq).padStart(4, '0')}`;
 }
 
+export type ReusableLeaveNoticeBatch = {
+  batchGroupId?: string;
+  requestNumber: string;
+  existingIds: string[];
+};
+
+/**
+ * 同一請假人、同一請假起迄的既有派代單（待審／已核准），
+ * 供後續加派節次或不同代課老師沿用同一通知單編號。
+ */
+export function findReusableLeaveNoticeBatch(params: {
+  existing: Array<
+    Pick<
+      SubstituteRequest,
+      | 'id'
+      | 'requestType'
+      | 'applicantTeacherId'
+      | 'leaveDateStart'
+      | 'leaveDateEnd'
+      | 'batchGroupId'
+      | 'requestNumber'
+      | 'status'
+    >
+  >;
+  applicantTeacherId: string;
+  leaveDateStart?: string;
+  leaveDateEnd?: string;
+}): ReusableLeaveNoticeBatch | null {
+  const start = String(params.leaveDateStart || '');
+  if (!start || !params.applicantTeacherId) return null;
+  const end = String(params.leaveDateEnd || params.leaveDateStart || '');
+  const matches = params.existing.filter((r) => {
+    if (r.requestType !== 'substitute') return false;
+    if (r.applicantTeacherId !== params.applicantTeacherId) return false;
+    if (r.status !== 'approved' && r.status !== 'pending') return false;
+    if (String(r.leaveDateStart || '') !== start) return false;
+    return String(r.leaveDateEnd || r.leaveDateStart || '') === end;
+  });
+  if (matches.length === 0) return null;
+  const withBatch = matches.find((r) => r.batchGroupId);
+  const primary = withBatch || matches[0];
+  if (!primary.requestNumber) return null;
+  const group = primary.batchGroupId
+    ? matches.filter((r) => r.batchGroupId === primary.batchGroupId)
+    : matches.filter((r) => r.requestNumber === primary.requestNumber);
+  return {
+    batchGroupId: primary.batchGroupId,
+    requestNumber: primary.requestNumber,
+    existingIds: group.map((r) => r.id),
+  };
+}
+
 /**
  * 同一 batchGroupId（連續節次一次勾選多堂）共用一個假單編號；
  * 新群組只消耗一個流水號，後續同批或跨次派代沿用既有編號。
+ * 不同代課老師不另開編號。
  */
 export function allocateRequestNumbersForBatch(params: {
   items: Array<{ batchGroupId?: string }>;
@@ -114,13 +167,23 @@ export function allocateRequestNumbersForBatch(params: {
   academicYear: string | number;
   semester: string | number;
   referenceMonth?: number;
+  /** 新建 batchGroupId 時沿用既有假單編號（同請假人加派節次） */
+  reuseRequestNumber?: string;
 }): string[] {
-  const { items, existing, academicYear, semester, referenceMonth } = params;
+  const { items, existing, academicYear, semester, referenceMonth, reuseRequestNumber } = params;
   const batchNumberCache = new Map<string, string>();
 
   for (const req of existing) {
     if (req.batchGroupId && req.requestNumber && !batchNumberCache.has(req.batchGroupId)) {
       batchNumberCache.set(req.batchGroupId, req.requestNumber);
+    }
+  }
+
+  if (reuseRequestNumber) {
+    for (const item of items) {
+      if (item.batchGroupId && !batchNumberCache.has(item.batchGroupId)) {
+        batchNumberCache.set(item.batchGroupId, reuseRequestNumber);
+      }
     }
   }
 

@@ -244,13 +244,22 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
       };
     }
 
+    const substituteNames = printGroup
+      .map((r) => r.substituteTeacherName)
+      .filter((name): name is string => Boolean(name))
+      .filter((name, index, list) => list.indexOf(name) === index);
+    const mixedSubstitutes = substituteNames.length > 1;
     return {
       title: '代課通知單',
-      addressee: teacherLabel(liveRequest.substituteTeacherName),
-      greeting: `您好！${teacherLabel(liveRequest.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`,
+      addressee: mixedSubstitutes
+        ? substituteNames.map((name) => teacherLabel(name)).join('、')
+        : teacherLabel(liveRequest.substituteTeacherName),
+      greeting: mixedSubstitutes
+        ? `您好！${teacherLabel(liveRequest.applicantTeacherName, '申請')}因${leaveShort}請各位代理以下課程，`
+        : `您好！${teacherLabel(liveRequest.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`,
       defaultRows: buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd),
     };
-  }, [liveRequest, groupedSessions, originalSession, leaveShort, leaveStart, leaveEnd]);
+  }, [liveRequest, groupedSessions, originalSession, leaveShort, leaveStart, leaveEnd, printGroup]);
 
   const defaultRows = noticeMeta.defaultRows;
 
