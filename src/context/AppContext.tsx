@@ -163,7 +163,11 @@ interface AppContextType {
       }
     >,
     requestMonth?: number,
-    batchOptions?: { idNoncePrefix?: string }
+    batchOptions?: {
+      idNoncePrefix?: string;
+      reuseRequestNumber?: string;
+      attachBatchGroupToIds?: string[];
+    }
   ) => SubstituteRequest[];
   /** 核准成功回傳 true；佔位課堂無法對應課表時回傳 false */
   approveRequest: (requestId: string, reviewerName?: string) => boolean;
@@ -1965,7 +1969,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     >,
     requestMonth?: number,
-    batchOptions?: { idNoncePrefix?: string }
+    batchOptions?: {
+      idNoncePrefix?: string;
+      reuseRequestNumber?: string;
+      attachBatchGroupToIds?: string[];
+    }
   ): SubstituteRequest[] => {
     if (items.length === 0) return [];
 
@@ -1977,6 +1985,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       academicYear: systemConfig.academicYear,
       semester,
       referenceMonth: month,
+      reuseRequestNumber: batchOptions?.reuseRequestNumber,
     });
     const nowStr = formatLocalDateTime();
     const stampPrefix = batchOptions?.idNoncePrefix ?? String(Date.now());
@@ -2129,7 +2138,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSessions(progressiveSessions);
     }
 
-    setRequests((prev) => [...prepared].reverse().concat(prev));
+    const attachIds = new Set(batchOptions?.attachBatchGroupToIds || []);
+    const attachGroupId = prepared[0]?.batchGroupId;
+    setRequests((prev) => {
+      const next = [...prepared].reverse().concat(prev);
+      if (!attachGroupId || attachIds.size === 0) return next;
+      return next.map((r) =>
+        attachIds.has(r.id) ? { ...r, batchGroupId: attachGroupId } : r
+      );
+    });
     return prepared;
   };
 
@@ -2500,6 +2517,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveNoticeRows = (requestId: string, rows: SubstituteNoticeRow[] | null) => {
     const target = requests.find((r) => r.id === requestId);
     const batchGroupId = target?.batchGroupId;
+    const substituteTeacherId = target?.substituteTeacherId;
 
     const patchNoticeRows = (r: SubstituteRequest): SubstituteRequest => {
       if (rows && rows.length > 0) {
@@ -2509,8 +2527,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return rest;
     };
 
+    // 同編號假單可有多位代理人：儲存表格只連動「同一代理人」的節次
     const inSameNoticeBatch = (r: SubstituteRequest) =>
-      r.id === requestId || (batchGroupId != null && r.batchGroupId === batchGroupId);
+      r.id === requestId ||
+      (batchGroupId != null &&
+        r.batchGroupId === batchGroupId &&
+        (!substituteTeacherId || r.substituteTeacherId === substituteTeacherId));
 
     setRequests((prev) =>
       prev.map((r) => (inSameNoticeBatch(r) ? patchNoticeRows(r) : r))
@@ -3286,7 +3308,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
         .forEach((r) => {
           const payrollTeacherId = resolveSubstitutePayrollTeacherId(r);
-          if (!payrollTeacherId) return;
+          if (!payrollTeacherId || payrollTeacherId !== teacher.id) return;
 
           const applicant = teachers.find((t) => t.id === r.applicantTeacherId);
           const periodOpts = {
@@ -3304,17 +3326,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           let rate = rateForRequest(r);
 
           if (effectiveNoticeRows) {
-            if (payrollTeacherId !== teacher.id) return;
             const batchKey = r.batchGroupId ? `${r.batchGroupId}::${teacher.id}` : r.id;
             if (noticeBatchCounted.has(batchKey)) return;
             noticeBatchCounted.add(batchKey);
             const related = getRelatedSubstituteRequests(r, requests);
             const relatedForTeacher = related.filter(
-              (item) => r.substituteTeacherId && item.substituteTeacherId === teacher.id
+              (item) => item.substituteTeacherId === teacher.id
             );
             const payrollResult = countSubstitutePayrollWithNoticeRows(
               effectiveNoticeRows,
-              related,
+              relatedForTeacher,
               settlementMonth,
               settlementYear,
               leaveCalendarOpts.weeksInMonth,
@@ -3356,10 +3377,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (publicPeriods <= 0) return;
 
-          if (payrollTeacherId === teacher.id) {
-            publicSubstitutePeriods += publicPeriods;
-            publicSubstituteAmount += rate * publicPeriods;
-          }
+          publicSubstitutePeriods += publicPeriods;
+          publicSubstituteAmount += rate * publicPeriods;
         });
 
       const swapConcurrentAdd = Math.max(0, swapConcurrentDelta);

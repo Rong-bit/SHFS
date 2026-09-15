@@ -172,12 +172,18 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
     [requests, request]
   );
 
+  /** 同假單編號可有多位代理人；每一張通知單只含該代理人的節次 */
   const printGroup = useMemo(
     () =>
       liveRequest.status === 'approved' && liveRequest.batchGroupId
         ? requests
             .filter(
-              (r) => r.batchGroupId === liveRequest.batchGroupId && r.status === 'approved'
+              (r) =>
+                r.batchGroupId === liveRequest.batchGroupId &&
+                r.status === 'approved' &&
+                (liveRequest.substituteTeacherId
+                  ? r.substituteTeacherId === liveRequest.substituteTeacherId
+                  : true)
             )
             .sort(
               (a, b) =>

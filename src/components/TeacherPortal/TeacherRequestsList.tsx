@@ -191,8 +191,15 @@ export const TeacherRequestsList: React.FC = () => {
             ] as string[];
             const canPrint =
               items.some((r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r));
-            const printTarget =
-              items.find((r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r)) || req;
+            const printTargets = (() => {
+              const map = new Map<string, SubstituteRequest>();
+              for (const r of items) {
+                if (r.status !== 'approved' || isActingHomeroomOnlyRequest(r)) continue;
+                const k = r.substituteTeacherId || r.id;
+                if (!map.has(k)) map.set(k, r);
+              }
+              return [...map.values()];
+            })();
             const canCancel = items.some((r) => r.status === 'pending');
 
             return (
@@ -207,7 +214,8 @@ export const TeacherRequestsList: React.FC = () => {
                   </span>
                   {items.length > 1 && (
                     <span className="text-[11px] text-slate-500 font-semibold">
-                      {items.length} 節合併
+                      {items.length} 節同號
+                      {subNames.length > 1 ? ` · ${subNames.length} 張通知單` : ''}
                     </span>
                   )}
                   <span className="text-xs font-semibold text-slate-600">
@@ -339,16 +347,22 @@ export const TeacherRequestsList: React.FC = () => {
 
               {/* Actions */}
               <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                {canPrint && (
+                {canPrint &&
+                  printTargets.map((target) => (
                   <button
+                    key={target.id}
                     type="button"
-                    onClick={() => setPrintModalRequest(printTarget)}
+                    onClick={() => setPrintModalRequest(target)}
                     className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>列印通知單</span>
+                    <span>
+                      {printTargets.length > 1
+                        ? `列印通知單（${target.substituteTeacherName || '代理人'}）`
+                        : '列印通知單'}
+                    </span>
                   </button>
-                )}
+                ))}
                 {canCancel && (
                   <button
                     type="button"
