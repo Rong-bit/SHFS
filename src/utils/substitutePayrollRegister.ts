@@ -103,7 +103,7 @@ export function buildSubstitutePayrollRemarks(
       const relatedForTeacher = related.filter((item) => item.substituteTeacherId === teacherId);
       const payrollResult = countSubstitutePayrollWithNoticeRows(
         effectiveNoticeRows,
-        relatedForTeacher,
+        related,
         settlementMonth,
         settlementYear,
         weeksInMonth,

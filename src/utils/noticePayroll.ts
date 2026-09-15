@@ -232,8 +232,6 @@ export type NoticePayrollResolveOptions = {
   weeksInMonth?: number;
   holidaySet?: Set<string>;
   calendarOpts?: LeaveBillableOptions;
-  /** false＝通知單列必須對到該代課老師自己的節次，不可整表算給第一人 */
-  allowMatchFallback?: boolean;
 };
 
 export type ResolvedNoticePayrollRow = {
@@ -267,50 +265,18 @@ function matchesNoticeSlot(
   return true;
 }
 
-function distinctSubstituteTeacherIds(related: SubstituteRequest[]): string[] {
-  return [
-    ...new Set(
-      related
-        .map((r) => r.substituteTeacherId)
-        .filter((id): id is string => Boolean(id))
-    ),
-  ];
-}
-
 function findMatchingRequests(
   row: SubstituteNoticeRow,
   related: SubstituteRequest[],
   options?: { allowFallback?: boolean }
 ): SubstituteRequest[] {
-  const mixedSubs = distinctSubstituteTeacherIds(related).length > 1;
-  const distinctPeriods = new Set(
-    related
-      .map((r) => r.originalSession?.period)
-      .filter((period): period is number => Boolean(period && period > 0))
-  );
-  // 同單不同代課老師／多節次：必須對到節次，不可把整張表算給第一人
-  if (mixedSubs || distinctPeriods.size > 1) {
-    const period = Number(row.period);
-    if (!row.period.trim() || !Number.isFinite(period) || period <= 0) {
-      return [];
-    }
-  }
-
   const byClass = related.filter((r) => matchesNoticeSlot(row, r, { requireClassName: true }));
   if (byClass.length > 0) return byClass;
   // 科目／班級改成監考等人工調整後，仍依節次／星期對到原請假單
   const bySlot = related.filter((r) => matchesNoticeSlot(row, r, { requireClassName: false }));
   if (bySlot.length > 0) return bySlot;
-  if (options?.allowFallback === false || mixedSubs) return [];
+  if (options?.allowFallback === false) return [];
   return related.filter((r) => Boolean(r.leaveDateStart && r.originalSession));
-}
-
-/** 通知單列只計入該代課老師自己的節次 */
-export function requestsForSubstituteTeacher(
-  related: SubstituteRequest[],
-  substituteTeacherId: string
-): SubstituteRequest[] {
-  return related.filter((r) => r.substituteTeacherId === substituteTeacherId);
 }
 
 function listClassifiedNoticeRowsForRequest(
@@ -361,9 +327,7 @@ function collectCandidateDatesForRow(
   row: SubstituteNoticeRow,
   opts: NoticePayrollResolveOptions
 ): string[] {
-  const matching = findMatchingRequests(row, opts.relatedRequests, {
-    allowFallback: opts.allowMatchFallback !== false,
-  });
+  const matching = findMatchingRequests(row, opts.relatedRequests);
   const dates: string[] = [];
   const weeksInMonth = opts.weeksInMonth ?? 4;
 
@@ -461,7 +425,7 @@ export function filterResolvedNoticeRowsForPublicPayroll(
   calendarOpts?: LeaveBillableOptions
 ): ResolvedNoticePayrollRow[] {
   return resolvedRows.filter(({ row, iso }) => {
-    const matching = findMatchingRequests(row, relatedRequests, { allowFallback: false });
+    const matching = findMatchingRequests(row, relatedRequests);
     if (matching.length === 0) return false;
     return matching.some((r) => {
       if (!r.leaveDateStart || !r.originalSession) return false;
@@ -531,30 +495,29 @@ export function countSubstitutePayrollWithNoticeRows(
   countOriginal: () => number,
   forSubstituteTeacherId?: string
 ): NoticePayrollCountResult {
-  const scopedRelated = forSubstituteTeacherId
-    ? requestsForSubstituteTeacher(relatedRequests, forSubstituteTeacherId)
-    : relatedRequests;
   const resolveOpts: NoticePayrollResolveOptions = {
-    relatedRequests: scopedRelated,
+    relatedRequests,
     settlementMonth,
     settlementYear,
     weeksInMonth,
     holidaySet,
     calendarOpts,
-    allowMatchFallback: false,
   };
   const resolvedRows = filterResolvedNoticeRowsForPublicPayroll(
     listResolvedNoticeRowsInSettlementMonth(effectiveNoticeRows, resolveOpts),
-    scopedRelated,
+    relatedRequests,
     payrollCtx,
     holidaySet,
     calendarOpts
   );
   const classified = classifySavedNoticeRows(
     effectiveNoticeRows,
-    buildDefaultNoticeRowsFromRequests(scopedRelated)
+    buildDefaultNoticeRowsFromRequests(relatedRequests)
   );
   const modifiedByRow = new Map(classified.map((item) => [noticeRowKey(item.row), item.modified]));
+  const scopedRelated = forSubstituteTeacherId
+    ? relatedRequests.filter((r) => r.substituteTeacherId === forSubstituteTeacherId)
+    : relatedRequests;
   const substituteRows = resolvedRows.filter(({ row }) => {
     if (
       forSubstituteTeacherId &&

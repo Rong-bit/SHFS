@@ -3303,7 +3303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
         .forEach((r) => {
           const payrollTeacherId = resolveSubstitutePayrollTeacherId(r);
-          if (!payrollTeacherId || payrollTeacherId !== teacher.id) return;
+          if (!payrollTeacherId) return;
 
           const applicant = teachers.find((t) => t.id === r.applicantTeacherId);
           const periodOpts = {
@@ -3321,16 +3321,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           let rate = rateForRequest(r);
 
           if (effectiveNoticeRows) {
+            if (payrollTeacherId !== teacher.id) return;
             const batchKey = r.batchGroupId ? `${r.batchGroupId}::${teacher.id}` : r.id;
             if (noticeBatchCounted.has(batchKey)) return;
             noticeBatchCounted.add(batchKey);
             const related = getRelatedSubstituteRequests(r, requests);
             const relatedForTeacher = related.filter(
-              (item) => item.substituteTeacherId === teacher.id
+              (item) => r.substituteTeacherId && item.substituteTeacherId === teacher.id
             );
             const payrollResult = countSubstitutePayrollWithNoticeRows(
               effectiveNoticeRows,
-              relatedForTeacher,
+              related,
               settlementMonth,
               settlementYear,
               leaveCalendarOpts.weeksInMonth,
@@ -3372,8 +3373,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (publicPeriods <= 0) return;
 
-          publicSubstitutePeriods += publicPeriods;
-          publicSubstituteAmount += rate * publicPeriods;
+          if (payrollTeacherId === teacher.id) {
+            publicSubstitutePeriods += publicPeriods;
+            publicSubstituteAmount += rate * publicPeriods;
+          }
         });
 
       const swapConcurrentAdd = Math.max(0, swapConcurrentDelta);
