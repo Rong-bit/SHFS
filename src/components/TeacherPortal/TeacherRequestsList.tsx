@@ -16,8 +16,17 @@ import {
   ArrowLeftRight
 } from 'lucide-react';
 
-const requestGroupKey = (r: SubstituteRequest) =>
+const leaveCaseKey = (r: Pick<SubstituteRequest, 'batchGroupId' | 'requestNumber' | 'id'>) =>
   r.batchGroupId || r.requestNumber || r.id;
+
+/** 同假單編號、不同代理人各一列 */
+const requestGroupKey = (r: SubstituteRequest) => {
+  const base = leaveCaseKey(r);
+  if (r.requestType !== 'substitute') return base;
+  if (r.substituteTeacherId) return `${base}::sub:${r.substituteTeacherId}`;
+  if (r.actingHomeroomTeacherId) return `${base}::acting:${r.actingHomeroomTeacherId}`;
+  return `${base}::id:${r.id}`;
+};
 
 export const TeacherRequestsList: React.FC = () => {
   const { currentTeacher, requests, cancelRequest, setPrintModalRequest, systemConfig } = useApp();
@@ -102,7 +111,7 @@ export const TeacherRequestsList: React.FC = () => {
   };
 
   const groupCount = useMemo(
-    () => new Set(myRequests.map(requestGroupKey)).size,
+    () => new Set(myRequests.map(leaveCaseKey)).size,
     [myRequests]
   );
 
@@ -191,15 +200,21 @@ export const TeacherRequestsList: React.FC = () => {
             ] as string[];
             const canPrint =
               items.some((r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r));
-            const printTargets = (() => {
-              const map = new Map<string, SubstituteRequest>();
-              for (const r of items) {
-                if (r.status !== 'approved' || isActingHomeroomOnlyRequest(r)) continue;
-                const k = r.substituteTeacherId || r.id;
-                if (!map.has(k)) map.set(k, r);
-              }
-              return [...map.values()];
-            })();
+            const leaveKey = leaveCaseKey(req);
+            const sameNumberSplit =
+              new Set(
+                myRequests
+                  .filter((r) => r.requestType === 'substitute' && leaveCaseKey(r) === leaveKey)
+                  .map((r) =>
+                    r.substituteTeacherId
+                      ? `sub:${r.substituteTeacherId}`
+                      : r.actingHomeroomTeacherId
+                        ? `acting:${r.actingHomeroomTeacherId}`
+                        : `id:${r.id}`
+                  )
+              ).size > 1;
+            const printTarget =
+              items.find((r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r)) || null;
             const canCancel = items.some((r) => r.status === 'pending');
 
             return (
@@ -212,10 +227,11 @@ export const TeacherRequestsList: React.FC = () => {
                   <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200">
                     {req.requestNumber}
                   </span>
-                  {items.length > 1 && (
+                  {(items.length > 1 || sameNumberSplit) && (
                     <span className="text-[11px] text-slate-500 font-semibold">
-                      {items.length} 節同號
-                      {subNames.length > 1 ? ` · ${subNames.length} 張通知單` : ''}
+                      {items.length > 1 ? `${items.length} 節` : ''}
+                      {items.length > 1 && sameNumberSplit ? ' · ' : ''}
+                      {sameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : ''}
                     </span>
                   )}
                   <span className="text-xs font-semibold text-slate-600">
@@ -294,7 +310,7 @@ export const TeacherRequestsList: React.FC = () => {
                           <div className="flex items-center space-x-2 text-sm">
                             <span className="text-slate-600">代課教師：</span>
                             <strong className="text-indigo-900">
-                              {subNames.join('、') || '由教學組媒合'}
+                              {subNames[0] || req.substituteTeacherName || '由教學組媒合'}
                             </strong>
                           </div>
                           {actingNames.length > 0 && (
@@ -347,22 +363,16 @@ export const TeacherRequestsList: React.FC = () => {
 
               {/* Actions */}
               <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                {canPrint &&
-                  printTargets.map((target) => (
+                {canPrint && printTarget && (
                   <button
-                    key={target.id}
                     type="button"
-                    onClick={() => setPrintModalRequest(target)}
+                    onClick={() => setPrintModalRequest(printTarget)}
                     className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>
-                      {printTargets.length > 1
-                        ? `列印通知單（${target.substituteTeacherName || '代理人'}）`
-                        : '列印通知單'}
-                    </span>
+                    <span>列印通知單</span>
                   </button>
-                ))}
+                )}
                 {canCancel && (
                   <button
                     type="button"

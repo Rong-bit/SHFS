@@ -1296,8 +1296,30 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }));
   }, [resolvedRequests, requests, systemConfig]);
 
-  const requestGroupKey = (r: { batchGroupId?: string; requestNumber?: string; id: string }) =>
-    r.batchGroupId || r.requestNumber || r.id;
+  /** 同一假單案件（編號／batch）— 用於統計案件數 */
+  const leaveCaseKey = (r: {
+    batchGroupId?: string;
+    requestNumber?: string;
+    id: string;
+  }) => r.batchGroupId || r.requestNumber || r.id;
+
+  /**
+   * 登錄簿列：同假單編號、不同代理人各佔一列（號碼相同、操作分張）。
+   */
+  const requestGroupKey = (r: {
+    id: string;
+    requestType?: string;
+    batchGroupId?: string;
+    requestNumber?: string;
+    substituteTeacherId?: string;
+    actingHomeroomTeacherId?: string;
+  }) => {
+    const base = leaveCaseKey(r);
+    if (r.requestType !== 'substitute') return base;
+    if (r.substituteTeacherId) return `${base}::sub:${r.substituteTeacherId}`;
+    if (r.actingHomeroomTeacherId) return `${base}::acting:${r.actingHomeroomTeacherId}`;
+    return `${base}::id:${r.id}`;
+  };
 
   const filteredRequests = useMemo(() => {
     return annotatedRequests.filter((r) => {
@@ -1344,8 +1366,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
     });
   }, [annotatedRequests, filteredRequests]);
 
-  const countRequestGroups = (list: Array<{ batchGroupId?: string; requestNumber?: string; id: string }>) =>
-    new Set(list.map(requestGroupKey)).size;
+  const countRequestGroups = (
+    list: Array<{
+      id: string;
+      batchGroupId?: string;
+      requestNumber?: string;
+    }>
+  ) => new Set(list.map(leaveCaseKey)).size;
 
   const displayedPendingIds = useMemo(
     () =>
@@ -2895,15 +2922,26 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         ...new Set(items.map((r) => r.actingHomeroomTeacherName).filter(Boolean)),
                       ] as string[];
                       const mixedPayment = items.some((r) => r.resolvedPayment !== req.resolvedPayment);
-                      const printTargets = (() => {
-                        const map = new Map<string, (typeof items)[0]>();
-                        for (const r of items) {
-                          if (r.status !== 'approved' || isActingHomeroomOnlyRequest(r)) continue;
-                          const key = r.substituteTeacherId || r.id;
-                          if (!map.has(key)) map.set(key, r);
-                        }
-                        return [...map.values()];
-                      })();
+                      const leaveKey = leaveCaseKey(req);
+                      const sameNumberAgentCount = new Set(
+                        annotatedRequests
+                          .filter(
+                            (r) =>
+                              r.requestType === 'substitute' && leaveCaseKey(r) === leaveKey
+                          )
+                          .map((r) =>
+                            r.substituteTeacherId
+                              ? `sub:${r.substituteTeacherId}`
+                              : r.actingHomeroomTeacherId
+                                ? `acting:${r.actingHomeroomTeacherId}`
+                                : `id:${r.id}`
+                          )
+                      ).size;
+                      const isSameNumberSplit = sameNumberAgentCount > 1;
+                      const printTarget =
+                        items.find(
+                          (r) => r.status === 'approved' && !isActingHomeroomOnlyRequest(r)
+                        ) || null;
 
                       return (
                         <tr
@@ -2937,10 +2975,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3 font-mono font-bold text-indigo-900">
                             {req.requestNumber}
-                            {items.length > 1 && (
+                            {(items.length > 1 || isSameNumberSplit) && (
                               <div className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">
-                                {items.length} 節同號
-                                {subNames.length > 1 ? ` · ${subNames.length} 張通知單` : ''}
+                                {items.length > 1 ? `${items.length} 節` : null}
+                                {items.length > 1 && isSameNumberSplit ? ' · ' : null}
+                                {isSameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : null}
                               </div>
                             )}
                           </td>
@@ -2971,11 +3010,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             {req.requestType === 'substitute' && (
                               <div className="text-[11px] text-amber-800 font-semibold mt-0.5">
                                 請假：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}
-                                {items.length > 1 || req.batchGroupId
-                                  ? subNames.length > 1
-                                    ? ` · 同號 ${subNames.length} 張通知單`
-                                    : ' · 同一假單編號'
-                                  : ''}
+                                {isSameNumberSplit
+                                  ? ' · 同號分張'
+                                  : items.length > 1 || req.batchGroupId
+                                    ? ' · 同一假單編號'
+                                    : ''}
                               </div>
                             )}
                           </td>
@@ -2994,7 +3033,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   <>
                                     <span className="text-slate-500">代課：</span>
                                     <strong className="text-indigo-900">
-                                      {subNames.join('、') || '由教學組媒合'}
+                                      {subNames[0] || req.substituteTeacherName || '由教學組媒合'}
                                     </strong>
                                     {actingNames.length > 0 && (
                                       <div className="text-[11px] text-violet-800 mt-0.5">
@@ -3067,54 +3106,31 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3 text-center">
                             <div className="flex items-center justify-center flex-wrap gap-1.5">
-                              {req.requestType === 'substitute' &&
-                                (printTargets.length > 1 ? (
-                                  printTargets.map((target) => (
-                                    <button
-                                      key={`edit-${target.id}`}
-                                      type="button"
-                                      onClick={() => openEditRequest(target)}
-                                      className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 transition"
-                                      title={`修改 ${target.substituteTeacherName || '代理人'} 的通知單課程表格／申請資料`}
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                      <span>修改（{target.substituteTeacherName || '代理人'}）</span>
-                                    </button>
-                                  ))
-                                ) : (
+                              {req.requestType === 'substitute' && (
                                 <button
                                   type="button"
                                   onClick={() => openEditRequest(req)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 transition"
                                   title={
                                     req.status === 'approved' && !isActingHomeroomOnlyRequest(req)
-                                      ? '修改申請資料與課程表格（儲存表格後改入代課清冊，兼課節次亦同）'
+                                      ? '修改申請資料與本張通知單課程表格'
                                       : '修改假別、事由、請假日、代課／代導師'
                                   }
                                 >
                                   <Edit2 className="w-3 h-3" />
                                   <span>修改</span>
                                 </button>
-                              ))}
-                              {printTargets.map((target) => (
+                              )}
+                              {printTarget && (
                                 <button
-                                  key={target.id}
-                                  onClick={() => setPrintModalRequest(target)}
+                                  onClick={() => setPrintModalRequest(printTarget)}
                                   className="flex items-center space-x-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 transition"
-                                  title={
-                                    printTargets.length > 1
-                                      ? `列印 ${target.substituteTeacherName || '代理人'} 的通知單`
-                                      : '列印調代課通知單'
-                                  }
+                                  title="列印本張調代課通知單"
                                 >
                                   <Printer className="w-3 h-3" />
-                                  <span>
-                                    {printTargets.length > 1
-                                      ? `通知單（${target.substituteTeacherName || '代理人'}）`
-                                      : '通知單'}
-                                  </span>
+                                  <span>通知單</span>
                                 </button>
-                              ))}
+                              )}
 
                               {isPending && (
                                 <button
