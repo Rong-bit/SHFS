@@ -1,6 +1,5 @@
 import React from 'react';
 import { SubstituteNoticeRow, SubstituteRequest } from '../../types';
-import { useApp } from '../../context/AppContext';
 import { Printer, X } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
@@ -330,7 +329,6 @@ const NoticeCopy: React.FC<{
 };
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { systemConfig } = useApp();
   const {
     liveRequest,
     printGroup,
@@ -356,8 +354,18 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const stampDateLabel = formatStampRocDate(noticeIssueDate);
 
   const handlePrint = () => {
-    const school = systemConfig.schoolName || '學校';
-    printWithDocumentTitle(`${school}_${title}_${liveRequest.requestNumber}`);
+    const applicant = (liveRequest.applicantTeacherName || '').trim() || '教師';
+    const counterpart = (
+      liveRequest.requestType === 'swap'
+        ? liveRequest.swapTargetTeacherName
+        : liveRequest.substituteTeacherName
+    )?.trim();
+    const number = liveRequest.requestNumber || requestNumberLabel;
+    printWithDocumentTitle(
+      counterpart
+        ? `${applicant}${title}_${number}_${counterpart}`
+        : `${applicant}${title}_${number}`
+    );
   };
 
   return (

@@ -231,6 +231,97 @@ export function formatLeaveDateLabel(
   return `${formatSlashDate(start)}～${em}/${ed}`;
 }
 
+export type ParsedSearchDate = {
+  year?: number;
+  month: number;
+  day: number;
+};
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function isValidMonthDay(month: number, day: number): boolean {
+  if (!Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const maxDays = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= maxDays[month];
+}
+
+function isValidYmd(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || year < 1911 || year > 2200) return false;
+  const d = new Date(year, month - 1, day);
+  return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+}
+
+function rocOrAdYear(yearRaw: string): number {
+  const n = Number(yearRaw);
+  if (yearRaw.length === 3 && n >= 90 && n <= 200) return n + 1911;
+  return n;
+}
+
+/**
+ * 搜尋框日期：9/22、09-22、2026/09/22、115/9/22（民國）、9月22日。
+ * 無法解析則回傳 null，呼叫端改走一般文字搜尋。
+ */
+export function parseSearchDate(raw: string): ParsedSearchDate | null {
+  const s = raw.trim();
+  if (!s) return null;
+
+  let m = s.match(/^(\d{3,4})[/.年\-](\d{1,2})[/.月\-](\d{1,2})日?$/);
+  if (m) {
+    const year = rocOrAdYear(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    if (isValidYmd(year, month, day)) return { year, month, day };
+    return null;
+  }
+
+  m = s.match(/^(\d{1,2})[/.月\-](\d{1,2})日?$/);
+  if (m) {
+    const month = Number(m[1]);
+    const day = Number(m[2]);
+    if (isValidMonthDay(month, day)) return { month, day };
+    return null;
+  }
+
+  m = s.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*日?$/);
+  if (m) {
+    const month = Number(m[1]);
+    const day = Number(m[2]);
+    if (isValidMonthDay(month, day)) return { month, day };
+    return null;
+  }
+
+  return null;
+}
+
+/** 請假區間（含起迄）是否涵蓋搜尋日期；未填年則比對任意年份的月／日 */
+export function leaveMatchesSearchDate(
+  leaveDateStart: string | undefined,
+  leaveDateEnd: string | undefined,
+  parsed: ParsedSearchDate
+): boolean {
+  if (!leaveDateStart) return false;
+  const end = resolveLeaveDateEnd(leaveDateStart, leaveDateEnd) || leaveDateStart;
+
+  if (parsed.year != null) {
+    const iso = `${parsed.year}-${pad2(parsed.month)}-${pad2(parsed.day)}`;
+    return leaveRangeCoversDate(leaveDateStart, leaveDateEnd, iso);
+  }
+
+  const startDt = new Date(leaveDateStart.replace(/-/g, '/') + ' 12:00:00');
+  const endDt = new Date(end.replace(/-/g, '/') + ' 12:00:00');
+  if (Number.isNaN(startDt.getTime()) || Number.isNaN(endDt.getTime()) || endDt < startDt) {
+    return false;
+  }
+
+  for (let cur = new Date(startDt); cur <= endDt; cur.setDate(cur.getDate() + 1)) {
+    if (cur.getMonth() + 1 === parsed.month && cur.getDate() === parsed.day) return true;
+  }
+  return false;
+}
+
 /** 請假派代結算節數：無日期舊案若該結算月該星期仍有上課日算 1，皆放假則 0；有日期則算區間內相符星期數（放假日不計） */
 export function countLeaveSubstitutePeriods(
   request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,

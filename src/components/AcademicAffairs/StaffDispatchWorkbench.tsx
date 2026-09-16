@@ -34,6 +34,8 @@ import {
   dateToDayOfWeek,
   formatLeaveDateLabel,
   formatWeekdayList,
+  leaveMatchesSearchDate,
+  parseSearchDate,
   resolveLeaveDateEnd,
   validateSubstituteLeaveInput,
   weekdaysInDateRange,
@@ -1329,16 +1331,33 @@ export const StaffDispatchWorkbench: React.FC = () => {
       if (listFilter === 'practical' && !isPracticalSession(r.originalSession)) return false;
 
       if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        const matchName = (r.applicantTeacherName || '').toLowerCase().includes(term);
-        const matchSub = (r.substituteTeacherName || '').toLowerCase().includes(term);
-        const matchActing = (r.actingHomeroomTeacherName || '').toLowerCase().includes(term);
-        const matchClass = (r.originalSession?.className || '').toLowerCase().includes(term);
-        const matchSubject = (r.originalSession?.subjectName || '').toLowerCase().includes(term);
-        const matchNum = (r.requestNumber || '').toLowerCase().includes(term);
-        if (!matchName && !matchSub && !matchActing && !matchClass && !matchSubject && !matchNum) {
-          return false;
-        }
+        const tokens = searchTerm.trim().split(/\s+/).filter(Boolean);
+        if (tokens.length === 0) return true;
+
+        const textBlob = [
+          r.applicantTeacherName,
+          r.substituteTeacherName,
+          r.actingHomeroomTeacherName,
+          r.originalSession?.className,
+          r.originalSession?.subjectName,
+          r.requestNumber,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        const matchesToken = (token: string) => {
+          const parsedDate = parseSearchDate(token);
+          if (parsedDate) {
+            return (
+              leaveMatchesSearchDate(r.leaveDateStart, r.leaveDateEnd, parsedDate) ||
+              leaveMatchesSearchDate(r.effectiveDate, r.effectiveDate, parsedDate)
+            );
+          }
+          return textBlob.includes(token.toLowerCase());
+        };
+
+        if (!tokens.every(matchesToken)) return false;
       }
 
       return true;
@@ -1354,6 +1373,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
       seen.add(key);
       order.push(key);
     }
+    let caseIndex = -1;
+    let lastCaseKey = '';
     return order.map((key) => {
       const items = annotatedRequests
         .filter((r) => requestGroupKey(r) === key)
@@ -1362,7 +1383,17 @@ export const StaffDispatchWorkbench: React.FC = () => {
             (a.originalSession?.dayOfWeek || 0) - (b.originalSession?.dayOfWeek || 0) ||
             (a.originalSession?.period || 0) - (b.originalSession?.period || 0)
         );
-      return { key, primary: items[0], items };
+      const caseKey = leaveCaseKey(items[0]);
+      if (caseKey !== lastCaseKey) {
+        caseIndex += 1;
+        lastCaseKey = caseKey;
+      }
+      return {
+        key,
+        primary: items[0],
+        items,
+        isShadedCase: caseIndex % 2 === 0,
+      };
     });
   }, [annotatedRequests, filteredRequests]);
 
@@ -2832,10 +2863,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="搜尋教師、班級、單號..."
+                  placeholder="搜尋教師、班級、單號、日期…"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs w-48 sm:w-60 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  title="可輸入教師、班級、單號，或日期如 9/22、2026/09/22"
+                  className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs w-52 sm:w-72 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
@@ -2889,7 +2921,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    groupedListRows.map(({ key, primary: req, items }) => {
+                    groupedListRows.map(({ key, primary: req, items, isShadedCase }) => {
                       const pendingItems = items.filter((r) => r.status === 'pending');
                       const isPending = pendingItems.length > 0;
                       const pendingIds = pendingItems.map((r) => r.id);
@@ -2946,8 +2978,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       return (
                         <tr
                           key={key}
-                          className={`hover:bg-slate-50 transition ${
-                            isSelected ? 'bg-indigo-50/50' : ''
+                          className={`transition ${
+                            isSelected
+                              ? 'bg-indigo-100 hover:bg-indigo-100'
+                              : isShadedCase
+                                ? 'bg-slate-200/80 hover:bg-slate-300/70'
+                                : 'bg-white hover:bg-slate-50'
                           }`}
                         >
                           <td className="p-3 text-center">
