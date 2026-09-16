@@ -765,6 +765,33 @@ export const StaffDispatchWorkbench: React.FC = () => {
     return names.length > 1 ? names : [];
   }, [editBatchSiblingRequests]);
 
+  /** 同編號多位代理人：課程表格分張，每位代理人各選一筆作為編輯入口 */
+  const editNoticeAgentTargets = useMemo(() => {
+    const map = new Map<string, SubstituteRequest>();
+    for (const r of editBatchSiblingRequests) {
+      if (r.status !== 'approved' || isActingHomeroomOnlyRequest(r)) continue;
+      const key = r.substituteTeacherId || r.id;
+      if (!map.has(key)) map.set(key, r);
+    }
+    return [...map.values()];
+  }, [editBatchSiblingRequests]);
+
+  const switchEditNoticeAgent = (target: SubstituteRequest) => {
+    if (!editingRequest || target.id === editingRequest.id) return;
+    if (noticeTableDirty) {
+      const ok = window.confirm(
+        '課程表格有未儲存的修改，切換代理人後將還原為上次儲存的內容。確定切換？'
+      );
+      if (!ok) return;
+      noticeDiscardRef.current?.();
+    }
+    setEditingRequest(target);
+    setEditSubstituteTeacherId(target.substituteTeacherId || '');
+    setEditActingHomeroomTeacherId(target.actingHomeroomTeacherId || '');
+    setNoticeTableDirty(false);
+    setEditModalTab('notice');
+  };
+
   const editWellnessExcludeIds = useMemo(() => {
     if (!editingRequest) return [] as string[];
     if (editingRequest.batchGroupId) {
@@ -3040,7 +3067,21 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3 text-center">
                             <div className="flex items-center justify-center flex-wrap gap-1.5">
-                              {req.requestType === 'substitute' && (
+                              {req.requestType === 'substitute' &&
+                                (printTargets.length > 1 ? (
+                                  printTargets.map((target) => (
+                                    <button
+                                      key={`edit-${target.id}`}
+                                      type="button"
+                                      onClick={() => openEditRequest(target)}
+                                      className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 transition"
+                                      title={`修改 ${target.substituteTeacherName || '代理人'} 的通知單課程表格／申請資料`}
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                      <span>修改（{target.substituteTeacherName || '代理人'}）</span>
+                                    </button>
+                                  ))
+                                ) : (
                                 <button
                                   type="button"
                                   onClick={() => openEditRequest(req)}
@@ -3054,7 +3095,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   <Edit2 className="w-3 h-3" />
                                   <span>修改</span>
                                 </button>
-                              )}
+                              ))}
                               {printTargets.map((target) => (
                                 <button
                                   key={target.id}
@@ -3189,9 +3230,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   {editingRequest.requestNumber}
-                  {editingRequest.batchGroupId ? ' · 連續節次同批一併更新' : ''}
+                  {editingRequest.batchGroupId
+                    ? editNoticeAgentTargets.length > 1
+                      ? ' · 同號分張（課程表格依代理人分開）'
+                      : ' · 連續節次同批'
+                    : ''}
                   {' · '}
                   {editingRequest.applicantTeacherName}
+                  {editingRequest.substituteTeacherName
+                    ? ` · 代理人：${editingRequest.substituteTeacherName}`
+                    : ''}
                 </p>
               </div>
               <button
@@ -3232,6 +3280,32 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
             {showNoticeTab && (
               <div className={editModalTab === 'notice' ? 'space-y-3' : 'hidden'}>
+                {editNoticeAgentTargets.length > 1 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-slate-600 font-semibold">
+                      請選擇要修改的代理人通知單（互不影響）：
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {editNoticeAgentTargets.map((target) => {
+                        const active = target.substituteTeacherId === editingRequest.substituteTeacherId;
+                        return (
+                          <button
+                            key={target.id}
+                            type="button"
+                            onClick={() => switchEditNoticeAgent(target)}
+                            className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition ${
+                              active
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            {target.substituteTeacherName || '代理人'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <RequestNoticeTab
                   request={editingRequest}
                   onDirtyChange={setNoticeTableDirty}
