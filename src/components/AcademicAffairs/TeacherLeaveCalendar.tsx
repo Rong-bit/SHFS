@@ -280,15 +280,16 @@ export const TeacherLeaveCalendar: React.FC = () => {
                         }}
                         className="w-full text-left truncate rounded px-1.5 py-[3px] text-[11px] font-bold leading-tight hover:brightness-95"
                         style={{
-                          background:
+                          backgroundColor: color.bg,
+                          color: color.text,
+                          backgroundImage:
                             event.status === 'pending'
-                              ? `repeating-linear-gradient(135deg, ${color.bg}, ${color.bg} 6px, ${color.soft} 6px, ${color.soft} 10px)`
-                              : color.bg,
-                          color: event.status === 'pending' ? '#1e293b' : color.text,
+                              ? 'repeating-linear-gradient(135deg, transparent, transparent 5px, rgba(255,255,255,0.28) 5px, rgba(255,255,255,0.28) 9px)'
+                              : undefined,
                         }}
-                        title={event.title}
+                        title={event.status === 'pending' ? `${event.title}（待審核）` : event.title}
                       >
-                        {event.title}
+                        {event.status === 'pending' ? `待 ${event.title}` : event.title}
                       </button>
                     );
                   })}
@@ -373,7 +374,9 @@ const EventPopover: React.FC<{
                 >
                   <span className="mt-1.5 w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color.bg }} />
                   <span>
-                    <span className="block text-sm font-bold text-slate-800">{event.title}</span>
+                    <span className="block text-sm font-bold text-slate-800">
+                      {event.status === 'pending' ? `待 ${event.title}` : event.title}
+                    </span>
                     <span className="block text-xs text-slate-500">
                       {eventTimeRangeLabel(event.periods)}
                       {event.status === 'pending' ? ' · 待審核' : ''}
