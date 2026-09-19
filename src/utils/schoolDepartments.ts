@@ -425,24 +425,11 @@ export const settlementWeeksForMonth = (
   calendar?: CalendarSettlementOptions
 ) => calendar?.weeksInMonth ?? 4;
 
-/** 每週超鐘點 = 課表標示兼課的節數 */
-export const weeklyOverloadPeriods = (
-  teachingPeriods: number,
-  dutyReductionPeriods: number,
-  basePeriods: number
-) => Math.max(0, teachingPeriods + Math.max(0, dutyReductionPeriods) - basePeriods);
-
+/** 每週超鐘點＝課表標示兼課的節數（有課表才計；不再用授課−基本估算） */
 export const teacherWeeklyOverload = (
   teacher: Pick<Teacher, 'id' | 'weeklyActualPeriods' | 'dutyReductionPeriods' | 'basePeriods'>,
   sessions?: CourseSession[]
-) =>
-  sessions
-    ? countWeeklyConcurrentPeriods(sessions, teacher.id)
-    : weeklyOverloadPeriods(
-        teacher.weeklyActualPeriods,
-        teacher.dutyReductionPeriods ?? 0,
-        teacher.basePeriods
-      );
+) => (sessions ? countWeeklyConcurrentPeriods(sessions, teacher.id) : 0);
 
 /** 各職稱基本鐘點由系統設定；未填時專任預設 16。 */
 export const HOMEROOM_DEFAULT_DUTY_REDUCTION = 1;
@@ -607,7 +594,7 @@ export const teacherBasePeriods = (
 const isLeftoverReduction = (value: number | undefined, leftovers: number[]) =>
   value == null || leftovers.includes(value);
 
-/** 各職稱基本鐘點由系統設定。超鐘點＝正課＋減授−基本。 */
+/** 各職稱基本鐘點由系統設定。超鐘點僅依課表「兼課」標記，不依正課−基本估算。 */
 export const resolveTeacherBasePeriods = (
   teacher: Pick<Teacher, 'dutyReductionPeriods' | 'basePeriods' | 'homeroomClass' | 'title'>,
   fulltimeStandard: number,

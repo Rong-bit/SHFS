@@ -814,7 +814,7 @@ export const AdminSettings: React.FC = () => {
               className={subTabClass(activeTab === 'config')}
             >
               <Coins className="w-3.5 h-3.5 text-amber-400" />
-              <span>鐘點費與授課節數標準</span>
+              <span>鐘點費率標準</span>
             </button>
             <button
               id="tab-admin-school"
@@ -912,15 +912,15 @@ export const AdminSettings: React.FC = () => {
         )}
       </div>
 
-      {/* TAB: 鐘點費與授課節數標準（僅費率與基本鐘點） */}
+      {/* TAB: 鐘點費率標準 */}
       {activeTab === 'config' && (
         <form onSubmit={handleConfigSubmit} className="space-y-6">
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-950 leading-relaxed">
-            此分頁只調整<strong>鐘點費率</strong>與<strong>職務基本授課節數</strong>。學校名稱、學年度、放假日請改到「學校與行事曆」；登入密碼在「系統維護 → 登入密碼」。
+            此分頁只調整<strong>鐘點費率</strong>與兼代課上限。超鐘點依課表「兼課」標記計費。學校名稱、學年度、放假日請改到「學校與行事曆」；登入密碼在「系統維護 → 登入密碼」。
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Hourly Rates Card */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 md:col-span-2">
               <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                 <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
                   <Coins className="w-4 h-4 text-amber-500" />
@@ -1041,141 +1041,6 @@ export const AdminSettings: React.FC = () => {
                   <span className="text-[10px] text-slate-400">法規上限 9 節（兼6+代5）</span>
                 </div>
 
-              </div>
-            </div>
-            {/* Base Teaching Periods Card */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
-                  <BookOpen className="w-4 h-4 text-indigo-500" />
-                  <span>職務基本鐘點設定</span>
-                </h3>
-                <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-bold border border-indigo-200">
-                  五種職稱基本鐘點皆可設定（專任預設 16）
-                </span>
-              </div>
-
-              <div className="space-y-4 text-xs sm:text-sm">
-                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-950 leading-relaxed">
-                  <strong>超鐘點＝課表標示「兼課」的節數</strong>（依該月週一至週五課表週次計費。國定假日編制內仍發；僅薪資職稱「外聘人員」扣放假日。教師差假未授課之該節仍不發）。基本鐘點與任務減授仍顯示於師資名冊，不列入超鐘點費。
-                  專任、導師、組長、科主任、主任都可在下方填節數，按「儲存系統參數設定」後會套用到全校該職稱教師。團體活動 3 節中：班會／班級活動計入正課，對開社團 2 節不計入。
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      專任教師基本鐘點 (節/週)
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.fulltime}
-                      onChange={(fulltime) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            fulltime,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定，預設 16 節；儲存後套用全體專任教師</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      導師基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.homeroom}
-                      onChange={(homeroom) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            homeroom,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體導師</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      組長基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.sectionChief}
-                      onChange={(sectionChief) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            sectionChief,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體組長</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      科主任基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.head}
-                      onChange={(head) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            head,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體科主任</span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      主任基本鐘點
-                    </label>
-                    <DraftNumberInput
-                      min={0}
-                      value={formConfig.standardBasePeriods.director}
-                      onChange={(director) =>
-                        setFormConfig({
-                          ...formConfig,
-                          standardBasePeriods: {
-                            ...formConfig.standardBasePeriods,
-                            director,
-                          },
-                        })
-                      }
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-base"
-                    />
-                    <span className="text-[10px] text-slate-500 mt-1 block">可設定；儲存後套用全體主任</span>
-                  </div>
-                </div>
-
-                <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-100 text-xs text-indigo-900 space-y-1">
-                  <div className="font-bold text-indigo-950 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                    目前套用中的基本鐘點
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-indigo-800">
-                    專任 {formConfig.standardBasePeriods.fulltime} 節、導師 {formConfig.standardBasePeriods.homeroom} 節、組長 {formConfig.standardBasePeriods.sectionChief} 節、科主任 {formConfig.standardBasePeriods.head} 節、主任 {formConfig.standardBasePeriods.director} 節。任務減授仍依各人職稱預設或名冊填寫。
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -2305,10 +2170,10 @@ export const AdminSettings: React.FC = () => {
               <div>
                 <div className="flex items-center space-x-2">
                   <Users className="w-5 h-5 text-emerald-400" />
-                  <h3 className="font-bold text-sm">全校專業群科教師師資與授課標準名冊</h3>
+                  <h3 className="font-bold text-sm">全校教師師資名冊</h3>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  基本節數依系統設定。職稱請用下拉選：導師、組長、科主任、主任、專任教師。欄位較多時可左右滑動／捲動。
+                  超鐘點依課表「兼課」標記。職稱請用下拉選：導師、組長、科主任、主任、專任教師。欄位較多時可左右滑動。
                 </p>
               </div>
               <span className="text-xs text-slate-400">
@@ -2317,7 +2182,7 @@ export const AdminSettings: React.FC = () => {
             </div>
 
             <div className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
-              <table className="min-w-[1180px] w-max text-left text-xs border-collapse">
+              <table className="min-w-[980px] w-max text-left text-xs border-collapse">
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-3.5 whitespace-nowrap min-w-[7.5rem]">教師姓名</th>
@@ -2325,10 +2190,8 @@ export const AdminSettings: React.FC = () => {
                     <th className="p-3.5 whitespace-nowrap min-w-[6.5rem]">薪資職稱</th>
                     <th className="p-3.5 whitespace-nowrap min-w-[7.5rem]">職稱</th>
                     <th className="p-3.5 whitespace-nowrap min-w-[5.5rem]">群科科別</th>
-                    <th className="p-3.5 text-center whitespace-nowrap min-w-[5rem]">任務減授</th>
-                    <th className="p-3.5 text-center whitespace-nowrap min-w-[5rem]">基本節數</th>
-                    <th className="p-3.5 text-center whitespace-nowrap min-w-[9rem]">排定節數（不含團體活動）</th>
-                    <th className="p-3.5 text-center whitespace-nowrap min-w-[7.5rem]">每週超額（兼課）</th>
+                    <th className="p-3.5 text-center whitespace-nowrap min-w-[6.5rem]">排定節數</th>
+                    <th className="p-3.5 text-center whitespace-nowrap min-w-[7.5rem]">兼課（超鐘點）</th>
                     <th className="p-3.5 whitespace-nowrap min-w-[12rem]">任教專長 / 專業證照</th>
                     <th className="p-3.5 whitespace-nowrap min-w-[10rem]">聯絡資訊</th>
                     <th className="p-3.5 text-right whitespace-nowrap min-w-[7rem]">操作</th>
@@ -2337,7 +2200,7 @@ export const AdminSettings: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {filteredTeachers.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="p-8 text-center text-slate-400">
+                      <td colSpan={10} className="p-8 text-center text-slate-400">
                         查無符合條件的教師資料
                       </td>
                     </tr>
@@ -2417,23 +2280,6 @@ export const AdminSettings: React.FC = () => {
                             <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-semibold text-[11px]">
                               {t.department}
                             </span>
-                          </td>
-                          <td className="p-3.5 text-center whitespace-nowrap">
-                            <DraftNumberInput
-                              min={0}
-                              max={formConfig.standardBasePeriods.fulltime}
-                              value={t.dutyReductionPeriods ?? 0}
-                              immediate
-                              onChange={(dutyReductionPeriods) =>
-                                updateTeacher(t.id, { dutyReductionPeriods })
-                              }
-                              className="w-16 text-center bg-white border border-slate-300 rounded-lg py-1 font-mono font-bold text-slate-900"
-                              title="任務減授節數（每人不同）"
-                            />
-                            <span className="block text-[10px] text-slate-400 mt-0.5">節</span>
-                          </td>
-                          <td className="p-3.5 text-center font-mono font-bold text-slate-800 whitespace-nowrap">
-                            {t.basePeriods} 節
                           </td>
                           <td className="p-3.5 text-center font-mono font-bold text-slate-900 whitespace-nowrap">
                             {t.weeklyActualPeriods} 節
@@ -2708,7 +2554,7 @@ export const AdminSettings: React.FC = () => {
               <div className="space-y-3 text-xs text-slate-600">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="font-bold text-slate-900">1. 《國立高級中等學校教師每週教學節數標準》（111.07.04 修正）</div>
-                  <p>專任教師基本 16 節（國語文 14 節）。兼任導師之專任教師基本 12 節（國語文 10 節），團體活動之班級活動節數併入計算。兼任行政職務之專任教師依班級數及職務核定：處室主任 0～7 節、二級單位組長 0～9 節、科（學程）主任依全科班級數 6～8 節。超鐘點＝每週排定教學節數 − 每週基本教學節數。</p>
+                  <p>專任教師基本 16 節（國語文 14 節）。兼任導師之專任教師基本 12 節（國語文 10 節），團體活動之班級活動節數併入計算。兼任行政職務之專任教師依班級數及職務核定：處室主任 0～7 節、二級單位組長 0～9 節、科（學程）主任依全科班級數 6～8 節。本系統超鐘點依課表標示「兼課」之節數計費，基本鐘點僅供名冊與法規對照顯示。</p>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
@@ -2987,7 +2833,7 @@ export const AdminSettings: React.FC = () => {
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold"
                     required
                   />
-                  <span className="text-[10px] text-slate-500 mt-1 block">導師 1、科主任 2、組長／主任 0；超鐘點＝正課＋減授−基本</span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">導師 1、科主任 2、組長／主任 0；超鐘點依課表「兼課」標記，與減授無關</span>
                 </div>
               </div>
 

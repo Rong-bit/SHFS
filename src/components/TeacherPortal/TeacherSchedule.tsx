@@ -12,7 +12,6 @@ import {
   ArrowLeftRight, 
   AlertCircle,
   Coins,
-  CheckCircle,
   Cpu,
   Cog,
   Monitor,
@@ -104,7 +103,6 @@ export const TeacherSchedule: React.FC = () => {
       )
   );
   const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
-  const basePeriods = currentTeacher.basePeriods;
   const overloadPeriods = overloadBreakdown.concurrent;
   const thisMonth = settlementPeriodContainingIso(
     isoDaysAgo(0),
@@ -275,80 +273,57 @@ export const TeacherSchedule: React.FC = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              本學期每週授課節數
+              本週課表節數
             </div>
-            <div className="flex items-baseline space-x-2 mt-2">
-              <span className="text-3xl font-extrabold text-slate-900">{overloadBreakdown.scheduleTotal}</span>
-              <span className="text-sm font-semibold text-slate-500">/ 基本 {basePeriods} 節</span>
+            <div className="mt-3 text-sm sm:text-base font-bold text-slate-900 leading-relaxed space-y-1.5">
+              {/* 與管理端「排定節數」相同：不含不計之社團／團體活動 */}
+              <p>本週課表 {overloadBreakdown.counted} 節</p>
+              <p>
+                其中兼課（超鐘點）{' '}
+                <span className={overloadPeriods > 0 ? 'text-amber-600' : 'text-slate-900'}>
+                  {overloadPeriods}
+                </span>{' '}
+                節
+              </p>
+              <p>
+                課輔{' '}
+                <span
+                  className={
+                    overloadBreakdown.counseling > 0 ? 'text-indigo-600' : 'text-slate-900'
+                  }
+                >
+                  {overloadBreakdown.counseling}
+                </span>{' '}
+                節
+              </p>
             </div>
-            <div className="mt-2 text-xs text-slate-600 space-y-1">
-              <div className="flex justify-between">
-                <span>課表總節數：</span>
-                <span className="font-semibold text-slate-800">{overloadBreakdown.scheduleTotal} 節</span>
-              </div>
-              {overloadBreakdown.counseling > 0 && (
-                <div className="flex justify-between text-indigo-700">
-                  <span>第八節課輔（不計入上列）：</span>
-                  <span className="font-semibold">{overloadBreakdown.counseling} 節</span>
-                </div>
-              )}
-              {overloadBreakdown.sessionRows > overloadBreakdown.scheduleTotal && (
-                <div className="flex justify-between text-sky-700">
-                  <span>跨班合授（同時段）：</span>
-                  <span className="font-semibold">
-                    {overloadBreakdown.sessionRows - overloadBreakdown.scheduleTotal} 筆（已合併計算）
-                  </span>
-                </div>
-              )}
-              {overloadBreakdown.hiddenRows > 0 && (
-                <div className="flex justify-between text-amber-700">
-                  <span>未顯示於週一至週五第1–8節：</span>
-                  <span className="font-semibold">{overloadBreakdown.hiddenRows} 筆（不計入）</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span>團體活動（不計）：</span>
-                <span className="font-semibold text-slate-800">
-                  −{overloadBreakdown.groupActivityExcluded} 節
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>正課（班會計入）：</span>
-                <span className="font-semibold text-slate-800">{overloadBreakdown.regularTeaching} 節</span>
-              </div>
-              <div className="flex justify-between">
-                <span>每週基本標準：</span>
-                <span className="font-semibold text-slate-800">{basePeriods} 節/週</span>
-              </div>
-              <div className="flex justify-between">
-                <span>兼課（超鐘點）：</span>
-                <span className={`font-bold ${overloadPeriods > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
-                  +{overloadPeriods} 節/週
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>第八節課輔（另計）：</span>
-                <span className={`font-bold ${overloadBreakdown.counseling > 0 ? 'text-indigo-600' : 'text-slate-700'}`}>
-                  {overloadBreakdown.counseling} 節/週
-                </span>
-              </div>
-            </div>
+            {overloadBreakdown.groupActivityExcluded > 0 && (
+              <p className="mt-2 text-[11px] text-slate-500">
+                另有團體活動／社團 {overloadBreakdown.groupActivityExcluded}{' '}
+                節不計入上列排定節數
+              </p>
+            )}
+            {overloadBreakdown.sessionRows > overloadBreakdown.scheduleTotal && (
+              <p className="mt-1 text-[11px] text-sky-700">
+                跨班合授同時段已合併計算（另{' '}
+                {overloadBreakdown.sessionRows - overloadBreakdown.scheduleTotal} 筆）
+              </p>
+            )}
+            {overloadBreakdown.hiddenRows > 0 && (
+              <p className="mt-1 text-[11px] text-amber-700">
+                未列入週一至週五顯示格：{overloadBreakdown.hiddenRows} 筆
+              </p>
+            )}
           </div>
 
-          {/* 9 period warning status */}
-          <div className="mt-3 pt-2 border-t border-slate-100">
-            {isOverNineHours ? (
+          {isOverNineHours && (
+            <div className="mt-3 pt-2 border-t border-slate-100">
               <div className="flex items-center space-x-1.5 text-xs text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>超額警示：已達法定兼代課上限</span>
               </div>
-            ) : (
-              <div className="flex items-center space-x-1.5 text-xs text-emerald-700 font-medium bg-emerald-50 px-2 py-1 rounded">
-                <CheckCircle className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
-                <span>兼代課節數符合教育部法規</span>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Overload Amount Stat Card */}

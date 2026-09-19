@@ -344,9 +344,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
                             isLight ? 'text-slate-500' : 'text-slate-400'
                           }`}
                         >
-                          {teacher.department} · 減授 {teacher.dutyReductionPeriods ?? 0} · 基本{' '}
-                          {teacher.basePeriods} 節
-                          {isLight ? ` · 現排 ${teacher.weeklyActualPeriods} 節` : ''}
+                          {teacher.department} · 現排 {teacher.weeklyActualPeriods} 節
                         </div>
                       </div>
                     </div>
