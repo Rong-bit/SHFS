@@ -1,0 +1,773 @@
+import React, { useState } from 'react';
+import { useApp } from '../../context/AppContext';
+import { CourseSession, DayOfWeek } from '../../types';
+import { PERIOD_DEFINITIONS } from '../../data/mockData';
+import { RequestModal } from './RequestModal';
+import { 
+  Calendar, 
+  Clock, 
+  Wrench, 
+  BookOpen, 
+  Plus, 
+  ArrowLeftRight, 
+  AlertCircle,
+  Coins,
+  CheckCircle,
+  Cpu,
+  Cog,
+  Monitor,
+  Building2,
+  Download,
+  KeyRound,
+  Lock,
+  Check,
+  X
+} from 'lucide-react';
+import { exportScheduleToExcel } from '../../utils/scheduleImporter';
+import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
+import { ModalShell } from '../Common/ModalShell';
+import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod } from '../../utils/schoolDepartments';
+import { SessionVenueSelect } from '../Common/SessionVenueSelect';
+import {
+  findApprovedTemporarySwapsForSession,
+  formatTemporarySwapEffectLabel,
+} from '../../utils/temporarySwap';
+import {
+  isoDateForDayOfWeekInCurrentWeek,
+  leaveCoverLabelForSessionDisplay,
+  leaveRangeCoversDate,
+} from '../../utils/leaveDates';
+import { isoDaysAgo, settlementPeriodContainingIso } from '../../utils/settlementPeriod';
+
+export const TeacherSchedule: React.FC = () => {
+  const { 
+    currentTeacher, 
+    currentTeacherId, 
+    requestTeacherSwitchWithAuth,
+    requestTeacherActionAuth,
+    updateTeacherPassword,
+    updateTeacher,
+    sessions, 
+    teachers, 
+    systemConfig, 
+    requests,
+    calculateMonthlySettlement,
+  } = useApp();
+  const [selectedSessionForModal, setSelectedSessionForModal] = useState<CourseSession | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isEditContactOpen, setIsEditContactOpen] = useState(false);
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [contactSavedNotice, setContactSavedNotice] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordSavedNotice, setPasswordSavedNotice] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+
+  if (!currentTeacher) {
+    return (
+      <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4 max-w-md mx-auto my-8">
+        <p className="text-slate-600 font-bold text-sm">請搜尋或選擇要檢視的任課教師：</p>
+        {teachers.length > 0 && (
+          <div className="flex justify-center">
+            <TeacherSearchCombobox
+              teachers={teachers}
+              currentTeacherId={currentTeacherId}
+              onSelectTeacher={(tId) => requestTeacherSwitchWithAuth(tId)}
+              placeholder="輸入教師姓名快速搜尋..."
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Teacher sessions（含舊版誤改到代課老師、註記仍寫原任課者）
+  const teacherSessions = sessions.filter(
+    (s) =>
+      s.teacherId === currentTeacher.id ||
+      (Boolean(s.notes?.includes('[代課]')) &&
+        Boolean(s.notes?.includes(`原任課 ${currentTeacher.name}`)))
+  );
+  /** 我當代課老師的已核准單（僅本週對應星期落在請假區間內才標示） */
+  const mySubstituteDuties = requests.filter(
+    (r) =>
+      r.status === 'approved' &&
+      r.requestType === 'substitute' &&
+      r.substituteTeacherId === currentTeacher.id &&
+      Boolean(r.leaveDateStart) &&
+      leaveRangeCoversDate(
+        r.leaveDateStart,
+        r.leaveDateEnd,
+        isoDateForDayOfWeekInCurrentWeek(r.originalSession.dayOfWeek)
+      )
+  );
+  const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
+  const basePeriods = currentTeacher.basePeriods;
+  const overloadPeriods = overloadBreakdown.concurrent;
+  const thisMonth = settlementPeriodContainingIso(
+    isoDaysAgo(0),
+    systemConfig.weeksInMonth ?? 4
+  ).settlementMonth;
+  const monthSettlement = calculateMonthlySettlement(thisMonth).find(
+    (s) => s.teacherId === currentTeacher.id
+  );
+  const monthlyOverloadAmount = monthSettlement?.monthlyOverloadAmount ?? 0;
+  const monthlyCounselingAmount = monthSettlement?.monthlyCounselingAmount ?? 0;
+  const isOverNineHours = overloadPeriods >= systemConfig.maxWeeklyOverloadPeriods;
+
+  const days: { day: DayOfWeek; name: string }[] = [
+    { day: 1, name: '週一' },
+    { day: 2, name: '週二' },
+    { day: 3, name: '週三' },
+    { day: 4, name: '週四' },
+    { day: 5, name: '週五' },
+  ];
+
+  // Helper to find session in specific day and period
+  const getSessionsAt = (day: DayOfWeek, period: number) =>
+    teacherSessions.filter((s) => s.dayOfWeek === day && s.period === period);
+  const getSessionAt = (day: DayOfWeek, period: number) => getSessionsAt(day, period)[0];
+  const getLeaveCoverLabel = (session: CourseSession) =>
+    leaveCoverLabelForSessionDisplay(session, requests);
+  const getTemporarySwapLabel = (session: CourseSession) => {
+    const swaps = findApprovedTemporarySwapsForSession(session, requests);
+    if (swaps.length === 0) return null;
+    const r = swaps[0];
+    if (!r.effectiveDate || !r.swapTargetSession) return '同班對調';
+    return formatTemporarySwapEffectLabel(
+      r.effectiveDate,
+      r.originalSession.dayOfWeek,
+      r.swapTargetSession.dayOfWeek
+    );
+  };
+  const getSubDutyAt = (day: DayOfWeek, period: number) =>
+    mySubstituteDuties.find(
+      (r) =>
+        r.originalSession.dayOfWeek === day && r.originalSession.period === period
+    );
+
+  const handleCellClick = (session?: CourseSession) => {
+    if (!currentTeacher) return;
+    requestTeacherActionAuth(
+      currentTeacher.id,
+      () => {
+        if (session) {
+          setSelectedSessionForModal(session);
+        } else {
+          setSelectedSessionForModal(teacherSessions[0] || null);
+        }
+        setIsModalOpen(true);
+      },
+      '新增調代課申請'
+    );
+  };
+
+  const getDeptIcon = (dept: string) => {
+    switch (dept) {
+      case '電機科':
+        return <Cpu className="w-3.5 h-3.5 text-amber-500" />;
+      case '資訊科':
+        return <Monitor className="w-3.5 h-3.5 text-blue-500" />;
+      case '機械科':
+        return <Cog className="w-3.5 h-3.5 text-purple-500" />;
+      default:
+        return <BookOpen className="w-3.5 h-3.5 text-indigo-500" />;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      
+      {/* Teacher Profile & Workload Stat Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        
+        {/* Profile Card */}
+        <div className="md:col-span-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-5 text-white shadow-sm border border-slate-700/60 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${currentTeacher.avatarBg || 'from-amber-500 to-amber-700'} flex items-center justify-center font-bold text-lg text-white shadow`}>
+                  {currentTeacher.name.slice(0, 1)}
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h2 className="text-lg font-bold text-slate-100">{currentTeacher.name}</h2>
+                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-xs font-semibold">
+                      {displayTeacherTitle(currentTeacher)}
+                    </span>
+                    <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-xs">
+                      {currentTeacher.department}
+                    </span>
+                    <button
+                      onClick={() => {
+                        requestTeacherActionAuth(
+                          currentTeacher.id,
+                          () => {
+                            setNewPassword(''); // 不回填雜湊／明文，留空表示重新設定
+                            setPasswordError('');
+                            setPasswordSavedNotice(false);
+                            setIsChangePasswordOpen(true);
+                          },
+                          '設定登入密碼'
+                        );
+                      }}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[11px] font-medium flex items-center space-x-1 transition"
+                      title="修改此教師身分的登入密碼（須先通過身分驗證）"
+                    >
+                      <KeyRound className="w-3 h-3 text-amber-400" />
+                      <span>設定密碼</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                    <span>聯絡分機：{currentTeacher.phone || '尚未填寫'} ｜ {currentTeacher.email || '尚未填寫信箱'}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        requestTeacherActionAuth(
+                          currentTeacher.id,
+                          () => {
+                            setEditPhone(currentTeacher.phone || '');
+                            setEditEmail(currentTeacher.email || '');
+                            setContactSavedNotice(false);
+                            setIsEditContactOpen(true);
+                          },
+                          '編輯聯絡資料'
+                        );
+                      }}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded text-[11px] font-medium"
+                    >
+                      填寫分機 / 信箱
+                    </button>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Certifications badges */}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {currentTeacher.certifications.map((cert, i) => (
+                <span key={i} className="inline-flex items-center space-x-1 text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
+                  <Wrench className="w-3 h-3 text-amber-400" />
+                  <span>{cert}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-700/80 flex items-center justify-between">
+            <span className="text-xs text-slate-400">
+              點選課堂可調課／派代；工場名稱可直接下拉改選（匯入後對應用）
+            </span>
+            <button
+              id="btn-add-request-hero"
+              onClick={() => handleCellClick(teacherSessions[0])}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow transition active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>新增調代課申請</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Periods Stat Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              本學期每週授課節數
+            </div>
+            <div className="flex items-baseline space-x-2 mt-2">
+              <span className="text-3xl font-extrabold text-slate-900">{overloadBreakdown.scheduleTotal}</span>
+              <span className="text-sm font-semibold text-slate-500">/ 基本 {basePeriods} 節</span>
+            </div>
+            <div className="mt-2 text-xs text-slate-600 space-y-1">
+              <div className="flex justify-between">
+                <span>課表總節數：</span>
+                <span className="font-semibold text-slate-800">{overloadBreakdown.scheduleTotal} 節</span>
+              </div>
+              {overloadBreakdown.counseling > 0 && (
+                <div className="flex justify-between text-indigo-700">
+                  <span>第八節課輔（不計入上列）：</span>
+                  <span className="font-semibold">{overloadBreakdown.counseling} 節</span>
+                </div>
+              )}
+              {overloadBreakdown.sessionRows > overloadBreakdown.scheduleTotal && (
+                <div className="flex justify-between text-sky-700">
+                  <span>跨班合授（同時段）：</span>
+                  <span className="font-semibold">
+                    {overloadBreakdown.sessionRows - overloadBreakdown.scheduleTotal} 筆（已合併計算）
+                  </span>
+                </div>
+              )}
+              {overloadBreakdown.hiddenRows > 0 && (
+                <div className="flex justify-between text-amber-700">
+                  <span>未顯示於週一至週五第1–8節：</span>
+                  <span className="font-semibold">{overloadBreakdown.hiddenRows} 筆（不計入）</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span>團體活動（不計）：</span>
+                <span className="font-semibold text-slate-800">
+                  −{overloadBreakdown.groupActivityExcluded} 節
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>正課（班會計入）：</span>
+                <span className="font-semibold text-slate-800">{overloadBreakdown.regularTeaching} 節</span>
+              </div>
+              <div className="flex justify-between">
+                <span>每週基本標準：</span>
+                <span className="font-semibold text-slate-800">{basePeriods} 節/週</span>
+              </div>
+              <div className="flex justify-between">
+                <span>兼課（超鐘點）：</span>
+                <span className={`font-bold ${overloadPeriods > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                  +{overloadPeriods} 節/週
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>第八節課輔（另計）：</span>
+                <span className={`font-bold ${overloadBreakdown.counseling > 0 ? 'text-indigo-600' : 'text-slate-700'}`}>
+                  {overloadBreakdown.counseling} 節/週
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 9 period warning status */}
+          <div className="mt-3 pt-2 border-t border-slate-100">
+            {isOverNineHours ? (
+              <div className="flex items-center space-x-1.5 text-xs text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>超額警示：已達法定兼代課上限</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5 text-xs text-emerald-700 font-medium bg-emerald-50 px-2 py-1 rounded">
+                <CheckCircle className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                <span>兼代課節數符合教育部法規</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Overload Amount Stat Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>每月預估超鐘點費</span>
+              <Coins className="w-4 h-4 text-amber-500" />
+            </div>
+            <div className="flex items-baseline space-x-1 mt-2">
+              <span className="text-3xl font-extrabold text-amber-600">
+                ${(monthlyOverloadAmount + monthlyCounselingAmount).toLocaleString()}
+              </span>
+              <span className="text-xs text-slate-500 font-medium">元/月</span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2">
+              超鐘點＝日間兼課 {overloadPeriods} 節／週 × {systemConfig.dayHourlyRate} 元（國定假日編制內仍發，僅外聘人員扣放假日）；第八節課輔 {overloadBreakdown.counseling} 節／週 × {systemConfig.nightHourlyRate} 元（仍扣放假日）。
+            </p>
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>日間／課輔費率：</span>
+            <span className="font-semibold text-slate-800">
+              {systemConfig.dayHourlyRate} / {systemConfig.nightHourlyRate} 元/節
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Weekly Schedule Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        
+        {/* Table Header / Title */}
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-5 h-5 text-amber-600" />
+            <h3 className="font-bold text-base text-slate-900">
+              {currentTeacher.name} - 每週課堂總表
+            </h3>
+            <span className="text-xs text-slate-500">
+              (點選課堂直接發起調代課申請)
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="flex items-center space-x-1 text-slate-600">
+              <span className="w-3 h-3 rounded bg-amber-100 border border-amber-400"></span>
+              <span>專業實習工場課</span>
+            </span>
+            <span className="flex items-center space-x-1 text-slate-600">
+              <span className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></span>
+              <span>一般學科課堂</span>
+            </span>
+            <span className="flex items-center space-x-1 text-slate-600">
+              <span className="w-3 h-3 rounded bg-rose-50 border border-rose-300"></span>
+              <span>請假派代（課仍屬原任課，僅標註代課）</span>
+            </span>
+            {/* Teacher portal: no Excel export (requested) */}
+          </div>
+        </div>
+
+        {/* Timetable Matrix */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[700px]">
+            <thead>
+              <tr className="bg-slate-100/80 text-slate-700 text-xs font-bold divide-x divide-slate-200 border-b border-slate-200">
+                <th className="p-3 w-28 text-center bg-slate-200/60">節次 / 時間</th>
+                {days.map((d) => (
+                  <th key={d.day} className="p-3 text-center w-1/5">
+                    {d.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 text-xs">
+              {PERIOD_DEFINITIONS.map((pDef) => {
+                const isNoon = pDef.period === 5;
+                return (
+                  <React.Fragment key={pDef.period}>
+                    {/* Lunch Break Divider */}
+                    {isNoon && (
+                      <tr className="bg-slate-100 text-slate-500 text-[11px] font-semibold text-center tracking-wider">
+                        <td colSpan={6} className="py-1.5 border-y border-slate-200 bg-slate-100/90">
+                          🍽️ 午餐與午休時段 (12:00 - 13:10)
+                        </td>
+                      </tr>
+                    )}
+
+                    <tr className="divide-x divide-slate-200 hover:bg-slate-50/50 transition">
+                      {/* Period Header Column */}
+                      <td className="p-2.5 text-center bg-slate-50/80">
+                        <div className="font-bold text-slate-800">{pDef.label}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {pDef.timeRange}
+                        </div>
+                      </td>
+
+                      {/* Day Columns 1 to 5 */}
+                      {days.map((d) => {
+                        const slotSessions = getSessionsAt(d.day, pDef.period);
+                        const session = slotSessions[0];
+                        const leaveLabel = session ? getLeaveCoverLabel(session) : null;
+                        const swapLabel = session ? getTemporarySwapLabel(session) : null;
+                        const subDuty = !session ? getSubDutyAt(d.day, pDef.period) : null;
+                        return (
+                          <td
+                            key={d.day}
+                            onClick={() => handleCellClick(session)}
+                            className="p-2 align-top h-24 transition relative group cursor-pointer hover:bg-amber-50/40"
+                          >
+                            {session ? (
+                              <div
+                                className={`h-full p-2.5 rounded-xl border flex flex-col justify-between transition-all group-hover:shadow-sm ${
+                                  leaveLabel
+                                    ? 'bg-rose-50/90 border-rose-300 text-rose-950 ring-1 ring-rose-400/30'
+                                    : swapLabel
+                                    ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 ring-1 ring-indigo-400/30'
+                                    : isPracticalSession(session)
+                                    ? 'bg-amber-50/90 border-amber-300 text-amber-950 ring-1 ring-amber-400/30'
+                                    : session.isConcurrent
+                                      ? 'bg-violet-50/90 border-violet-300 text-violet-950 ring-1 ring-violet-400/30'
+                                      : 'bg-blue-50/70 border-blue-200 text-slate-900'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex flex-wrap items-center justify-end gap-0.5">
+                                      {leaveLabel && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-rose-600 text-white rounded font-medium">
+                                          請假派代
+                                        </span>
+                                      )}
+                                      {!leaveLabel && swapLabel && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-indigo-600 text-white rounded font-medium">
+                                          同班對調
+                                        </span>
+                                      )}
+                                      {slotSessions.length > 1 && (
+                                        <span
+                                          className="text-[10px] px-1.5 py-0.2 bg-sky-600 text-white rounded font-medium"
+                                          title={slotSessions.map((s) => s.className).join('、')}
+                                        >
+                                          跨班
+                                        </span>
+                                      )}
+                                      {isWednesdayHomeroomPeriod(session.dayOfWeek, session.period) && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-emerald-600 text-white rounded font-medium">
+                                          班會
+                                        </span>
+                                      )}
+                                      {session.isConcurrent && (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-violet-600 text-white rounded font-medium">
+                                          兼課
+                                        </span>
+                                      )}
+                                      {!leaveLabel && isPracticalSession(session) ? (
+                                        <span className="text-[10px] px-1.5 py-0.2 bg-amber-500 text-white rounded font-medium">
+                                          實習工場
+                                        </span>
+                                      ) : !leaveLabel && !session.isConcurrent ? (
+                                        <span className="text-[10px] text-slate-500 font-normal">正課</span>
+                                      ) : null}
+                                  </div>
+                                  <div className="font-bold text-xs text-slate-900 whitespace-nowrap mt-0.5">
+                                    {session.className}
+                                  </div>
+                                  <div className="font-semibold text-xs text-slate-800 mt-1 line-clamp-1">
+                                    {session.subjectName}
+                                  </div>
+                                  {leaveLabel && (
+                                    <div className="text-[10px] text-rose-700 mt-0.5 line-clamp-2">
+                                      {leaveLabel.replace(/^\[請假派代\]\s*/, '').replace(/^\[代課\]\s*/, '')}
+                                    </div>
+                                  )}
+                                  {!leaveLabel && swapLabel && (
+                                    <div className="text-[10px] text-indigo-700 mt-0.5 line-clamp-2">
+                                      {swapLabel}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="mt-1.5 pt-1 border-t border-slate-200/60 flex flex-col gap-1 text-[11px] text-slate-600">
+                                  <div
+                                    className="flex items-center gap-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <SessionVenueSelect session={session} />
+                                  </div>
+                                  <span className="text-amber-700 opacity-0 group-hover:opacity-100 font-bold text-[10px] transition self-end">
+                                    調課 ➔
+                                  </span>
+                                </div>
+                              </div>
+                            ) : subDuty ? (
+                              <div className="h-full p-2.5 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/80 text-indigo-950 flex flex-col justify-between">
+                                <div>
+                                  <div className="flex justify-end">
+                                    <span className="text-[10px] px-1.5 py-0.2 bg-indigo-600 text-white rounded font-medium">
+                                      代課任務
+                                    </span>
+                                  </div>
+                                  <div className="font-bold text-xs whitespace-nowrap mt-0.5">
+                                    {subDuty.originalSession.className}
+                                  </div>
+                                  <div className="font-semibold text-xs mt-1 line-clamp-1">
+                                    {subDuty.originalSession.subjectName}
+                                  </div>
+                                  <div className="text-[10px] text-indigo-700 mt-0.5">
+                                    原任課 {subDuty.applicantTeacherName}
+                                  </div>
+                                </div>
+                                <div className="text-[10px] text-indigo-600/80">
+                                  週課表仍屬原任課；此為請假期間代課標註
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="h-full flex items-center justify-center text-slate-300 group-hover:text-amber-500 text-[11px] transition">
+                                <span className="opacity-0 group-hover:opacity-100 font-medium">
+                                  + 空堂 (可移入)
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Request Modal */}
+      {isModalOpen && (
+        <RequestModal
+          initialSession={selectedSessionForModal || undefined}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedSessionForModal(null);
+          }}
+        />
+      )}
+
+      {/* Change Password Modal */}
+      {isChangePasswordOpen && (
+        <ModalShell
+          scroll="panel"
+          panelClassName="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 animate-in fade-in zoom-in-95 duration-150 text-left"
+        >
+            <div className="bg-slate-800 px-6 py-4 flex items-center justify-between border-b border-slate-700">
+              <div className="flex items-center space-x-2">
+                <KeyRound className="w-4 h-4 text-amber-400" />
+                <span className="font-bold text-white text-sm">設定【{currentTeacher.name}】個人登入密碼</span>
+              </div>
+              <button
+                onClick={() => {
+                  setIsChangePasswordOpen(false);
+                  setPasswordSavedNotice(false);
+                  setPasswordError('');
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-400">
+                設定此教師身分切換或登入時所需的專屬密碼。若未設定，系統將自動套用全校教師預設密碼（密碼以雜湊保存，不會顯示明文）。
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  新登入密碼：
+                </label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    setPasswordError('');
+                    setPasswordSavedNotice(false);
+                  }}
+                  placeholder="請輸入新密碼 (如: 1234, 自訂生日等)..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm font-medium focus:outline-none"
+                />
+              </div>
+
+              {passwordError && (
+                <div className="p-3 bg-rose-950/60 border border-rose-800 rounded-xl text-rose-300 text-xs">
+                  {passwordError}
+                </div>
+              )}
+
+              {passwordSavedNotice && (
+                <div className="p-3 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-300 text-xs flex items-center space-x-2">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>密碼更新成功！下次切換至此教師時請使用新密碼。</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsChangePasswordOpen(false);
+                    setPasswordSavedNotice(false);
+                    setPasswordError('');
+                  }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition"
+                >
+                  關閉
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = newPassword.trim();
+                    if (!next) {
+                      setPasswordError('請輸入新密碼（空白會改回全校預設密碼，此處不處理）。');
+                      setPasswordSavedNotice(false);
+                      return;
+                    }
+                    if (next.length < 4) {
+                      setPasswordError('新密碼至少 4 個字。');
+                      setPasswordSavedNotice(false);
+                      return;
+                    }
+                    updateTeacherPassword(currentTeacher.id, next);
+                    setPasswordError('');
+                    setPasswordSavedNotice(true);
+                    setTimeout(() => {
+                      setIsChangePasswordOpen(false);
+                      setPasswordSavedNotice(false);
+                    }, 1200);
+                  }}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow transition"
+                >
+                  儲存密碼
+                </button>
+              </div>
+            </div>
+        </ModalShell>
+      )}
+
+      {isEditContactOpen && (
+        <ModalShell
+          scroll="panel"
+          panelClassName="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 text-left"
+        >
+            <div className="bg-slate-800 px-6 py-4 flex items-center justify-between border-b border-slate-700">
+              <span className="font-bold text-white text-sm">填寫【{currentTeacher.name}】分機與信箱</span>
+              <button
+                type="button"
+                onClick={() => setIsEditContactOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-400">
+                電子郵件可留空；若有公務信箱請填寫（{SCHOOL_EMAIL_EXAMPLE}）。儲存後其他電腦同步也會一起更新。
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">公務分機</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="例如：分機 301"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 text-sm focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">電子郵件（選填）</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder={SCHOOL_EMAIL_EXAMPLE}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 focus:ring-2 focus:ring-amber-500 text-sm focus:outline-none"
+                />
+              </div>
+              {contactSavedNotice && (
+                <div className="p-3 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-300 text-xs flex items-center space-x-2">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>已儲存聯絡資料。</span>
+                </div>
+              )}
+              <div className="flex items-center justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditContactOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700"
+                >
+                  關閉
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateTeacher(currentTeacher.id, {
+                      phone: editPhone.trim() || currentTeacher.phone,
+                      email: normalizeSchoolEmail(editEmail),
+                    });
+                    setContactSavedNotice(true);
+                    window.setTimeout(() => setIsEditContactOpen(false), 800);
+                  }}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl"
+                >
+                  儲存
+                </button>
+              </div>
+            </div>
+        </ModalShell>
+      )}
+
+    </div>
+  );
+};
