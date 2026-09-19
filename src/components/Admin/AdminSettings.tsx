@@ -1217,15 +1217,6 @@ export const AdminSettings: React.FC = () => {
                   ) : null}
                 </span>
               </label>
-              <div className="text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed space-y-1">
-                <p className="font-bold text-amber-900">操作建議（三種常見情境）</p>
-                <p>
-                  <strong>半日停課</strong>（如下午佈置考場）：勿標整天放假；改用下方「半日／節次停課」。日間兼課僅薪資職稱「外聘人員」不發停課節次。<strong>段考／運動會停課輔</strong>請勾第 8 節，課輔清冊全員應減 1 並寫備註。派代檢核仍排除該節次。
-                </p>
-                <p>
-                  <strong>連假平日對調／週六補課</strong>：原日列入放假日，再用下方「暫時移課／補課」指定補課日（可選週六）。勿用教師端自行移課永久改週模板。
-                </p>
-              </div>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
@@ -1436,7 +1427,8 @@ export const AdminSettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                把「原日」的週課表（依該日是星期幾）加計到「補課日」。例：週四放假 → 週六補上＝原日選該週四、補課日選週六。原日請一併列入上方放假日。可選只移部分節次（空白＝全日 1～8 節）。
+                連假平日對調／週六補課：原日請先列入上方放假日，再於此指定補課日（可選週六）。
+                勿用教師端「自行移課」永久改週模板。可選只移部分節次（空白＝全日 1～8 節）。
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
@@ -1580,7 +1572,8 @@ export const AdminSettings: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                指定日期的部分節次：派代／衝堂檢核會排除。日間兼課僅薪資職稱「外聘人員」不發該節次。若勾選第 8 節（段考、運動會停課輔），課輔清冊全員應減 1，備註帶說明。預設勾選第 5～8 節，可自行調整。
+                下午佈置考場等：勿標整天放假，請在此勾停課節次。日間兼課僅「外聘人員」不發該節；
+                段考／運動會停課輔請勾第 8 節（課輔清冊全員應減 1 並寫備註）。派代檢核會排除該節。預設勾選第 5～8 節。
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
