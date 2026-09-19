@@ -291,6 +291,8 @@ export const AdminSettings: React.FC = () => {
   const [passwordResetNotice, setPasswordResetNotice] = useState('');
   const salaryFileRef = useRef<HTMLInputElement>(null);
   const salaryMigratedRef = useRef(false);
+  /** 輸入法組字中：勿套 maxLength／即時截斷，否則注音佔位會擋最後幾字 */
+  const schoolNameComposingRef = useRef(false);
   const [salaryCodeNotice, setSalaryCodeNotice] = useState('');
 
   const salaryCodesByName = systemConfig.teacherSalaryCodesByName || {};
@@ -1194,15 +1196,44 @@ export const AdminSettings: React.FC = () => {
               <input
                 type="text"
                 value={formConfig.schoolName || ''}
-                maxLength={SCHOOL_NAME_MAX_LENGTH}
-                onChange={(e) =>
-                  setFormConfig({ ...formConfig, schoolName: clipSchoolName(e.target.value) })
-                }
+                onCompositionStart={() => {
+                  schoolNameComposingRef.current = true;
+                }}
+                onCompositionEnd={(e) => {
+                  schoolNameComposingRef.current = false;
+                  const clipped = clipSchoolName(e.currentTarget.value);
+                  setFormConfig((prev) => ({ ...prev, schoolName: clipped }));
+                }}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  // 組字中先原樣寫入，讓注音／拼音可完整輸入；確認後再截 8 字
+                  setFormConfig((prev) => ({
+                    ...prev,
+                    schoolName: schoolNameComposingRef.current
+                      ? next
+                      : clipSchoolName(next),
+                  }));
+                }}
+                onBlur={(e) => {
+                  if (schoolNameComposingRef.current) return;
+                  const clipped = clipSchoolName(e.currentTarget.value);
+                  setFormConfig((prev) => ({ ...prev, schoolName: clipped }));
+                }}
                 className="flex-1 bg-white border border-indigo-300 rounded-xl p-3 text-lg font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500"
                 placeholder="如：高雄市立中正高工"
               />
-              <span className="text-xs font-bold text-indigo-700 whitespace-nowrap tabular-nums">
-                {Array.from(formConfig.schoolName || '').length}/{SCHOOL_NAME_MAX_LENGTH}
+              <span
+                className={`text-xs font-bold whitespace-nowrap tabular-nums ${
+                  Array.from(formConfig.schoolName || '').length > SCHOOL_NAME_MAX_LENGTH
+                    ? 'text-amber-600'
+                    : 'text-indigo-700'
+                }`}
+              >
+                {Math.min(
+                  Array.from(formConfig.schoolName || '').length,
+                  SCHOOL_NAME_MAX_LENGTH
+                )}
+                /{SCHOOL_NAME_MAX_LENGTH}
               </span>
             </div>
             <p className="text-[11px] text-indigo-600 mt-1.5">
