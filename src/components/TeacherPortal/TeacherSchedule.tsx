@@ -330,7 +330,7 @@ export const TeacherSchedule: React.FC = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>每月預估超鐘點費</span>
+              <span>每月預估超鐘點費(含課輔費)</span>
               <Coins className="w-4 h-4 text-amber-500" />
             </div>
             <div className="flex items-baseline space-x-1 mt-2">
