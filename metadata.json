@@ -1,5 +1,5 @@
 {
-  "name": "Remix 高職調代課與鐘點費管理系統",
+  "name": "Remix 調代課與鐘點費管理系統",
   "description": "專為技術型高中（高職）設計的調代課、實習工場排課與鐘點費管理系統，支援四種角色協同、智慧衝堂檢查與主計結算。",
   "requestFramePermissions": [],
   "majorCapabilities": []
