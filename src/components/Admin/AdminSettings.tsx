@@ -2020,8 +2020,11 @@ export const AdminSettings: React.FC = () => {
               </div>
 
               <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  系統管理員密碼
+                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                  <span>系統管理員密碼</span>
+                  <span className="text-[10px] text-rose-600 font-mono">
+                    預設: {DEFAULT_ADMIN_PASSWORD}
+                  </span>
                 </label>
                 <div className="relative">
                   <input
@@ -2043,7 +2046,11 @@ export const AdminSettings: React.FC = () => {
                       })
                     }
                     className="w-full bg-white border border-slate-300 rounded-lg p-2 pr-9 font-mono font-bold text-slate-900 text-sm"
-                    placeholder="請輸入管理員密碼"
+                    placeholder={
+                      isPasswordHash(systemConfig.authConfig?.adminPassword)
+                        ? '已設定，留空則不變'
+                        : `預設 ${DEFAULT_ADMIN_PASSWORD}，留空沿用`
+                    }
                   />
                   <button
                     type="button"
@@ -2056,7 +2063,7 @@ export const AdminSettings: React.FC = () => {
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-1">
-                  切換至【系統管理員】後台維護時所需的最高權限密碼。
+                  切換至【系統管理員】後台維護時所需的最高權限密碼。出廠預設為「{DEFAULT_ADMIN_PASSWORD}」；密碼以雜湊保存，表單不回填明文。
                 </p>
               </div>
             </div>

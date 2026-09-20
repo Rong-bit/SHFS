@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Lock, KeyRound, Eye, EyeOff, ShieldCheck, User, X, AlertCircle, Check } from 'lucide-react';
 import { UserRole } from '../../types';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
-import { verifyPassword } from '../../utils/passwordCrypto';
+import { isPasswordHash, verifyPassword } from '../../utils/passwordCrypto';
 import {
   markLocalAuthTrusted,
   roleAuthTrustKey,
@@ -146,7 +146,9 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         targetSubtitle = '標準與參數 · 場地／名冊維護 · 課表匯入';
         targetBadge = '最高管理權限';
         expectedPassword = auth.adminPassword || DEFAULT_ADMIN_PASSWORD;
-        hint = '請輸入系統管理員密碼';
+        hint = isPasswordHash(auth.adminPassword)
+          ? `已設定管理員密碼（出廠預設為 ${DEFAULT_ADMIN_PASSWORD}；若已改過請用新密碼）`
+          : `預設密碼為 ${DEFAULT_ADMIN_PASSWORD}`;
         break;
       case 'teacher':
       default:
