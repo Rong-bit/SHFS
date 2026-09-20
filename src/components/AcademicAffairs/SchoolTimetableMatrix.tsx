@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DayOfWeek, DepartmentType } from '../../types';
-import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { 
   Building2, 
   Users, 
@@ -16,23 +15,43 @@ import {
   Search,
   Filter,
 } from 'lucide-react';
-import { displayTeacherTitle, gradeYearFromClassName, isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import {
+  departmentsFromSessions,
+  departmentFromClassName,
+  departmentFromLabel,
+  displayTeacherTitle,
+  gradeYearFromClassName,
+  gradeYearsFromSessions,
+  isPracticalSession,
+  type GradeYear,
+} from '../../utils/schoolDepartments';
+import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import { classifyVenueKind, venueKindLabel } from '../../utils/venueKinds';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { sessionNotesForCurrentWeekDisplay } from '../../utils/leaveDates';
 
 export const SchoolTimetableMatrix: React.FC = () => {
-  const { sessions, teachers, venues, requests } = useApp();
+  const { sessions, teachers, venues, requests, systemConfig } = useApp();
+  const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
 
   type ViewDimension = 'venue' | 'class' | 'teacher' | 'department';
   type VenueListGroup = 'workshop' | 'classroom';
-  type DeptGradeFilter = 'all' | 1 | 2 | 3;
+  type DeptGradeFilter = 'all' | GradeYear;
   const [dimension, setDimension] = useState<ViewDimension>('venue');
   
   // Selected filter targets
   const [selectedVenueId, setSelectedVenueId] = useState<string>(venues[0]?.id || '');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teachers[0]?.id || '');
-  const [selectedDepartment, setSelectedDepartment] = useState<DepartmentType>('電機科');
+  const departmentOptions = useMemo((): string[] => {
+    const fromSessions = departmentsFromSessions(sessions);
+    const fromTeachers = teachers.map((t) => t.department).filter(Boolean) as string[];
+    const set = new Set<string>([...fromSessions, ...fromTeachers]);
+    return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }, [sessions, teachers]);
+  const gradeOptions = useMemo(() => gradeYearsFromSessions(sessions), [sessions]);
+  const [selectedDepartment, setSelectedDepartment] = useState<DepartmentType>(
+    () => departmentOptions[0] || '共同科目'
+  );
   const [deptGradeFilter, setDeptGradeFilter] = useState<DeptGradeFilter>('all');
   const [venueListGroup, setVenueListGroup] = useState<VenueListGroup>(() => {
     const first = venues[0];
@@ -41,7 +60,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
   
   // Available classes derived from sessions
   const allClasses = Array.from(new Set(sessions.map((s) => s.className))).sort();
-  const [selectedClass, setSelectedClass] = useState<string>(allClasses[0] || '電機二甲');
+  const [selectedClass, setSelectedClass] = useState<string>(allClasses[0] || '');
 
   const days: { day: DayOfWeek; name: string }[] = [
     { day: 1, name: '週一' },
@@ -82,21 +101,27 @@ export const SchoolTimetableMatrix: React.FC = () => {
     if (dimension === 'teacher') return s.teacherId === selectedTeacherId;
     if (dimension === 'department') {
       const teacher = teachers.find((t) => t.id === s.teacherId);
-      if (teacher?.department !== selectedDepartment) return false;
+      const dept =
+        teacher?.department ||
+        departmentFromClassName(s.className) ||
+        departmentFromLabel(s.subjectName);
+      if (dept !== selectedDepartment) return false;
       if (deptGradeFilter === 'all') return true;
       return gradeYearFromClassName(s.className) === deptGradeFilter;
     }
     return true;
   });
 
+  const gradeDigitLabels: Record<GradeYear, string> = {
+    1: '一年級',
+    2: '二年級',
+    3: '三年級',
+    4: '四年級',
+    5: '五年級',
+    6: '六年級',
+  };
   const deptGradeLabel =
-    deptGradeFilter === 'all'
-      ? '全年級'
-      : deptGradeFilter === 1
-        ? '一年級'
-        : deptGradeFilter === 2
-          ? '二年級'
-          : '三年級';
+    deptGradeFilter === 'all' ? '全年級' : gradeDigitLabels[deptGradeFilter];
 
   const getSessionsAt = (day: DayOfWeek, period: number) => {
     return filteredSessions
@@ -290,9 +315,9 @@ export const SchoolTimetableMatrix: React.FC = () => {
           {dimension === 'department' && (
             <div className="flex flex-wrap items-center gap-3 w-full">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700">選擇高職科別：</span>
+                <span className="text-xs font-bold text-slate-700">選擇科別／領域：</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {SCHOOL_DEPARTMENTS.map((dept) => (
+                  {departmentOptions.map((dept) => (
                     <button
                       key={dept}
                       onClick={() => setSelectedDepartment(dept)}
@@ -305,30 +330,37 @@ export const SchoolTimetableMatrix: React.FC = () => {
                       {dept}
                     </button>
                   ))}
+                  {departmentOptions.length === 0 && (
+                    <span className="text-xs text-slate-400">尚無課表科別資料</span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-700">年級：</span>
                 <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
-                  {(
-                    [
-                      { key: 'all' as const, label: '全部' },
-                      { key: 1 as const, label: '一年級' },
-                      { key: 2 as const, label: '二年級' },
-                      { key: 3 as const, label: '三年級' },
-                    ] as const
-                  ).map((g) => (
+                  <button
+                    type="button"
+                    onClick={() => setDeptGradeFilter('all')}
+                    className={`px-2.5 py-1 rounded-md transition ${
+                      deptGradeFilter === 'all'
+                        ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    全部
+                  </button>
+                  {gradeOptions.map((g) => (
                     <button
-                      key={String(g.key)}
+                      key={g}
                       type="button"
-                      onClick={() => setDeptGradeFilter(g.key)}
+                      onClick={() => setDeptGradeFilter(g)}
                       className={`px-2.5 py-1 rounded-md transition ${
-                        deptGradeFilter === g.key
+                        deptGradeFilter === g
                           ? 'bg-indigo-600 text-white font-bold shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      {g.label}
+                      {gradeDigitLabels[g]}
                     </button>
                   ))}
                 </div>
@@ -376,7 +408,7 @@ export const SchoolTimetableMatrix: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-xs">
-              {PERIOD_DEFINITIONS.map((pDef) => {
+              {periodDefinitions.map((pDef) => {
                 const isNoon = pDef.period === 5;
                 return (
                   <React.Fragment key={pDef.period}>

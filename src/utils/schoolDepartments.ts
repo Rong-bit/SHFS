@@ -1,11 +1,16 @@
-import { CourseSession, DepartmentType, Teacher, TeacherTitle } from '../types';
+import { CourseSession, DepartmentType, SystemConfig, Teacher, TeacherTitle } from '../types';
 import {
   CalendarSettlementOptions,
   slotOccurrenceCountsInMonth,
 } from './calendarSettlement';
+import {
+  isCounselingSlot as isCounselingSlotConfigured,
+  isDaytimeSlot as isDaytimeSlotConfigured,
+  resolvePeriodConfig,
+} from './periodConfig';
 import { eachDateInSettlementPeriod, resolveSettlementPeriod } from './settlementPeriod';
 
-/** 本校課表會出現的科別（含示範資料用的餐飲／廣告） */
+/** 建議科別／領域清單（高職示範；國中小可自填領域或班級語意） */
 export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
   '電機科',
   '電子科',
@@ -22,6 +27,14 @@ export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
   '服務科',
   '普通科',
   '共同科目',
+  '語文領域',
+  '數學領域',
+  '自然領域',
+  '社會領域',
+  '藝術領域',
+  '健康與體育領域',
+  '綜合活動領域',
+  '科技領域',
 ];
 
 /** 班級名稱字首，較長／易混淆的（電圖、電子、電機）放前面 */
@@ -54,17 +67,40 @@ export const departmentFromClassName = (className: string): DepartmentType | nul
   return null;
 };
 
-/** 從班級名稱判斷年級：優先取科別字首後的一／二／三（電機二忠 → 2） */
-export const gradeYearFromClassName = (className: string): 1 | 2 | 3 | null => {
+export type GradeYear = 1 | 2 | 3 | 4 | 5 | 6;
+
+/** 從班級名稱判斷年級：支援國小 1～6、國高中 1～3；亦辨識 701／112 等數字班碼首位 */
+export const gradeYearFromClassName = (className: string): GradeYear | null => {
   const text = compactText(className);
   if (!text) return null;
-  const map: Record<string, 1 | 2 | 3> = { 一: 1, 二: 2, 三: 3, '1': 1, '2': 2, '3': 3 };
+  const map: Record<string, GradeYear> = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    '1': 1,
+    '2': 2,
+    '3': 3,
+    '4': 4,
+    '5': 5,
+    '6': 6,
+  };
   for (const [prefix] of CLASS_DEPT_PREFIXES) {
     if (!text.startsWith(prefix)) continue;
-    const m = text.slice(prefix.length).match(/^[一二三123]/);
+    const m = text.slice(prefix.length).match(/^[一二三四五六123456]/);
     if (m) return map[m[0]] ?? null;
   }
-  const m = text.match(/[一二三123]/);
+  // 國中常見班碼：701、802、810甲（7/8/9＝國一／二／三）；國小／高中：112、201（首位 1～6）
+  const juniorNumeric = text.match(/^([789])\d{2}/);
+  if (juniorNumeric) {
+    const map789: Record<string, GradeYear> = { '7': 1, '8': 2, '9': 3 };
+    return map789[juniorNumeric[1]] ?? null;
+  }
+  const numericClass = text.match(/^([1-6])\d{2}/);
+  if (numericClass) return map[numericClass[1]] ?? null;
+  const m = text.match(/[一二三四五六123456]/);
   if (!m) return null;
   return map[m[0]] ?? null;
 };
@@ -80,6 +116,57 @@ export const departmentFromLabel = (text: string): DepartmentType | null => {
   }
   return null;
 };
+
+/** 從課表實際出現的班級動態產生科別／領域篩選選項 */
+export function departmentsFromSessions(sessions: CourseSession[]): DepartmentType[] {
+  const set = new Set<string>();
+  sessions.forEach((s) => {
+    const fromClass = departmentFromClassName(s.className || '');
+    if (fromClass) set.add(fromClass);
+    const fromSubject = departmentFromLabel(s.subjectName || '');
+    if (fromSubject) set.add(fromSubject);
+  });
+  const known = SCHOOL_DEPARTMENTS.filter((d) => set.has(d));
+  const extras = [...set].filter((d) => !SCHOOL_DEPARTMENTS.includes(d)).sort();
+  return [...known, ...extras];
+}
+
+export function gradeYearsFromSessions(sessions: CourseSession[]): GradeYear[] {
+  const set = new Set<GradeYear>();
+  sessions.forEach((s) => {
+    const g = gradeYearFromClassName(s.className || '');
+    if (g) set.add(g);
+  });
+  return ([1, 2, 3, 4, 5, 6] as GradeYear[]).filter((g) => set.has(g));
+}
+
+export function classNamesFromSessions(
+  sessions: CourseSession[],
+  options?: { department?: string | null; gradeYear?: GradeYear | null }
+): string[] {
+  const set = new Set<string>();
+  sessions.forEach((s) => {
+    const name = (s.className || '').trim();
+    if (!name) return;
+    if (options?.department) {
+      const dept = departmentFromClassName(name) || departmentFromLabel(s.subjectName || '');
+      if (dept !== options.department) return;
+    }
+    if (options?.gradeYear != null) {
+      if (gradeYearFromClassName(name) !== options.gradeYear) return;
+    }
+    set.add(name);
+  });
+  return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+}
+
+type PeriodCfg = Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null | undefined;
+
+const isDaytimeSlot = (s: CourseSession, cfg?: PeriodCfg) => isDaytimeSlotConfigured(s, cfg);
+export const isCounselingSlot = (
+  s: Pick<CourseSession, 'dayOfWeek' | 'period'>,
+  cfg?: PeriodCfg
+) => isCounselingSlotConfigured(s, cfg);
 
 const teacherNameMatches = (rowTeacherName: string, teacherName: string) => {
   const name = teacherName.trim();
@@ -133,25 +220,20 @@ export type WeeklyOverloadBreakdown = {
   counseling: number;
 };
 
-const isDaytimeSlot = (s: CourseSession) =>
-  s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period >= 1 && s.period <= 7;
-
-export const isCounselingSlot = (s: Pick<CourseSession, 'dayOfWeek' | 'period'>) =>
-  s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8;
-
 /** 舊版「任課已改成代課老師」的課堂（notes 含原任課）；新版 [請假派代] 僅標註、不排除月結模板 */
 export const isSubstituteCoverSession = (s: Pick<CourseSession, 'notes' | 'teacherId'>) =>
   Boolean(s.notes && s.notes.includes('[代課]') && s.notes.includes('原任課'));
 
 export const breakdownWeeklyOverloadPeriods = (
   sessions: CourseSession[],
-  teacherId: string
+  teacherId: string,
+  periodCfg?: PeriodCfg
 ): WeeklyOverloadBreakdown => {
   const mine = sessions.filter((s) => s.teacherId === teacherId);
   // 代課覆蓋節次改由代課申請計費，不計入週兼課／超鐘點格數（與月結一致）
-  const visible = mine.filter((s) => isDaytimeSlot(s) && !isSubstituteCoverSession(s));
+  const visible = mine.filter((s) => isDaytimeSlot(s, periodCfg) && !isSubstituteCoverSession(s));
   const counselingMine = mine.filter(
-    (s) => isCounselingSlot(s) && !isSubstituteCoverSession(s)
+    (s) => isCounselingSlot(s, periodCfg) && !isSubstituteCoverSession(s)
   );
   const counselingSlots = new Set(counselingMine.map((s) => `${s.dayOfWeek}-${s.period}`));
   const slotMap = new Map<string, CourseSession[]>();
@@ -208,14 +290,23 @@ export const breakdownWeeklyOverloadPeriods = (
   };
 };
 
-export const countWeeklyTeachingPeriods = (sessions: CourseSession[], teacherId: string) =>
-  breakdownWeeklyOverloadPeriods(sessions, teacherId).counted;
+export const countWeeklyTeachingPeriods = (
+  sessions: CourseSession[],
+  teacherId: string,
+  periodCfg?: PeriodCfg
+) => breakdownWeeklyOverloadPeriods(sessions, teacherId, periodCfg).counted;
 
-export const countWeeklyConcurrentPeriods = (sessions: CourseSession[], teacherId: string) =>
-  breakdownWeeklyOverloadPeriods(sessions, teacherId).concurrent;
+export const countWeeklyConcurrentPeriods = (
+  sessions: CourseSession[],
+  teacherId: string,
+  periodCfg?: PeriodCfg
+) => breakdownWeeklyOverloadPeriods(sessions, teacherId, periodCfg).concurrent;
 
-export const countWeeklyCounselingPeriods = (sessions: CourseSession[], teacherId: string) =>
-  breakdownWeeklyOverloadPeriods(sessions, teacherId).counseling;
+export const countWeeklyCounselingPeriods = (
+  sessions: CourseSession[],
+  teacherId: string,
+  periodCfg?: PeriodCfg
+) => breakdownWeeklyOverloadPeriods(sessions, teacherId, periodCfg).counseling;
 
 /** 依目前日期推估應為哪個民國學年度（8 月起為新學年） */
 export const expectedRocAcademicYear = (now = new Date()) => {
@@ -309,14 +400,15 @@ export const monthlyTeachingPeriods = (
   teacherId: string,
   year: number,
   month: number,
-  excludeDates?: Iterable<string> | Set<string> | null
+  excludeDates?: Iterable<string> | Set<string> | null,
+  periodCfg?: PeriodCfg
 ) => {
   const counts = weekdayOccurrencesInMonth(year, month, excludeDates);
   return sessions
     .filter(
       (s) =>
         s.teacherId === teacherId &&
-        isDaytimeSlot(s) &&
+        isDaytimeSlot(s, periodCfg) &&
         !isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)
     )
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
@@ -329,7 +421,8 @@ export const monthlyConcurrentPeriods = (
   year: number,
   month: number,
   excludeDates?: Iterable<string> | Set<string> | null,
-  calendar?: CalendarSettlementOptions
+  calendar?: CalendarSettlementOptions,
+  periodCfg?: PeriodCfg
 ) => {
   const holidaySet =
     calendar?.holidaySet ??
@@ -338,17 +431,20 @@ export const monthlyConcurrentPeriods = (
       : excludeDates
       ? new Set(excludeDates)
       : new Set<string>());
+  const maxPeriod =
+    calendar?.maxPeriod ?? resolvePeriodConfig(periodCfg).maxPeriod;
   const slotCounts = slotOccurrenceCountsInMonth(year, month, {
     holidaySet,
     temporaryMoves: calendar?.temporaryMoves,
     partialStops: calendar?.partialStops,
     weeksInMonth: calendar?.weeksInMonth,
+    maxPeriod,
   });
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
     if (!s.isConcurrent || isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)) return;
-    if (!isDaytimeSlot(s)) return;
+    if (!isDaytimeSlot(s, periodCfg)) return;
     if (isSubstituteCoverSession(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });
@@ -366,7 +462,8 @@ export const monthlyCounselingPeriods = (
   now = new Date(),
   excludeDates?: Iterable<string> | Set<string> | null,
   academicYear?: string | number,
-  calendar?: CalendarSettlementOptions
+  calendar?: CalendarSettlementOptions,
+  periodCfg?: PeriodCfg
 ) => {
   const year = calendarYearForSettlementMonth(month, now, academicYear);
   const holidaySet =
@@ -376,6 +473,8 @@ export const monthlyCounselingPeriods = (
       : excludeDates
       ? new Set(excludeDates)
       : new Set<string>());
+  const maxPeriod =
+    calendar?.maxPeriod ?? resolvePeriodConfig(periodCfg).maxPeriod;
   const slotCounts = slotOccurrenceCountsInMonth(year, month, {
     holidaySet,
     temporaryMoves: calendar?.temporaryMoves,
@@ -383,10 +482,12 @@ export const monthlyCounselingPeriods = (
     weeksInMonth: calendar?.weeksInMonth,
     activeStartIso: calendar?.activeStartIso,
     activeEndIso: calendar?.activeEndIso,
+    maxPeriod,
   });
   const slots = new Set<string>();
   sessions.forEach((s) => {
-    if (s.teacherId !== teacherId || !isCounselingSlot(s) || isSubstituteCoverSession(s)) return;
+    if (s.teacherId !== teacherId || !isCounselingSlot(s, periodCfg) || isSubstituteCoverSession(s))
+      return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
   });
   let total = 0;
@@ -403,7 +504,8 @@ export const monthlyOverloadPeriods = (
   now = new Date(),
   excludeDates?: Iterable<string> | Set<string> | null,
   academicYear?: string | number,
-  calendar?: CalendarSettlementOptions
+  calendar?: CalendarSettlementOptions,
+  periodCfg?: PeriodCfg
 ) => {
   const year = calendarYearForSettlementMonth(month, now, academicYear);
   return monthlyConcurrentPeriods(
@@ -412,7 +514,8 @@ export const monthlyOverloadPeriods = (
     year,
     month,
     excludeDates,
-    calendar
+    calendar,
+    periodCfg
   );
 };
 

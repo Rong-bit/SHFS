@@ -15,6 +15,14 @@ import {
   mergePartialNonTeachingDays,
 } from '../../utils/calendarSettlement';
 import { clipSchoolName, SCHOOL_NAME_MAX_LENGTH, normalizeSchoolName } from '../../utils/schoolName';
+import { buildPeriodDefinitions, resolvePeriodConfig } from '../../utils/periodConfig';
+import {
+  applySchoolLevelPreset,
+  normalizeSchoolLevel,
+  SCHOOL_LEVEL_OPTIONS,
+  type SchoolLevel,
+} from '../../utils/schoolLevelPresets';
+import { resolveLeaveThresholds } from '../../utils/leavePayrollPolicy';
 import {
   classifyVenueKind,
   venueKindBadgeClass,
@@ -142,6 +150,14 @@ export const AdminSettings: React.FC = () => {
     actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
     maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
     standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
+    schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
+    maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
+    counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
+    personalLeavePublicDayThreshold:
+      resolveLeaveThresholds(systemConfig).personalLeavePublicDayThreshold,
+    sickLeaveConsecutiveDayThreshold:
+      resolveLeaveThresholds(systemConfig).sickLeaveConsecutiveDayThreshold,
+    wellnessLeaveHoursPerYear: resolveLeaveThresholds(systemConfig).wellnessLeaveHoursPerYear,
     schoolName: normalizeSchoolName(systemConfig?.schoolName ?? '高雄市立中正高工'),
     academicYear: systemConfig?.academicYear ?? '114',
     semester: systemConfig?.semester ?? '1',
@@ -183,7 +199,10 @@ export const AdminSettings: React.FC = () => {
   const [movePeriods, setMovePeriods] = useState<number[]>([]);
   const [partialDate, setPartialDate] = useState('');
   const [partialLabel, setPartialLabel] = useState('半日停課');
-  const [partialPeriods, setPartialPeriods] = useState<number[]>([5, 6, 7, 8]);
+  const [partialPeriods, setPartialPeriods] = useState<number[]>(() => {
+    const max = resolvePeriodConfig(systemConfig).maxPeriod;
+    return Array.from({ length: max }, (_, i) => i + 1).filter((p) => p >= 5);
+  });
 
   // Sync if systemConfig changes
   useEffect(() => {
@@ -193,13 +212,21 @@ export const AdminSettings: React.FC = () => {
       actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
       maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
       standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
+      schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
+      maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
+      counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
+      personalLeavePublicDayThreshold:
+        resolveLeaveThresholds(systemConfig).personalLeavePublicDayThreshold,
+      sickLeaveConsecutiveDayThreshold:
+        resolveLeaveThresholds(systemConfig).sickLeaveConsecutiveDayThreshold,
+      wellnessLeaveHoursPerYear: resolveLeaveThresholds(systemConfig).wellnessLeaveHoursPerYear,
       schoolName: normalizeSchoolName(systemConfig?.schoolName ?? '高雄市立中正高工'),
       academicYear: systemConfig?.academicYear ?? '114',
       semester: systemConfig?.semester ?? '1',
       currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
       weeksInMonth: systemConfig?.weeksInMonth ?? 4,
-    counselingStartDate: systemConfig?.counselingStartDate || '',
-    counselingEndDate: systemConfig?.counselingEndDate || '',
+      counselingStartDate: systemConfig?.counselingStartDate || '',
+      counselingEndDate: systemConfig?.counselingEndDate || '',
       nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
       autoSyncNationalHolidays: systemConfig?.autoSyncNationalHolidays !== false,
       nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
@@ -214,6 +241,18 @@ export const AdminSettings: React.FC = () => {
       },
     });
   }, [systemConfig]);
+
+  const formPeriodDefs = buildPeriodDefinitions(formConfig);
+  const formMaxPeriod = resolvePeriodConfig(formConfig).maxPeriod;
+  const afternoonPartialDefault = () =>
+    Array.from({ length: formMaxPeriod }, (_, i) => i + 1).filter((p) => p >= 5);
+
+  const applySchoolPreset = () => {
+    const level = normalizeSchoolLevel(formConfig.schoolLevel);
+    const patch = applySchoolLevelPreset(level);
+    setFormConfig((prev) => ({ ...prev, ...patch }));
+    alert(`已套用「${SCHOOL_LEVEL_OPTIONS.find((o) => o.value === level)?.label}」預設（費率、節次、課輔、假別門檻、基本鐘點）。請再檢查後按儲存。`);
+  };
 
   // Venue management modal state
   const [editingVenue, setEditingVenue] = useState<WorkshopVenue | null>(null);
@@ -717,7 +756,7 @@ export const AdminSettings: React.FC = () => {
           {/* Download Template Excel */}
           <button
             id="btn-admin-top-download-template"
-            onClick={() => generateTemplateExcel(venues)}
+            onClick={() => generateTemplateExcel(venues, { maxPeriod: formConfig.maxPeriod })}
             className="flex items-center space-x-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
             title="下載標準課表 Excel 範本檔案（含場地清單）"
           >
@@ -745,7 +784,7 @@ export const AdminSettings: React.FC = () => {
               setConfirmDialog({
                 isOpen: true,
                 title: '確認重設系統預設值',
-                message: '確定要將所有系統參數、師資、工場與課表重設回預設高職示範值嗎？',
+                message: '確定要將所有系統參數、師資、工場與課表重設回系統初始示範值嗎？',
                 warningMessage: '此操作將還原所有自訂課表與師資至預設示範狀態。若已啟用跨電腦同步，示範資料會覆蓋全校雲端課表，請謹慎使用。',
                 onConfirm: () => {
                   resetToMockData();
@@ -954,7 +993,7 @@ export const AdminSettings: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    進修部 / 第八節課輔鐘點費 (元/節)
+                    課輔鐘點費 (元/節)
                   </label>
                   <div className="relative">
                     <DraftNumberInput
@@ -968,7 +1007,7 @@ export const AdminSettings: React.FC = () => {
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 節</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    第八節輔導課不計入日間超鐘點，改依此費率另計。預設 660 元（常見為學習輔導費要點之第八節上限；各校依主管機關核定調整）。
+                    課輔節（依「學校與行事曆」課輔節次設定）不計入日間超鐘點，改依此費率另計。無課輔時可與日間費率相同。
                   </p>
                 </div>
 
@@ -1103,6 +1142,142 @@ export const AdminSettings: React.FC = () => {
             </div>
             <p className="text-[11px] text-indigo-600 mt-1.5">
               限 {SCHOOL_NAME_MAX_LENGTH} 個字，作為通知單教務戳章上弧校名；並套用於頁首、匯出 Excel 課表標題與列印檔名。
+            </p>
+          </div>
+
+          {/* 學制與節次 */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                <School className="w-4 h-4 text-emerald-600" />
+                <span>學制 · 節次 · 假別門檻</span>
+              </h3>
+              <button
+                type="button"
+                onClick={applySchoolPreset}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
+              >
+                套用此學制預設
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              選國小／國中／高中／高職後可一鍵寫入常見費率、每日節數、課輔節、假別公費門檻與基本鐘點；數字仍可再手改。超鐘點一律依課表「兼課＝1」計費。
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">學制</label>
+                <select
+                  value={normalizeSchoolLevel(formConfig.schoolLevel)}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      schoolLevel: e.target.value as SchoolLevel,
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm font-bold text-slate-900"
+                >
+                  {SCHOOL_LEVEL_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">每日最大節次</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={formConfig.maxPeriod ?? formMaxPeriod}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      maxPeriod: Math.max(1, Math.min(12, Number(e.target.value) || 1)),
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">課輔節次</label>
+                <input
+                  type="text"
+                  value={(formConfig.counselingPeriods || []).join(',')}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    const counselingPeriods = raw
+                      ? [
+                          ...new Set(
+                            raw
+                              .split(/[,，\s]+/)
+                              .map((s) => Number(s))
+                              .filter((n) => Number.isFinite(n) && n >= 1 && n <= 12)
+                          ),
+                        ].sort((a: number, b: number) => a - b)
+                      : [];
+                    setFormConfig({ ...formConfig, counselingPeriods });
+                  }}
+                  placeholder="無則留空；高職常見 8"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-sm font-mono"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  事假第幾天起公費
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={formConfig.personalLeavePublicDayThreshold ?? 8}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      personalLeavePublicDayThreshold: Math.max(1, Number(e.target.value) || 8),
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  病假連續幾日起公費
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={formConfig.sickLeaveConsecutiveDayThreshold ?? 3}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      sickLeaveConsecutiveDayThreshold: Math.max(1, Number(e.target.value) || 3),
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  身心調適假學年小時
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={formConfig.wellnessLeaveHoursPerYear ?? 21}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      wellnessLeaveHoursPerYear: Math.max(1, Number(e.target.value) || 21),
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              目前節次：{formPeriodDefs.map((p) => p.label).join('、') || '（請設定最大節次）'}
             </p>
           </div>
 
@@ -1428,7 +1603,7 @@ export const AdminSettings: React.FC = () => {
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
                 連假平日對調／週六補課：原日請先列入上方放假日，再於此指定補課日（可選週六）。
-                勿用教師端「自行移課」永久改週模板。可選只移部分節次（空白＝全日 1～8 節）。
+                勿用教師端「自行移課」永久改週模板。可選只移部分節次（空白＝全日第 1～{formMaxPeriod} 節）。
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
@@ -1497,7 +1672,8 @@ export const AdminSettings: React.FC = () => {
               </div>
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-[11px] text-slate-500 mr-1">只移節次（可空白＝全日）：</span>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => {
+                {formPeriodDefs.map((pDef) => {
+                  const p = pDef.period;
                   const on = movePeriods.includes(p);
                   return (
                     <button
@@ -1606,10 +1782,15 @@ export const AdminSettings: React.FC = () => {
                       alert('請至少勾選一節停課節次');
                       return;
                     }
+                    const capped = partialPeriods.filter((p) => p >= 1 && p <= formMaxPeriod);
+                    if (capped.length === 0) {
+                      alert(`停課節次須在 1～${formMaxPeriod} 節內`);
+                      return;
+                    }
                     const next: PartialNonTeachingDay = {
                       id: `partial-${Date.now()}`,
                       date: partialDate,
-                      periods: [...partialPeriods].sort((a, b) => a - b),
+                      periods: [...capped].sort((a, b) => a - b),
                       label: partialLabel.trim() || '半日停課',
                     };
                     setFormConfig({
@@ -1620,7 +1801,7 @@ export const AdminSettings: React.FC = () => {
                       ),
                     });
                     setPartialDate('');
-                    setPartialPeriods([5, 6, 7, 8]);
+                    setPartialPeriods(afternoonPartialDefault());
                   }}
                   className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400"
                 >
@@ -1630,7 +1811,8 @@ export const AdminSettings: React.FC = () => {
               </div>
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-[11px] text-slate-500 mr-1">停課節次：</span>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => {
+                {formPeriodDefs.map((pDef) => {
+                  const p = pDef.period;
                   const on = partialPeriods.includes(p);
                   return (
                     <button
@@ -1653,7 +1835,7 @@ export const AdminSettings: React.FC = () => {
                 })}
                 <button
                   type="button"
-                  onClick={() => setPartialPeriods([5, 6, 7, 8])}
+                  onClick={() => setPartialPeriods(afternoonPartialDefault())}
                   className="ml-1 text-[11px] text-amber-800 font-semibold underline"
                 >
                   下午（5–8）
@@ -2469,7 +2651,7 @@ export const AdminSettings: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2.5 text-xs">
                 <button
                   id="btn-admin-download-template"
-                  onClick={() => generateTemplateExcel(venues)}
+                  onClick={() => generateTemplateExcel(venues, { maxPeriod: formConfig.maxPeriod })}
                   className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold transition"
                 >
                   <Download className="w-3.5 h-3.5 text-amber-400" />
@@ -2587,15 +2769,15 @@ export const AdminSettings: React.FC = () => {
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                   <div className="font-bold text-slate-900">重設示範資料</div>
                   <p className="text-slate-500 text-[11px]">
-                    若排課或測試資料需還原為系統初始高職示範資料（含電機、資訊、機械、餐飲等群科課表），可隨時一鍵重設。
+                    若排課或測試資料需還原為系統初始示範資料（含群科課表範例），可隨時一鍵重設。
                   </p>
                   <button
                     onClick={() => {
                       setConfirmDialog({
                         isOpen: true,
                         title: '確認還原初始示範資料',
-                        message: '確定要還原所有資料為初始高職示範狀態嗎？',
-                        warningMessage: '包含電機、資訊、機械、餐飲等群科之預設課表與申請單。',
+                        message: '確定要還原所有資料為初始示範狀態嗎？',
+                        warningMessage: '包含預設課表與申請單範例。',
                         onConfirm: () => {
                           resetToMockData();
                           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));

@@ -14,22 +14,8 @@ export interface AcademicStaff {
   password?: string;
 }
 
-export type DepartmentType =
-  | '電機科'
-  | '電子科'
-  | '控制科'
-  | '冷凍科'
-  | '化工科'
-  | '建築科'
-  | '汽車科'
-  | '機械科'
-  | '資訊科'
-  | '製圖科'
-  | '金工科'
-  | '電圖科'
-  | '服務科'
-  | '普通科'
-  | '共同科目';
+/** 科別／領域字串（高職可用電機科等；國中小可用領域或自由標籤） */
+export type DepartmentType = string;
 
 export type TeacherTitle = '專任教師' | '導師' | '組長' | '科主任' | '主任';
 
@@ -71,7 +57,7 @@ export interface WorkshopVenue {
 export interface CourseSession {
   id: string;
   dayOfWeek: DayOfWeek;
-  period: number; // 1 ~ 8
+  period: number; // 1 ~ maxPeriod（依系統設定）
   className: string; // 如：電機二甲、資訊三乙、餐飲一甲
   subjectName: string; // 如：電工機械實習、數位邏輯、西餐烹調實習
   teacherId: string;
@@ -196,7 +182,7 @@ export interface SubstituteRequest {
 
 export interface SystemConfig {
   dayHourlyRate: number; // 日間部每節鐘點費 (505，114/9/1 起)
-  nightHourlyRate: number; // 第八節課輔每節鐘點費 (660，依學習輔導費要點)
+  nightHourlyRate: number; // 課輔節每節鐘點費 (660，依學習輔導費要點)
   /**
    * 代導師減授鐘點費每日金額（預設 404）。
    * 法令參考：鐘點費×日數÷5×（專任基本−導師基本）；學校可改為固定日費。
@@ -210,6 +196,18 @@ export interface SystemConfig {
     sectionChief: number; // 組長基本鐘點（可設定）
     director: number; // 主任基本鐘點（可設定）
   };
+  /** 學制：影響一鍵預設；節次／費率仍可手改 */
+  schoolLevel?: 'elementary' | 'junior' | 'senior' | 'vocational';
+  /** 每日最大節次（國小常見 6～7；國中／高中職常見 7～8） */
+  maxPeriod?: number;
+  /** 課輔節次（可空＝無課輔；高職預設 [8]） */
+  counselingPeriods?: number[];
+  /** 事假：學年累計第 N 天起改公費派代（預設 8） */
+  personalLeavePublicDayThreshold?: number;
+  /** 病假：連續請假達 N 日（曆日）起改公費派代（預設 3） */
+  sickLeaveConsecutiveDayThreshold?: number;
+  /** 身心調適假：每學年小時上限（預設 21） */
+  wellnessLeaveHoursPerYear?: number;
   /** 學校名稱（最多 8 字；頁首、匯出標題、列印檔名、通知單戳章上弧） */
   schoolName: string;
   academicYear: string; // 114
@@ -262,7 +260,7 @@ export interface TemporaryScheduleMove {
   /** 實際補上日 YYYY-MM-DD（可為平日或週六） */
   targetDate: string;
   label?: string;
-  /** 只移這些節次；省略或空＝全日第 1～8 節 */
+  /** 只移這些節次；省略或空＝全日第 1～maxPeriod 節 */
   periods?: number[];
 }
 

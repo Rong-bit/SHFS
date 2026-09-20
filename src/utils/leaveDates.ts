@@ -128,6 +128,8 @@ export type LeaveBillableOptions = {
   /** 課輔開課起迄：此窗外不計課輔請假扣節 */
   activeStartIso?: string | null;
   activeEndIso?: string | null;
+  /** 每日最大節次（預設 8）；暫時移課空白＝全日 1～maxPeriod */
+  maxPeriod?: number;
 };
 
 function asExcludeSet(excludeDates?: ExcludeDates): Set<string> {
@@ -136,7 +138,10 @@ function asExcludeSet(excludeDates?: ExcludeDates): Set<string> {
   return new Set(excludeDates);
 }
 
-const ALL_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
+function periodsUpTo(maxPeriod: number): number[] {
+  const cap = Math.max(1, Math.min(12, maxPeriod || 8));
+  return Array.from({ length: cap }, (_, i) => i + 1);
+}
 
 /** 該日該節是否仍應計請假／代課節數（整天放假、半日停課、暫時移走皆不计） */
 export function isLeaveDatePeriodBillable(
@@ -148,8 +153,9 @@ export function isLeaveDatePeriodBillable(
   if (options?.activeEndIso && isoDate > options.activeEndIso) return false;
   const exclude = asExcludeSet(excludeDates);
   if (isNonTeachingDate(isoDate, exclude)) return false;
+  const maxPeriod = options?.maxPeriod ?? 8;
   const period = options?.period;
-  if (period == null || period < 1 || period > 8) return true;
+  if (period == null || period < 1 || period > maxPeriod) return true;
 
   for (const stop of options?.partialStops || []) {
     if (stop?.date === isoDate && stop.periods?.includes(period)) return false;
@@ -157,7 +163,9 @@ export function isLeaveDatePeriodBillable(
   for (const move of options?.temporaryMoves || []) {
     if (!move?.sourceDate || move.sourceDate !== isoDate) continue;
     const periods =
-      !move.periods || move.periods.length === 0 ? ALL_PERIODS : move.periods;
+      !move.periods || move.periods.length === 0
+        ? periodsUpTo(maxPeriod)
+        : move.periods;
     if (periods.includes(period)) return false;
   }
   return true;

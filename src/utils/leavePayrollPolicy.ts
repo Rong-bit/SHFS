@@ -9,8 +9,9 @@ import {
   legacyRequestBelongsToSettlement,
   type LeaveBillableOptions,
 } from './leaveDates';
+import { isDaytimePeriod } from './periodConfig';
 
-/** 事假：學年累計第 8 天起改公費派代 */
+/** 事假：學年累計第 8 天起改公費派代（預設；可於 SystemConfig 覆寫） */
 export const PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD = 8;
 
 /** 病假：連續請假達 3 日（曆日）起改公費派代 */
@@ -21,6 +22,31 @@ export const WELLNESS_LEAVE_HOURS_PER_YEAR = 21;
 
 /** 身心調適假：每請假曆日計 7 小時 */
 export const WELLNESS_HOURS_PER_LEAVE_DAY = 7;
+
+export type LeaveThresholdConfig = {
+  personalLeavePublicDayThreshold?: number;
+  sickLeaveConsecutiveDayThreshold?: number;
+  wellnessLeaveHoursPerYear?: number;
+};
+
+export function resolveLeaveThresholds(
+  config?: LeaveThresholdConfig | Pick<SystemConfig, keyof LeaveThresholdConfig> | null
+): Required<LeaveThresholdConfig> {
+  return {
+    personalLeavePublicDayThreshold:
+      Number(config?.personalLeavePublicDayThreshold) > 0
+        ? Number(config!.personalLeavePublicDayThreshold)
+        : PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD,
+    sickLeaveConsecutiveDayThreshold:
+      Number(config?.sickLeaveConsecutiveDayThreshold) > 0
+        ? Number(config!.sickLeaveConsecutiveDayThreshold)
+        : SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD,
+    wellnessLeaveHoursPerYear:
+      Number(config?.wellnessLeaveHoursPerYear) > 0
+        ? Number(config!.wellnessLeaveHoursPerYear)
+        : WELLNESS_LEAVE_HOURS_PER_YEAR,
+  };
+}
 
 /** 對照表涵蓋的假別（UI 選單用） */
 export const IN_SCOPE_LEAVE_TYPES: LeaveType[] = [
@@ -41,6 +67,10 @@ export type LeavePayrollContext = {
   excludeRequestIds?: string[];
   /** 納入累計的狀態，預設 approved + pending */
   countStatuses?: RequestStatus[];
+  /** 假別公費門檻（未傳則用系統預設常數） */
+  leaveThresholds?: LeaveThresholdConfig | null;
+  /** 節次設定（兼課日間判斷） */
+  periodConfig?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null;
 };
 
 const DEFAULT_COUNT_STATUSES: RequestStatus[] = ['approved', 'pending'];
@@ -119,14 +149,19 @@ export function personalLeaveDayRank(date: string, sortedPersonalDates: string[]
 
 export function isPersonalLeaveDatePublicPayroll(
   date: string,
-  sortedPersonalDates: string[]
+  sortedPersonalDates: string[],
+  threshold: number = PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD
 ): boolean {
   const rank = personalLeaveDayRank(date, sortedPersonalDates);
-  return rank != null && rank >= PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD;
+  return rank != null && rank >= threshold;
 }
 
-export function isSickLeaveSpellPublicPayroll(start?: string, end?: string): boolean {
-  return leaveCalendarDayCount(start, end) >= SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD;
+export function isSickLeaveSpellPublicPayroll(
+  start?: string,
+  end?: string,
+  threshold: number = SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD
+): boolean {
+  return leaveCalendarDayCount(start, end) >= threshold;
 }
 
 /** 永遠公費派代之假別（不含事假／病假門檻判斷） */
@@ -142,25 +177,35 @@ export function isLeaveDatePublicPayroll(
   applicantTeacherId: string,
   sortedPersonalDates?: string[]
 ): boolean {
+  const thresholds = resolveLeaveThresholds(ctx.leaveThresholds);
   const lt = normalizeLeaveType(request.leaveType, request.reason);
   if (isAlwaysPublicLeaveType(lt)) return true;
   if (lt === 'personal') {
     const personalDates =
       sortedPersonalDates ?? collectPersonalLeaveDatesInAcademicYear(ctx, applicantTeacherId);
-    return isPersonalLeaveDatePublicPayroll(date, personalDates);
+    return isPersonalLeaveDatePublicPayroll(
+      date,
+      personalDates,
+      thresholds.personalLeavePublicDayThreshold
+    );
   }
   if (lt === 'sick') {
-    return isSickLeaveSpellPublicPayroll(request.leaveDateStart, request.leaveDateEnd);
+    return isSickLeaveSpellPublicPayroll(
+      request.leaveDateStart,
+      request.leaveDateEnd,
+      thresholds.sickLeaveConsecutiveDayThreshold
+    );
   }
   return false;
 }
 
-/** 課表第 1～7 節且標示兼課（超鐘點） */
+/** 日間正課且標示兼課（超鐘點）；課輔節不計 */
 export function isConcurrentTeachingSession(
-  session: SubstituteRequest['originalSession'] | undefined
+  session: SubstituteRequest['originalSession'] | undefined,
+  periodConfig?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null
 ): boolean {
   return Boolean(
-    session?.isConcurrent && session.period >= 1 && session.period <= 7
+    session?.isConcurrent && isDaytimePeriod(session.period, periodConfig)
   );
 }
 
@@ -181,7 +226,7 @@ export function shouldTransferConcurrentToSubstituteOnLeaveDate(
   request: SubstituteRequest,
   ctx: LeavePayrollContext
 ): boolean {
-  if (!isConcurrentTeachingSession(request.originalSession)) return false;
+  if (!isConcurrentTeachingSession(request.originalSession, ctx.periodConfig)) return false;
   return shouldDeductConcurrentOnLeaveDate(date, request, ctx);
 }
 
@@ -280,7 +325,7 @@ export function countSubstituteConcurrentAddPeriodsInMonth(
 ): number {
   if (request.requestType !== 'substitute') return 0;
   if (!resolveSubstitutePayrollTeacherId(request)) return 0;
-  if (!isConcurrentTeachingSession(request.originalSession)) return 0;
+  if (!isConcurrentTeachingSession(request.originalSession, ctx.periodConfig)) return 0;
 
   if (!request.leaveDateStart) {
     if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') return 0;
@@ -510,14 +555,15 @@ export function getWellnessLeaveHoursStatus(
     calendarOpts
   );
 
+  const limitHours = resolveLeaveThresholds(ctx.leaveThresholds).wellnessLeaveHoursPerYear;
   const allDates = new Set([...usedDates, ...draftDates]);
   const usedDays = usedDates.size;
   const draftDays = draftDates.size;
   const usedHours = usedDays * WELLNESS_HOURS_PER_LEAVE_DAY;
   const draftHours = draftDays * WELLNESS_HOURS_PER_LEAVE_DAY;
   const totalHours = allDates.size * WELLNESS_HOURS_PER_LEAVE_DAY;
-  const exceeded = totalHours > WELLNESS_LEAVE_HOURS_PER_YEAR;
-  const remainingAfterDraft = WELLNESS_LEAVE_HOURS_PER_YEAR - totalHours;
+  const exceeded = totalHours > limitHours;
+  const remainingAfterDraft = limitHours - totalHours;
 
   return {
     usedHours,
@@ -525,11 +571,11 @@ export function getWellnessLeaveHoursStatus(
     totalHours,
     usedDays,
     draftDays,
-    limit: WELLNESS_LEAVE_HOURS_PER_YEAR,
+    limit: limitHours,
     remainingAfterDraft,
     exceeded,
     warningMessage: exceeded
-      ? `身心調適假每學年限 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時）。本學年已用 ${usedHours} 小時，本次 ${draftHours} 小時，合計 ${totalHours} 小時，已超出上限 ${totalHours - WELLNESS_LEAVE_HOURS_PER_YEAR} 小時。`
+      ? `身心調適假每學年限 ${limitHours} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時）。本學年已用 ${usedHours} 小時，本次 ${draftHours} 小時，合計 ${totalHours} 小時，已超出上限 ${totalHours - limitHours} 小時。`
       : null,
   };
 }
@@ -560,9 +606,14 @@ export function leavePaymentDisplayLabel(
   paymentType: PaymentType,
   leaveType?: LeaveType,
   reason?: string,
-  options?: { isConcurrentSession?: boolean; noticeTableSaved?: boolean }
+  options?: {
+    isConcurrentSession?: boolean;
+    noticeTableSaved?: boolean;
+    leaveThresholds?: LeaveThresholdConfig | null;
+  }
 ): { kind: 'public' | 'self_pay'; label: string; detail: string } {
   const lt = normalizeLeaveType(leaveType, reason);
+  const thresholds = resolveLeaveThresholds(options?.leaveThresholds);
   if (paymentType === 'public') {
     if (options?.noticeTableSaved) {
       return {
@@ -587,9 +638,9 @@ export function leavePaymentDisplayLabel(
         label: '公費派代',
         detail:
           lt === 'personal'
-            ? `事假學年第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 天起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
+            ? `事假學年第 ${thresholds.personalLeavePublicDayThreshold} 天起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
             : lt === 'sick'
-              ? `病假連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
+              ? `病假連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
               : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）；基本鐘點入代課清冊',
       };
     }
@@ -598,9 +649,9 @@ export function leavePaymentDisplayLabel(
       label: '公費派代',
       detail:
         lt === 'personal'
-          ? `事假學年第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 天起：基本鐘點入代課清冊`
+          ? `事假學年第 ${thresholds.personalLeavePublicDayThreshold} 天起：基本鐘點入代課清冊`
           : lt === 'sick'
-            ? `病假連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日起：基本鐘點入代課清冊`
+            ? `病假連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日起：基本鐘點入代課清冊`
             : '基本鐘點：代課鐘點費由學校支給（代課清冊）',
     };
   }
@@ -608,14 +659,14 @@ export function leavePaymentDisplayLabel(
     return {
       kind: 'self_pay',
       label: '教師自理',
-      detail: `事假未達學年第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 日，不入代課清冊`,
+      detail: `事假未達學年第 ${thresholds.personalLeavePublicDayThreshold} 日，不入代課清冊`,
     };
   }
   if (lt === 'sick') {
     return {
       kind: 'self_pay',
       label: '教師自理',
-      detail: `病假未達連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日，不入代課清冊`,
+      detail: `病假未達連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日，不入代課清冊`,
     };
   }
   return {
@@ -627,12 +678,29 @@ export function leavePaymentDisplayLabel(
 
 export function buildLeavePayrollContext(
   requests: SubstituteRequest[],
-  systemConfig: Pick<SystemConfig, 'academicYear'>,
+  systemConfig: Pick<
+    SystemConfig,
+    | 'academicYear'
+    | 'maxPeriod'
+    | 'counselingPeriods'
+    | 'personalLeavePublicDayThreshold'
+    | 'sickLeaveConsecutiveDayThreshold'
+    | 'wellnessLeaveHoursPerYear'
+  >,
   options?: Partial<LeavePayrollContext>
 ): LeavePayrollContext {
   return {
     requests,
     academicYear: systemConfig.academicYear,
+    leaveThresholds: {
+      personalLeavePublicDayThreshold: systemConfig.personalLeavePublicDayThreshold,
+      sickLeaveConsecutiveDayThreshold: systemConfig.sickLeaveConsecutiveDayThreshold,
+      wellnessLeaveHoursPerYear: systemConfig.wellnessLeaveHoursPerYear,
+    },
+    periodConfig: {
+      maxPeriod: systemConfig.maxPeriod,
+      counselingPeriods: systemConfig.counselingPeriods,
+    },
     ...options,
   };
 }

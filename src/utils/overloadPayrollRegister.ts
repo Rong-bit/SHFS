@@ -12,6 +12,7 @@ import {
 import { noticeDateUsesModifiedSubstitutePayroll } from './noticePayroll';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
+import { isDaytimePeriod } from './periodConfig';
 import type { Teacher } from '../types';
 
 /**
@@ -187,7 +188,7 @@ export function buildConcurrentPayrollRemarks(
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (!r.originalSession?.isConcurrent) continue;
-    if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
+    if (!isDaytimePeriod(r.originalSession.period, systemConfig)) continue;
     if (r.applicantTeacherId !== teacherId) continue;
     if (!r.substituteTeacherId) continue;
 
@@ -211,7 +212,7 @@ export function buildConcurrentPayrollRemarks(
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (!r.originalSession?.isConcurrent) continue;
-    if (r.originalSession.period < 1 || r.originalSession.period > 7) continue;
+    if (!isDaytimePeriod(r.originalSession.period, systemConfig)) continue;
     if (r.substituteTeacherId !== teacherId) continue;
 
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);

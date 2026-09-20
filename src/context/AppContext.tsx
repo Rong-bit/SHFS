@@ -29,6 +29,8 @@ import { ParsedImportRow, inferIsPractical, splitTeacherNames } from '../utils/s
 import { formatLocalDateTime } from '../utils/dateTime';
 import { normalizePeopleEmails, normalizeSchoolEmail } from '../utils/schoolEmail';
 import { normalizeSchoolName } from '../utils/schoolName';
+import { normalizeLoadedSystemConfig } from '../utils/normalizeSystemConfig';
+import { isCounselingPeriod, isDaytimePeriod, resolvePeriodConfig } from '../utils/periodConfig';
 import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
 import { temporarySwapPeriodDeltaInMonth, validateSwapRequestFields } from '../utils/temporarySwap';
@@ -384,12 +386,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!saved) return INITIAL_SYSTEM_CONFIG;
     try {
       const parsed = JSON.parse(saved);
+      const normalizedExtras = normalizeLoadedSystemConfig(parsed, INITIAL_SYSTEM_CONFIG);
       return {
         ...INITIAL_SYSTEM_CONFIG,
         ...parsed,
-        schoolName: normalizeSchoolName(
-          typeof parsed.schoolName === 'string' ? parsed.schoolName : INITIAL_SYSTEM_CONFIG.schoolName
-        ),
+        ...normalizedExtras,
         actingHomeroomDailyRate:
           typeof parsed.actingHomeroomDailyRate === 'number' &&
           Number.isFinite(parsed.actingHomeroomDailyRate)
@@ -773,9 +774,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     })));
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,
+      ...systemConfigRef.current,
       ...(merged.systemConfig || {}),
-      schoolName: normalizeSchoolName(
-        merged.systemConfig?.schoolName ?? INITIAL_SYSTEM_CONFIG.schoolName
+      ...normalizeLoadedSystemConfig(
+        {
+          ...systemConfigRef.current,
+          ...(merged.systemConfig || {}),
+        },
+        systemConfigRef.current.schoolLevel || systemConfigRef.current.maxPeriod
+          ? systemConfigRef.current
+          : INITIAL_SYSTEM_CONFIG
       ),
       semester: normalizeSystemConfigSemester(
         merged.systemConfig?.semester,
@@ -787,7 +795,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         typeof merged.systemConfig?.actingHomeroomDailyRate === 'number' &&
         Number.isFinite(merged.systemConfig.actingHomeroomDailyRate)
           ? merged.systemConfig.actingHomeroomDailyRate
-          : INITIAL_SYSTEM_CONFIG.actingHomeroomDailyRate,
+          : systemConfigRef.current.actingHomeroomDailyRate ??
+            INITIAL_SYSTEM_CONFIG.actingHomeroomDailyRate,
       standardBasePeriods: remoteStd,
       authConfig: withMigratedAuthConfig({
         ...INITIAL_SYSTEM_CONFIG.authConfig,
@@ -3074,11 +3083,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       systemConfig.academicYear
     );
     const holidaySet = nonTeachingDateSet(systemConfig.nonTeachingDays);
+    const periodCfg = resolvePeriodConfig(systemConfig);
     const calendarOpts = {
       holidaySet,
       temporaryMoves: systemConfig.temporaryScheduleMoves || [],
       partialStops: systemConfig.partialNonTeachingDays || [],
       weeksInMonth: systemConfig.weeksInMonth ?? 4,
+      maxPeriod: periodCfg.maxPeriod,
     };
     const weeks = settlementWeeksForMonth(
       settlementMonth,
@@ -3118,10 +3129,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeEndIso: counselingEnd,
       };
 
-      // 1. Weekly actual and overload（不含第八節課輔）
-      const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id);
+      // 1. Weekly actual and overload（不含課輔節）
+      const weeklyActual = countWeeklyTeachingPeriods(sessions, teacher.id, systemConfig);
       const base = teacher.basePeriods;
-      const weeklyOverload = countWeeklyConcurrentPeriods(sessions, teacher.id);
+      const weeklyOverload = countWeeklyConcurrentPeriods(sessions, teacher.id, systemConfig);
       const rawMonthlyOverload = monthlyOverloadPeriods(
         sessions,
         teacher,
@@ -3129,7 +3140,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         new Date(),
         overloadHolidaySet,
         systemConfig.academicYear,
-        overloadCalendarOpts
+        overloadCalendarOpts,
+        systemConfig
       );
       // 請假日按日扣兼課（依對照表：身心調適假不扣；事病假僅公費派代日扣）
       const leaveConcurrentDeduct = countApplicantConcurrentDeductPeriodsInMonth(
@@ -3141,11 +3153,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         holidaySet,
         {
           matchSession: (s) =>
-            Boolean(s.isConcurrent) &&
-            s.dayOfWeek >= 1 &&
-            s.dayOfWeek <= 5 &&
-            s.period >= 1 &&
-            s.period <= 7,
+            Boolean(s?.isConcurrent) &&
+            s!.dayOfWeek >= 1 &&
+            s!.dayOfWeek <= 5 &&
+            isDaytimePeriod(s!.period, systemConfig),
           includeLegacyWithoutDates: (r) =>
             requestBelongsToMonth(
               r.requestNumber,
@@ -3167,8 +3178,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           Boolean(s.isConcurrent) &&
           s.dayOfWeek >= 1 &&
           s.dayOfWeek <= 5 &&
-          s.period >= 1 &&
-          s.period <= 7,
+          isDaytimePeriod(s.period, systemConfig),
         holidaySet,
         systemConfig.weeksInMonth ?? 4
       );
@@ -3181,11 +3191,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         holidaySet,
         {
           matchSession: (s) =>
-            Boolean(s.isConcurrent) &&
-            s.dayOfWeek >= 1 &&
-            s.dayOfWeek <= 5 &&
-            s.period >= 1 &&
-            s.period <= 7,
+            Boolean(s?.isConcurrent) &&
+            s!.dayOfWeek >= 1 &&
+            s!.dayOfWeek <= 5 &&
+            isDaytimePeriod(s!.period, systemConfig),
           skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
@@ -3208,7 +3217,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           substituteConcurrentAdd
       );
       const monthlyOverloadAmount = monthlyOverload * hourlyRate;
-      const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id);
+      const weeklyCounseling = countWeeklyCounselingPeriods(sessions, teacher.id, systemConfig);
       const rawMonthlyCounseling = monthlyCounselingPeriods(
         sessions,
         teacher.id,
@@ -3216,7 +3225,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         new Date(),
         new Set(),
         systemConfig.academicYear,
-        counselingBaseCalendarOpts
+        counselingBaseCalendarOpts,
+        systemConfig
       );
       const counselingHolidayDeduct = listCounselingHolidayDeducts(
         sessions,
@@ -3230,7 +3240,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
           activeStartIso: counselingStart,
           activeEndIso: counselingEnd,
-        }
+        },
+        systemConfig
       ).length;
       const counselingPartialStopDeduct = listCounselingPartialStopDeducts(
         sessions,
@@ -3244,7 +3255,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           weeksInMonth: systemConfig.weeksInMonth ?? 4,
           activeStartIso: counselingStart,
           activeEndIso: counselingEnd,
-        }
+        },
+        systemConfig
       ).length;
       const leaveCounselingDeduct = countApplicantApprovedLeaveCoverPeriodsInMonth(
         requests,
@@ -3253,7 +3265,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settlementYear,
         holidaySet,
         {
-          matchSession: (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
+          matchSession: (s) =>
+            Boolean(s) &&
+            s!.dayOfWeek >= 1 &&
+            s!.dayOfWeek <= 5 &&
+            isCounselingPeriod(s!.period, systemConfig),
           includeLegacyWithoutDates: (r) =>
             requestBelongsToMonth(
               r.requestNumber,
@@ -3273,7 +3289,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         teacher.id,
         settlementMonth,
         settlementYear,
-        (s) => s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && s.period === 8,
+        (s) =>
+          s.dayOfWeek >= 1 &&
+          s.dayOfWeek <= 5 &&
+          isCounselingPeriod(s.period, systemConfig),
         holidaySet,
         systemConfig.weeksInMonth ?? 4,
         counselingStart,
@@ -3306,7 +3325,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let privateSubstituteEarnAmount = 0;
 
       const rateForRequest = (r: SubstituteRequest) =>
-        r.originalSession?.period === 8 ? counselingRate : hourlyRate;
+        r.originalSession && isCounselingPeriod(r.originalSession.period, systemConfig)
+          ? counselingRate
+          : hourlyRate;
 
       const leaveCalendarOpts = {
         temporaryMoves: systemConfig.temporaryScheduleMoves || [],

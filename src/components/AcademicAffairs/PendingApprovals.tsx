@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
-import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/actingHomeroomPayrollRegister';
 import { ModalShell } from '../Common/ModalShell';
@@ -34,6 +34,7 @@ export const PendingApprovals: React.FC = () => {
     academicStaffList,
     systemConfig,
   } = useApp();
+  const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
   const [filter, setFilter] = useState<'pending' | 'all' | 'approved' | 'rejected'>('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('時段衝堂或請假附件不全');
@@ -65,9 +66,14 @@ export const PendingApprovals: React.FC = () => {
   const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
 
   const getPeriodLabel = (pNum: number) => {
-    const p = PERIOD_DEFINITIONS.find((def) => def.period === pNum);
+    const p = periodDefinitions.find((def) => def.period === pNum);
     return p ? `${p.label} (${p.timeRange})` : `第${pNum}節`;
   };
+
+  const hourlyRateForPeriod = (period?: number) =>
+    period != null && isCounselingPeriod(period, systemConfig)
+      ? systemConfig.nightHourlyRate
+      : systemConfig.dayHourlyRate;
 
   const handleApprove = (req: SubstituteRequest) => {
     const pendingCount = req.batchGroupId
@@ -205,8 +211,8 @@ export const PendingApprovals: React.FC = () => {
                       {isActingOnly
                         ? `代導師費 (${systemConfig.actingHomeroomDailyRate ?? 404}元/日)`
                         : req.paymentType === 'public'
-                        ? `公費派代 (${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元)`
-                        : `自費代課 (${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元)`}
+                        ? `公費派代 (${hourlyRateForPeriod(req.originalSession?.period)}元)`
+                        : `自費代課 (${hourlyRateForPeriod(req.originalSession?.period)}元)`}
                     </span>
                   </div>
 
@@ -286,8 +292,8 @@ export const PendingApprovals: React.FC = () => {
                             </strong>
                             <span className="text-xs text-slate-600 ml-2">
                               ({req.paymentType === 'public'
-                                ? `公費派代 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`
-                                : `自費代課 ${req.originalSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節`})
+                                ? `公費派代 ${hourlyRateForPeriod(req.originalSession?.period)}元/節`
+                                : `自費代課 ${hourlyRateForPeriod(req.originalSession?.period)}元/節`})
                             </span>
                             {req.actingHomeroomTeacherName && (
                               <div className="text-xs text-violet-800 mt-1">

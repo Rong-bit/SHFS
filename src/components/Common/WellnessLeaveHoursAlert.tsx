@@ -1,7 +1,8 @@
 import { AlertTriangle } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 import {
   WELLNESS_HOURS_PER_LEAVE_DAY,
-  WELLNESS_LEAVE_LEGAL_NOTE,
+  wellnessLeaveLegalNote,
 } from '../../utils/leaveTypes';
 import type { WellnessLeaveHoursStatus } from '../../utils/leavePayrollPolicy';
 
@@ -12,10 +13,12 @@ type Props = {
 };
 
 export function WellnessLeaveHoursAlert({ status, showUsage = true }: Props) {
+  const { systemConfig } = useApp();
+
   return (
     <div className="mt-1.5 space-y-1.5">
       <p className="text-[10px] text-teal-800 leading-snug bg-teal-50 border border-teal-200 rounded-lg px-2 py-1.5">
-        {WELLNESS_LEAVE_LEGAL_NOTE}
+        {wellnessLeaveLegalNote(systemConfig)}
       </p>
       {showUsage && status && (status.usedHours > 0 || status.draftDays > 0) && (
         <p className="text-[10px] text-slate-700 leading-snug bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">

@@ -72,13 +72,21 @@ const dateToIsoLocal = (d: Date) => {
   return `${y}-${m}-${day}`;
 };
 
-function teacherPeriod8Weekdays(
+import { isCounselingPeriod, resolvePeriodConfig } from './periodConfig';
+
+function teacherCounselingWeekdays(
   sessions: CourseSession[],
-  teacherId: string
+  teacherId: string,
+  periodCfg?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null
 ): Set<number> {
   const days = new Set<number>();
   sessions.forEach((s) => {
-    if (s.teacherId === teacherId && s.period === 8 && s.dayOfWeek >= 1 && s.dayOfWeek <= 5) {
+    if (
+      s.teacherId === teacherId &&
+      s.dayOfWeek >= 1 &&
+      s.dayOfWeek <= 5 &&
+      isCounselingPeriod(s.period, periodCfg)
+    ) {
       days.add(s.dayOfWeek);
     }
   });
@@ -88,8 +96,8 @@ function teacherPeriod8Weekdays(
 export type CounselingHolidayDeduct = { date: string; label: string };
 
 /**
- * 課輔小計先按課表週次計（含國定假日那天的第 8 節），放假日改列應減。
- * 若該日已暫時移走或半日停課含第 8 節，小計本來就不含，不重複扣。
+ * 課輔小計先按課表週次計（含國定假日那天的課輔節），放假日改列應減。
+ * 若該日已暫時移走或半日停課含課輔節，小計本來就不含，不重複扣。
  */
 export function listCounselingHolidayDeducts(
   sessions: CourseSession[],
@@ -103,19 +111,14 @@ export function listCounselingHolidayDeducts(
     weeksInMonth?: number;
     activeStartIso?: string | null;
     activeEndIso?: string | null;
-  }
+  },
+  periodCfg?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null
 ): CounselingHolidayDeduct[] {
-  const period8Days = teacherPeriod8Weekdays(sessions, teacherId);
-  if (period8Days.size === 0 || !nonTeachingDays?.length) return [];
+  const counselingDays = teacherCounselingWeekdays(sessions, teacherId, periodCfg);
+  const { counselingPeriods } = resolvePeriodConfig(periodCfg);
+  if (counselingDays.size === 0 || counselingPeriods.length === 0 || !nonTeachingDays?.length)
+    return [];
   const weeksInMonth = options?.weeksInMonth ?? 4;
-  const billableOpts = {
-    period: 8,
-    temporaryMoves: options?.temporaryMoves,
-    partialStops: options?.partialStops,
-    weeksInMonth,
-    activeStartIso: options?.activeStartIso,
-    activeEndIso: options?.activeEndIso,
-  };
   const out: CounselingHolidayDeduct[] = [];
   const seen = new Set<string>();
   for (const day of nonTeachingDays) {
@@ -123,8 +126,18 @@ export function listCounselingHolidayDeducts(
     if (!iso || seen.has(iso)) continue;
     if (!isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)) continue;
     const dow = dateToDayOfWeek(iso);
-    if (dow == null || !period8Days.has(dow)) continue;
-    if (!isLeaveDatePeriodBillable(iso, new Set(), billableOpts)) continue;
+    if (dow == null || !counselingDays.has(dow)) continue;
+    const anyBillable = counselingPeriods.some((period) =>
+      isLeaveDatePeriodBillable(iso, new Set(), {
+        period,
+        temporaryMoves: options?.temporaryMoves,
+        partialStops: options?.partialStops,
+        weeksInMonth,
+        activeStartIso: options?.activeStartIso,
+        activeEndIso: options?.activeEndIso,
+      })
+    );
+    if (!anyBillable) continue;
     seen.add(iso);
     out.push({ date: iso, label: day.label?.trim() || '放假' });
   }
@@ -132,7 +145,7 @@ export function listCounselingHolidayDeducts(
 }
 
 /**
- * 段考／運動會等半日停課含第 8 節：課輔全員應減 1（不限外聘）。
+ * 段考／運動會等半日停課含課輔節：課輔全員應減 1（不限外聘）。
  * 整天放假已列應減者不重複扣；暫時移走的原日也不扣。
  */
 export function listCounselingPartialStopDeducts(
@@ -147,30 +160,35 @@ export function listCounselingPartialStopDeducts(
     weeksInMonth?: number;
     activeStartIso?: string | null;
     activeEndIso?: string | null;
-  }
+  },
+  periodCfg?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null
 ): CounselingHolidayDeduct[] {
-  const period8Days = teacherPeriod8Weekdays(sessions, teacherId);
-  if (period8Days.size === 0 || !partialStops?.length) return [];
+  const counselingDays = teacherCounselingWeekdays(sessions, teacherId, periodCfg);
+  const { counselingPeriods } = resolvePeriodConfig(periodCfg);
+  if (counselingDays.size === 0 || counselingPeriods.length === 0 || !partialStops?.length)
+    return [];
   const weeksInMonth = options?.weeksInMonth ?? 4;
   const holidaySet = options?.holidaySet ?? new Set<string>();
-  const billableOpts = {
-    period: 8,
-    temporaryMoves: options?.temporaryMoves,
-    weeksInMonth,
-    activeStartIso: options?.activeStartIso,
-    activeEndIso: options?.activeEndIso,
-  };
   const out: CounselingHolidayDeduct[] = [];
   const seen = new Set<string>();
   for (const stop of partialStops) {
     const iso = stop?.date?.trim();
     if (!iso || seen.has(iso)) continue;
-    if (!stop.periods?.includes(8)) continue;
+    if (!stop.periods?.some((p) => counselingPeriods.includes(p))) continue;
     if (holidaySet.has(iso)) continue;
     if (!isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)) continue;
     const dow = dateToDayOfWeek(iso);
-    if (dow == null || !period8Days.has(dow)) continue;
-    if (!isLeaveDatePeriodBillable(iso, new Set(), billableOpts)) continue;
+    if (dow == null || !counselingDays.has(dow)) continue;
+    const anyBillable = counselingPeriods.some((period) =>
+      isLeaveDatePeriodBillable(iso, new Set(), {
+        period,
+        temporaryMoves: options?.temporaryMoves,
+        weeksInMonth,
+        activeStartIso: options?.activeStartIso,
+        activeEndIso: options?.activeEndIso,
+      })
+    );
+    if (!anyBillable) continue;
     seen.add(iso);
     out.push({ date: iso, label: stop.label?.trim() || '停課輔' });
   }
@@ -249,7 +267,8 @@ export function buildCounselingPayrollRemarks(
     {
       ...calendarOpts,
       partialStops: [],
-    }
+    },
+    systemConfig
   )) {
     parts.push(`${formatMd(item.date)}${item.label}未上課，扣1節。`);
   }
@@ -266,7 +285,8 @@ export function buildCounselingPayrollRemarks(
       weeksInMonth: calendarOpts.weeksInMonth,
       activeStartIso: calendarOpts.activeStartIso,
       activeEndIso: calendarOpts.activeEndIso,
-    }
+    },
+    systemConfig
   )) {
     parts.push(`${formatMd(item.date)}${item.label}未上課，扣1節。`);
   }
@@ -274,7 +294,7 @@ export function buildCounselingPayrollRemarks(
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (r.applicantTeacherId !== teacherId || !r.substituteTeacherId) continue;
-    if (r.originalSession?.period !== 8) continue;
+    if (!r.originalSession || !isCounselingPeriod(r.originalSession.period, systemConfig)) continue;
 
     const leaveShort = leaveTypeRemarkShort(r.leaveType, r.reason);
 

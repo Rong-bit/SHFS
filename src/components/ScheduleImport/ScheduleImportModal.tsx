@@ -104,7 +104,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
   const handleCopyErrorReport = () => {
     if (!parseResult) return;
     const lines: string[] = [];
-    lines.push(`=== 高職課表匯入檢核診斷報告 ===`);
+    lines.push(`=== 課表匯入檢核診斷報告 ===`);
     lines.push(`檔案名稱: ${file ? file.name : '示範課表資料'}`);
     lines.push(`總筆數: ${parseResult.totalCount} | 成功解析: ${parseResult.validRows.length} | 異常需修正: ${parseResult.invalidRows.length}`);
     lines.push(`實習連堂/工場課: ${parseResult.practicalCoursesCount} 節 | 新教師: ${parseResult.newTeachersDetected.length} 位`);
@@ -154,7 +154,10 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
     setIsClashListExpanded(false);
 
     try {
-      const result = await parseScheduleFile(selectedFile, teachers, venues);
+      const result = await parseScheduleFile(selectedFile, teachers, venues, {
+        maxPeriod: systemConfig.maxPeriod,
+        counselingPeriods: systemConfig.counselingPeriods,
+      });
       setParseResult(result);
     } catch (err: any) {
       setParseError(err.message || '檔案解析失敗，請確認是否為有效之 Excel (.xlsx/.xls) 或 CSV 檔案');
@@ -513,7 +516,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                       </div>
                       <div>
                         <h4 className="text-sm font-bold text-amber-950">
-                          首次使用？請先下載「高職課表匯入範本 Excel」
+                          首次使用？請先下載「課表匯入範本 Excel」
                         </h4>
                         <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
                           範本含「場地清單」工作表，可對照複製工場名稱。匯入後也可在課表格子直接下拉改選工場。
@@ -523,7 +526,9 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
 
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => generateTemplateExcel(venues)}
+                        onClick={() =>
+                          generateTemplateExcel(venues, { maxPeriod: systemConfig.maxPeriod })
+                        }
                         className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition active:scale-95"
                       >
                         <Download className="w-3.5 h-3.5" />

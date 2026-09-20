@@ -75,7 +75,7 @@ export const AccountingSettlement: React.FC = () => {
       '職務': displayTeacherTitle(s),
       '排定節數 (節/週)': s.weeklyActualPeriods,
       '每週兼課（超鐘點）節數': s.weeklyOverloadPeriods,
-      '每週第八節課輔節數': s.weeklyCounselingPeriods,
+      '每週課輔節數': s.weeklyCounselingPeriods,
       [`月課輔費 (依該月實際日數×${systemConfig.nightHourlyRate}元)`]: s.monthlyCounselingAmount,
       [`月超鐘點費 (依課表週次×${systemConfig.dayHourlyRate}元；國定假日編制內仍發)`]: s.monthlyOverloadAmount,
       '公費代課節數': s.publicSubstitutePeriods,
@@ -95,7 +95,7 @@ export const AccountingSettlement: React.FC = () => {
       '職務': '',
       '排定節數 (節/週)': 0 as any,
       '每週兼課（超鐘點）節數': 0 as any,
-      '每週第八節課輔節數': 0 as any,
+      '每週課輔節數': 0 as any,
       [`月課輔費 (依該月實際日數×${systemConfig.nightHourlyRate}元)`]: totalCounselingAmount,
       [`月超鐘點費 (依課表週次×${systemConfig.dayHourlyRate}元；國定假日編制內仍發)`]: totalOverloadAmount,
       '公費代課節數': 0 as any,
@@ -132,7 +132,7 @@ export const AccountingSettlement: React.FC = () => {
 
     XLSX.utils.book_append_sheet(workbook, worksheet, `${selectedMonth}月份鐘點費結算清冊`);
 
-    const fileName = `國立高職_${systemConfig.academicYear}學年第${systemConfig.semester}學期_${selectedMonth}月份_鐘點費主計結算清冊.xlsx`;
+    const fileName = `${systemConfig.schoolName || '學校'}_${systemConfig.academicYear}學年第${systemConfig.semester}學期_${selectedMonth}月份_鐘點費主計結算清冊.xlsx`;
     XLSX.writeFile(workbook, fileName);
   };
 
@@ -150,7 +150,7 @@ export const AccountingSettlement: React.FC = () => {
           </div>
           <p className="text-xs text-slate-500 mt-1">
             基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜
-            第八節課輔 <strong>{systemConfig.nightHourlyRate} 元/節</strong> ｜ 
+            課輔 <strong>{systemConfig.nightHourlyRate} 元/節</strong> ｜ 
             本月依 <strong>{formatPayrollMonthRangeLabel(selectedMonth, settlementYear, systemConfig.weeksInMonth ?? 4)}</strong>
             {academicYearStale && (
               <span className="block mt-1 text-amber-800">
@@ -277,7 +277,7 @@ export const AccountingSettlement: React.FC = () => {
             ${totalOverloadAmount.toLocaleString()}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            課表「兼課」依課表週次計費（國定假日編制內仍發，僅外聘人員扣放假日；不含第八節課輔）
+            課表「兼課」依課表週次計費（國定假日編制內仍發，僅外聘人員扣放假日；不含課輔節）
           </p>
         </div>
 

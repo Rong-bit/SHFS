@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
-import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import { formatDayPeriodSummary } from '../../utils/periodLabels';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
@@ -31,6 +31,7 @@ const requestGroupKey = (r: SubstituteRequest) => {
 export const TeacherRequestsList: React.FC = () => {
   const { currentTeacher, requests, cancelRequest, setPrintModalRequest, systemConfig } = useApp();
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
 
   const myRequests = useMemo(
     () => requests.filter((r) => r.applicantTeacherId === currentTeacher?.id),
@@ -106,7 +107,7 @@ export const TeacherRequestsList: React.FC = () => {
   const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
 
   const getPeriodLabel = (pNum: number) => {
-    const p = PERIOD_DEFINITIONS.find((def) => def.period === pNum);
+    const p = periodDefinitions.find((def) => def.period === pNum);
     return p ? `${p.label}` : `第${pNum}節`;
   };
 

@@ -10,14 +10,13 @@ import {
   SubstituteRequest,
   Teacher 
 } from '../../types';
-import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import { isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
 import {
   defaultReasonForLeaveType,
-  LEAVE_TYPE_FORM_OPTIONS,
-  PERSONAL_LEAVE_POLICY_NOTE,
+  leaveTypeFormOptions,
+  personalLeavePolicyNote,
   requiresSubstituteTeacherForLeave,
-  SICK_LEAVE_POLICY_NOTE,
+  sickLeavePolicyNote,
 } from '../../utils/leaveTypes';
 import {
   buildLeavePayrollContext,
@@ -44,6 +43,7 @@ import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { findReusableLeaveNoticeBatch } from '../../utils/requestNumbers';
 import { formatDayPeriodSummary, formatPeriodsLabel } from '../../utils/periodLabels';
+import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import {
   formatTemporarySwapEffectLabel,
   validateTemporarySwapEffectiveDate,
@@ -142,6 +142,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
     setPrintModalRequest,
     checkClashes
   } = useApp();
+
+  const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
+  const leaveTypeOptions = useMemo(() => leaveTypeFormOptions(systemConfig), [systemConfig]);
 
   // Mode: 'list' (登錄簿與批次管理) vs 'create' (教學組直接經辦派代/調課)
   const [activeSubView, setActiveSubView] = useState<'create' | 'list'>('create');
@@ -641,7 +644,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
   // Auto-switch payment type default when leave type changes
   const handleLeaveTypeChange = (type: LeaveType) => {
     setLeaveType(type);
-    setReason(defaultReasonForLeaveType(type));
+    setReason(defaultReasonForLeaveType(type, systemConfig));
   };
 
   const payrollCtx = useMemo(
@@ -1788,7 +1791,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           onChange={(e) => handleLeaveTypeChange(e.target.value as LeaveType)}
                           className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
                         >
-                          {LEAVE_TYPE_FORM_OPTIONS.map((opt) => (
+                          {leaveTypeOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                               {opt.label}
                             </option>
@@ -1804,12 +1807,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         )}
                         {leaveType === 'personal' && (
                           <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
-                            {PERSONAL_LEAVE_POLICY_NOTE}
+                            {personalLeavePolicyNote(systemConfig)}
                           </p>
                         )}
                         {leaveType === 'sick' && (
                           <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
-                            {SICK_LEAVE_POLICY_NOTE}
+                            {sickLeavePolicyNote(systemConfig)}
                           </p>
                         )}
                       </div>
@@ -2056,7 +2059,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             onChange={(e) => setRangePeriodStart(Number(e.target.value))}
                             className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg"
                           >
-                            {PERIOD_DEFINITIONS.map((p) => (
+                            {periodDefinitions.map((p) => (
                               <option key={p.period} value={p.period}>
                                 第{p.period}節
                               </option>
@@ -2070,7 +2073,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             onChange={(e) => setRangePeriodEnd(Number(e.target.value))}
                             className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg"
                           >
-                            {PERIOD_DEFINITIONS.map((p) => (
+                            {periodDefinitions.map((p) => (
                               <option key={p.period} value={p.period}>
                                 第{p.period}節
                               </option>
@@ -2483,7 +2486,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         onChange={(e) => setTargetPeriod(Number(e.target.value))}
                         className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
                       >
-                        {PERIOD_DEFINITIONS.map((p) => (
+                        {periodDefinitions.map((p) => (
                           <option key={p.period} value={p.period}>
                             {p.label} ({p.timeRange})
                           </option>
@@ -2674,7 +2677,18 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         )}
                         <div className="text-[11px] text-slate-400 mt-0.5">
                           {dispatchPaymentDisplay.kind === 'public'
-                            ? `🏛️ 公費派代 (${(sessionPickMode === 'periodRange' ? batchSelectedSessions[0]?.period : selectedOriginalSession?.period) === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate}元/節)`
+                            ? (() => {
+                                const ratePeriod =
+                                  sessionPickMode === 'periodRange'
+                                    ? batchSelectedSessions[0]?.period
+                                    : selectedOriginalSession?.period;
+                                const rate =
+                                  ratePeriod != null &&
+                                  isCounselingPeriod(ratePeriod, systemConfig)
+                                    ? systemConfig.nightHourlyRate
+                                    : systemConfig.dayHourlyRate;
+                                return `🏛️ 公費派代 (${rate}元/節)`;
+                              })()
                             : `👤 ${dispatchPaymentDisplay.label}（不入代課清冊）`}
                         </div>
                       </div>
@@ -3377,11 +3391,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 onChange={(e) => {
                   const next = e.target.value as LeaveType;
                   setEditLeaveType(next);
-                  setEditReason(defaultReasonForLeaveType(next));
+                  setEditReason(defaultReasonForLeaveType(next, systemConfig));
                 }}
                 className="w-full text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
               >
-                {LEAVE_TYPE_FORM_OPTIONS.map((opt) => (
+                {leaveTypeOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>

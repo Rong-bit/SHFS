@@ -12,9 +12,16 @@ export type CalendarSettlementOptions = {
   activeStartIso?: string | null;
   /** 課輔等：只計此日迄（含） */
   activeEndIso?: string | null;
+  /** 每日最大節次（預設 8） */
+  maxPeriod?: number;
 };
 
-const ALL_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const DEFAULT_MAX_PERIOD = 8;
+
+function periodsUpTo(maxPeriod: number): number[] {
+  const cap = Math.max(1, Math.min(12, maxPeriod || DEFAULT_MAX_PERIOD));
+  return Array.from({ length: cap }, (_, i) => i + 1);
+}
 
 function jsDayToDow(js: number): DayOfWeek | null {
   if (js < 1 || js > 5) return null;
@@ -42,9 +49,10 @@ function isoJsDay(iso: string): number | null {
 }
 
 
-function resolvePeriods(periods?: number[]): number[] {
-  if (!periods || periods.length === 0) return [...ALL_PERIODS];
-  return periods.filter((p) => p >= 1 && p <= 8);
+function resolvePeriods(periods: number[] | undefined, maxPeriod: number): number[] {
+  const all = periodsUpTo(maxPeriod);
+  if (!periods || periods.length === 0) return all;
+  return periods.filter((p) => p >= 1 && p <= maxPeriod);
 }
 
 function slotKey(dow: DayOfWeek, period: number): string {
@@ -79,13 +87,15 @@ export function slotOccurrenceCountsInMonth(
 ): Map<string, number> {
   const holidaySet = options?.holidaySet ?? new Set<string>();
   const weeksInMonth = options?.weeksInMonth ?? 4;
+  const maxPeriod = options?.maxPeriod ?? DEFAULT_MAX_PERIOD;
+  const allPeriods = periodsUpTo(maxPeriod);
   const period = resolveSettlementPeriod(month, year, weeksInMonth);
   const partialByDate = new Map<string, Set<number>>();
   for (const stop of options?.partialStops || []) {
     if (!stop?.date || !stop.periods?.length) continue;
     const set = partialByDate.get(stop.date) || new Set<number>();
     stop.periods.forEach((p) => {
-      if (p >= 1 && p <= 8) set.add(p);
+      if (p >= 1 && p <= maxPeriod) set.add(p);
     });
     partialByDate.set(stop.date, set);
   }
@@ -100,7 +110,7 @@ export function slotOccurrenceCountsInMonth(
     const dow = jsDayToDow(jsDay);
     if (dow == null) return;
     const blocked = partialByDate.get(iso);
-    for (const periodNum of ALL_PERIODS) {
+    for (const periodNum of allPeriods) {
       if (blocked?.has(periodNum)) continue;
       bump(counts, slotKey(dow, periodNum), 1);
     }
@@ -110,7 +120,7 @@ export function slotOccurrenceCountsInMonth(
     if (!move?.sourceDate || !move?.targetDate) continue;
     const sourceDow = isoDayOfWeek(move.sourceDate);
     if (sourceDow == null) continue;
-    const periods = resolvePeriods(move.periods);
+    const periods = resolvePeriods(move.periods, maxPeriod);
 
     if (dateInSettlementPeriod(move.sourceDate, year, month, weeksInMonth)) {
       const srcJs = isoJsDay(move.sourceDate);

@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
 import { departmentFromClassName, departmentFromLabel, gradeYearFromClassName, isInternshipCourse } from './schoolDepartments';
+import { isDaytimePeriod, resolvePeriodConfig } from './periodConfig';
 import {
   classifyVenueKind,
   practicalVenueMissingWarn,
@@ -52,28 +53,30 @@ export const parseDayOfWeek = (val: any): DayOfWeek | null => {
   return null;
 };
 
-const periodTokenToNum = (raw: string): number | null => {
+const periodTokenToNum = (raw: string, maxPeriod = 8): number | null => {
   const chineseToNum: Record<string, number> = {
     一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8,
+    九: 9, 十: 10,
   };
-  if (chineseToNum[raw]) return chineseToNum[raw];
+  if (chineseToNum[raw] != null && chineseToNum[raw] <= maxPeriod) return chineseToNum[raw];
   const n = parseInt(raw, 10);
-  if (n >= 1 && n <= 8) return n;
+  if (n >= 1 && n <= maxPeriod) return n;
   return null;
 };
 
-/** 支援單節或連堂範圍（如 1-3、第2～4節），回傳 1~8 的節次陣列 */
-export const parsePeriodList = (val: any): number[] => {
+/** 支援單節或連堂範圍（如 1-3、第2～4節），回傳 1～maxPeriod 的節次陣列 */
+export const parsePeriodList = (val: any, maxPeriod = 8): number[] => {
   if (val === undefined || val === null) return [];
   const str = String(val).trim();
   if (!str) return [];
+  const cap = Math.max(1, Math.min(12, maxPeriod));
 
   const rangeMatch = str.match(
-    /(?:第\s*)?([0-9一二三四五六七八])\s*[-~～—–到至]\s*(?:第\s*)?([0-9一二三四五六七八])/
+    /(?:第\s*)?([0-9一二三四五六七八九十]+)\s*[-~～—–到至]\s*(?:第\s*)?([0-9一二三四五六七八九十]+)/
   );
   if (rangeMatch) {
-    const a = periodTokenToNum(rangeMatch[1]);
-    const b = periodTokenToNum(rangeMatch[2]);
+    const a = periodTokenToNum(rangeMatch[1], cap);
+    const b = periodTokenToNum(rangeMatch[2], cap);
     if (a != null && b != null) {
       const lo = Math.min(a, b);
       const hi = Math.max(a, b);
@@ -83,9 +86,9 @@ export const parsePeriodList = (val: any): number[] => {
     }
   }
 
-  const nthMatch = str.match(/第\s*([0-9一二三四五六七八])\s*節?/);
+  const nthMatch = str.match(/第\s*([0-9一二三四五六七八九十]+)\s*節?/);
   if (nthMatch) {
-    const n = periodTokenToNum(nthMatch[1]);
+    const n = periodTokenToNum(nthMatch[1], cap);
     if (n != null) return [n];
   }
 
@@ -97,20 +100,21 @@ export const parsePeriodList = (val: any): number[] => {
   const digitMatch = stripped.match(/\d+/);
   if (digitMatch) {
     const num = parseInt(digitMatch[0], 10);
-    if (num >= 1 && num <= 8) return [num];
+    if (num >= 1 && num <= cap) return [num];
   }
 
   const chineseMap: Record<string, number> = {
-    一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8,
+    一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
     第一節: 1, 第二節: 2, 第三節: 3, 第四節: 4, 第五節: 5, 第六節: 6, 第七節: 7, 第八節: 8,
+    第九節: 9, 第十節: 10,
   };
-  if (chineseMap[stripped]) return [chineseMap[stripped]];
+  if (chineseMap[stripped] != null && chineseMap[stripped] <= cap) return [chineseMap[stripped]];
   return [];
 };
 
-// Convert period string to number (1-8); 連堂範圍時取第一節（完整範圍請用 parsePeriodList）
-export const parsePeriod = (val: any): number | null => {
-  const list = parsePeriodList(val);
+// Convert period string to number (1~maxPeriod); 連堂範圍時取第一節（完整範圍請用 parsePeriodList）
+export const parsePeriod = (val: any, maxPeriod = 8): number | null => {
+  const list = parsePeriodList(val, maxPeriod);
   return list.length ? list[0] : null;
 };
 
@@ -237,8 +241,18 @@ const isCombinedOrDuplicateTeacherSlot = (
 export const parseScheduleFile = async (
   file: File,
   existingTeachers: Teacher[],
-  existingVenues: WorkshopVenue[]
+  existingVenues: WorkshopVenue[],
+  options?: { maxPeriod?: number; counselingPeriods?: number[] }
 ): Promise<ImportParseResult> => {
+  const periodCfg = resolvePeriodConfig({
+    maxPeriod: options?.maxPeriod,
+    counselingPeriods: options?.counselingPeriods,
+  });
+  const maxPeriod = periodCfg.maxPeriod;
+  const daytimePeriods = Array.from({ length: maxPeriod }, (_, i) => i + 1).filter((p) =>
+    isDaytimePeriod(p, periodCfg)
+  );
+  const teachMax = daytimePeriods.length ? Math.max(...daytimePeriods) : Math.max(1, maxPeriod - 1);
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
   
@@ -399,7 +413,7 @@ export const parseScheduleFile = async (
       if (isNaN(parsedHours) || parsedHours <= 0) {
         parsedHours = isPractical ? 3 : 2;
       }
-      const roundedHours = Math.max(1, Math.min(8, Math.round(parsedHours)));
+      const roundedHours = Math.max(1, Math.min(teachMax, Math.round(parsedHours)));
 
       if (!classCoursesMap.has(classVal)) {
         classCoursesMap.set(classVal, []);
@@ -474,7 +488,7 @@ export const parseScheduleFile = async (
 
         // If practical with 3-4 hours, try to find a consecutive morning (1-3/4) or afternoon (5-7/8) block
         if (item.isPractical && remainingHours >= 3) {
-          const blockSize = Math.min(4, remainingHours);
+          const blockSize = Math.min(4, remainingHours, teachMax);
           let allocated = false;
 
           // Try morning blocks (periods 1..1+blockSize-1) across days 1..5
@@ -516,17 +530,24 @@ export const parseScheduleFile = async (
               break;
             }
 
-            // Test afternoon: periods 5..5+blockSize-1 (up to 7)
-            const aftBlock = Math.min(3, blockSize);
+            // Test afternoon: periods 5.. within daytime max
+            const aftStart = 5;
+            if (aftStart > teachMax) continue;
+            const aftBlock = Math.min(3, blockSize, teachMax - aftStart + 1);
+            if (aftBlock < 1) continue;
             let aftOk = true;
-            for (let p = 5; p <= 4 + aftBlock; p++) {
+            for (let p = aftStart; p < aftStart + aftBlock; p++) {
+              if (!isDaytimePeriod(p, periodCfg)) {
+                aftOk = false;
+                break;
+              }
               if (!isSlotAvailable(day, p, cName, item.teacherName, item.venueName)) {
                 aftOk = false;
                 break;
               }
             }
             if (aftOk) {
-              for (let p = 5; p <= 4 + aftBlock; p++) {
+              for (let p = aftStart; p < aftStart + aftBlock; p++) {
                 occupySlot(day, p, cName, item.teacherName, item.venueName);
                 validRows.push({
                   rowNumber: item.rawRowIndex,
@@ -558,7 +579,8 @@ export const parseScheduleFile = async (
         // Allocate remaining hours across available slots (preferring 1 period per day)
         for (let d = 1; d <= 5 && remainingHours > 0; d++) {
           const day = d as DayOfWeek;
-          for (let p = 1; p <= 7 && remainingHours > 0; p++) {
+          for (let p = 1; p <= teachMax && remainingHours > 0; p++) {
+            if (!isDaytimePeriod(p, periodCfg)) continue;
             if (isSlotAvailable(day, p, cName, item.teacherName, item.venueName)) {
               occupySlot(day, p, cName, item.teacherName, item.venueName);
               validRows.push({
@@ -590,7 +612,8 @@ export const parseScheduleFile = async (
         if (remainingHours > 0) {
           for (let d = 1; d <= 5 && remainingHours > 0; d++) {
             const day = d as DayOfWeek;
-            for (let p = 1; p <= 7 && remainingHours > 0; p++) {
+            for (let p = 1; p <= teachMax && remainingHours > 0; p++) {
+              if (!isDaytimePeriod(p, periodCfg)) continue;
               if (isSlotAvailable(day, p, cName, item.teacherName, item.venueName)) {
                 occupySlot(day, p, cName, item.teacherName, item.venueName);
                 validRows.push({
@@ -698,9 +721,9 @@ export const parseScheduleFile = async (
       errors.push(`星期無效 (需為 1~5 或 週一~週五，目前值: "${dayVal}")`);
     }
 
-    const periods = parsePeriodList(periodVal);
+    const periods = parsePeriodList(periodVal, maxPeriod);
     if (periods.length === 0) {
-      errors.push(`節次無效 (需為 1~8 節或如 1-3 連堂，目前值: "${periodVal}")`);
+      errors.push(`節次無效 (需為 1~${maxPeriod} 節或如 1-3 連堂，目前值: "${periodVal}")`);
     } else if (periods.length > 1) {
       warnings.push(`節次「${periodVal}」已展開為第 ${periods.join('、')} 節`);
     }
@@ -855,14 +878,18 @@ export const parseScheduleFile = async (
  * Generate sample Excel template for users to download and fill in.
  * 若傳入 venues，會附加「場地清單」工作表，方便對照／複製工場名稱。
  */
-export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
+export const generateTemplateExcel = (
+  venues: WorkshopVenue[] = [],
+  options?: { maxPeriod?: number }
+) => {
+  const maxPeriod = Math.max(1, Math.min(12, options?.maxPeriod ?? 8));
   const wb = XLSX.utils.book_new();
 
   // 1. Template data sheet
   const sampleData = [
     {
       '星期 (1~5 或 週一~週五)': '週一',
-      '節次 (1~8)': 1,
+      '節次': 1,
       '班級名稱': '電機二甲',
       '科目名稱': '電工機械實習',
       '授課教師姓名': '林建宏',
@@ -874,7 +901,7 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
     },
     {
       '星期 (1~5 或 週一~週五)': '週一',
-      '節次 (1~8)': 2,
+      '節次': 2,
       '班級名稱': '電機二甲',
       '科目名稱': '電工機械實習',
       '授課教師姓名': '林建宏',
@@ -885,7 +912,7 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
     },
     {
       '星期 (1~5 或 週一~週五)': '週一',
-      '節次 (1~8)': 3,
+      '節次': 3,
       '班級名稱': '電機一孝',
       '科目名稱': '配線實習',
       '授課教師姓名': '林建宏',
@@ -896,7 +923,7 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
     },
     {
       '星期 (1~5 或 週一~週五)': '週二',
-      '節次 (1~8)': 5,
+      '節次': 5,
       '班級名稱': '機械三甲',
       '科目名稱': 'CNC 銑床加工實習',
       '授課教師姓名': '陳冠宇',
@@ -907,7 +934,7 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
     },
     {
       '星期 (1~5 或 週一~週五)': '週三',
-      '節次 (1~8)': 3,
+      '節次': 3,
       '班級名稱': '電機二甲',
       '科目名稱': '實用數學 II',
       '授課教師姓名': '李雅筑',
@@ -935,7 +962,7 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
     { wch: 20 }, // 備註
   ];
 
-  XLSX.utils.book_append_sheet(wb, ws, '高職課表匯入範本');
+  XLSX.utils.book_append_sheet(wb, ws, '課表匯入範本');
 
   // 2. Venue list sheet (for copy / Excel data validation reference)
   const venueListHeader = [['科別', '場地類型', '場地名稱', '代碼']];
@@ -964,28 +991,44 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
 
   // 3. Add guide sheet
   const guideData = [
-    ['技術型高級中等學校 (高職) 課表匯入說明指南'],
+    ['課表匯入說明指南（國小／國中／高中／高職通用）'],
     [''],
     ['欄位名稱', '是否必填', '格式說明與範例'],
     ['星期', '必填', '支援 1~5 或 週一、週二、週三、週四、週五'],
-    ['節次', '必填', '支援 1~8 節 (1~4 為上午，5~8 為下午與課輔)'],
-    ['班級名稱', '必填', '如：電機二甲、資訊三乙、機械三甲、餐飲一甲'],
-    ['科目名稱', '必填', '如：電工機械實習、數位邏輯、CNC銑床加工'],
+    [
+      '節次',
+      '必填',
+      `支援 1~${maxPeriod} 節（依系統「每日最大節次」驗證；課輔節次請於系統設定標示）`,
+    ],
+    [
+      '班級名稱',
+      '必填',
+      '自由文字：如電機二甲、701、112、資訊三乙',
+    ],
+    ['科目名稱', '必填', '如：電工機械實習、國語文、數學'],
     ['授課教師姓名', '必填', '填寫教師全名。如系統中尚無該教師，系統將自動建檔並標記科別'],
-    ['教師科別', '選填', '電機科 / 資訊科 / 機械科 / 共同科目'],
+    [
+      '教師科別',
+      '選填',
+      '高職可用電機科等；國中小可用語文領域／數學領域或自由標籤',
+    ],
     [
       '實習工場/教室名稱',
       '建議填寫',
-      '請從「場地清單」工作表複製名稱貼上。實習課建議填具體工場（如電機科配線實習工場）。匯入後也可在課表格子直接下拉改選。',
+      '請從「場地清單」工作表複製名稱貼上。匯入後也可在課表格子直接下拉改選。',
     ],
-    ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定實習工場課程'],
-    ['1.兼課2.', '選填', '填 1 代表此節為兼課，課表會顯示「兼課」標籤'],
+    ['是否為實習實作課', '選填', '填「是」或「否」。系統亦會自動依科目名稱判定'],
+    [
+      '1.兼課2.',
+      '選填',
+      '各學制皆以「兼課＝1」標示超鐘點；填 1 代表此節為兼課',
+    ],
     ['備註說明', '選填', '如：分組教學、協同教學、課輔節數等備註'],
     [''],
     ['如何在 Excel 設下拉選單（選用）：'],
-    ['1. 選取「高職課表匯入範本」工作表的「實習工場/教室名稱」欄資料列'],
+    ['1. 選取「課表匯入範本」工作表的「實習工場/教室名稱」欄資料列'],
     ['2. 資料 → 資料驗證 → 允許「清單」→ 來源選「場地清單」工作表的「場地名稱」欄'],
-    ['3. 可先在場地清單用篩選只顯示「電機科」再複製名稱'],
+    ['3. 可先在場地清單用篩選再複製名稱'],
     [''],
     ['法規提醒：'],
     ['1. 實習工場請確認無同時間重複借用，以確保學生實作安全及工場容留人數限制。'],
@@ -995,7 +1038,7 @@ export const generateTemplateExcel = (venues: WorkshopVenue[] = []) => {
   wsGuide['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 70 }];
   XLSX.utils.book_append_sheet(wb, wsGuide, '欄位填寫說明與安全指南');
 
-  XLSX.writeFile(wb, '高職課表匯入範本_技術型高中標準.xlsx');
+  XLSX.writeFile(wb, '課表匯入範本.xlsx');
 };
 
 /**

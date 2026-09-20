@@ -71,18 +71,23 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
   }
 ];
 
-export const PERIOD_DEFINITIONS: PeriodDefinition[] = [
-  { period: 1, label: '第一節', timeRange: '08:10 - 09:00', isAfternoon: false },
-  { period: 2, label: '第二節', timeRange: '09:10 - 10:00', isAfternoon: false },
-  { period: 3, label: '第三節', timeRange: '10:10 - 11:00', isAfternoon: false },
-  { period: 4, label: '第四節', timeRange: '11:10 - 12:00', isAfternoon: false },
-  { period: 5, label: '第五節', timeRange: '13:10 - 14:00', isAfternoon: true },
-  { period: 6, label: '第六節', timeRange: '14:10 - 15:00', isAfternoon: true },
-  { period: 7, label: '第七節', timeRange: '15:10 - 16:00', isAfternoon: true },
-  { period: 8, label: '第八節(課輔)', timeRange: '16:10 - 17:00', isAfternoon: true }
-];
+import { buildPeriodDefinitions } from '../utils/periodConfig';
+import { SCHOOL_LEVEL_PRESETS } from '../utils/schoolLevelPresets';
+
+/** @deprecated 請改用 buildPeriodDefinitions(systemConfig)；保留供未注入設定處相容 */
+export const PERIOD_DEFINITIONS: PeriodDefinition[] = buildPeriodDefinitions(
+  SCHOOL_LEVEL_PRESETS.vocational
+);
 
 export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
+  schoolLevel: 'vocational',
+  maxPeriod: SCHOOL_LEVEL_PRESETS.vocational.maxPeriod,
+  counselingPeriods: [...(SCHOOL_LEVEL_PRESETS.vocational.counselingPeriods || [])],
+  personalLeavePublicDayThreshold:
+    SCHOOL_LEVEL_PRESETS.vocational.personalLeavePublicDayThreshold,
+  sickLeaveConsecutiveDayThreshold:
+    SCHOOL_LEVEL_PRESETS.vocational.sickLeaveConsecutiveDayThreshold,
+  wellnessLeaveHoursPerYear: SCHOOL_LEVEL_PRESETS.vocational.wellnessLeaveHoursPerYear,
   dayHourlyRate: 505,
   nightHourlyRate: 660,
   actingHomeroomDailyRate: 404,

@@ -1,7 +1,7 @@
-import { PERIOD_DEFINITIONS } from '../data/mockData';
 import {
   LeaveType,
   PaymentType,
+  PeriodDefinition,
   RequestStatus,
   SubstituteRequest,
 } from '../types';
@@ -9,6 +9,7 @@ import { isActingHomeroomOnlyRequest } from './actingHomeroomPayrollRegister';
 import { dateToIsoLocal } from './holidays';
 import { dateToDayOfWeek, resolveLeaveDateEnd } from './leaveDates';
 import { leaveTypeRemarkShort, normalizeLeaveTypeForForm } from './leaveTypes';
+import { buildPeriodDefinitions } from './periodConfig';
 import { isPlaceholderSession } from './resolveOriginalSession';
 
 export type LeaveCalendarPeriodDetail = {
@@ -117,15 +118,23 @@ export function formatSubstitutePeriodLine(period: number, substituteName?: stri
   return who ? `第${period}節-${who}代` : `第${period}節-尚未派代`;
 }
 
-export function periodTimeRange(period: number): string {
-  return PERIOD_DEFINITIONS.find((p) => p.period === period)?.timeRange || '';
+export function periodTimeRange(
+  period: number,
+  periodDefs?: PeriodDefinition[] | null
+): string {
+  const defs = periodDefs ?? buildPeriodDefinitions();
+  return defs.find((p) => p.period === period)?.timeRange || '';
 }
 
-export function eventTimeRangeLabel(periods: number[]): string {
+export function eventTimeRangeLabel(
+  periods: number[],
+  periodDefs?: PeriodDefinition[] | null
+): string {
+  const defs = periodDefs ?? buildPeriodDefinitions();
   const uniq = [...new Set(periods)].sort((a, b) => a - b);
   if (uniq.length === 0) return '全日';
-  const start = PERIOD_DEFINITIONS.find((p) => p.period === uniq[0]);
-  const end = PERIOD_DEFINITIONS.find((p) => p.period === uniq[uniq.length - 1]);
+  const start = defs.find((p) => p.period === uniq[0]);
+  const end = defs.find((p) => p.period === uniq[uniq.length - 1]);
   if (!start || !end) return formatLeaveCalendarPeriodRange(uniq);
   const startTime = start.timeRange.split(/\s*-\s*/)[0];
   const endTime = end.timeRange.split(/\s*-\s*/)[1];

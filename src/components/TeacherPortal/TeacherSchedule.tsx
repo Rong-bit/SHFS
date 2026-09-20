@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CourseSession, DayOfWeek } from '../../types';
-import { PERIOD_DEFINITIONS } from '../../data/mockData';
+import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import { RequestModal } from './RequestModal';
 import { 
   Calendar, 
@@ -53,6 +53,7 @@ export const TeacherSchedule: React.FC = () => {
     requests,
     calculateMonthlySettlement,
   } = useApp();
+  const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
   const [selectedSessionForModal, setSelectedSessionForModal] = useState<CourseSession | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -340,7 +341,7 @@ export const TeacherSchedule: React.FC = () => {
               <span className="text-xs text-slate-500 font-medium">元/月</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
-              超鐘點＝日間兼課 {overloadPeriods} 節／週 × {systemConfig.dayHourlyRate} 元（國定假日編制內仍發，僅外聘人員扣放假日）；第八節課輔 {overloadBreakdown.counseling} 節／週 × {systemConfig.nightHourlyRate} 元（仍扣放假日）。
+              超鐘點＝日間兼課 {overloadPeriods} 節／週 × {systemConfig.dayHourlyRate} 元（國定假日編制內仍發，僅外聘人員扣放假日）；課輔 {overloadBreakdown.counseling} 節／週 × {systemConfig.nightHourlyRate} 元（仍扣放假日）。
             </p>
           </div>
 
@@ -400,7 +401,7 @@ export const TeacherSchedule: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-xs">
-              {PERIOD_DEFINITIONS.map((pDef) => {
+              {periodDefinitions.map((pDef) => {
                 const isNoon = pDef.period === 5;
                 return (
                   <React.Fragment key={pDef.period}>

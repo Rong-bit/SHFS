@@ -4,19 +4,35 @@ import {
   SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD,
   WELLNESS_LEAVE_HOURS_PER_YEAR,
   WELLNESS_HOURS_PER_LEAVE_DAY,
+  resolveLeaveThresholds,
+  type LeaveThresholdConfig,
 } from './leavePayrollPolicy';
 
 export { WELLNESS_HOURS_PER_LEAVE_DAY, WELLNESS_LEAVE_HOURS_PER_YEAR };
 
-/** 身心調適假：每學年 21 小時（1 日＝7 小時），代課鐘點費公費派代 */
-export const WELLNESS_LEAVE_LEGAL_NOTE =
-  `依薪資對照表：每學年准給 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時，得以時計）；代課鐘點費由學校支給（公費派代）。`;
+export function wellnessLeaveLegalNote(config?: LeaveThresholdConfig | null): string {
+  const { wellnessLeaveHoursPerYear } = resolveLeaveThresholds(config);
+  return `依薪資對照表：每學年准給 ${wellnessLeaveHoursPerYear} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時，得以時計）；代課鐘點費由學校支給（公費派代）。`;
+}
 
-export const PERSONAL_LEAVE_POLICY_NOTE =
-  `事假學年累計第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 天起改公費派代；未達門檻者不入代課清冊，請假人自行與代課教師約定。`;
+export function personalLeavePolicyNote(config?: LeaveThresholdConfig | null): string {
+  const { personalLeavePublicDayThreshold } = resolveLeaveThresholds(config);
+  return `事假學年累計第 ${personalLeavePublicDayThreshold} 天起改公費派代；未達門檻者不入代課清冊，請假人自行與代課教師約定。`;
+}
 
-export const SICK_LEAVE_POLICY_NOTE =
-  `病假連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日（曆日）起改公費派代；未達門檻者不入代課清冊。`;
+export function sickLeavePolicyNote(config?: LeaveThresholdConfig | null): string {
+  const { sickLeaveConsecutiveDayThreshold } = resolveLeaveThresholds(config);
+  return `病假連續 ${sickLeaveConsecutiveDayThreshold} 日（曆日）起改公費派代；未達門檻者不入代課清冊。`;
+}
+
+/** @deprecated 請改用 wellnessLeaveLegalNote(systemConfig) */
+export const WELLNESS_LEAVE_LEGAL_NOTE = wellnessLeaveLegalNote();
+
+/** @deprecated 請改用 personalLeavePolicyNote(systemConfig) */
+export const PERSONAL_LEAVE_POLICY_NOTE = personalLeavePolicyNote();
+
+/** @deprecated 請改用 sickLeavePolicyNote(systemConfig) */
+export const SICK_LEAVE_POLICY_NOTE = sickLeavePolicyNote();
 
 /** 僅代導師單等：不必指定代課教師 */
 export const requiresSubstituteTeacherForLeave = (
@@ -48,7 +64,11 @@ export function normalizeLeaveTypeForForm(leaveType: LeaveType): LeaveType {
   return leaveType;
 }
 
-export const leaveTypeLabel = (leaveType?: LeaveType): string => {
+export const leaveTypeLabel = (
+  leaveType?: LeaveType,
+  config?: LeaveThresholdConfig | null
+): string => {
+  const { wellnessLeaveHoursPerYear } = resolveLeaveThresholds(config);
   switch (normalizeLeaveTypeForForm(leaveType || 'official')) {
     case 'official':
       return '公假 / 公差 (檢附公文派令)';
@@ -61,7 +81,7 @@ export const leaveTypeLabel = (leaveType?: LeaveType): string => {
     case 'maternity':
       return '娩假 / 陪產假 (公費派代 · 按小時計)';
     case 'wellness':
-      return `身心調適假 (公費派代 · 每學年 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時)`;
+      return `身心調適假 (公費派代 · 每學年 ${wellnessLeaveHoursPerYear} 小時)`;
     default:
       return '公假 / 公差';
   }
@@ -115,7 +135,11 @@ export const actingHomeroomLeaveRemarkShort = (
   }
 };
 
-export const defaultReasonForLeaveType = (leaveType: LeaveType): string => {
+export const defaultReasonForLeaveType = (
+  leaveType: LeaveType,
+  config?: LeaveThresholdConfig | null
+): string => {
+  const thresholds = resolveLeaveThresholds(config);
   switch (normalizeLeaveTypeForForm(leaveType)) {
     case 'official':
       return '奉派代表學校出席公務會議/專業競賽 (公費派代)';
@@ -126,20 +150,37 @@ export const defaultReasonForLeaveType = (leaveType: LeaveType): string => {
     case 'wellness':
       return '申請身心調適假 (公費派代)';
     case 'sick':
-      return '因就醫治療無法到校（未達連續三日者教師自理代課費）';
+      return `因就醫治療無法到校（未達連續${thresholds.sickLeaveConsecutiveDayThreshold}日者教師自理代課費）`;
     case 'personal':
-      return '個人事假（未達學年第八日者教師自理代課費）';
+      return `個人事假（未達學年第${thresholds.personalLeavePublicDayThreshold}日者教師自理代課費）`;
     default:
       return '公務請假 (公費派代)';
   }
 };
 
-/** 教師／教學組請假假別選單 */
-export const LEAVE_TYPE_FORM_OPTIONS: { value: LeaveType; label: string }[] = [
-  { value: 'official', label: '🏛️ 公假 / 公差 (公文指派、出差)' },
-  { value: 'marriage', label: '💒 婚假 (公費派代 · 按小時計)' },
-  { value: 'maternity', label: '👶 娩假 / 陪產假 (公費派代 · 按小時計)' },
-  { value: 'wellness', label: `🧘 身心調適假 (公費 · 每學年 ${WELLNESS_LEAVE_HOURS_PER_YEAR} 小時)` },
-  { value: 'personal', label: `💼 事假 (第 ${PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD} 天起公費派代)` },
-  { value: 'sick', label: `🩺 病假 (連續 ${SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD} 日起公費派代)` },
-];
+/** 教師／教學組請假假別選單（可依系統門檻動態標籤） */
+export function leaveTypeFormOptions(
+  config?: LeaveThresholdConfig | null
+): { value: LeaveType; label: string }[] {
+  const thresholds = resolveLeaveThresholds(config);
+  return [
+    { value: 'official', label: '🏛️ 公假 / 公差 (公文指派、出差)' },
+    { value: 'marriage', label: '💒 婚假 (公費派代 · 按小時計)' },
+    { value: 'maternity', label: '👶 娩假 / 陪產假 (公費派代 · 按小時計)' },
+    {
+      value: 'wellness',
+      label: `🧘 身心調適假 (公費 · 每學年 ${thresholds.wellnessLeaveHoursPerYear} 小時)`,
+    },
+    {
+      value: 'personal',
+      label: `💼 事假 (第 ${thresholds.personalLeavePublicDayThreshold} 天起公費派代)`,
+    },
+    {
+      value: 'sick',
+      label: `🩺 病假 (連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日起公費派代)`,
+    },
+  ];
+}
+
+/** @deprecated 請改用 leaveTypeFormOptions(systemConfig) */
+export const LEAVE_TYPE_FORM_OPTIONS = leaveTypeFormOptions();

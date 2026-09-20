@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { 
+import {
   CourseSession, 
   RequestType, 
   LeaveType, 
@@ -8,7 +8,6 @@ import {
   DayOfWeek, 
   ClashCheckResult 
 } from '../../types';
-import { PERIOD_DEFINITIONS } from '../../data/mockData';
 import {
   countMatchingWeekdays,
   formatWeekdayList,
@@ -18,9 +17,9 @@ import {
 } from '../../utils/leaveDates';
 import {
   defaultReasonForLeaveType,
-  LEAVE_TYPE_FORM_OPTIONS,
-  PERSONAL_LEAVE_POLICY_NOTE,
-  SICK_LEAVE_POLICY_NOTE,
+  leaveTypeFormOptions,
+  personalLeavePolicyNote,
+  sickLeavePolicyNote,
 } from '../../utils/leaveTypes';
 import {
   buildLeavePayrollContext,
@@ -33,6 +32,7 @@ import { WellnessLeaveHoursAlert } from '../Common/WellnessLeaveHoursAlert';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
+import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { isPlaceholderSession } from '../../utils/resolveOriginalSession';
 import {
   formatTemporarySwapEffectLabel,
@@ -79,15 +79,23 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       (a, b) => a.dayOfWeek - b.dayOfWeek || a.period - b.period
     );
   }, [sessions, currentTeacher?.id]);
+
+  const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
+  const leaveTypeOptions = useMemo(() => leaveTypeFormOptions(systemConfig), [systemConfig]);
   
   const [selectedSessionId, setSelectedSessionId] = useState<string>(
     initialSession ? initialSession.id : teacherSessions[0]?.id || ''
   );
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) || teacherSessions[0];
-  const sessionHourlyRate =
-    selectedSession?.period === 8 ? systemConfig.nightHourlyRate : systemConfig.dayHourlyRate;
-  const sessionRateKind = selectedSession?.period === 8 ? '第八節課輔' : '日間部';
+  const sessionIsCounseling =
+    selectedSession != null && isCounselingPeriod(selectedSession.period, systemConfig);
+  const sessionHourlyRate = sessionIsCounseling
+    ? systemConfig.nightHourlyRate
+    : systemConfig.dayHourlyRate;
+  const sessionRateKind = sessionIsCounseling
+    ? periodDefinitions.find((d) => d.period === selectedSession.period)?.label || '課輔'
+    : '日間部';
 
   const [requestType, setRequestType] = useState<RequestType>('substitute');
   const [leaveType, setLeaveType] = useState<LeaveType>('personal');
@@ -878,9 +886,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                           className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-medium focus:ring-1 focus:ring-amber-500"
                         >
                           <option value="">-- 請選擇 --</option>
-                          {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
-                            <option key={p} value={p}>
-                              第{p}節 ({PERIOD_DEFINITIONS.find((def) => def.period === p)?.timeRange})
+                          {periodDefinitions.map((pDef) => (
+                            <option key={pDef.period} value={pDef.period}>
+                              第{pDef.period}節 ({pDef.timeRange})
                             </option>
                           ))}
                         </select>
@@ -901,7 +909,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                   >
                     {teacherSessions.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {dayNames[s.dayOfWeek]} 第{s.period}節 ({PERIOD_DEFINITIONS.find((p) => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》{s.isConcurrent ? '【兼課】' : ''} @ {s.venueName}
+                        {dayNames[s.dayOfWeek]} 第{s.period}節 ({periodDefinitions.find((p) => p.period === s.period)?.timeRange}) ｜ {s.className} 《{s.subjectName}》{s.isConcurrent ? '【兼課】' : ''} @ {s.venueName}
                       </option>
                     ))}
                   </select>
@@ -1225,11 +1233,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       onChange={(e) => {
                         const next = e.target.value as LeaveType;
                         setLeaveType(next);
-                        setReason(defaultReasonForLeaveType(next));
+                        setReason(defaultReasonForLeaveType(next, systemConfig));
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-amber-500"
                     >
-                      {LEAVE_TYPE_FORM_OPTIONS.map((opt) => (
+                      {leaveTypeOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -1243,12 +1251,12 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     )}
                     {leaveType === 'personal' && (
                       <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
-                        {PERSONAL_LEAVE_POLICY_NOTE}
+                        {personalLeavePolicyNote(systemConfig)}
                       </p>
                     )}
                     {leaveType === 'sick' && (
                       <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
-                        {SICK_LEAVE_POLICY_NOTE}
+                        {sickLeavePolicyNote(systemConfig)}
                       </p>
                     )}
                   </div>
@@ -1578,7 +1586,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       onChange={(e) => setTargetPeriod(Number(e.target.value))}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-emerald-500"
                     >
-                      {PERIOD_DEFINITIONS.map((p) => (
+                      {periodDefinitions.map((p) => (
                         <option key={p.period} value={p.period}>
                           {p.label} ({p.timeRange})
                         </option>
