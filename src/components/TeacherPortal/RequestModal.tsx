@@ -1348,7 +1348,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                               )}
                               {isNearLimit && (
                                 <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 font-bold rounded">
-                                  接近9節上限
+                                  接近{systemConfig.maxWeeklyOverloadPeriods}節上限
                                 </span>
                               )}
                               <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded">

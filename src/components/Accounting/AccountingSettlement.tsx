@@ -62,6 +62,8 @@ export const AccountingSettlement: React.FC = () => {
   const totalNetPayable = filteredSettlements.reduce((acc, curr) => acc + curr.netPayableAmount, 0);
   const warningCount = filteredSettlements.filter((s) => s.isOverLimit).length;
   const salaryCodeCount = countSalaryCodes(systemConfig);
+  const weeklyOverloadLimit = systemConfig.maxWeeklyOverloadPeriods;
+  const overloadLimitCheckCol = `兼代課${weeklyOverloadLimit}節上限檢核`;
 
   // Export to Excel (.xlsx) using SheetJS
   const handleExportExcel = () => {
@@ -84,7 +86,9 @@ export const AccountingSettlement: React.FC = () => {
       '事病假代課(扣款)金額': s.privateLeaveDeductionAmount,
       '應領鐘點費總額 (元)': s.netPayableAmount,
       '每週兼代課估算 (節)': s.totalSubstituteWeeklyEstimated.toFixed(1),
-      '兼代課9節上限檢核': s.isOverLimit ? '【警示】超過9節法定上限' : '符合法規',
+      [overloadLimitCheckCol]: s.isOverLimit
+        ? `【警示】超過${weeklyOverloadLimit}節法定上限`
+        : '符合法規',
     }));
 
     // Add summary row
@@ -104,7 +108,7 @@ export const AccountingSettlement: React.FC = () => {
       '事病假代課(扣款)金額': totalPrivateLeaveDeduction,
       '應領鐘點費總額 (元)': totalNetPayable,
       '每週兼代課估算 (節)': '' as any,
-      '兼代課9節上限檢核': warningCount > 0 ? `共 ${warningCount} 人超額警示` : '全數合規',
+      [overloadLimitCheckCol]: warningCount > 0 ? `共 ${warningCount} 人超額警示` : '全數合規',
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelRows);
@@ -126,7 +130,7 @@ export const AccountingSettlement: React.FC = () => {
       { wch: 18 }, // 事病假扣款
       { wch: 18 }, // 應發總額
       { wch: 16 }, // 兼代課估算
-      { wch: 22 }, // 9節檢核
+      { wch: 22 }, // 兼代課上限檢核
     ];
     worksheet['!cols'] = colWidths;
 
@@ -312,7 +316,7 @@ export const AccountingSettlement: React.FC = () => {
         {/* Legal Overload Limit Warning */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-            <span>兼代課9節法規預警</span>
+            <span>兼代課{weeklyOverloadLimit}節法規預警</span>
             {warningCount > 0 ? (
               <AlertTriangle className="w-4 h-4 text-rose-500" />
             ) : (
@@ -323,7 +327,9 @@ export const AccountingSettlement: React.FC = () => {
             {warningCount} 位教師
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            {warningCount > 0 ? '已達或超過每週9節兼代課上限' : '全校兼代課節數符合教育部法規'}
+            {warningCount > 0
+              ? `已達或超過每週${weeklyOverloadLimit}節兼代課上限`
+              : '全校兼代課節數符合教育部法規'}
           </p>
         </div>
 

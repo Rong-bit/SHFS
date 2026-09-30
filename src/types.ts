@@ -188,7 +188,7 @@ export interface SystemConfig {
    * 法令參考：鐘點費×日數÷5×（專任基本−導師基本）；學校可改為固定日費。
    */
   actingHomeroomDailyRate: number;
-  maxWeeklyOverloadPeriods: number; // 法定每週兼代課上限 (9)
+  maxWeeklyOverloadPeriods: number; // 法定每週兼代課上限（系統參數可調，預設 9）
   standardBasePeriods: {
     head: number; // 科主任基本鐘點（可設定）
     homeroom: number; // 導師基本鐘點（可設定）
@@ -299,7 +299,7 @@ export interface MonthlyTeacherSettlement {
   
   // 兼代課法規檢核
   totalSubstituteWeeklyEstimated: number; // 代課換算每週
-  isOverLimit: boolean; // 是否超過9節法定上限
+  isOverLimit: boolean; // 是否超過系統設定之兼代課法定上限
   
   // 總應發/結算金額
   netPayableAmount: number; // 超鐘點費 + 第八節課輔費 + 公費代課 + 受代領取 - 事病假代課扣款
