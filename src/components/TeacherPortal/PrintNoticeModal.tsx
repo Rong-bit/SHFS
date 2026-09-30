@@ -228,6 +228,47 @@ const NOTICE_PRINT_CSS = `
 }
 `;
 
+/** 解析 YYYY-MM-DD 或 YYYY-MM-DD HH:mm 為本地 Date；無效則回 null */
+function parseLocalDateTime(value?: string): Date | null {
+  if (!value?.trim()) return null;
+  const m = value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}))?/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const month = Number(m[2]);
+  const d = Number(m[3]);
+  const h = Number(m[4] ?? 12);
+  const min = Number(m[5] ?? 0);
+  if (![y, month, d, h, min].every(Number.isFinite)) return null;
+  const dt = new Date(y, month - 1, d, h, min, 0, 0);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+/**
+ * 通知單開立／戳章日期：以核准（產生）時間為準，補印不隨「今天」變動。
+ * 優先 reviewedAt → 同批最早 reviewedAt → createdAt → 現在。
+ */
+function resolveNoticeIssueDate(
+  liveRequest: SubstituteRequest,
+  printGroup: SubstituteRequest[]
+): Date {
+  const fromLive = parseLocalDateTime(liveRequest.reviewedAt);
+  if (fromLive) return fromLive;
+
+  let earliest: Date | null = null;
+  for (const req of printGroup) {
+    const dt = parseLocalDateTime(req.reviewedAt);
+    if (!dt) continue;
+    if (!earliest || dt.getTime() < earliest.getTime()) earliest = dt;
+  }
+  if (earliest) return earliest;
+
+  return (
+    parseLocalDateTime(liveRequest.createdAt) ||
+    parseLocalDateTime(printGroup[0]?.createdAt) ||
+    new Date()
+  );
+}
+
 /** 開立通知單日期，例 115.8.28 */
 function formatNoticeIssueRocDate(date: Date = new Date()): string {
   const roc = date.getFullYear() - 1911;
@@ -351,7 +392,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const rowPages = chunkNoticeRows(rows, MAX_NOTICE_TABLE_ROWS);
   const multiPage = rowPages.length > 1;
   const previewLabel = `${title}列印預覽（校內格式 · 一頁兩聯 · 上聯留存${multiPage ? ` · 共 ${rowPages.length} 張` : ''}）`;
-  const noticeIssueDate = new Date();
+  const noticeIssueDate = resolveNoticeIssueDate(liveRequest, printGroup);
   const issueDateLabel = formatNoticeIssueRocDate(noticeIssueDate);
   const stampDateLabel = formatStampRocDate(noticeIssueDate);
 
