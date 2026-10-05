@@ -112,6 +112,8 @@ const NOTICE_PRINT_CSS = `
   border-top: 1px dashed #666;
   margin: 0;
   height: 0;
+  position: relative;
+  top: -1mm;
 }
 .substitute-notice-copy-lower {
   padding-top: 0.5cm;
@@ -224,6 +226,8 @@ const NOTICE_PRINT_CSS = `
     border-top: 1px dashed #666;
     height: 0;
     margin: 0;
+    position: relative !important;
+    top: -1mm !important;
   }
 }
 `;
