@@ -65,13 +65,18 @@ export function sanitizeConcurrentFunding(
   return { concurrentFundingSources: sources, concurrentFundingByName: byName };
 }
 
-/** 清冊頁籤：學校在前，其後為有任一教師使用的外部經費 */
+/** 清冊頁籤：學校在前，其後依匯入欄位順序列出全部外部經費（含本月無人使用者） */
 export function listConcurrentFundNames(config: ConcurrentFundingConfig): string[] {
-  const { concurrentFundingSources, concurrentFundingByName } = sanitizeConcurrentFunding(config);
-  const used = new Set(
-    Object.values(concurrentFundingByName).flatMap((funds) => Object.keys(funds))
-  );
-  return [SCHOOL_FUND_NAME, ...concurrentFundingSources.filter((s) => used.has(s))];
+  return [SCHOOL_FUND_NAME, ...sanitizeConcurrentFunding(config).concurrentFundingSources];
+}
+
+/** 各經費有填節數的教師人數（頁籤標示用） */
+export function countTeachersByFund(config: ConcurrentFundingConfig): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const funds of Object.values(sanitizeConcurrentFunding(config).concurrentFundingByName)) {
+    for (const name of Object.keys(funds)) counts[name] = (counts[name] || 0) + 1;
+  }
+  return counts;
 }
 
 export function teacherExternalFunding(

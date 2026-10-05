@@ -16,7 +16,11 @@ import {
   type OverloadPayrollTotals,
 } from '../../utils/overloadPayrollRegister';
 import { exportOverloadPayrollExcel } from '../../utils/payrollRegisterExcel';
-import { listConcurrentFundNames, SCHOOL_FUND_NAME } from '../../utils/concurrentFunding';
+import {
+  countTeachersByFund,
+  listConcurrentFundNames,
+  SCHOOL_FUND_NAME,
+} from '../../utils/concurrentFunding';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
 import { PayrollRegisterPrintStyles, CELL_CENTER, CELL_LEFT } from './PayrollRegisterPrintStyles';
 import { PayrollRegisterSignatureBlock } from './PayrollRegisterSignatureBlock';
@@ -82,6 +86,7 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
   const rocYear = formatRocYear(settlementYear);
 
   const fundNames = listConcurrentFundNames(systemConfig);
+  const fundTeacherCounts = countTeachersByFund(systemConfig);
   const hasExternalFunds = fundNames.length > 1;
   const [fundName, setFundName] = React.useState(SCHOOL_FUND_NAME);
   const activeFund = fundNames.includes(fundName) ? fundName : SCHOOL_FUND_NAME;
@@ -155,20 +160,28 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
       {hasExternalFunds && (
         <div className="print:hidden bg-slate-100 border-b border-slate-200 px-4 py-2 flex flex-wrap items-center gap-2 shrink-0">
           <span className="text-xs font-bold text-slate-600">經費來源</span>
-          {fundNames.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => setFundName(name)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
-                name === activeFund
-                  ? 'bg-slate-800 text-white border-slate-800'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              {name}
-            </button>
-          ))}
+          {fundNames.map((name) => {
+            const count = fundTeacherCounts[name] || 0;
+            const isSchool = name === SCHOOL_FUND_NAME;
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setFundName(name)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
+                  name === activeFund
+                    ? 'bg-slate-800 text-white border-slate-800'
+                    : !isSchool && count === 0
+                      ? 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+                title={isSchool ? undefined : count === 0 ? '尚無教師填此經費節數' : `${count} 位教師`}
+              >
+                {name}
+                {!isSchool && <span className="ml-1 font-normal opacity-80">({count})</span>}
+              </button>
+            );
+          })}
           <span className="text-[11px] text-slate-500">
             外部經費固定每週節數 × {weekRound} 週；請假應減、代課應加都算在學校經費。列印與匯出以目前選的經費為準。
           </span>
