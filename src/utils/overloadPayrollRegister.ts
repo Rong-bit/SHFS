@@ -13,6 +13,7 @@ import { noticeDateUsesModifiedSubstitutePayroll } from './noticePayroll';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
 import { isDaytimePeriod } from './periodConfig';
+import { SCHOOL_FUND_NAME, splitConcurrentByFunding } from './concurrentFunding';
 import type { Teacher } from '../types';
 
 /**
@@ -246,43 +247,67 @@ export function buildConcurrentPayrollRemarks(
   return parts.join('；');
 }
 
+export type OverloadPayrollFundOptions = {
+  /** 經費名稱；未傳或「學校」為學校經費（含應加／應減） */
+  fundName?: string;
+  /** 結算週數：外部經費月節數＝每週節數 × 週數 */
+  weeks: number;
+};
+
 export function buildOverloadPayrollRows(
   settlements: MonthlyTeacherSettlement[],
   systemConfig: SystemConfig,
   requests: SubstituteRequest[],
   settlementMonth: number,
-  settlementYear: number
+  settlementYear: number,
+  fund?: OverloadPayrollFundOptions
 ): OverloadPayrollRow[] {
+  const fundName = fund?.fundName || SCHOOL_FUND_NAME;
+  const isSchool = fundName === SCHOOL_FUND_NAME;
   return settlements
+    .map((s) => {
+      const share = splitConcurrentByFunding(
+        s,
+        systemConfig,
+        fund?.weeks ?? 0,
+        systemConfig.dayHourlyRate
+      ).shares.find((x) => x.fundName === fundName);
+      return { s, share };
+    })
     .filter(
-      (s) =>
-        s.weeklyOverloadPeriods > 0 ||
-        s.monthlyConcurrentBasePeriods > 0 ||
-        s.concurrentAddPeriods > 0 ||
-        s.concurrentSubtractPeriods > 0 ||
-        s.monthlyConcurrentPeriods > 0
+      ({ share }) =>
+        share &&
+        (share.weekly > 0 ||
+          share.base > 0 ||
+          share.add > 0 ||
+          share.subtract > 0 ||
+          share.actual > 0)
     )
-    .map((s) => ({
+    .map(({ s, share }) => ({
       teacherId: s.teacherId,
       salaryCode: resolveTeacherSalaryCode(
         { id: s.teacherId, name: s.teacherName },
         systemConfig
       ),
       teacherName: s.teacherName,
-      weeklyConcurrent: s.weeklyOverloadPeriods,
-      baseMonthlyConcurrent: s.monthlyConcurrentBasePeriods,
-      addConcurrent: s.concurrentAddPeriods,
-      subtractConcurrent: s.concurrentSubtractPeriods,
-      actualConcurrent: s.monthlyConcurrentPeriods,
-      amount: s.concurrentPayrollAmount,
-      remarks: buildConcurrentPayrollRemarks(
-        s.teacherId,
-        settlementMonth,
-        settlementYear,
-        requests,
-        systemConfig,
-        { id: s.teacherId, name: s.teacherName }
-      ),
+      weeklyConcurrent: share!.weekly,
+      baseMonthlyConcurrent: share!.base,
+      addConcurrent: share!.add,
+      subtractConcurrent: share!.subtract,
+      actualConcurrent: share!.actual,
+      amount: share!.amount,
+      remarks: isSchool
+        ? buildConcurrentPayrollRemarks(
+            s.teacherId,
+            settlementMonth,
+            settlementYear,
+            requests,
+            systemConfig,
+            { id: s.teacherId, name: s.teacherName }
+          )
+        : share!.actual < Math.round(share!.weekly * (fund?.weeks ?? 0))
+          ? `${fundName}經費；實得兼課不足，已壓低`
+          : `${fundName}經費`,
     }))
     .sort((a, b) => {
       const codeA = a.salaryCode || '999999';

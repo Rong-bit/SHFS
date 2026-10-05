@@ -237,6 +237,10 @@ export interface SystemConfig {
   teacherSalaryCodesByName?: Record<string, string>;
   /** 薪資匯入職稱（姓名 → 職稱，如外聘人員）；用於半日停課與放假日超鐘點扣節，與名冊職稱下拉無關 */
   teacherPayrollTitlesByName?: Record<string, string>;
+  /** 兼課外部經費名稱（依匯入欄位順序，如全英、本土語）；學校經費不列入 */
+  concurrentFundingSources?: string[];
+  /** 兼課外部經費每週節數（姓名 → 經費名稱 → 節數）；其餘兼課歸學校經費 */
+  concurrentFundingByName?: Record<string, Record<string, number>>;
   authConfig?: {
     requirePassword: boolean; // 是否啟用密碼確認
     defaultTeacherPassword: string; // 預設教師密碼雜湊（或遷移前明文）

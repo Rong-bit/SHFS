@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, NonTeachingDay, TemporaryScheduleMove, PartialNonTeachingDay } from '../../types';
 import {
@@ -73,6 +73,14 @@ import {
   readSalaryCodeFile,
 } from '../../utils/salaryCodeImporter';
 import {
+  downloadConcurrentFundingTemplate,
+  exportConcurrentFundingToExcel,
+  parseConcurrentFundingWorkbook,
+  readConcurrentFundingFile,
+  type ScheduleWeeklyByName,
+} from '../../utils/concurrentFundingImporter';
+import { sanitizeConcurrentFunding } from '../../utils/concurrentFunding';
+import {
   applyPayrollTitlesImport,
   countSalaryCodes,
   mergeSalaryCodesByName,
@@ -86,7 +94,7 @@ import {
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
-import { normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadSystemManual } from '../../utils/generateManual';
 import { isPasswordHash } from '../../utils/passwordCrypto';
@@ -405,6 +413,62 @@ export const AdminSettings: React.FC = () => {
           teacherPayrollTitlesByName: {},
         });
         setSalaryCodeNotice('已清除全部薪資編號與薪資職稱');
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+
+  const fundingFileRef = useRef<HTMLInputElement>(null);
+  const [fundingNotice, setFundingNotice] = useState('');
+  const [fundingWarnings, setFundingWarnings] = useState<string[]>([]);
+  const funding = useMemo(() => sanitizeConcurrentFunding(systemConfig), [systemConfig]);
+  const fundedTeacherNames = Object.keys(funding.concurrentFundingByName).sort((a, b) =>
+    a.localeCompare(b, 'zh-Hant')
+  );
+
+  const scheduleWeeklyByName = useMemo<ScheduleWeeklyByName>(() => {
+    const out: ScheduleWeeklyByName = {};
+    for (const t of teachers) {
+      const b = breakdownWeeklyOverloadPeriods(sessions, t.id, systemConfig);
+      out[t.name.trim()] = { concurrent: b.concurrent, counseling: b.counseling };
+    }
+    return out;
+  }, [teachers, sessions, systemConfig]);
+
+  const handleFundingImport = async (file: File) => {
+    try {
+      const workbook = await readConcurrentFundingFile(file);
+      const result = parseConcurrentFundingWorkbook(workbook, scheduleWeeklyByName);
+      updateSystemConfig({
+        concurrentFundingSources: result.concurrentFundingSources,
+        concurrentFundingByName: result.concurrentFundingByName,
+      });
+      const unmatchedNote =
+        result.unmatched.length > 0
+          ? `；名冊查無 ${result.unmatched.length} 人（${result.unmatched.slice(0, 5).join('、')}${
+              result.unmatched.length > 5 ? '…' : ''
+            }，已保留，課表匯入後自動對上）`
+          : '';
+      setFundingNotice(
+        `已匯入 ${result.imported} 位教師，其中 ${result.fundedTeachers} 位有外部經費；經費欄：${result.concurrentFundingSources.join('、')}${unmatchedNote}`
+      );
+      setFundingWarnings(result.warnings);
+    } catch (err) {
+      setFundingNotice(err instanceof Error ? err.message : '兼課經費來源匯入失敗');
+      setFundingWarnings([]);
+    }
+  };
+
+  const handleClearFunding = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '清除全部兼課經費來源？',
+      message: '清除後，所有兼課鐘點費都歸學校經費，兼課印領清冊只剩一份。',
+      warningMessage: '此操作不影響課表與薪資編號，可再次匯入 Excel 恢復。',
+      onConfirm: () => {
+        updateSystemConfig({ concurrentFundingSources: [], concurrentFundingByName: {} });
+        setFundingNotice('已清除全部兼課經費來源');
+        setFundingWarnings([]);
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       },
     });
@@ -2288,6 +2352,140 @@ export const AdminSettings: React.FC = () => {
             <p className="text-[11px] text-indigo-700">
               已保存 <strong>{salaryCodeCount}</strong> 筆；可在下方名冊「薪資編號」欄個別修改或刪除。
             </p>
+          </div>
+
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                  <Coins className="w-4 h-4 text-emerald-600" />
+                  兼課經費來源（兼課印領清冊分冊用）
+                </h3>
+                <p className="text-[11px] text-emerald-800 mt-1 leading-relaxed max-w-2xl">
+                  匯入欄位：<strong>姓名、兼課時數、輔導課時數</strong>，其後每一欄都是一個外部經費（如本土語、全英），填每週節數。
+                  例如兼課 11 節、全英填 4，則學校 7 節、全英 4 節。外部經費固定「每週節數 × 週數」；
+                  請假應減、代課應加一律算在<strong>學校經費</strong>。兼課／輔導課時數只用來和課表比對，不會覆蓋課表。
+                </p>
+                {fundingNotice && (
+                  <p className="text-[11px] text-emerald-900 mt-2 font-medium">{fundingNotice}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadConcurrentFundingTemplate()}
+                  className="px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                >
+                  下載範本
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fundingFileRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  匯入經費來源
+                </button>
+                <input
+                  ref={fundingFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleFundingImport(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    exportConcurrentFundingToExcel(
+                      funding,
+                      scheduleWeeklyByName,
+                      `${systemConfig.schoolName}_兼課經費來源.xlsx`
+                    )
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                  title="含課表兼課教師與目前經費設定，可修改後重新匯入"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  匯出（含課表兼課）
+                </button>
+                {fundedTeacherNames.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearFunding}
+                    className="px-3 py-1.5 bg-white border border-rose-300 rounded-lg text-xs font-bold text-rose-700 hover:bg-rose-50"
+                  >
+                    清除全部
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {fundingWarnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-[11px] text-amber-900 space-y-0.5 max-h-40 overflow-y-auto">
+                <div className="font-bold flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  匯入提醒（{fundingWarnings.length} 筆，已照常匯入）
+                </div>
+                {fundingWarnings.map((w, i) => (
+                  <div key={i}>· {w}</div>
+                ))}
+              </div>
+            )}
+
+            {fundedTeacherNames.length === 0 ? (
+              <p className="text-[11px] text-emerald-700">
+                尚未匯入；目前所有兼課鐘點費都歸學校經費。
+              </p>
+            ) : (
+              <div className="overflow-x-auto bg-white rounded-xl border border-emerald-200">
+                <table className="min-w-max text-xs border-collapse">
+                  <thead className="bg-emerald-100/60 text-emerald-950">
+                    <tr>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">姓名</th>
+                      <th className="px-3 py-2 text-center whitespace-nowrap">課表兼課</th>
+                      {funding.concurrentFundingSources.map((s) => (
+                        <th key={s} className="px-3 py-2 text-center whitespace-nowrap">{s}</th>
+                      ))}
+                      <th className="px-3 py-2 text-center whitespace-nowrap">學校</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-emerald-100">
+                    {fundedTeacherNames.map((name) => {
+                      const funds: Record<string, number> = funding.concurrentFundingByName[name] || {};
+                      const weekly = scheduleWeeklyByName[name]?.concurrent;
+                      const extTotal = Object.values(funds).reduce((s, n) => s + n, 0);
+                      const school = weekly === undefined ? null : weekly - extTotal;
+                      return (
+                        <tr key={name}>
+                          <td className="px-3 py-1.5 font-bold text-slate-900 whitespace-nowrap">
+                            {name}
+                            {weekly === undefined && (
+                              <span className="ml-1 text-[10px] font-normal text-slate-400">名冊查無</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 text-center">{weekly ?? '—'}</td>
+                          {funding.concurrentFundingSources.map((s) => (
+                            <td key={s} className="px-3 py-1.5 text-center">{funds[s] || ''}</td>
+                          ))}
+                          <td
+                            className={`px-3 py-1.5 text-center font-semibold ${
+                              school !== null && school < 0 ? 'text-rose-600' : 'text-emerald-800'
+                            }`}
+                            title={school !== null && school < 0 ? '外部經費超過課表兼課，月結時會壓低外部經費' : undefined}
+                          >
+                            {school ?? '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">

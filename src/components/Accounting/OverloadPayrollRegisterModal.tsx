@@ -16,6 +16,7 @@ import {
   type OverloadPayrollTotals,
 } from '../../utils/overloadPayrollRegister';
 import { exportOverloadPayrollExcel } from '../../utils/payrollRegisterExcel';
+import { listConcurrentFundNames, SCHOOL_FUND_NAME } from '../../utils/concurrentFunding';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
 import { PayrollRegisterPrintStyles, CELL_CENTER, CELL_LEFT } from './PayrollRegisterPrintStyles';
 import { PayrollRegisterSignatureBlock } from './PayrollRegisterSignatureBlock';
@@ -80,21 +81,31 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
   const monthRangeLabel = formatPayrollMonthRangeLabel(month, settlementYear, weeks);
   const rocYear = formatRocYear(settlementYear);
 
+  const fundNames = listConcurrentFundNames(systemConfig);
+  const hasExternalFunds = fundNames.length > 1;
+  const [fundName, setFundName] = React.useState(SCHOOL_FUND_NAME);
+  const activeFund = fundNames.includes(fundName) ? fundName : SCHOOL_FUND_NAME;
+
   const rows = buildOverloadPayrollRows(
     settlements,
     systemConfig,
     requests,
     month,
-    settlementYear
+    settlementYear,
+    { fundName: activeFund, weeks: weekRound }
   );
   const { pages, grandTotal } = paginateOverloadPayroll(rows);
   const totalPages = Math.max(pages.length, 1);
 
-  const title = `${systemConfig.schoolName}日校${rocYear}年${month}月份超時授課鐘點費印領清冊`;
+  const fundSuffix = hasExternalFunds ? `（${activeFund}經費）` : '';
+  const fileFundSuffix = hasExternalFunds
+    ? `_${activeFund.replace(/[\\/:*?"<>|]/g, '_')}經費`
+    : '';
+  const title = `${systemConfig.schoolName}日校${rocYear}年${month}月份超時授課鐘點費印領清冊${fundSuffix}`;
 
   const handlePrint = () =>
     printWithDocumentTitle(
-      `${systemConfig.schoolName}_${rocYear}年${month}月_兼課鐘點費印領清冊`
+      `${systemConfig.schoolName}_${rocYear}年${month}月_兼課鐘點費印領清冊${fileFundSuffix}`
     );
 
   const handleExportExcel = async () => {
@@ -105,7 +116,7 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
       weekRound,
       pages,
       grandTotal,
-      `${systemConfig.schoolName}_${rocYear}年${month}月_兼課鐘點費印領清冊.xlsx`
+      `${systemConfig.schoolName}_${rocYear}年${month}月_兼課鐘點費印領清冊${fileFundSuffix}.xlsx`
     );
   };
 
@@ -141,11 +152,36 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
         </div>
       </div>
 
+      {hasExternalFunds && (
+        <div className="print:hidden bg-slate-100 border-b border-slate-200 px-4 py-2 flex flex-wrap items-center gap-2 shrink-0">
+          <span className="text-xs font-bold text-slate-600">經費來源</span>
+          {fundNames.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setFundName(name)}
+              className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
+                name === activeFund
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+          <span className="text-[11px] text-slate-500">
+            外部經費固定每週節數 × {weekRound} 週；請假應減、代課應加都算在學校經費。列印與匯出以目前選的經費為準。
+          </span>
+        </div>
+      )}
+
       <div className="payroll-register-print-root overflow-y-auto flex-1 p-4 print:p-0 print:overflow-visible bg-slate-100 print:bg-white">
         <PayrollRegisterPrintStyles />
         {pages.length === 0 ? (
           <div className="bg-white rounded-xl p-8 text-center text-slate-500 text-sm">
-            本月無兼課鐘點費資料。請確認課表已標示兼課，或結算月份是否正確。
+            {activeFund === SCHOOL_FUND_NAME
+              ? '本月無兼課鐘點費資料。請確認課表已標示兼課，或結算月份是否正確。'
+              : `本月無${activeFund}經費的兼課鐘點費資料。`}
           </div>
         ) : (
           <>

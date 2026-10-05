@@ -19,6 +19,7 @@ import {
   Printer,
 } from 'lucide-react';
 import { OverloadPayrollRegisterModal } from './OverloadPayrollRegisterModal';
+import { listConcurrentFundNames } from '../../utils/concurrentFunding';
 import { SubstitutePayrollRegisterModal } from './SubstitutePayrollRegisterModal';
 import { CounselingPayrollRegisterModal } from './CounselingPayrollRegisterModal';
 import { ActingHomeroomPayrollRegisterModal } from './ActingHomeroomPayrollRegisterModal';
@@ -167,6 +168,12 @@ export const AccountingSettlement: React.FC = () => {
               代課費規則（依薪資對照表）：公假／公差、婚假、娩假／陪產假、喪假、身心調適假，以及<strong>事假學年第 8 天起</strong>、<strong>病假連續 3 日起</strong>，由學校公費支應（代課清冊）；
               未達門檻之事病假<strong>不入清冊</strong>，請假人自行與代課教師約定。身心調適假超鐘點<strong>不扣</strong>兼課費。
             </span>
+            {listConcurrentFundNames(systemConfig).length > 1 && (
+              <span className="block mt-1 text-emerald-800">
+                兼課經費來源已設定（{listConcurrentFundNames(systemConfig).slice(1).join('、')}）：兼課印領清冊依經費分冊，
+                外部經費固定每週節數 × 週數，請假應減、代課應加一律算在學校經費。
+              </span>
+            )}
           </p>
         </div>
 
