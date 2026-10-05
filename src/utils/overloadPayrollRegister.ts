@@ -194,9 +194,12 @@ export function buildConcurrentPayrollRemarks(
     if (!r.substituteTeacherId) continue;
 
     const periodOpts = { ...calendarOpts, period: r.originalSession.period };
+    const substituteName = (r.substituteTeacherName || '')
+      .replace(/\s+/g, '')
+      .replace(/(老師|教師)$/, '');
     pushDateLines(
       r,
-      `請${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`,
+      `請${substituteName ? `${substituteName}代` : ''}${leaveTypeRemarkShort(r.leaveType, r.reason)}扣兼課`,
       (iso) => shouldDeductConcurrentOnLeaveDate(iso, r, payrollCtx),
       () =>
         countConcurrentDeductPeriodsInMonth(
