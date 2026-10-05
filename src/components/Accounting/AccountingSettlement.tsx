@@ -164,7 +164,7 @@ export const AccountingSettlement: React.FC = () => {
             計，超鐘點國定假日編制內仍發（僅外聘人員扣放假日） ｜ 
             兼代課法定上限 <strong>{systemConfig.maxWeeklyOverloadPeriods} 節/週</strong>
             <span className="block mt-1 text-slate-600">
-              代課費規則（依薪資對照表）：公假／公差、婚假、娩假／陪產假、身心調適假，以及<strong>事假學年第 8 天起</strong>、<strong>病假連續 3 日起</strong>，由學校公費支應（代課清冊）；
+              代課費規則（依薪資對照表）：公假／公差、婚假、娩假／陪產假、喪假、身心調適假，以及<strong>事假學年第 8 天起</strong>、<strong>病假連續 3 日起</strong>，由學校公費支應（代課清冊）；
               未達門檻之事病假<strong>不入清冊</strong>，請假人自行與代課教師約定。身心調適假超鐘點<strong>不扣</strong>兼課費。
             </span>
           </p>
@@ -295,7 +295,7 @@ export const AccountingSettlement: React.FC = () => {
             ${totalPublicSubAmount.toLocaleString()}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            公假、婚假、娩假／陪產假、身心調適假，及事假第 8 天起、病假連續 3 日起
+            公假、婚假、娩假／陪產假、喪假、身心調適假，及事假第 8 天起、病假連續 3 日起
           </p>
         </div>
 

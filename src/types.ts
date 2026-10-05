@@ -79,8 +79,8 @@ export type LeaveType =
   | 'wellness' // 身心調適假 (公費派代 · 21 小時/學年)
   | 'personal' // 事假 (第 8 天起公費派代)
   | 'sick' // 病假 (連續 3 日起公費派代)
+  | 'bereavement' // 喪假 (公費派代 · 得以時計)
   | 'training' // @deprecated 舊資料：併入公假
-  | 'bereavement' // @deprecated 舊資料：併入公假
   | 'other'; // @deprecated 舊資料：併入事假
 
 export type PaymentType = 'public' | 'private'; // 公費派代 | 自費代課

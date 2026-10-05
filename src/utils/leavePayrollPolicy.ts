@@ -53,6 +53,7 @@ export const IN_SCOPE_LEAVE_TYPES: LeaveType[] = [
   'official',
   'marriage',
   'maternity',
+  'bereavement',
   'wellness',
   'personal',
   'sick',
@@ -89,7 +90,7 @@ export function academicYearIsoRange(academicYear: string | number): { start: st
 
 export function normalizeLeaveType(leaveType?: LeaveType, reason?: string): LeaveType {
   if (reason && /婚假/.test(reason)) return 'marriage';
-  if (leaveType === 'training' || leaveType === 'bereavement') return 'official';
+  if (leaveType === 'training') return 'official';
   if (leaveType === 'other') return 'personal';
   if ((leaveType as string | undefined) === 'invigilation') return 'official';
   if (!leaveType) return 'official';
@@ -167,7 +168,13 @@ export function isSickLeaveSpellPublicPayroll(
 /** 永遠公費派代之假別（不含事假／病假門檻判斷） */
 export function isAlwaysPublicLeaveType(leaveType?: LeaveType, reason?: string): boolean {
   const lt = normalizeLeaveType(leaveType, reason);
-  return lt === 'official' || lt === 'marriage' || lt === 'maternity' || lt === 'wellness';
+  return (
+    lt === 'official' ||
+    lt === 'marriage' ||
+    lt === 'maternity' ||
+    lt === 'bereavement' ||
+    lt === 'wellness'
+  );
 }
 
 export function isLeaveDatePublicPayroll(

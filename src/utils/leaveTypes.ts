@@ -25,6 +25,10 @@ export function sickLeavePolicyNote(config?: LeaveThresholdConfig | null): strin
   return `病假連續 ${sickLeaveConsecutiveDayThreshold} 日（曆日）起改公費派代；未達門檻者不入代課清冊。`;
 }
 
+/** 教師請假規則第 3 條第 1 項第 6 款；課務依國立高級中等以下學校教師差假期間所遺課務調課補課代課實施要點第 3 點第 3 款 */
+export const BEREAVEMENT_LEAVE_LEGAL_NOTE =
+  '喪假：父母、配偶死亡 15 日；繼父母、配偶之父母、子女死亡 10 日；曾祖父母、祖父母、配偶之祖父母、配偶之繼父母、兄弟姐妹死亡 5 日。得分次申請（得以時計），應於死亡之日起百日內請畢；所遺課務由學校遴聘代課並核支代課鐘點費（公費派代）。';
+
 /** @deprecated 請改用 wellnessLeaveLegalNote(systemConfig) */
 export const WELLNESS_LEAVE_LEGAL_NOTE = wellnessLeaveLegalNote();
 
@@ -49,6 +53,7 @@ export const paymentTypeForLeaveType = (leaveType: LeaveType): PaymentType => {
     case 'official':
     case 'marriage':
     case 'maternity':
+    case 'bereavement':
     case 'wellness':
       return 'public';
     default:
@@ -57,7 +62,7 @@ export const paymentTypeForLeaveType = (leaveType: LeaveType): PaymentType => {
 };
 
 export function normalizeLeaveTypeForForm(leaveType: LeaveType): LeaveType {
-  if (leaveType === 'training' || leaveType === 'bereavement') return 'official';
+  if (leaveType === 'training') return 'official';
   if (leaveType === 'other') return 'personal';
   // 舊資料相容：已移除的監考任務假別視為公假
   if ((leaveType as string) === 'invigilation') return 'official';
@@ -80,6 +85,8 @@ export const leaveTypeLabel = (
       return '病假 (檢附就醫收據/證明)';
     case 'maternity':
       return '娩假 / 陪產假 (公費派代 · 按小時計)';
+    case 'bereavement':
+      return '喪假 (公費派代 · 得以時計 · 百日內請畢)';
     case 'wellness':
       return `身心調適假 (公費派代 · 每學年 ${wellnessLeaveHoursPerYear} 小時)`;
     default:
@@ -102,6 +109,8 @@ export const leaveTypeRemarkShort = (leaveType?: LeaveType, reason?: string): st
       return '婚假';
     case 'maternity':
       return /陪產/.test(reason || '') ? '陪產假' : '產假';
+    case 'bereavement':
+      return '喪假';
     default:
       return '請假';
   }
@@ -130,6 +139,8 @@ export const actingHomeroomLeaveRemarkShort = (
       return '婚假';
     case 'maternity':
       return '產假';
+    case 'bereavement':
+      return '喪假';
     default:
       return '請假';
   }
@@ -147,6 +158,8 @@ export const defaultReasonForLeaveType = (
       return '申請婚假 (公費派代)';
     case 'maternity':
       return '申請娩假/陪產假 (公費派代)';
+    case 'bereavement':
+      return '申請喪假 (公費派代)';
     case 'wellness':
       return '申請身心調適假 (公費派代)';
     case 'sick':
@@ -167,6 +180,7 @@ export function leaveTypeFormOptions(
     { value: 'official', label: '🏛️ 公假 / 公差 (公文指派、出差)' },
     { value: 'marriage', label: '💒 婚假 (公費派代 · 按小時計)' },
     { value: 'maternity', label: '👶 娩假 / 陪產假 (公費派代 · 按小時計)' },
+    { value: 'bereavement', label: '🕯️ 喪假 (公費派代 · 得以時計 · 百日內請畢)' },
     {
       value: 'wellness',
       label: `🧘 身心調適假 (公費 · 每學年 ${thresholds.wellnessLeaveHoursPerYear} 小時)`,

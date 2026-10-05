@@ -16,6 +16,7 @@ import {
   weekdaysInDateRange,
 } from '../../utils/leaveDates';
 import {
+  BEREAVEMENT_LEAVE_LEGAL_NOTE,
   defaultReasonForLeaveType,
   leaveTypeFormOptions,
   personalLeavePolicyNote,
@@ -1257,6 +1258,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     {leaveType === 'sick' && (
                       <p className="mt-1.5 text-[10px] text-amber-900 leading-snug bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                         {sickLeavePolicyNote(systemConfig)}
+                      </p>
+                    )}
+                    {leaveType === 'bereavement' && (
+                      <p className="mt-1.5 text-[10px] text-slate-700 leading-snug bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
+                        {BEREAVEMENT_LEAVE_LEGAL_NOTE}
                       </p>
                     )}
                   </div>

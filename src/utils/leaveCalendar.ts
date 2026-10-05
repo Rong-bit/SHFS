@@ -51,6 +51,7 @@ export const LEAVE_CALENDAR_COLORS: Record<
   sick: { bg: '#d50000', text: '#ffffff', soft: '#fad2cf' },
   marriage: { bg: '#e67c73', text: '#ffffff', soft: '#fde7e3' },
   maternity: { bg: '#8e24aa', text: '#ffffff', soft: '#f3e8fd' },
+  bereavement: { bg: '#616161', text: '#ffffff', soft: '#e0e0e0' },
   wellness: { bg: '#33b679', text: '#ffffff', soft: '#d4edda' },
 };
 

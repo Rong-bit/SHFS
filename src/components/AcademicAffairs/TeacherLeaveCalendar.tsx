@@ -201,6 +201,7 @@ export const TeacherLeaveCalendar: React.FC = () => {
           ['sick', '病假'],
           ['marriage', '婚假'],
           ['maternity', '產假'],
+          ['bereavement', '喪假'],
           ['wellness', '身心假'],
         ].map(([key, label]) => {
           const c = leaveCalendarColor(key as 'official');
