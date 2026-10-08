@@ -82,6 +82,8 @@ export const PERIOD_DEFINITIONS: PeriodDefinition[] = buildPeriodDefinitions(
 export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   schoolLevel: 'vocational',
   maxPeriod: SCHOOL_LEVEL_PRESETS.vocational.maxPeriod,
+  homeroomDayOfWeek: 3,
+  homeroomPeriod: 7,
   counselingPeriods: [...(SCHOOL_LEVEL_PRESETS.vocational.counselingPeriods || [])],
   personalLeavePublicDayThreshold:
     SCHOOL_LEVEL_PRESETS.vocational.personalLeavePublicDayThreshold,

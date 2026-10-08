@@ -31,7 +31,7 @@ import { normalizePeopleEmails, normalizeSchoolEmail } from '../utils/schoolEmai
 import { normalizeSchoolName } from '../utils/schoolName';
 import { normalizeLoadedSystemConfig } from '../utils/normalizeSystemConfig';
 import { isCounselingPeriod, isDaytimePeriod, resolvePeriodConfig } from '../utils/periodConfig';
-import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, clearInferredHomeroom, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherNameMatches } from '../utils/schoolDepartments';
+import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, clearInferredHomeroom, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveHomeroomSlot, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherNameMatches } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
 import { temporarySwapPeriodDeltaInMonth, validateSwapRequestFields } from '../utils/temporarySwap';
 import {
@@ -331,6 +331,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const savedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     const sessionList: CourseSession[] = savedSessions ? JSON.parse(savedSessions) : INITIAL_SESSIONS;
     let basePeriods = normalizeStandardBasePeriods(INITIAL_SYSTEM_CONFIG.standardBasePeriods);
+    let homeroomSlot = resolveHomeroomSlot(INITIAL_SYSTEM_CONFIG);
     try {
       const savedConfig = localStorage.getItem(STORAGE_KEYS.CONFIG);
       if (savedConfig) {
@@ -338,6 +339,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         basePeriods = normalizeStandardBasePeriods(
           parsed.standardBasePeriods || parsed.basePeriodsStandard
         );
+        homeroomSlot = resolveHomeroomSlot(parsed);
       }
     } catch {
       /* keep defaults */
@@ -349,7 +351,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       basePeriods.homeroom,
       basePeriods.head,
       basePeriods.sectionChief,
-      basePeriods.director
+      basePeriods.director,
+      { homeroomDayOfWeek: homeroomSlot.dayOfWeek, homeroomPeriod: homeroomSlot.period }
     );
   });
 
@@ -755,6 +758,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : inferIsPractical(s.subjectName, s.venueName),
     }));
     const remoteStd = normalizeStandardBasePeriods(merged.systemConfig?.standardBasePeriods);
+    const remoteSlot = resolveHomeroomSlot({
+      ...INITIAL_SYSTEM_CONFIG,
+      ...systemConfigRef.current,
+      ...(merged.systemConfig || {}),
+    });
     setTeachers(
       enrichTeachersFromSessions(
         remoteTeachers,
@@ -763,7 +771,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         remoteStd.homeroom,
         remoteStd.head,
         remoteStd.sectionChief,
-        remoteStd.director
+        remoteStd.director,
+        { homeroomDayOfWeek: remoteSlot.dayOfWeek, homeroomPeriod: remoteSlot.period }
       )
     );
     setVenues(merged.venues || []);
@@ -1603,7 +1612,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           subTeacher,
           schedule,
           requestPool,
-          { excludeRequestIds: params.excludeRequestIds }
+          { excludeRequestIds: params.excludeRequestIds, periodCfg: systemConfig }
         );
         if (weeklyOverload >= systemConfig.maxWeeklyOverloadPeriods) {
           messages.push(`【法規防呆警示】${subTeacher.name} 本週兼課與代課合計已達 ${weeklyOverload} 節（法定上限為 ${systemConfig.maxWeeklyOverloadPeriods} 節），若再承擔代課將超過法規上限！`);
@@ -2587,17 +2596,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const apply = (authConfig?: SystemConfig['authConfig']) => {
+      const nextSlot = resolveHomeroomSlot({ ...systemConfig, ...newConfig });
+      const prevSlot = resolveHomeroomSlot(systemConfig);
+      const homeroomSlotChanged =
+        prevSlot.dayOfWeek !== nextSlot.dayOfWeek || prevSlot.period !== nextSlot.period;
+      const homeroomSlot = {
+        homeroomDayOfWeek: nextSlot.dayOfWeek,
+        homeroomPeriod: nextSlot.period,
+      };
       setSystemConfig((prev) => ({
         ...prev,
         ...newConfig,
+        ...homeroomSlot,
         ...(typeof newConfig.schoolName === 'string'
           ? { schoolName: normalizeSchoolName(newConfig.schoolName) }
           : {}),
         standardBasePeriods: nextBase,
         ...(authConfig ? { authConfig: withMigratedAuthConfig(authConfig) } : {}),
       }));
-      setTeachers((prev) =>
-        prev.map((t) => {
+      setTeachers((prev) => {
+        if (homeroomSlotChanged) {
+          return enrichTeachersFromSessions(
+            prev,
+            sessions,
+            nextBase.fulltime,
+            nextBase.homeroom,
+            nextBase.head,
+            nextBase.sectionChief,
+            nextBase.director,
+            homeroomSlot
+          );
+        }
+        return prev.map((t) => {
           const resolved = resolveTeacherBasePeriods(
             t,
             nextBase.fulltime,
@@ -2612,8 +2642,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             basePeriods: resolved.basePeriods,
             title: resolved.title,
           };
-        })
-      );
+        });
+      });
     };
 
     if (newConfig.authConfig) {
@@ -2819,7 +2849,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       systemConfig.standardBasePeriods.homeroom,
       systemConfig.standardBasePeriods.head,
       systemConfig.standardBasePeriods.sectionChief,
-      systemConfig.standardBasePeriods.director
+      systemConfig.standardBasePeriods.director,
+      systemConfig
     );
 
     setTeachers(updatedTeachers);
@@ -2837,7 +2868,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         systemConfig.standardBasePeriods.homeroom,
         systemConfig.standardBasePeriods.head,
         systemConfig.standardBasePeriods.sectionChief,
-        systemConfig.standardBasePeriods.director
+        systemConfig.standardBasePeriods.director,
+        systemConfig
       );
       setTeachers(teachersAfterReapply);
       setSessions(withCovers);

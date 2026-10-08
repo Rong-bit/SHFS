@@ -160,7 +160,10 @@ export function classNamesFromSessions(
   return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 }
 
-type PeriodCfg = Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null | undefined;
+type PeriodCfg =
+  | Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods' | 'homeroomDayOfWeek' | 'homeroomPeriod'>
+  | null
+  | undefined;
 
 const isDaytimeSlot = (s: CourseSession, cfg?: PeriodCfg) => isDaytimeSlotConfigured(s, cfg);
 export const isCounselingSlot = (
@@ -188,17 +191,42 @@ export const teacherNameMatches = (rowTeacherName: string, teacherName: string) 
 /** 班會／班級活動：用來判斷導師，並計入正課（法規：班級活動節數併入計算） */
 export const isHomeroomActivity = (subjectName: string) => /班會|班級活動/.test(subjectName || '');
 
-/** 課表匯入常把三節都寫成「團體活動」；星期三第 7 節實際為班會 */
-export const isWednesdayHomeroomPeriod = (dayOfWeek?: number, period?: number) =>
-  dayOfWeek === 3 && period === 7;
+export const DEFAULT_HOMEROOM_DAY = 3;
+export const DEFAULT_HOMEROOM_PERIOD = 7;
+
+export type HomeroomSlotConfig = {
+  homeroomDayOfWeek?: number;
+  homeroomPeriod?: number;
+};
+
+/** 未設定時為星期三第 7 節 */
+export const resolveHomeroomSlot = (config?: HomeroomSlotConfig | null) => {
+  const day = Number(config?.homeroomDayOfWeek);
+  const period = Number(config?.homeroomPeriod);
+  return {
+    dayOfWeek: day >= 1 && day <= 5 ? Math.round(day) : DEFAULT_HOMEROOM_DAY,
+    period: period >= 1 && period <= 12 ? Math.round(period) : DEFAULT_HOMEROOM_PERIOD,
+  };
+};
+
+/** 系統設定的班會格。未傳設定時為星期三第 7 節（課表匯入常把該節寫成團體活動） */
+export const isWednesdayHomeroomPeriod = (
+  dayOfWeek?: number,
+  period?: number,
+  config?: HomeroomSlotConfig | null
+) => {
+  const slot = resolveHomeroomSlot(config);
+  return dayOfWeek === slot.dayOfWeek && period === slot.period;
+};
 
 /** 對開社團／團體活動（非班會）：不計入每週授課節數，通常 2 節 */
 export const isExcludedGroupActivity = (
   subjectName: string,
   dayOfWeek?: number,
-  period?: number
+  period?: number,
+  config?: HomeroomSlotConfig | null
 ) => {
-  if (isWednesdayHomeroomPeriod(dayOfWeek, period)) return false;
+  if (isWednesdayHomeroomPeriod(dayOfWeek, period, config)) return false;
   const name = subjectName || '';
   if (isHomeroomActivity(name) && !/社團/.test(name)) return false;
   return /團體活動|社團/.test(name);
@@ -208,8 +236,9 @@ export const isExcludedGroupActivity = (
 export const isExcludedFromTeachingPeriods = (
   subjectName: string,
   dayOfWeek?: number,
-  period?: number
-) => isExcludedGroupActivity(subjectName, dayOfWeek, period);
+  period?: number,
+  config?: HomeroomSlotConfig | null
+) => isExcludedGroupActivity(subjectName, dayOfWeek, period, config);
 
 /** 課表上的團體活動時間（含班會、社團）。判斷導師請用 isHomeroomTeacherSlot，不要把整段團體活動都算成導師。 */
 export const isGroupActivity = (subjectName: string) =>
@@ -217,16 +246,17 @@ export const isGroupActivity = (subjectName: string) =>
 
 /**
  * 這一格才是班會、才代表該班導師。
- * 匯入常把星期三下午三節都寫成「團體活動」，實際只有第 7 節是班會；
- * 第 5、6 節的社團／團體活動老師不是導師。
- * 科目已寫明班會或班級活動時，不論節次都算。
+ * 預設星期三第 7 節；可在系統設定改星期與節次。
+ * 課表常把同一下午多節都寫成「團體活動」，只有設定的那一節算導師。
+ * 科目已寫明班會或班級活動時，任何節次都算。
  */
 export const isHomeroomTeacherSlot = (
-  session: Pick<CourseSession, 'subjectName' | 'dayOfWeek' | 'period'>
+  session: Pick<CourseSession, 'subjectName' | 'dayOfWeek' | 'period'>,
+  config?: HomeroomSlotConfig | null
 ) => {
   const name = session.subjectName || '';
   if (isHomeroomActivity(name) && !/社團/.test(name)) return true;
-  return isWednesdayHomeroomPeriod(session.dayOfWeek, session.period) && isGroupActivity(name);
+  return isWednesdayHomeroomPeriod(session.dayOfWeek, session.period, config) && isGroupActivity(name);
 };
 
 export type WeeklyOverloadBreakdown = {
@@ -271,7 +301,7 @@ export const breakdownWeeklyOverloadPeriods = (
 
   slotMap.forEach((list, key) => {
     const teaching = list.filter(
-      (s) => !isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)
+      (s) => !isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period, periodCfg)
     );
     if (teaching.length === 0) {
       clubOnlySlots.push({ key, list });
@@ -429,7 +459,7 @@ export const monthlyTeachingPeriods = (
       (s) =>
         s.teacherId === teacherId &&
         isDaytimeSlot(s, periodCfg) &&
-        !isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)
+        !isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period, periodCfg)
     )
     .reduce((sum, s) => sum + (counts[s.dayOfWeek] || 0), 0);
 };
@@ -463,7 +493,8 @@ export const monthlyConcurrentPeriods = (
   const slots = new Set<string>();
   sessions.forEach((s) => {
     if (s.teacherId !== teacherId) return;
-    if (!s.isConcurrent || isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period)) return;
+    if (!s.isConcurrent || isExcludedFromTeachingPeriods(s.subjectName, s.dayOfWeek, s.period, periodCfg))
+      return;
     if (!isDaytimeSlot(s, periodCfg)) return;
     if (isSubstituteCoverSession(s)) return;
     slots.add(`${s.dayOfWeek}-${s.period}`);
@@ -551,8 +582,9 @@ export const settlementWeeksForMonth = (
 /** 每週超鐘點＝課表標示兼課的節數（有課表才計；不再用授課−基本估算） */
 export const teacherWeeklyOverload = (
   teacher: Pick<Teacher, 'id' | 'weeklyActualPeriods' | 'dutyReductionPeriods' | 'basePeriods'>,
-  sessions?: CourseSession[]
-) => (sessions ? countWeeklyConcurrentPeriods(sessions, teacher.id) : 0);
+  sessions?: CourseSession[],
+  periodCfg?: PeriodCfg
+) => (sessions ? countWeeklyConcurrentPeriods(sessions, teacher.id, periodCfg) : 0);
 
 /** 各職稱基本鐘點由系統設定；未填時專任預設 16。 */
 export const HOMEROOM_DEFAULT_DUTY_REDUCTION = 1;
@@ -671,12 +703,15 @@ const sessionTeacherKeys = (session: CourseSession) => {
   return { names, teacherId: session.teacherId };
 };
 
-/** 班會老師 = 該班導師。只看星期三第 7 節，或科目已寫明班會／班級活動。 */
-export const buildHomeroomClassByTeacher = (sessions: CourseSession[]) => {
+/** 班會老師 = 該班導師。看系統設定的班會格（預設星期三第 7 節），或科目已寫明班會／班級活動。 */
+export const buildHomeroomClassByTeacher = (
+  sessions: CourseSession[],
+  config?: HomeroomSlotConfig | null
+) => {
   const classToTeachers = new Map<string, string[]>();
 
   sessions.forEach((s) => {
-    if (!isHomeroomTeacherSlot(s)) return;
+    if (!isHomeroomTeacherSlot(s, config)) return;
     const { names } = sessionTeacherKeys(s);
     if (names.length === 0) return;
     const prev = classToTeachers.get(s.className) || [];
@@ -786,10 +821,11 @@ export const applyTeacherHomeroomFromSessions = <
   T extends Pick<Teacher, 'id' | 'name' | 'title' | 'homeroomClass'>
 >(
   teachers: T[],
-  sessions: CourseSession[]
+  sessions: CourseSession[],
+  config?: HomeroomSlotConfig | null
 ): T[] => {
   if (!sessions.some((s) => isGroupActivity(s.subjectName))) return teachers;
-  const homeroomByTeacher = buildHomeroomClassByTeacher(sessions);
+  const homeroomByTeacher = buildHomeroomClassByTeacher(sessions, config);
   const claimedClasses = new Set<string>();
   homeroomByTeacher.forEach((classes) => classes.forEach((className) => claimedClasses.add(className)));
 
@@ -834,11 +870,13 @@ export const enrichTeachersFromSessions = (
   homeroomStandard = HOMEROOM_BASE_PERIODS,
   headStandard = HEAD_BASE_PERIODS,
   chiefStandard = CHIEF_BASE_PERIODS,
-  directorStandard = DIRECTOR_BASE_PERIODS
+  directorStandard = DIRECTOR_BASE_PERIODS,
+  homeroomSlot?: HomeroomSlotConfig | null
 ) => {
   const next = applyTeacherHomeroomFromSessions(
     applyTeacherDepartmentsFromSessions(teachers, sessions),
-    sessions
+    sessions,
+    homeroomSlot
   );
   return next.map((t) => {
     const { dutyReductionPeriods, basePeriods, title } = resolveTeacherBasePeriods(
@@ -849,7 +887,7 @@ export const enrichTeachersFromSessions = (
       chiefStandard,
       directorStandard
     );
-    const weeklyActualPeriods = countWeeklyTeachingPeriods(sessions, t.id);
+    const weeklyActualPeriods = countWeeklyTeachingPeriods(sessions, t.id, homeroomSlot);
     if (
       t.title === title &&
       t.dutyReductionPeriods === dutyReductionPeriods &&

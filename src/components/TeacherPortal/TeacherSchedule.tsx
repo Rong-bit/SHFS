@@ -26,7 +26,7 @@ import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { ModalShell } from '../Common/ModalShell';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isPracticalSession, isWednesdayHomeroomPeriod } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isHomeroomTeacherSlot, isPracticalSession } from '../../utils/schoolDepartments';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import {
   findApprovedTemporarySwapsForSession,
@@ -103,7 +103,11 @@ export const TeacherSchedule: React.FC = () => {
         isoDateForDayOfWeekInCurrentWeek(r.originalSession.dayOfWeek)
       )
   );
-  const overloadBreakdown = breakdownWeeklyOverloadPeriods(sessions, currentTeacher.id);
+  const overloadBreakdown = breakdownWeeklyOverloadPeriods(
+    sessions,
+    currentTeacher.id,
+    systemConfig
+  );
   const overloadPeriods = overloadBreakdown.concurrent;
   const thisMonth = settlementPeriodContainingIso(
     isoDaysAgo(0),
@@ -470,7 +474,7 @@ export const TeacherSchedule: React.FC = () => {
                                           跨班
                                         </span>
                                       )}
-                                      {isWednesdayHomeroomPeriod(session.dayOfWeek, session.period) && (
+                                      {isHomeroomTeacherSlot(session, systemConfig) && (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-emerald-600 text-white rounded font-medium">
                                           班會
                                         </span>

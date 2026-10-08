@@ -321,6 +321,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
       subjectName: targets.map((s) => s.subjectName),
       applicantDepartment: currentTeacher.department,
       maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+      periodCfg: systemConfig,
       leaveDateStart: leaveDateStart || undefined,
       leaveDateEnd:
         leaveDateMode === 'range'

@@ -1,5 +1,6 @@
 import type { SystemConfig } from '../types';
 import { resolvePeriodConfig } from './periodConfig';
+import { resolveHomeroomSlot } from './schoolDepartments';
 import { normalizeSchoolLevel, type SchoolLevel } from './schoolLevelPresets';
 import { resolveLeaveThresholds } from './leavePayrollPolicy';
 import { normalizeSchoolName } from './schoolName';
@@ -13,6 +14,8 @@ export function normalizeLoadedSystemConfig(
   SystemConfig,
   | 'schoolLevel'
   | 'maxPeriod'
+  | 'homeroomDayOfWeek'
+  | 'homeroomPeriod'
   | 'counselingPeriods'
   | 'personalLeavePublicDayThreshold'
   | 'sickLeaveConsecutiveDayThreshold'
@@ -28,6 +31,14 @@ export function normalizeLoadedSystemConfig(
     counselingPeriods: Array.isArray(parsed.counselingPeriods)
       ? (parsed.counselingPeriods as number[])
       : base.counselingPeriods,
+  });
+  const homeroom = resolveHomeroomSlot({
+    homeroomDayOfWeek:
+      typeof parsed.homeroomDayOfWeek === 'number'
+        ? parsed.homeroomDayOfWeek
+        : base.homeroomDayOfWeek,
+    homeroomPeriod:
+      typeof parsed.homeroomPeriod === 'number' ? parsed.homeroomPeriod : base.homeroomPeriod,
   });
   const leave = resolveLeaveThresholds({
     personalLeavePublicDayThreshold:
@@ -46,6 +57,8 @@ export function normalizeLoadedSystemConfig(
   return {
     schoolLevel: schoolLevel as SchoolLevel,
     maxPeriod: period.maxPeriod,
+    homeroomDayOfWeek: homeroom.dayOfWeek,
+    homeroomPeriod: homeroom.period,
     counselingPeriods: period.counselingPeriods,
     personalLeavePublicDayThreshold: leave.personalLeavePublicDayThreshold,
     sickLeaveConsecutiveDayThreshold: leave.sickLeaveConsecutiveDayThreshold,

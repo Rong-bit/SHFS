@@ -24,7 +24,7 @@ export interface Teacher {
   name: string;
   title: TeacherTitle;
   department: DepartmentType;
-  homeroomClass?: string; // 由星期三第 7 節班會判斷，例如 電機三忠
+  homeroomClass?: string; // 由系統設定的班會格判斷（預設星期三第 7 節），例如 電機三忠
   dutyReductionPeriods?: number; // 任務減授節數（導師等任務每人不同，例如減 1 節或數節）
   basePeriods: number; // 每週基本授課節數 = 專任標準 − 任務減授
   weeklyActualPeriods: number; // 每週正課節數（不含團體活動）
@@ -200,6 +200,10 @@ export interface SystemConfig {
   schoolLevel?: 'elementary' | 'junior' | 'senior' | 'vocational';
   /** 每日最大節次（國小常見 6～7；國中／高中職常見 7～8） */
   maxPeriod?: number;
+  /** 班會星期（1＝週一 … 5＝週五）。該節團體活動的老師視為該班導師。預設 3（週三） */
+  homeroomDayOfWeek?: number;
+  /** 班會節次。預設 7 */
+  homeroomPeriod?: number;
   /** 課輔節次（可空＝無課輔；高職預設 [8]） */
   counselingPeriods?: number[];
   /** 事假：學年累計第 N 天起改公費派代（預設 8） */

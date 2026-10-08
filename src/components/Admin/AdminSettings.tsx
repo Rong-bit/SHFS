@@ -16,6 +16,7 @@ import {
 } from '../../utils/calendarSettlement';
 import { clipSchoolName, SCHOOL_NAME_MAX_LENGTH, normalizeSchoolName } from '../../utils/schoolName';
 import { buildPeriodDefinitions, resolvePeriodConfig } from '../../utils/periodConfig';
+import { resolveHomeroomSlot } from '../../utils/schoolDepartments';
 import {
   applySchoolLevelPreset,
   normalizeSchoolLevel,
@@ -158,6 +159,8 @@ export const AdminSettings: React.FC = () => {
     standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
     schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
     maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
+    homeroomDayOfWeek: resolveHomeroomSlot(systemConfig).dayOfWeek,
+    homeroomPeriod: resolveHomeroomSlot(systemConfig).period,
     counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
     personalLeavePublicDayThreshold:
       resolveLeaveThresholds(systemConfig).personalLeavePublicDayThreshold,
@@ -220,6 +223,8 @@ export const AdminSettings: React.FC = () => {
       standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
       schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
       maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
+      homeroomDayOfWeek: resolveHomeroomSlot(systemConfig).dayOfWeek,
+      homeroomPeriod: resolveHomeroomSlot(systemConfig).period,
       counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
       personalLeavePublicDayThreshold:
         resolveLeaveThresholds(systemConfig).personalLeavePublicDayThreshold,
@@ -484,8 +489,14 @@ export const AdminSettings: React.FC = () => {
       alert('課輔開課起日不可晚於迄日。');
       return;
     }
+    const homeroomSlot = resolveHomeroomSlot({
+      homeroomDayOfWeek: formConfig.homeroomDayOfWeek ?? systemConfig.homeroomDayOfWeek,
+      homeroomPeriod: formConfig.homeroomPeriod ?? systemConfig.homeroomPeriod,
+    });
     const nextConfig = {
       ...formConfig,
+      homeroomDayOfWeek: homeroomSlot.dayOfWeek,
+      homeroomPeriod: Math.min(homeroomSlot.period, resolvePeriodConfig(formConfig).maxPeriod),
       schoolName: normalizeSchoolName(formConfig.schoolName),
       counselingStartDate,
       counselingEndDate,
@@ -1260,6 +1271,44 @@ export const AdminSettings: React.FC = () => {
                 />
               </div>
               <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">班會星期</label>
+                <select
+                  value={formConfig.homeroomDayOfWeek ?? 3}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      homeroomDayOfWeek: Number(e.target.value),
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-sm font-bold text-slate-900"
+                >
+                  <option value={1}>星期一</option>
+                  <option value={2}>星期二</option>
+                  <option value={3}>星期三</option>
+                  <option value={4}>星期四</option>
+                  <option value={5}>星期五</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">班會節次</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={formMaxPeriod}
+                  value={formConfig.homeroomPeriod ?? 7}
+                  onChange={(e) =>
+                    setFormConfig({
+                      ...formConfig,
+                      homeroomPeriod: Math.max(
+                        1,
+                        Math.min(formMaxPeriod, Number(e.target.value) || 1)
+                      ),
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-center font-mono font-bold"
+                />
+              </div>
+              <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">課輔節次</label>
                 <input
                   type="text"
@@ -1283,6 +1332,9 @@ export const AdminSettings: React.FC = () => {
                 />
               </div>
             </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              班會格預設星期三第 7 節。該節的團體活動、社團、班會或班級活動，任課老師視為該班導師，這一節計入正課。科目已寫明班會或班級活動時，任何節次都算。儲存後依新節次重算導師。
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -2581,7 +2633,7 @@ export const AdminSettings: React.FC = () => {
                     </tr>
                   ) : (
                     filteredTeachers.map((t) => {
-                      const overload = teacherWeeklyOverload(t, sessions);
+                      const overload = teacherWeeklyOverload(t, sessions, systemConfig);
                       return (
                         <tr key={t.id} className="hover:bg-slate-50/80 transition">
                           <td className="p-3.5 whitespace-nowrap">

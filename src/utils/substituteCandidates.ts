@@ -1,5 +1,5 @@
 import { CourseSession, DayOfWeek, SubstituteRequest, Teacher } from '../types';
-import { teacherWeeklyOverload } from './schoolDepartments';
+import { teacherWeeklyOverload, type HomeroomSlotConfig } from './schoolDepartments';
 import { resolveLeaveDateEnd } from './leaveDates';
 
 export interface SubstituteCandidate {
@@ -129,10 +129,10 @@ export function teacherWeeklyLoadTowardLimit(
   teacher: Pick<Teacher, 'id' | 'weeklyActualPeriods' | 'dutyReductionPeriods' | 'basePeriods'>,
   sessions: CourseSession[],
   requests: SubstituteRequest[],
-  options?: { excludeRequestIds?: string[] }
+  options?: { excludeRequestIds?: string[]; periodCfg?: HomeroomSlotConfig | null }
 ): number {
   return (
-    teacherWeeklyOverload(teacher, sessions) +
+    teacherWeeklyOverload(teacher, sessions, options?.periodCfg) +
     countWeeklySubstituteOccupancySlots(requests, teacher.id, options)
   );
 }
@@ -154,6 +154,7 @@ export function rankSubstituteCandidates(params: {
   sessionDepartment?: string;
   applicantDepartment?: string;
   maxWeeklyOverloadPeriods: number;
+  periodCfg?: HomeroomSlotConfig | null;
   /** 已派代佔用（不傳則只看課表） */
   substituteOccupancies?: SubstituteOccupancy[];
   requests?: SubstituteRequest[];
@@ -205,7 +206,7 @@ export function rankSubstituteCandidates(params: {
         t,
         sessions,
         params.requests || [],
-        undefined
+        { periodCfg: params.periodCfg }
       );
       const isNearLimit = weeklyOverload >= maxWeeklyOverloadPeriods;
 

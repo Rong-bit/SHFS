@@ -432,6 +432,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
       subjectName: targetSessions.map((s) => s.subjectName),
       applicantDepartment: applicantTeacher.department,
       maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+      periodCfg: systemConfig,
       leaveDateStart: leaveDateStart || undefined,
       leaveDateEnd:
         leaveDateMode === 'range'
@@ -469,6 +470,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
         subjectName: session.subjectName,
         applicantDepartment: applicantTeacher.department,
         maxWeeklyOverloadPeriods: systemConfig.maxWeeklyOverloadPeriods,
+        periodCfg: systemConfig,
         leaveDateStart: leaveDateStart || undefined,
         leaveDateEnd: periodRangeLeaveEnd,
       });
@@ -480,7 +482,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     teachers,
     sessions,
     requests,
-    systemConfig.maxWeeklyOverloadPeriods,
+    systemConfig,
     leaveDateStart,
     periodRangeLeaveEnd,
   ]);
