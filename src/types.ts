@@ -24,7 +24,7 @@ export interface Teacher {
   name: string;
   title: TeacherTitle;
   department: DepartmentType;
-  homeroomClass?: string; // 由星期三下午團體活動判斷，例如 電機三忠
+  homeroomClass?: string; // 由星期三第 7 節班會判斷，例如 電機三忠
   dutyReductionPeriods?: number; // 任務減授節數（導師等任務每人不同，例如減 1 節或數節）
   basePeriods: number; // 每週基本授課節數 = 專任標準 − 任務減授
   weeklyActualPeriods: number; // 每週正課節數（不含團體活動）

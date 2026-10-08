@@ -31,7 +31,7 @@ import { normalizePeopleEmails, normalizeSchoolEmail } from '../utils/schoolEmai
 import { normalizeSchoolName } from '../utils/schoolName';
 import { normalizeLoadedSystemConfig } from '../utils/normalizeSystemConfig';
 import { isCounselingPeriod, isDaytimePeriod, resolvePeriodConfig } from '../utils/periodConfig';
-import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth } from '../utils/schoolDepartments';
+import { countWeeklyConcurrentPeriods, countWeeklyCounselingPeriods, countWeeklyTeachingPeriods, calendarYearForSettlementMonth, clearInferredHomeroom, departmentFromLabel, enrichTeachersFromSessions, inferTeacherDepartmentFromPracticalRows, monthlyCounselingPeriods, monthlyOverloadPeriods, normalizeStandardBasePeriods, resolveTeacherBasePeriods, settlementWeeksForMonth, teacherNameMatches } from '../utils/schoolDepartments';
 import { autoVenueCodePrefix, autoVenueEquipmentNote } from '../utils/venueKinds';
 import { temporarySwapPeriodDeltaInMonth, validateSwapRequestFields } from '../utils/temporarySwap';
 import {
@@ -2661,17 +2661,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (mode === 'overwrite') {
       // OVERWRITE MODE: Completely purge old mock demo teachers (e.g. 鄭志華) and only keep real in-school teachers from file
       importedTeacherNames.forEach((name, idx) => {
-        // If an existing teacher has the same name, keep their customized info (e.g. title, basePeriods)
-        const existing = teachers.find((t) => t.name.trim() === name);
+        // 同名教師保留聯絡資料與密碼；導師班不沿用上一份課表，稍後依新課表重算
+        const existing = teachers.find((t) => teacherNameMatches(t.name, name));
         const dept = inferTeacherDepartmentFromPracticalRows(name, validRows);
 
         const teacherObj: Teacher = existing
-          ? {
+          ? clearInferredHomeroom({
               ...existing,
               department: dept,
               weeklyActualPeriods: 0,
               email: normalizeSchoolEmail(existing.email),
-            }
+            })
           : {
               id: `t-imp-${Date.now()}-${idx}`,
               name,
@@ -2801,25 +2801,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.removeItem(STORAGE_KEYS.REQUESTS);
       }
     } else {
-      // Append：同班同時段同教師更新並保留 id；其餘課堂（含協同）原樣保留
-      const teacherSlotKey = (s: CourseSession) =>
-        `${s.dayOfWeek}-${s.period}-${s.className}-${s.teacherId}`;
-      const existingMap = new Map<string, CourseSession>();
-      sessions.forEach((s) => existingMap.set(teacherSlotKey(s), s));
-
-      newSessionsList.forEach((s) => {
-        const key = teacherSlotKey(s);
-        const existing = existingMap.get(key);
-        if (existing) {
-          existingMap.set(key, { ...s, id: existing.id });
-          updatedCount++;
-        } else {
-          existingMap.set(key, s);
-          addedCount++;
-        }
-      });
-
-      finalSessions = Array.from(existingMap.values());
+      // 增量：檔案有寫到的「班級＋星期＋節次」整格換成新課，舊教師那一筆刪除。檔案沒有的時段仍保留。
+      const classSlotKey = (s: Pick<CourseSession, 'dayOfWeek' | 'period' | 'className'>) =>
+        `${s.dayOfWeek}-${s.period}-${s.className.trim()}`;
+      const incomingSlots = new Set(newSessionsList.map(classSlotKey));
+      const kept = sessions.filter((s) => !incomingSlots.has(classSlotKey(s)));
+      finalSessions = [...kept, ...newSessionsList];
+      addedCount = newSessionsList.length;
+      updatedCount = sessions.length - kept.length;
     }
 
     // 4. 重算每週正課（不含團體活動）與基本節數

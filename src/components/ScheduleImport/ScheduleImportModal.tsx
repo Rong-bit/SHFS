@@ -1115,7 +1115,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                             🔁 完全覆蓋全校現有課表 (推薦新學期排課)
                           </div>
                           <p className="text-slate-500 text-[11px] mt-0.5">
-                            清除舊有課堂，完全套用此份最新課表，並重新統計全體教師基本與超鐘點節數。
+                            清除舊有課堂與上一份課表推斷的導師班，完全套用此份最新課表，並重新統計全體教師基本與超鐘點節數。
                             工場／教室清冊仍保留，僅追加課表中新出現的名稱。
                           </p>
                           {importMode === 'overwrite' && (
@@ -1154,7 +1154,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                             ➕ 增量合併 (僅更新對應班級與時段)
                           </div>
                           <p className="text-slate-500 text-[11px] mt-0.5">
-                            保留未在檔案中的現有課堂，僅追加或更新檔案中指定的班級時段課表。
+                            檔案有寫到的班級、星期、節次會整格換成新課（該格舊教師一併刪除）。檔案沒有的時段仍保留。
                           </p>
                         </div>
                       </label>

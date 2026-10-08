@@ -168,13 +168,21 @@ export const isCounselingSlot = (
   cfg?: PeriodCfg
 ) => isCounselingSlotConfigured(s, cfg);
 
-const teacherNameMatches = (rowTeacherName: string, teacherName: string) => {
-  const name = teacherName.trim();
-  if (!name || !rowTeacherName) return false;
-  if (rowTeacherName.trim() === name) return true;
-  const rowParts = rowTeacherName.split('/').map((s) => s.trim()).filter(Boolean);
-  const nameParts = name.split('/').map((s) => s.trim()).filter(Boolean);
-  return rowParts.includes(name) || nameParts.some((p) => rowParts.includes(p));
+/** 比對課表姓名與名冊：忽略空白，以及結尾的「老師／教師／導師」。 */
+const normalizeTeacherMatchName = (name: string) =>
+  name.replace(/\s+/g, '').replace(/(老師|教師|導師)$/g, '');
+
+const teacherNameParts = (value: string) =>
+  value
+    .split('/')
+    .map((s) => normalizeTeacherMatchName(s))
+    .filter(Boolean);
+
+export const teacherNameMatches = (rowTeacherName: string, teacherName: string) => {
+  const nameParts = teacherNameParts(teacherName);
+  const rowParts = teacherNameParts(rowTeacherName);
+  if (nameParts.length === 0 || rowParts.length === 0) return false;
+  return nameParts.some((p) => rowParts.includes(p));
 };
 
 /** 班會／班級活動：用來判斷導師，並計入正課（法規：班級活動節數併入計算） */
@@ -203,11 +211,23 @@ export const isExcludedFromTeachingPeriods = (
   period?: number
 ) => isExcludedGroupActivity(subjectName, dayOfWeek, period);
 
-/** 課表上的團體活動時間（含班會）：用來判斷導師 */
+/** 課表上的團體活動時間（含班會、社團）。判斷導師請用 isHomeroomTeacherSlot，不要把整段團體活動都算成導師。 */
 export const isGroupActivity = (subjectName: string) =>
   isHomeroomActivity(subjectName) || /團體活動|社團/.test(subjectName || '');
 
-const isAfternoonPeriod = (period: number) => period >= 5;
+/**
+ * 這一格才是班會、才代表該班導師。
+ * 匯入常把星期三下午三節都寫成「團體活動」，實際只有第 7 節是班會；
+ * 第 5、6 節的社團／團體活動老師不是導師。
+ * 科目已寫明班會或班級活動時，不論節次都算。
+ */
+export const isHomeroomTeacherSlot = (
+  session: Pick<CourseSession, 'subjectName' | 'dayOfWeek' | 'period'>
+) => {
+  const name = session.subjectName || '';
+  if (isHomeroomActivity(name) && !/社團/.test(name)) return true;
+  return isWednesdayHomeroomPeriod(session.dayOfWeek, session.period) && isGroupActivity(name);
+};
 
 export type WeeklyOverloadBreakdown = {
   scheduleTotal: number;
@@ -651,35 +671,29 @@ const sessionTeacherKeys = (session: CourseSession) => {
   return { names, teacherId: session.teacherId };
 };
 
-/** 星期三下午團體活動的老師 = 該班導師。若該班週三沒排，才改看其他下午團體活動。 */
+/** 班會老師 = 該班導師。只看星期三第 7 節，或科目已寫明班會／班級活動。 */
 export const buildHomeroomClassByTeacher = (sessions: CourseSession[]) => {
-  const wedByClass = new Map<string, string[]>();
-  const otherByClass = new Map<string, string[]>();
+  const classToTeachers = new Map<string, string[]>();
 
   sessions.forEach((s) => {
-    if (!isGroupActivity(s.subjectName) || !isAfternoonPeriod(s.period)) return;
+    if (!isHomeroomTeacherSlot(s)) return;
     const { names } = sessionTeacherKeys(s);
     if (names.length === 0) return;
-    const target = s.dayOfWeek === 3 ? wedByClass : otherByClass;
-    const prev = target.get(s.className) || [];
+    const prev = classToTeachers.get(s.className) || [];
     names.forEach((n) => {
       if (!prev.includes(n)) prev.push(n);
     });
-    target.set(s.className, prev);
-  });
-
-  const classToTeachers = new Map<string, string[]>();
-  const allClasses = new Set([...wedByClass.keys(), ...otherByClass.keys()]);
-  allClasses.forEach((className) => {
-    classToTeachers.set(className, wedByClass.get(className) || otherByClass.get(className) || []);
+    classToTeachers.set(s.className, prev);
   });
 
   const teacherToClasses = new Map<string, string[]>();
   classToTeachers.forEach((names, className) => {
     names.forEach((name) => {
-      const list = teacherToClasses.get(name) || [];
+      const key = normalizeTeacherMatchName(name);
+      if (!key) return;
+      const list = teacherToClasses.get(key) || [];
       if (!list.includes(className)) list.push(className);
-      teacherToClasses.set(name, list);
+      teacherToClasses.set(key, list);
     });
   });
   return teacherToClasses;
@@ -748,6 +762,17 @@ export const resolveDutyReductionPeriods = (
   return Math.max(0, fulltimeStandard - (teacher.basePeriods ?? fulltimeStandard));
 };
 
+/** 覆蓋匯入時先清掉上一份課表推斷的導師班，再依新課表重算。行政職稱保留。 */
+export const clearInferredHomeroom = <T extends Pick<Teacher, 'title' | 'homeroomClass'>>(teacher: T): T => {
+  if (isAdminTeacherTitle(teacher.title)) {
+    return teacher.homeroomClass ? { ...teacher, homeroomClass: undefined } : teacher;
+  }
+  if (teacher.title === '導師' || teacher.homeroomClass) {
+    return { ...teacher, title: '專任教師' as T['title'], homeroomClass: undefined };
+  }
+  return teacher;
+};
+
 export const displayTeacherTitle = (teacher: Pick<Teacher, 'title' | 'homeroomClass'>) => {
   const title = normalizeTeacherTitle(teacher.title);
   if (isAdminTeacherTitle(title)) {
@@ -765,10 +790,12 @@ export const applyTeacherHomeroomFromSessions = <
 ): T[] => {
   if (!sessions.some((s) => isGroupActivity(s.subjectName))) return teachers;
   const homeroomByTeacher = buildHomeroomClassByTeacher(sessions);
+  const claimedClasses = new Set<string>();
+  homeroomByTeacher.forEach((classes) => classes.forEach((className) => claimedClasses.add(className)));
 
   return teachers.map((t) => {
     const classes =
-      homeroomByTeacher.get(t.name.trim()) ||
+      homeroomByTeacher.get(normalizeTeacherMatchName(t.name)) ||
       [...homeroomByTeacher.entries()].find(([name]) => teacherNameMatches(name, t.name))?.[1] ||
       [];
     const homeroomClass = classes.length ? classes.join('、') : undefined;
@@ -782,8 +809,21 @@ export const applyTeacherHomeroomFromSessions = <
       return { ...t, title: '導師' as T['title'], homeroomClass };
     }
 
-    // 團體活動對不到姓名：保留既有導師班／職稱，避免誤降專任（代導師領費資格會錯）
-    return t;
+    // 這個班的班會已經對到別人：清掉先前誤掛的導師班。
+    // 班會完全對不到姓名時仍保留，避免列名不一致就誤降專任。
+    if (!t.homeroomClass) return t;
+    const kept = t.homeroomClass
+      .split('、')
+      .map((s) => s.trim())
+      .filter((className) => className && !claimedClasses.has(className));
+    if (kept.join('、') === t.homeroomClass) return t;
+    if (keepAdminTitle) {
+      return { ...t, homeroomClass: kept.length ? kept.join('、') : undefined };
+    }
+    if (!kept.length) {
+      return { ...t, title: '專任教師' as T['title'], homeroomClass: undefined };
+    }
+    return { ...t, title: '導師' as T['title'], homeroomClass: kept.join('、') };
   });
 };
 
