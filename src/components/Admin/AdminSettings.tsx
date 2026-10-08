@@ -81,7 +81,6 @@ import {
 } from '../../utils/concurrentFundingImporter';
 import { sanitizeConcurrentFunding } from '../../utils/concurrentFunding';
 import {
-  applyPayrollTitlesImport,
   countSalaryCodes,
   mergeSalaryCodesByName,
   migrateSalaryCodesToName,
@@ -372,27 +371,13 @@ export const AdminSettings: React.FC = () => {
           systemConfig.teacherSalaryCodesByName,
           result.codesByName
         ),
-        ...(result.hasTitleColumn
-          ? {
-              teacherPayrollTitlesByName: applyPayrollTitlesImport(
-                systemConfig.teacherPayrollTitlesByName,
-                result.titlesByName,
-                result.titleClears
-              ),
-            }
-          : {}),
       });
-      const titleNote = result.hasTitleColumn
-        ? `；職稱 ${result.titlesImported} 筆${
-            result.titleClears.length > 0 ? `、清除 ${result.titleClears.length} 筆` : ''
-          }`
-        : '';
       const unmatchedNote =
         result.unmatched.length > 0
           ? `；名冊尚無 ${result.unmatched.length} 人（已保留，課表匯入後自動對上）`
           : '';
       setSalaryCodeNotice(
-        `已匯入／更新 ${result.imported} 筆薪資編號（名冊可對 ${result.matchedInRoster} 人）${titleNote}${unmatchedNote}`
+        `已匯入／更新 ${result.imported} 筆薪資編號（名冊可對 ${result.matchedInRoster} 人）${unmatchedNote}`
       );
     } catch (err) {
       setSalaryCodeNotice(err instanceof Error ? err.message : '薪資編號匯入失敗');
@@ -2289,7 +2274,7 @@ export const AdminSettings: React.FC = () => {
                 </h3>
                 <p className="text-[11px] text-indigo-800 mt-1 leading-relaxed max-w-2xl">
                   以<strong>教師姓名</strong>保存，課表重新匯入<strong>不會清除</strong>；僅在重新匯入薪資編號或手動刪除時變更。
-                  兼課／代課／課輔三份印領清冊共用。匯入檔可含<strong>職稱</strong>欄（如外聘人員），供半日停課與放假日超鐘點扣節判定。
+                  匯入檔只需<strong>薪資編號、姓名</strong>。兼課／代課／課輔三份印領清冊共用。外聘人員請在下方名冊「薪資職稱」填寫，半日停課與放假日超鐘點才會扣節。
                 </p>
                 {salaryCodeNotice && (
                   <p className="text-[11px] text-indigo-900 mt-2 font-medium">{salaryCodeNotice}</p>
@@ -2329,8 +2314,7 @@ export const AdminSettings: React.FC = () => {
                       onClick={() =>
                         exportSalaryCodesToExcel(
                           systemConfig.teacherSalaryCodesByName ||
-                            migrateSalaryCodesToName(teachers, systemConfig),
-                          systemConfig.teacherPayrollTitlesByName
+                            migrateSalaryCodesToName(teachers, systemConfig)
                         )
                       }
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-indigo-300 rounded-lg text-xs font-bold text-indigo-800 hover:bg-indigo-100"
