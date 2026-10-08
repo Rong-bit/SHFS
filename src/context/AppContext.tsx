@@ -2960,6 +2960,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((t) => {
         if (t.id !== id) return t;
         const merged = { ...t, ...data };
+        if (data.title === '專任教師') {
+          merged.homeroomClass = undefined;
+        }
         if ((data.dutyReductionPeriods !== undefined || data.title !== undefined) && data.basePeriods === undefined) {
           const resolved = resolveTeacherBasePeriods(
             merged,

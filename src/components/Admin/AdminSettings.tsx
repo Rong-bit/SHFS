@@ -607,9 +607,7 @@ export const AdminSettings: React.FC = () => {
     if (title === '主任') return formConfig.standardBasePeriods.director;
     if (title === '科主任') return formConfig.standardBasePeriods.head;
     if (title === '組長') return formConfig.standardBasePeriods.sectionChief;
-    if (title === '導師' || Boolean(editingTeacher?.homeroomClass && editingTeacher.title !== '科主任' && editingTeacher.title !== '組長' && editingTeacher.title !== '主任')) {
-      return formConfig.standardBasePeriods.homeroom;
-    }
+    if (title === '導師') return formConfig.standardBasePeriods.homeroom;
     return formConfig.standardBasePeriods.fulltime;
   };
 
