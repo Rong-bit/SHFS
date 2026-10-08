@@ -4,8 +4,16 @@ import type { Teacher } from '../types';
 export type SalaryCodeImportResult = {
   /** 以教師姓名為 key（課表匯入後仍有效） */
   codesByName: Record<string, string>;
+  /** 薪資匯入職稱（姓名 → 職稱，非空者）；名冊不顯示，只用於外聘判定 */
+  titlesByName: Record<string, string>;
+  /** 匯入檔是否含職稱欄 */
+  hasTitleColumn: boolean;
+  /** 職稱欄留空、應清除舊職稱的姓名 */
+  titleClears: string[];
   /** 檔案內有效列數 */
   imported: number;
+  /** 檔案內寫入非空職稱的筆數 */
+  titlesImported: number;
   /** 目前師資名冊中可對到的筆數 */
   matchedInRoster: number;
   /** 檔案有、名冊尚無的姓名（仍會保存，待課表匯入後自動對上） */
@@ -19,7 +27,7 @@ const findColumn = (headers: string[], keys: string[]) => {
   return idx >= 0 ? idx : -1;
 };
 
-/** 解析 Excel / CSV：欄位只需「姓名」與「薪資編號」。檔案若仍有職稱欄，略過不寫入。 */
+/** 解析 Excel / CSV：必要欄為「姓名」與「薪資編號」。若有「職稱」欄則寫入，供外聘人員判定，名冊不顯示。 */
 export function parseSalaryCodeWorkbook(
   workbook: XLSX.WorkBook,
   teachers: Teacher[] = []
@@ -29,7 +37,11 @@ export function parseSalaryCodeWorkbook(
   if (rows.length < 2) {
     return {
       codesByName: {},
+      titlesByName: {},
+      hasTitleColumn: false,
+      titleClears: [],
       imported: 0,
+      titlesImported: 0,
       matchedInRoster: 0,
       unmatched: [],
     };
@@ -38,13 +50,18 @@ export function parseSalaryCodeWorkbook(
   const headers = (rows[0] || []).map((c) => String(c));
   const nameCol = findColumn(headers, ['教師姓名', '姓名', '名字']);
   const codeCol = findColumn(headers, ['薪資編號', '編號', '薪資代號']);
+  const titleCol = findColumn(headers, ['職稱', '職務', '職別']);
   if (nameCol < 0 || codeCol < 0) {
     throw new Error('找不到必要欄位：請確認檔案含「姓名」與「薪資編號」欄');
   }
 
   const rosterNames = new Set(teachers.map((t) => t.name.trim()));
   const codesByName: Record<string, string> = {};
+  const titlesByName: Record<string, string> = {};
+  const titleClears: string[] = [];
   const unmatched: string[] = [];
+  const hasTitleColumn = titleCol >= 0;
+  let titlesImported = 0;
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i] || [];
@@ -52,6 +69,15 @@ export function parseSalaryCodeWorkbook(
     const code = String(row[codeCol] || '').trim();
     if (!name || !code) continue;
     codesByName[name] = code;
+    if (hasTitleColumn) {
+      const title = String(row[titleCol] || '').trim();
+      if (title) {
+        titlesByName[name] = title;
+        titlesImported += 1;
+      } else {
+        titleClears.push(name);
+      }
+    }
     if (teachers.length > 0 && !rosterNames.has(name)) {
       unmatched.push(name);
     }
@@ -65,7 +91,11 @@ export function parseSalaryCodeWorkbook(
 
   return {
     codesByName,
+    titlesByName,
+    hasTitleColumn,
+    titleClears,
     imported,
+    titlesImported,
     matchedInRoster,
     unmatched,
   };
@@ -78,12 +108,12 @@ export async function readSalaryCodeFile(file: File): Promise<XLSX.WorkBook> {
 
 export function downloadSalaryCodeTemplate() {
   const rows = [
-    ['薪資編號', '姓名'],
-    ['010120', '王小明'],
-    ['X07390', '李小華'],
+    ['薪資編號', '姓名', '職稱'],
+    ['010120', '王小明', '專任教師'],
+    ['X07390', '李小華', '外聘人員'],
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 14 }];
+  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '薪資編號');
   XLSX.writeFile(wb, '薪資編號匯入範本.xlsx');
@@ -91,15 +121,18 @@ export function downloadSalaryCodeTemplate() {
 
 export function exportSalaryCodesToExcel(
   codesByName: Record<string, string>,
+  titlesByName: Record<string, string> | undefined = {},
   fileName = '薪資編號對照表.xlsx'
 ) {
-  const names = Object.keys(codesByName).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  const names = [
+    ...new Set([...Object.keys(codesByName), ...Object.keys(titlesByName || {})]),
+  ].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   const rows = [
-    ['薪資編號', '姓名'],
-    ...names.map((name) => [codesByName[name] || '', name]),
+    ['薪資編號', '姓名', '職稱'],
+    ...names.map((name) => [codesByName[name] || '', name, titlesByName?.[name] || '']),
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 14 }];
+  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '薪資編號');
   XLSX.writeFile(wb, fileName);
