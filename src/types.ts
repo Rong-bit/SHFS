@@ -235,6 +235,8 @@ export interface SystemConfig {
   temporaryScheduleMoves?: TemporaryScheduleMove[];
   /** 半日／節次停課：該日指定節次不計鐘點（如上午仍上課、下午佈置考場） */
   partialNonTeachingDays?: PartialNonTeachingDay[];
+  /** 段考日：請假日期皆落在段考日時，代課教師週課表正課不視為衝堂（僅提醒，仍須自行確認監考） */
+  examDays?: ExamDay[];
   /** 教師薪資編號（teacherId → 薪資編號）— 舊版；請改用 teacherSalaryCodesByName */
   teacherSalaryCodes?: Record<string, string>;
   /** 教師薪資編號（姓名 → 薪資編號），課表匯入後仍有效 */
@@ -278,6 +280,12 @@ export interface PartialNonTeachingDay {
   date: string; // YYYY-MM-DD
   periods: number[];
   label?: string;
+}
+
+/** 段考日（不影響鐘點計算，僅放寬派代衝堂檢核） */
+export interface ExamDay {
+  date: string; // YYYY-MM-DD
+  label: string;
 }
 
 export interface MonthlyTeacherSettlement {
