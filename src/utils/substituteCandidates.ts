@@ -1,10 +1,20 @@
-import { CourseSession, DayOfWeek, SubstituteRequest, Teacher } from '../types';
+import {
+  CourseSession,
+  DayOfWeek,
+  ExamDay,
+  NonTeachingDay,
+  SubstituteRequest,
+  Teacher,
+} from '../types';
 import { teacherWeeklyOverload, type HomeroomSlotConfig } from './schoolDepartments';
 import { resolveLeaveDateEnd } from './leaveDates';
+import { dateToIsoLocal, nonTeachingDateSet } from './holidays';
 
 export interface SubstituteCandidate {
   teacher: Teacher;
   hasClash: boolean;
+  /** 週課表該節有正課，但請假日皆為段考日而解除衝堂 */
+  examClashWaived: boolean;
   isSameSubject: boolean;
   isSameDept: boolean;
   weeklyOverload: number;
@@ -35,6 +45,38 @@ function leaveRangesOverlap(
   const aE = resolveLeaveDateEnd(aStart, aEnd) || aStart;
   const bE = resolveLeaveDateEnd(bStart, bEnd) || bStart;
   return aStart <= bE && bStart <= aE;
+}
+
+/**
+ * 請假區間內所有符合該星期的日期皆為段考日（至少一天）時回傳 true；放假日略過不計。
+ * 無請假起日（永久移課／舊案）一律 false。
+ */
+export function leaveFallsOnExamDays(
+  dayOfWeek: DayOfWeek,
+  leaveDateStart: string | undefined,
+  leaveDateEnd: string | undefined,
+  examDays: ExamDay[] | null | undefined,
+  nonTeachingDays?: NonTeachingDay[] | null
+): boolean {
+  if (!leaveDateStart || !examDays || examDays.length === 0) return false;
+  const examSet = new Set(examDays.map((d) => d.date).filter(Boolean));
+  const holidaySet = nonTeachingDateSet(nonTeachingDays);
+  const end = resolveLeaveDateEnd(leaveDateStart, leaveDateEnd) || leaveDateStart;
+  const s = new Date(leaveDateStart.replace(/-/g, '/') + ' 12:00:00');
+  const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return false;
+  let matched = 0;
+  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
+    if (cur.getDay() !== dayOfWeek) continue;
+    const iso = dateToIsoLocal(cur);
+    if (examSet.has(iso)) {
+      matched += 1;
+      continue;
+    }
+    if (holidaySet.has(iso)) continue;
+    return false;
+  }
+  return matched > 0;
 }
 
 /** 科目名稱正規化：略過「補強-」等前綴以便比對 */
@@ -160,6 +202,10 @@ export function rankSubstituteCandidates(params: {
   requests?: SubstituteRequest[];
   leaveDateStart?: string;
   leaveDateEnd?: string;
+  /** 段考日：請假日皆落在段考日時，週課表正課不算衝堂 */
+  examDays?: ExamDay[] | null;
+  /** 放假日：段考判定時略過 */
+  nonTeachingDays?: NonTeachingDay[] | null;
 }): SubstituteCandidate[] {
   const {
     teachers,
@@ -183,19 +229,30 @@ export function rankSubstituteCandidates(params: {
     leaveDateEnd: params.leaveDateEnd,
   };
 
+  const examWaiver = leaveFallsOnExamDays(
+    targetDayOfWeek,
+    params.leaveDateStart,
+    params.leaveDateEnd,
+    params.examDays,
+    params.nonTeachingDays
+  );
+
   return teachers
     .filter((t) => t.id !== excludeTeacherId)
     .map((t) => {
-      const hasClash = periods.some(
-        (p) =>
-          sessions.some(
-            (s) =>
-              s.teacherId === t.id &&
-              s.dayOfWeek === targetDayOfWeek &&
-              s.period === p
-          ) ||
-          teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies, probeLeave)
+      const hasRegularClash = periods.some((p) =>
+        sessions.some(
+          (s) =>
+            s.teacherId === t.id &&
+            s.dayOfWeek === targetDayOfWeek &&
+            s.period === p
+        )
       );
+      const hasOccupancyClash = periods.some((p) =>
+        teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies, probeLeave)
+      );
+      const examClashWaived = examWaiver && hasRegularClash && !hasOccupancyClash;
+      const hasClash = hasOccupancyClash || (hasRegularClash && !examWaiver);
       const isSameSubject = subjects.some((subj) =>
         teacherTeachesSubject(t.id, subj, sessions)
       );
@@ -215,12 +272,14 @@ export function rankSubstituteCandidates(params: {
       if (isSameSubject) score += 1000;
       if (isSameDept) score += 300;
       if (!hasClash) score += 100;
+      if (examClashWaived) score -= 50;
       if (!isNearLimit) score += 20;
       score -= weeklyOverload;
 
       return {
         teacher: t,
         hasClash,
+        examClashWaived,
         isSameSubject,
         isSameDept,
         weeklyOverload,

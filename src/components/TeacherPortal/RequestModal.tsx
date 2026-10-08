@@ -31,7 +31,7 @@ import {
 } from '../../utils/leavePayrollPolicy';
 import { WellnessLeaveHoursAlert } from '../Common/WellnessLeaveHoursAlert';
 import { nonTeachingDateSet } from '../../utils/holidays';
-import { rankSubstituteCandidates } from '../../utils/substituteCandidates';
+import { leaveFallsOnExamDays, rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
 import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { isPlaceholderSession } from '../../utils/resolveOriginalSession';
@@ -327,6 +327,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
         leaveDateMode === 'range'
           ? leaveDateEnd || leaveDateStart || undefined
           : leaveDateStart || undefined,
+      examDays: systemConfig.examDays,
+      nonTeachingDays: systemConfig.nonTeachingDays,
     });
   }, [
     teachers,
@@ -478,10 +480,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
     // If empty, or current selection clashes, choose the first non-clash candidate.
     if (!substituteTeacherId || selected?.hasClash) {
+      const free = candidateSubstitutes.filter((c) => !c.hasClash && !c.examClashWaived);
       const best =
-        candidateSubstitutes.find((c) => !c.hasClash && c.isSameSubject) ||
-        candidateSubstitutes.find((c) => !c.hasClash && c.isSameDept) ||
-        candidateSubstitutes.find((c) => !c.hasClash);
+        free.find((c) => c.isSameSubject) ||
+        free.find((c) => c.isSameDept) ||
+        free[0];
       if (best) setSubstituteTeacherId(best.teacher.id);
     }
   }, [
@@ -1320,7 +1323,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                     {candidateSubstitutes
                       .filter((c) => !c.hasClash)
                       .slice(0, showAllTeachers ? undefined : 5)
-                      .map(({ teacher: cand, isSameSubject, isSameDept, weeklyOverload, isNearLimit }) => {
+                      .map(({ teacher: cand, examClashWaived, isSameSubject, isSameDept, weeklyOverload, isNearLimit }) => {
                         const isSelected = substituteTeacherId === cand.id;
                         return (
                           <div
@@ -1340,9 +1343,18 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                               <span className="text-[11px] text-slate-500">{cand.department}</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-1 mt-1 text-[10px]">
-                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
-                                ✓ 空堂
-                              </span>
+                              {examClashWaived ? (
+                                <span
+                                  className="px-1.5 py-0.2 bg-amber-100 text-amber-800 font-bold rounded"
+                                  title="週課表此節有正課，但請假日皆為段考日，故解除衝堂"
+                                >
+                                  📝 段考解除衝堂
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
+                                  ✓ 空堂
+                                </span>
+                              )}
                               {isSameSubject && (
                                 <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 font-bold rounded">
                                   同科目
@@ -1413,8 +1425,19 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                         .map((t) => {
                           const targetDay = effectiveOriginalSession?.dayOfWeek;
                           const targetP = effectiveOriginalSession?.period;
+                          const examWaived =
+                            typeof targetDay === 'number' &&
+                            leaveFallsOnExamDays(
+                              targetDay,
+                              leaveDateStart || undefined,
+                              leaveDateMode === 'range'
+                                ? leaveDateEnd || leaveDateStart || undefined
+                                : leaveDateStart || undefined,
+                              systemConfig.examDays,
+                              systemConfig.nonTeachingDays
+                            );
                           const hasClash =
-                            typeof targetDay === 'number' && typeof targetP === 'number'
+                            !examWaived && typeof targetDay === 'number' && typeof targetP === 'number'
                               ? sessions.some(
                                   (s) =>
                                     s.teacherId === t.id &&

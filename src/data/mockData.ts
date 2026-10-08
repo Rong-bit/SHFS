@@ -117,6 +117,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   autoSyncNationalHolidays: true,
   temporaryScheduleMoves: [],
   partialNonTeachingDays: [],
+  examDays: [],
   authConfig: {
     requirePassword: true,
     defaultTeacherPassword: '1234',

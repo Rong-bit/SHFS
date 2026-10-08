@@ -158,6 +158,10 @@ export function buildDefaultNoticeRowsFromRequests(
     const dateList = dates.length ? dates : [start || ''];
     return dateList.map((iso) => defaultNoticeRowFromSession(sess, iso || undefined));
   });
+  return sortNoticeRowsByDatePeriod(rows);
+}
+
+function sortNoticeRowsByDatePeriod(rows: SubstituteNoticeRow[]): SubstituteNoticeRow[] {
   const sortKey = (date: string) => parseNoticeRowDateToIso(date) ?? date.replace(/\//g, '-');
   return [...rows].sort((a, b) => {
     const dateA = sortKey(a.date);
@@ -230,6 +234,71 @@ export function getRelatedSubstituteRequests(
   return request.status === 'approved' && request.requestType === 'substitute'
     ? [request]
     : [];
+}
+
+function savedNoticeRowsOf(reqs: SubstituteRequest[]): SubstituteNoticeRow[] | null {
+  const hit = reqs.find(
+    (r) => r.noticeRowsCustomized && r.noticeRows?.some(isMeaningfulNoticeRow)
+  );
+  return hit?.noticeRows ?? null;
+}
+
+function withNoticeRows(
+  r: SubstituteRequest,
+  rows: SubstituteNoticeRow[] | null
+): SubstituteRequest {
+  if (rows && rows.some(isMeaningfulNoticeRow)) {
+    return { ...r, noticeRows: rows, noticeRowsCustomized: true };
+  }
+  const { noticeRows: _rows, noticeRowsCustomized: _custom, ...rest } = r;
+  return rest;
+}
+
+/**
+ * 同號分張改派部分節次後，已儲存的課程表格列隨節次搬到新代理人：
+ * 原代理人表格移除該節次列；新代理人表格＝其原表格（未存則課表預設列）＋搬來的列。
+ * batch 須為已套用新代課教師後的同批申請。
+ */
+export function moveNoticeRowsWithReassignedSessions(
+  batch: SubstituteRequest[],
+  movedIds: Set<string>,
+  fromSubstituteTeacherId: string,
+  toSubstituteTeacherId: string
+): SubstituteRequest[] {
+  const moved = batch.filter((r) => movedIds.has(r.id));
+  const source = batch.filter(
+    (r) => !movedIds.has(r.id) && r.substituteTeacherId === fromSubstituteTeacherId
+  );
+  const dest = batch.filter(
+    (r) => !movedIds.has(r.id) && r.substituteTeacherId === toSubstituteTeacherId
+  );
+  if (moved.length === 0) return batch;
+
+  const sourceRows = savedNoticeRowsOf(moved) ?? savedNoticeRowsOf(source);
+  const destRows = savedNoticeRowsOf(dest);
+  if (!sourceRows && !destRows) return batch;
+
+  const movedPeriods = new Set(
+    moved.map((r) => String(r.originalSession?.period ?? '')).filter(Boolean)
+  );
+  const isMovedRow = (row: SubstituteNoticeRow) => movedPeriods.has(row.period.trim());
+
+  const nextSourceRows = sourceRows ? sourceRows.filter((row) => !isMovedRow(row)) : null;
+  const carriedRows = sourceRows
+    ? sourceRows.filter(isMovedRow)
+    : buildDefaultNoticeRowsFromRequests(moved);
+  const nextDestRows = sortNoticeRowsByDatePeriod([
+    ...(destRows ?? buildDefaultNoticeRowsFromRequests(dest)),
+    ...carriedRows,
+  ]);
+
+  const destIds = new Set([...moved, ...dest].map((r) => r.id));
+  const sourceIds = new Set(source.map((r) => r.id));
+  return batch.map((r) => {
+    if (destIds.has(r.id)) return withNoticeRows(r, nextDestRows);
+    if (sourceIds.has(r.id) && sourceRows) return withNoticeRows(r, nextSourceRows);
+    return r;
+  });
 }
 
 export type NoticePayrollResolveOptions = {

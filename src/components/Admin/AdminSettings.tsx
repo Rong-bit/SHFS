@@ -179,6 +179,7 @@ export const AdminSettings: React.FC = () => {
     nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
     temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
     partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
+    examDays: systemConfig?.examDays ?? [],
     authConfig: {
       requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
       // 表單不回填雜湊／明文，留空表示沿用既有密碼
@@ -206,7 +207,10 @@ export const AdminSettings: React.FC = () => {
   const [moveTargetDate, setMoveTargetDate] = useState('');
   const [moveLabel, setMoveLabel] = useState('暫時移課／補課');
   const [movePeriods, setMovePeriods] = useState<number[]>([]);
+  const [examDate, setExamDate] = useState('');
+  const [examLabel, setExamLabel] = useState('段考');
   const [partialDate, setPartialDate] = useState('');
+  const [partialAlsoExam, setPartialAlsoExam] = useState(false);
   const [partialLabel, setPartialLabel] = useState('半日停課');
   const [partialPeriods, setPartialPeriods] = useState<number[]>(() => {
     const max = resolvePeriodConfig(systemConfig).maxPeriod;
@@ -243,6 +247,7 @@ export const AdminSettings: React.FC = () => {
       nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
       temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
       partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
+      examDays: systemConfig?.examDays ?? [],
       authConfig: {
         requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
         defaultTeacherPassword: '',
@@ -1861,7 +1866,8 @@ export const AdminSettings: React.FC = () => {
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
                 下午佈置考場等：勿標整天放假，請在此勾停課節次。日間兼課僅「外聘人員」不發該節；
-                段考／運動會停課輔請勾第 8 節（課輔清冊全員應減 1 並寫備註）。派代檢核會排除該節。預設勾選第 5～8 節。
+                段考／運動會停課輔請勾第 8 節（課輔清冊全員應減 1 並寫備註）。停課節次不可請假派代。預設勾選第 5～8 節。
+                段考日若需派代老師去代其他節，請勾「同時設為段考日」以解除代課教師正課衝堂。
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
@@ -1905,12 +1911,19 @@ export const AdminSettings: React.FC = () => {
                       periods: [...capped].sort((a, b) => a - b),
                       label: partialLabel.trim() || '半日停課',
                     };
+                    const examDays = partialAlsoExam
+                      ? [
+                          ...(formConfig.examDays || []).filter((d) => d.date !== partialDate),
+                          { date: partialDate, label: next.label || '段考' },
+                        ].sort((a, b) => a.date.localeCompare(b.date))
+                      : formConfig.examDays;
                     setFormConfig({
                       ...formConfig,
                       partialNonTeachingDays: mergePartialNonTeachingDays(
                         formConfig.partialNonTeachingDays,
                         [next]
                       ),
+                      examDays,
                     });
                     setPartialDate('');
                     setPartialPeriods(afternoonPartialDefault());
@@ -1918,8 +1931,28 @@ export const AdminSettings: React.FC = () => {
                   className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  新增半日停課
+                  {partialAlsoExam ? '新增停課＋段考日' : '新增停課節次'}
                 </button>
+                <label
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-700 py-2 cursor-pointer select-none"
+                  title="同一天也加入下方「段考日」，派代時解除代課教師正課衝堂"
+                >
+                  <input
+                    type="checkbox"
+                    checked={partialAlsoExam}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setPartialAlsoExam(checked);
+                      if (checked && (!partialLabel.trim() || partialLabel.trim() === '半日停課')) {
+                        setPartialLabel('段考');
+                      } else if (!checked && partialLabel.trim() === '段考') {
+                        setPartialLabel('半日停課');
+                      }
+                    }}
+                    className="rounded border-slate-300"
+                  />
+                  同時設為段考日
+                </label>
               </div>
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-[11px] text-slate-500 mr-1">停課節次：</span>
@@ -1955,7 +1988,7 @@ export const AdminSettings: React.FC = () => {
               </div>
               <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
                 {(formConfig.partialNonTeachingDays || []).length === 0 ? (
-                  <p className="text-xs text-slate-400 p-3">尚未設定半日停課。</p>
+                  <p className="text-xs text-slate-400 p-3">尚未設定停課節次。</p>
                 ) : (
                   (formConfig.partialNonTeachingDays || []).map((m) => (
                     <div
@@ -1975,6 +2008,96 @@ export const AdminSettings: React.FC = () => {
                             partialNonTeachingDays: (formConfig.partialNonTeachingDays || []).filter(
                               (x) => x.id !== m.id
                             ),
+                          })
+                        }
+                        className="p-1 text-slate-400 hover:text-rose-600"
+                        title="移除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 段考日（派代解除正課衝堂） */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-indigo-500" />
+                  <span>段考日（派代解除衝堂）</span>
+                </h3>
+                <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-800 rounded-full font-bold border border-indigo-200">
+                  不影響鐘點計算
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                請假日期皆為段考日時，代課教師週課表該節的正課不視為衝堂（標示「段考解除衝堂」並提醒），
+                可直接派代；已有其他派代的時段仍會擋下。系統不知道監考安排，請自行確認該節未排監考。
+              </p>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
+                  <input
+                    type="date"
+                    value={examDate}
+                    onChange={(e) => setExamDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex-1 min-w-[8rem]">
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                  <input
+                    type="text"
+                    value={examLabel}
+                    onChange={(e) => setExamLabel(e.target.value)}
+                    placeholder="例：第一次段考"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!examDate) {
+                      alert('請選擇日期');
+                      return;
+                    }
+                    const label = examLabel.trim() || '段考';
+                    const rest = (formConfig.examDays || []).filter((d) => d.date !== examDate);
+                    setFormConfig({
+                      ...formConfig,
+                      examDays: [...rest, { date: examDate, label }].sort((a, b) =>
+                        a.date.localeCompare(b.date)
+                      ),
+                    });
+                    setExamDate('');
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  新增段考日
+                </button>
+              </div>
+              <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                {(formConfig.examDays || []).length === 0 ? (
+                  <p className="text-xs text-slate-400 p-3">尚未設定段考日。</p>
+                ) : (
+                  (formConfig.examDays || []).map((d) => (
+                    <div
+                      key={d.date}
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                    >
+                      <div>
+                        <span className="font-mono font-semibold text-slate-800">{d.date}</span>
+                        <span className="text-slate-500 ml-2">{d.label}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormConfig({
+                            ...formConfig,
+                            examDays: (formConfig.examDays || []).filter((x) => x.date !== d.date),
                           })
                         }
                         className="p-1 text-slate-400 hover:text-rose-600"

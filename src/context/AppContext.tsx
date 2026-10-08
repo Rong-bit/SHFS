@@ -97,12 +97,14 @@ import {
 import {
   collectSubstituteOccupancies,
   countWeeklySubstituteOccupancySlots,
+  leaveFallsOnExamDays,
   teacherHasSubstituteOccupancy,
   teacherWeeklyLoadTowardLimit,
 } from '../utils/substituteCandidates';
 import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
+  moveNoticeRowsWithReassignedSessions,
   noticeDateUsesModifiedSubstitutePayroll,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
@@ -408,6 +410,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         partialNonTeachingDays: Array.isArray(parsed.partialNonTeachingDays)
           ? parsed.partialNonTeachingDays
           : INITIAL_SYSTEM_CONFIG.partialNonTeachingDays || [],
+        examDays: Array.isArray(parsed.examDays) ? parsed.examDays : [],
         standardBasePeriods: normalizeStandardBasePeriods(
           parsed.standardBasePeriods || parsed.basePeriodsStandard
         ),
@@ -1586,7 +1589,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.period === originalSession.period &&
           s.id !== originalSession.id
       );
-      if (subClash) {
+      const examWaived =
+        Boolean(subClash) &&
+        leaveFallsOnExamDays(
+          originalSession.dayOfWeek,
+          leaveDateStart,
+          leaveDateEnd,
+          systemConfig.examDays,
+          systemConfig.nonTeachingDays
+        );
+      if (subClash && !examWaived) {
         messages.push(`【代課教師衝堂】${subTeacher?.name} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有正課「${subClash.className} ${subClash.subjectName}」`);
         severity = 'danger';
       } else if (
@@ -1604,6 +1616,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           `【代課教師衝堂】${subTeacher?.name} 在 週${originalSession.dayOfWeek} 第${originalSession.period}節 已有其他已派代／待簽核代課（請假區間重疊）`
         );
         severity = 'danger';
+      }
+      if (subClash && examWaived) {
+        messages.push(
+          `【段考解除衝堂】${subTeacher?.name} 週${originalSession.dayOfWeek} 第${originalSession.period}節 原有「${subClash.className} ${subClash.subjectName}」，請假日皆為段考日故放行；請確認該節未排監考。`
+        );
+        if (severity !== 'danger') severity = 'warning';
       }
 
       // Overload check (9 periods limit：兼課 + 已派代／待簽核代課)
@@ -2446,6 +2464,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return rest;
     };
 
+    // 同號分張改派部分節次：課程表格列隨節次搬到新代理人，避免兩邊通知單錯置或漏算
+    const reassignedIds =
+      mixedSubs && subChanged && newSubId && !leaveChanged
+        ? new Set(
+            group.filter((r) => (r.substituteTeacherId || '') === oldSubId).map((r) => r.id)
+          )
+        : null;
+    const patchRequests = (list: SubstituteRequest[]): SubstituteRequest[] => {
+      const next = list.map((r) => (ids.has(r.id) ? applyPatch(r) : r));
+      if (!reassignedIds) return next;
+      const moved = moveNoticeRowsWithReassignedSessions(
+        next.filter((r) => ids.has(r.id)),
+        reassignedIds,
+        oldSubId,
+        newSubId
+      );
+      const byId = new Map(moved.map((r) => [r.id, r]));
+      return next.map((r) => byId.get(r.id) ?? r);
+    };
+
     if (mixedSubs && subChanged) {
       window.alert(
         '此申請單含多位代課教師；僅更新與您目前開啟那一節相同代課者之課堂，其餘代課教師維持不變。'
@@ -2457,7 +2495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!needReschedule) {
       if (newSubId && leaveChanged) {
-        const patched = requests.map((r) => (ids.has(r.id) ? applyPatch(r) : r));
+        const patched = patchRequests(requests);
         for (const req of patched.filter((r) => ids.has(r.id))) {
           const clash = checkClashes({
             requestType: 'substitute',
@@ -2479,7 +2517,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       }
-      setRequests((prev) => prev.map((r) => (ids.has(r.id) ? applyPatch(r) : r)));
+      setRequests((prev) => patchRequests(prev));
       return true;
     }
 
@@ -2494,7 +2532,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 新代課：逐筆衝堂＋套用；清掉代課則僅回滾即可
     if (newSubId) {
-      let progressiveRequests = requests.map((r) => (ids.has(r.id) ? applyPatch(r) : r));
+      let progressiveRequests = patchRequests(requests);
       for (const req of patchedApproved) {
         const clash = checkClashes({
           requestType: 'substitute',
@@ -2526,7 +2564,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         progressiveSessions = applyResult.sessions;
         progressiveRequests = progressiveRequests.map((r) =>
-          r.id === req.id ? { ...req, clashStatus: clash } : r
+          r.id === req.id ? { ...r, clashStatus: clash } : r
         );
       }
       setSessions(progressiveSessions);
@@ -2535,7 +2573,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setSessions(progressiveSessions);
-    setRequests((prev) => prev.map((r) => (ids.has(r.id) ? applyPatch(r) : r)));
+    setRequests((prev) => patchRequests(prev));
     return true;
   };
 

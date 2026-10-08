@@ -438,6 +438,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
         leaveDateMode === 'range'
           ? leaveDateEnd || leaveDateStart || undefined
           : leaveDateStart || undefined,
+      examDays: systemConfig.examDays,
+      nonTeachingDays: systemConfig.nonTeachingDays,
     });
   }, [
     teachers,
@@ -473,6 +475,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
         periodCfg: systemConfig,
         leaveDateStart: leaveDateStart || undefined,
         leaveDateEnd: periodRangeLeaveEnd,
+        examDays: systemConfig.examDays,
+        nonTeachingDays: systemConfig.nonTeachingDays,
       });
     });
     return map;
@@ -558,10 +562,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
         batchSelectedSessions.forEach((session) => {
           if (next[session.id]) return;
           const cands = periodRangeCandidateMap[session.id] || [];
+          const free = cands.filter((c) => !c.hasClash && !c.examClashWaived);
           const best =
-            cands.find((c) => !c.hasClash && c.isSameSubject) ||
-            cands.find((c) => !c.hasClash && c.isSameDept) ||
-            cands.find((c) => !c.hasClash);
+            free.find((c) => c.isSameSubject) ||
+            free.find((c) => c.isSameDept) ||
+            free[0];
           if (best) {
             next[session.id] = best.teacher.id;
             changed = true;
@@ -579,10 +584,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
       : undefined;
 
     if (!substituteTeacherId || selected?.hasClash) {
+      const free = candidateSubstitutes.filter((c) => !c.hasClash && !c.examClashWaived);
       const best =
-        candidateSubstitutes.find((c) => !c.hasClash && c.isSameSubject) ||
-        candidateSubstitutes.find((c) => !c.hasClash && c.isSameDept) ||
-        candidateSubstitutes.find((c) => !c.hasClash);
+        free.find((c) => c.isSameSubject) ||
+        free.find((c) => c.isSameDept) ||
+        free[0];
       if (best) setSubstituteTeacherId(best.teacher.id);
     }
   }, [
@@ -2306,7 +2312,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     ) : (
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                          {candidateSubstitutes.map(({ teacher: cand, hasClash, isSameSubject, isSameDept, weeklyOverload }) => {
+                          {candidateSubstitutes.map(({ teacher: cand, hasClash, examClashWaived, isSameSubject, isSameDept, weeklyOverload }) => {
                             const isSelected = substituteTeacherId === cand.id;
 
                             return (
@@ -2337,6 +2343,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   {hasClash ? (
                                     <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 font-bold rounded">
                                       🚫 時段衝堂 (已有課)
+                                    </span>
+                                  ) : examClashWaived ? (
+                                    <span
+                                      className="px-1.5 py-0.2 bg-amber-100 text-amber-800 font-bold rounded"
+                                      title="週課表此節有正課，但請假日皆為段考日，故解除衝堂；請確認該節未排監考"
+                                    >
+                                      📝 段考解除衝堂
                                     </span>
                                   ) : (
                                     <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 font-bold rounded">
