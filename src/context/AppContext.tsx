@@ -911,8 +911,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCloudSyncMessage('正在強制推送本機…');
     cloudBusyRef.current = true;
     try {
-      const remote = await pullSharedSchoolData(cloudSyncSettings);
-      const remoteAt = remote?.updatedAt ?? lastCloudSyncAtRef.current;
+      const remoteAt = (await pullRemoteUpdatedAt(cloudSyncSettings)) ?? lastCloudSyncAtRef.current;
       // 不可在寫入成功前推進 lastCloudSyncAtRef，否則推送失敗後會跳過套用較新遠端
       const now = Date.now();
       let result = await pushSharedSchoolData(
@@ -922,8 +921,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       let writtenAt = now;
       if (result === 'conflict') {
-        const again = await pullSharedSchoolData(cloudSyncSettings);
-        const at2 = again?.updatedAt ?? Date.now();
+        const at2 = (await pullRemoteUpdatedAt(cloudSyncSettings)) ?? Date.now();
         const now2 = Date.now();
         result = await pushSharedSchoolData(cloudSyncSettings, buildSharedSchoolData(now2), {
           ifMatchUpdatedAt: at2,
