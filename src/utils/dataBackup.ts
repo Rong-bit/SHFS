@@ -1,12 +1,15 @@
 import { STORAGE_KEYS } from '../context/AppContext';
+import { clearLocalAuthTrust } from './localAuthTrust';
 import { isPasswordHash } from './passwordCrypto';
-import { PATROL_RECORDS_KEY } from './patrolSync';
+import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from './patrolSync';
 
 /** 不在 STORAGE_KEYS 的本機資料；還原時舊備份沒有這些欄位就保留現有資料 */
 const EXTRA_BACKUP_KEYS = [PATROL_RECORDS_KEY];
 
 export const BACKUP_APP_ID = 'SHFS';
 export const BACKUP_VERSION = 2;
+/** 匯入後若已啟用雲端同步，暫停自動覆寫，請使用者選擇推送或拉取 */
+export const POST_BACKUP_IMPORT_FLAG = 'voc_post_backup_import_v1';
 
 export interface SystemBackupFile {
   app: string;
@@ -66,6 +69,11 @@ function sanitizeConfigJson(raw: string | null): string | null {
   }
 }
 
+function assertBackupValue(key: string, value: unknown): asserts value is string | null | undefined {
+  if (value === undefined || value === null || typeof value === 'string') return;
+  throw new Error(`備份欄位「${key}」格式無效，已中止匯入以免資料不一致。`);
+}
+
 export const exportSystemBackup = () => {
   const data: Record<string, string | null> = {};
   Object.values(STORAGE_KEYS).forEach((key) => {
@@ -113,8 +121,21 @@ export const importSystemBackup = async (file: File): Promise<void> => {
     throw new Error('這不是本系統的整份備份檔。');
   }
 
-  Object.values(STORAGE_KEYS).forEach((key) => {
-    let value = payload.data[key];
+  if (
+    payload.version != null &&
+    (typeof payload.version !== 'number' ||
+      !Number.isFinite(payload.version) ||
+      payload.version > BACKUP_VERSION)
+  ) {
+    throw new Error(`不支援的備份版本（${String(payload.version)}），請使用較新的系統匯入。`);
+  }
+
+  // 先消毒並驗證，全部通過後再寫入，避免半套用
+  const mainWrites: { key: string; value: string | null }[] = [];
+  for (const key of Object.values(STORAGE_KEYS)) {
+    const raw = payload.data[key] as unknown;
+    assertBackupValue(key, raw);
+    let value: string | null = raw ?? null;
     if (key === STORAGE_KEYS.TEACHERS && typeof value === 'string') {
       value = sanitizeTeachersJson(value);
     }
@@ -124,16 +145,34 @@ export const importSystemBackup = async (file: File): Promise<void> => {
     if (key === STORAGE_KEYS.CONFIG && typeof value === 'string') {
       value = sanitizeConfigJson(value);
     }
-    if (typeof value === 'string') {
-      localStorage.setItem(key, value);
-    } else if (value == null) {
-      localStorage.removeItem(key);
-    }
-  });
-  EXTRA_BACKUP_KEYS.forEach((key) => {
-    const value = payload.data[key];
+    mainWrites.push({ key, value });
+  }
+
+  const extraWrites: { key: string; value: string | null }[] = [];
+  for (const key of EXTRA_BACKUP_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(payload.data, key)) continue;
+    const raw = payload.data[key] as unknown;
+    assertBackupValue(key, raw);
+    // 缺欄位已 skip；明確 null → 清除；字串 → 還原
+    extraWrites.push({ key, value: raw ?? null });
+  }
+
+  for (const { key, value } of mainWrites) {
     if (typeof value === 'string') localStorage.setItem(key, value);
-  });
+    else localStorage.removeItem(key);
+  }
+  for (const { key, value } of extraWrites) {
+    if (typeof value === 'string') localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  }
+
+  // 待上傳佇列屬本機操作狀態，不可跨機延續，否則可能誤刪／復活雲端巡堂紀錄
+  localStorage.removeItem(PATROL_PENDING_KEY);
+  // 匯入後密碼可能已變更，清除本機「已驗證」信任以免略過密碼門檻
+  clearLocalAuthTrust();
+  // 若已啟用雲端同步：暫停自動覆寫，請使用者選擇強制推送或拉取遠端
+  // （同步密碼不進備份，故保留 voc_cloud_sync_v1；時間戳保留供衝突比對）
+  localStorage.setItem(POST_BACKUP_IMPORT_FLAG, '1');
 
   window.location.reload();
 };

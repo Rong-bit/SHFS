@@ -12,7 +12,7 @@ import {
 import { dateToIsoLocal } from './holidays';
 
 export const PATROL_RECORDS_KEY = 'voc_patrol_records_v1';
-const PATROL_PENDING_KEY = 'voc_patrol_pending_v1';
+export const PATROL_PENDING_KEY = 'voc_patrol_pending_v1';
 /** 本機只保留近期紀錄，避免 localStorage 爆量；較舊的仍可由雲端查詢 */
 const LOCAL_RETENTION_DAYS = 400;
 
@@ -168,9 +168,15 @@ export function usePatrolRecords() {
 
   const saveRecord = useCallback(
     (record: PatrolRecord) => {
-      const next = upsert(loadLocalPatrolRecords(), record);
-      saveLocalPatrolRecords(next);
-      setRecords(next);
+      const nextDisk = upsert(loadLocalPatrolRecords(), record);
+      saveLocalPatrolRecords(nextDisk);
+      // 磁碟只留近期；畫面上若已用 refresh 拉回較舊資料，勿被此次寫入沖掉
+      setRecords((prev) => {
+        const saved = loadLocalPatrolRecords();
+        const savedIds = new Set(saved.map((r) => r.id));
+        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
+        return [...olderInMemory, ...saved];
+      });
       recentOpsRef.current.set(record.id, { id: record.id, at: Date.now(), record });
       savePending([
         ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
@@ -184,9 +190,14 @@ export function usePatrolRecords() {
 
   const deleteRecord = useCallback(
     (record: PatrolRecord) => {
-      const next = loadLocalPatrolRecords().filter((r) => r.id !== record.id);
-      saveLocalPatrolRecords(next);
-      setRecords(next);
+      const nextDisk = loadLocalPatrolRecords().filter((r) => r.id !== record.id);
+      saveLocalPatrolRecords(nextDisk);
+      setRecords((prev) => {
+        const saved = loadLocalPatrolRecords();
+        const savedIds = new Set(saved.map((r) => r.id));
+        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
+        return [...olderInMemory, ...saved];
+      });
       recentOpsRef.current.set(record.id, { id: record.id, at: Date.now() });
       savePending([
         ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),

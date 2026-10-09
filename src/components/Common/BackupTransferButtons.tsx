@@ -42,7 +42,7 @@ export const BackupTransferButtons: React.FC<BackupTransferButtonsProps> = ({
         type="button"
         onClick={exportSystemBackup}
         className={btnClass}
-        title="匯出課表、申請單與設定，拿到其他電腦匯入"
+        title="匯出課表、申請單、設定、巡堂教室與巡堂紀錄，拿到其他電腦匯入"
       >
         <Download className={`w-3.5 h-3.5 ${isHeader ? '' : 'text-amber-500'}`} />
         <span className={isHeader ? 'hidden sm:inline' : ''}>匯出整份備份</span>
@@ -94,10 +94,10 @@ export const BackupTransferButtons: React.FC<BackupTransferButtonsProps> = ({
             </div>
             <div className="p-6 space-y-3">
               <p className="text-slate-200 text-sm font-medium leading-relaxed">
-                將匯入「{pendingFile?.name}」，覆蓋這台電腦目前的課表、教師、申請單與設定。
+                將匯入「{pendingFile?.name}」，覆蓋這台電腦目前的課表、教師、申請單、設定、巡堂教室配置與巡堂紀錄。
               </p>
               <div className="p-3 bg-amber-950/50 rounded-xl border border-amber-800/80 text-xs text-amber-300">
-                用於把 A 電腦的資料帶到 B 電腦。匯入後網頁會自動重新整理。
+                用於把 A 電腦的資料帶到 B 電腦。匯入後網頁會自動重新整理；若已啟用雲端同步，會暫停自動覆寫，請至雲端同步選擇強制推送或拉取遠端。
               </div>
               {errorMsg && (
                 <div className="text-xs text-rose-400 font-medium">{errorMsg}</div>
