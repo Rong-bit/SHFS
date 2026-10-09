@@ -65,7 +65,10 @@ import {
   Cloud,
   Eye,
   EyeOff,
+  MapPin,
 } from 'lucide-react';
+import { PatrolLayoutSettings } from './PatrolLayoutSettings';
+import { PatrolReport } from '../Patrol/PatrolReport';
 import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/scheduleImporter';
 import {
   downloadSalaryCodeTemplate,
@@ -106,6 +109,8 @@ type AdminTab =
   | 'calendar'
   | 'security'
   | 'venues'
+  | 'patrol'
+  | 'patrolReport'
   | 'teachers'
   | 'staff'
   | 'schedules'
@@ -116,7 +121,7 @@ type AdminGroup = 'params' | 'venues' | 'roster' | 'data' | 'ops';
 
 const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
   { id: 'params', label: '標準與參數', tabs: ['config', 'school', 'calendar'] },
-  { id: 'venues', label: '場地維護', tabs: ['venues'] },
+  { id: 'venues', label: '場地維護', tabs: ['venues', 'patrol', 'patrolReport'] },
   { id: 'roster', label: '名冊維護', tabs: ['teachers', 'staff'] },
   { id: 'data', label: '課表與同步', tabs: ['schedules', 'sync'] },
   { id: 'ops', label: '系統維護', tabs: ['security', 'maintenance'] },
@@ -977,6 +982,24 @@ export const AdminSettings: React.FC = () => {
             >
               <Building2 className="w-3.5 h-3.5 text-amber-400" />
               <span>工場與教室 ({venues.length})</span>
+            </button>
+            <button
+              id="tab-admin-patrol"
+              type="button"
+              onClick={() => setActiveTab('patrol')}
+              className={subTabClass(activeTab === 'patrol')}
+            >
+              <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+              <span>巡堂教室配置 ({(systemConfig.patrolRooms || []).length})</span>
+            </button>
+            <button
+              id="tab-admin-patrol-report"
+              type="button"
+              onClick={() => setActiveTab('patrolReport')}
+              className={subTabClass(activeTab === 'patrolReport')}
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <span>巡堂紀錄彙整</span>
             </button>
           </div>
         )}
@@ -2354,6 +2377,9 @@ export const AdminSettings: React.FC = () => {
           {renderConfigSaveBar()}
         </form>
       )}
+
+      {activeTab === 'patrol' && <PatrolLayoutSettings />}
+      {activeTab === 'patrolReport' && <PatrolReport />}
 
       {/* TAB 2: 實習工場與教室維護 */}
       {activeTab === 'venues' && (

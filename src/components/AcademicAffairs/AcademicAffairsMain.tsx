@@ -4,11 +4,14 @@ import { PendingApprovals } from './PendingApprovals';
 import { SchoolTimetableMatrix } from './SchoolTimetableMatrix';
 import { StaffDispatchWorkbench } from './StaffDispatchWorkbench';
 import { TeacherLeaveCalendar } from './TeacherLeaveCalendar';
-import { CalendarDays, ClipboardCheck, Grid, UserCheck } from 'lucide-react';
+import { PatrolReport } from '../Patrol/PatrolReport';
+import { CalendarDays, ClipboardCheck, Grid, MapPin, UserCheck } from 'lucide-react';
 
 export const AcademicAffairsMain: React.FC = () => {
   const { requests } = useApp();
-  const [activeTab, setActiveTab] = useState<'dispatch' | 'approvals' | 'matrix' | 'leave-calendar'>('dispatch');
+  const [activeTab, setActiveTab] = useState<
+    'dispatch' | 'approvals' | 'matrix' | 'leave-calendar' | 'patrol'
+  >('dispatch');
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
@@ -75,6 +78,19 @@ export const AcademicAffairsMain: React.FC = () => {
             <CalendarDays className="w-4 h-4 text-sky-300" />
             <span>檢視教師請假行事曆</span>
           </button>
+
+          <button
+            id="tab-academic-patrol"
+            onClick={() => setActiveTab('patrol')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition ${
+              activeTab === 'patrol'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <MapPin className="w-4 h-4 text-emerald-400" />
+            <span>巡堂紀錄彙整</span>
+          </button>
         </div>
       </div>
 
@@ -82,6 +98,7 @@ export const AcademicAffairsMain: React.FC = () => {
       {activeTab === 'approvals' && <PendingApprovals />}
       {activeTab === 'matrix' && <SchoolTimetableMatrix />}
       {activeTab === 'leave-calendar' && <TeacherLeaveCalendar />}
+      {activeTab === 'patrol' && <PatrolReport />}
 
     </div>
   );

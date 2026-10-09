@@ -1,5 +1,9 @@
 import { STORAGE_KEYS } from '../context/AppContext';
 import { isPasswordHash } from './passwordCrypto';
+import { PATROL_RECORDS_KEY } from './patrolSync';
+
+/** 不在 STORAGE_KEYS 的本機資料；還原時舊備份沒有這些欄位就保留現有資料 */
+const EXTRA_BACKUP_KEYS = [PATROL_RECORDS_KEY];
 
 export const BACKUP_APP_ID = 'SHFS';
 export const BACKUP_VERSION = 2;
@@ -71,6 +75,9 @@ export const exportSystemBackup = () => {
     if (key === STORAGE_KEYS.CONFIG) value = sanitizeConfigJson(value);
     data[key] = value;
   });
+  EXTRA_BACKUP_KEYS.forEach((key) => {
+    data[key] = localStorage.getItem(key);
+  });
 
   const payload: SystemBackupFile = {
     app: BACKUP_APP_ID,
@@ -122,6 +129,10 @@ export const importSystemBackup = async (file: File): Promise<void> => {
     } else if (value == null) {
       localStorage.removeItem(key);
     }
+  });
+  EXTRA_BACKUP_KEYS.forEach((key) => {
+    const value = payload.data[key];
+    if (typeof value === 'string') localStorage.setItem(key, value);
   });
 
   window.location.reload();

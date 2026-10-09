@@ -1,16 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { TeacherSchedule } from './TeacherSchedule';
 import { TeacherRequestsList } from './TeacherRequestsList';
 import { RequestModal } from './RequestModal';
-import { Calendar, FileText, Plus, Cloud } from 'lucide-react';
+import { Calendar, FileText, Plus, Cloud, MapPin } from 'lucide-react';
 import { CloudSyncJoinModal } from '../Common/CloudSyncJoinModal';
+import { PatrolMain } from '../Patrol/PatrolMain';
 
 export const TeacherPortalMain: React.FC = () => {
   const { requests, currentTeacher, requestTeacherActionAuth, cloudSyncStatus } = useApp();
-  const [activeTab, setActiveTab] = useState<'schedule' | 'requests'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'requests' | 'patrol'>('schedule');
   const [isTopRequestModalOpen, setIsTopRequestModalOpen] = useState(false);
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
+
+  // 巡堂紀錄記在登入教師名下；切換身分須重新驗證
+  useEffect(() => {
+    setActiveTab((tab) => (tab === 'patrol' ? 'schedule' : tab));
+  }, [currentTeacher?.id]);
 
   const myPendingCount = requests.filter(
     (r) => r.applicantTeacherId === currentTeacher?.id && r.status === 'pending'
@@ -67,6 +73,26 @@ export const TeacherPortalMain: React.FC = () => {
               </span>
             )}
           </button>
+
+          <button
+            id="tab-teacher-patrol"
+            onClick={() => {
+              if (activeTab === 'patrol') return;
+              if (!currentTeacher) {
+                setActiveTab('patrol');
+                return;
+              }
+              requestTeacherActionAuth(currentTeacher.id, () => setActiveTab('patrol'), '巡堂登錄');
+            }}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition ${
+              activeTab === 'patrol'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <MapPin className="w-4 h-4 text-emerald-400" />
+            <span>巡堂</span>
+          </button>
         </div>
 
         {currentTeacher && (
@@ -90,7 +116,9 @@ export const TeacherPortalMain: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      {activeTab === 'schedule' ? <TeacherSchedule /> : <TeacherRequestsList />}
+      {activeTab === 'schedule' && <TeacherSchedule />}
+      {activeTab === 'requests' && <TeacherRequestsList />}
+      {activeTab === 'patrol' && <PatrolMain />}
 
       {/* Top Level Request Modal */}
       {isTopRequestModalOpen && (

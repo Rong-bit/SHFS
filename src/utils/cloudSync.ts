@@ -68,7 +68,19 @@ const base64ToBytes = (value: string) => {
   return bytes;
 };
 
-const deriveAesKey = async (schoolKey: string) => {
+const aesKeyCache = new Map<string, Promise<CryptoKey>>();
+
+const deriveAesKey = (schoolKey: string): Promise<CryptoKey> => {
+  let cached = aesKeyCache.get(schoolKey);
+  if (!cached) {
+    cached = deriveAesKeyUncached(schoolKey);
+    cached.catch(() => aesKeyCache.delete(schoolKey));
+    aesKeyCache.set(schoolKey, cached);
+  }
+  return cached;
+};
+
+const deriveAesKeyUncached = async (schoolKey: string) => {
   const material = await crypto.subtle.importKey('raw', encoder.encode(schoolKey), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     {
@@ -84,7 +96,7 @@ const deriveAesKey = async (schoolKey: string) => {
   );
 };
 
-const pathIdForSchool = async (schoolKey: string) => {
+export const pathIdForSchool = async (schoolKey: string) => {
   const digest = await crypto.subtle.digest('SHA-256', encoder.encode(`shfs:${schoolKey}`));
   return Array.from(new Uint8Array(digest))
     .slice(0, 16)
@@ -92,7 +104,35 @@ const pathIdForSchool = async (schoolKey: string) => {
     .join('');
 };
 
-const normalizeDatabaseUrl = (url: string) => url.trim().replace(/\/+$/, '');
+export const normalizeDatabaseUrl = (url: string) => url.trim().replace(/\/+$/, '');
+
+/** 任意 JSON 以同步密碼加密（巡堂紀錄等逐筆資料共用） */
+export const encryptJson = async (
+  schoolKey: string,
+  value: unknown
+): Promise<{ v: 1; iv: string; ct: string }> => {
+  const key = await deriveAesKey(schoolKey);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    encoder.encode(JSON.stringify(value))
+  );
+  return { v: 1, iv: bytesToBase64(iv), ct: bytesToBase64(new Uint8Array(cipherBuf)) };
+};
+
+export const decryptJson = async <T>(
+  schoolKey: string,
+  envelope: { iv: string; ct: string }
+): Promise<T> => {
+  const key = await deriveAesKey(schoolKey);
+  const plainBuf = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(envelope.iv) },
+    key,
+    base64ToBytes(envelope.ct)
+  );
+  return JSON.parse(decoder.decode(plainBuf)) as T;
+};
 
 const buildEndpoint = async (settings: CloudSyncSettings) => {
   const base = normalizeDatabaseUrl(settings.databaseUrl);
