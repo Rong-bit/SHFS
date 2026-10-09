@@ -1526,9 +1526,6 @@ export const AdminSettings: React.FC = () => {
       {/* TAB: 行事曆（新增／刪除即儲存） */}
       {activeTab === 'calendar' && (
         <div className="space-y-6">
-          <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 leading-relaxed">
-            本頁的新增、刪除與勾選都會<strong>立即儲存</strong>，不需另按儲存。學年度與每日節次請在「學校與學制」設定並儲存後，本頁才會套用。
-          </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* 放假日行事曆 */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
