@@ -244,9 +244,16 @@ export const CloudSyncPanel: React.FC = () => {
     "shfs": {
       ".read": true,
       ".write": true
+    },
+    "shfs_patrol": {
+      ".read": true,
+      ".write": true
     }
   }
 }`}</pre>
+              <span className="block mt-1 text-[11px] text-slate-500">
+                已在使用同步的學校，請補上 <code>shfs_patrol</code> 這段，巡堂紀錄才能上傳。
+              </span>
             </li>
             <li>複製資料庫網址（結尾通常是 <code>.firebasedatabase.app</code> 或 <code>.firebaseio.com</code>）。</li>
             <li>

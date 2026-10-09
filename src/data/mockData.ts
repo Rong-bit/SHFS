@@ -118,6 +118,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   temporaryScheduleMoves: [],
   partialNonTeachingDays: [],
   examDays: [],
+  patrolRooms: [],
   authConfig: {
     requirePassword: true,
     defaultTeacherPassword: '1234',

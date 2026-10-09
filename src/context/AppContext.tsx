@@ -411,6 +411,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? parsed.partialNonTeachingDays
           : INITIAL_SYSTEM_CONFIG.partialNonTeachingDays || [],
         examDays: Array.isArray(parsed.examDays) ? parsed.examDays : [],
+        patrolRooms: Array.isArray(parsed.patrolRooms) ? parsed.patrolRooms : [],
         standardBasePeriods: normalizeStandardBasePeriods(
           parsed.standardBasePeriods || parsed.basePeriodsStandard
         ),

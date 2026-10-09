@@ -237,6 +237,14 @@ export interface SystemConfig {
   partialNonTeachingDays?: PartialNonTeachingDay[];
   /** 段考日：請假日期皆落在段考日時，代課教師週課表正課不視為衝堂（僅提醒，仍須自行確認監考） */
   examDays?: ExamDay[];
+  /** 巡堂教室配置（大樓 → 樓層 → 教室） */
+  patrolRooms?: PatrolRoom[];
+  /** 放學／室外課巡查檢查項目（關燈、門窗、大屏等） */
+  patrolCheckItems?: PatrolCheckItem[];
+  /** 課間巡堂觀察項目（睡覺、玩手機等；只記有無） */
+  patrolObservationItems?: PatrolCheckItem[];
+  /** 場地名稱含這些字視為室外場地（如操場、體育館） */
+  outdoorVenueKeywords?: string[];
   /** 教師薪資編號（teacherId → 薪資編號）— 舊版；請改用 teacherSalaryCodesByName */
   teacherSalaryCodes?: Record<string, string>;
   /** 教師薪資編號（姓名 → 薪資編號），課表匯入後仍有效 */
@@ -286,6 +294,51 @@ export interface PartialNonTeachingDay {
 export interface ExamDay {
   date: string; // YYYY-MM-DD
   label: string;
+}
+
+/** 巡堂教室 */
+export interface PatrolRoom {
+  id: string;
+  building: string;
+  /** 樓層標籤，如 1F、B1 */
+  floor: string;
+  name: string;
+  /** 原班級（對應課表 className，如 機二忠）；空白＝專科教室或空教室 */
+  homeroomClass?: string;
+  order: number;
+}
+
+/** 巡堂檢查／觀察項目 */
+export interface PatrolCheckItem {
+  id: string;
+  label: string;
+}
+
+export type PatrolKind = 'class' | 'outdoor' | 'after_school';
+
+/** 巡堂紀錄（逐筆同步） */
+export interface PatrolRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  kind: PatrolKind;
+  period?: number;
+  roomId: string;
+  roomName: string;
+  building: string;
+  floor: string;
+  className?: string;
+  subjectName?: string;
+  teacherName?: string;
+  /** 課間：勾選的觀察項目 id；空陣列＝正常 */
+  observations: string[];
+  /** 室外課／放學：檢查項目 id → 是否合格 */
+  checks: Record<string, boolean>;
+  /** 登錄當下的項目名稱（項目日後被改名或移除時，報表仍可顯示） */
+  itemLabels?: Record<string, string>;
+  note: string;
+  patrollerId: string;
+  patrollerName: string;
+  createdAt: string;
 }
 
 export interface MonthlyTeacherSettlement {
