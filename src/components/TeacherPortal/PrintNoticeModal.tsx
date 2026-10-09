@@ -403,18 +403,6 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              id="btn-export-notice-excel"
-              type="button"
-              onClick={() => {
-                void handleExportExcel();
-              }}
-              disabled={exporting}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 text-xs font-bold rounded shadow transition"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>{exporting ? '匯出中…' : '匯出 Excel'}</span>
-            </button>
-            <button
               id="btn-trigger-print"
               onClick={handlePrint}
               className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded shadow transition"
@@ -482,6 +470,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           關閉視窗
         </button>
         <button
+          id="btn-export-notice-excel"
           type="button"
           onClick={() => {
             void handleExportExcel();
