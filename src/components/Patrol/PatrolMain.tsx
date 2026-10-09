@@ -249,7 +249,7 @@ export const PatrolMain: React.FC = () => {
             {building.floors.map((f) => (
               <div key={f.floor} className="flex gap-2 p-2 sm:p-3">
                 <div className="w-12 shrink-0 text-sm font-extrabold text-slate-500 pt-2">{f.floor}</div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 flex-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 flex-1">
                   {f.rooms.map((room) => {
                     const o = occupancy.get(room.id);
                     const recs = recordsByRoom.get(room.id) || [];
