@@ -6,6 +6,7 @@ import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import { formatDayPeriodSummary } from '../../utils/periodLabels';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
+import { exportNoticesToExcel } from '../../utils/noticeExcel';
 import { 
   Printer, 
   Trash2, 
@@ -13,6 +14,7 @@ import {
   Clock, 
   XCircle, 
   FileText,
+  FileSpreadsheet,
   ArrowLeftRight
 } from 'lucide-react';
 
@@ -29,8 +31,9 @@ const requestGroupKey = (r: SubstituteRequest) => {
 };
 
 export const TeacherRequestsList: React.FC = () => {
-  const { currentTeacher, requests, cancelRequest, setPrintModalRequest, systemConfig } = useApp();
+  const { currentTeacher, requests, sessions, cancelRequest, setPrintModalRequest, systemConfig } = useApp();
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [exportingNotices, setExportingNotices] = useState(false);
   const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
 
   const myRequests = useMemo(
@@ -116,6 +119,28 @@ export const TeacherRequestsList: React.FC = () => {
     [myRequests]
   );
 
+  const handleExportMyNotices = async () => {
+    if (exportingNotices) return;
+    setExportingNotices(true);
+    try {
+      const count = await exportNoticesToExcel({
+        requests,
+        sessions,
+        schoolName: systemConfig.schoolName,
+        scope: myRequests,
+        fileName: `${(systemConfig.schoolName || '學校').replace(/[\\/:*?"<>|]/g, '')}_${(currentTeacher?.name || '教師').replace(/[\\/:*?"<>|]/g, '')}_調代課通知單清冊.xlsx`,
+      });
+      if (count === 0) {
+        window.alert('目前沒有已核准、可匯出的通知單。僅代導師不產生通知單。');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '匯出失敗';
+      window.alert(`通知單清冊 Excel 匯出失敗：${message}`);
+    } finally {
+      setExportingNotices(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       
@@ -129,6 +154,18 @@ export const TeacherRequestsList: React.FC = () => {
           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
             共 {groupCount} 筆
           </span>
+          <button
+            type="button"
+            onClick={() => {
+              void handleExportMyNotices();
+            }}
+            disabled={exportingNotices}
+            title="匯出本人已核准的代課、調課、同班對調通知單清冊（一列一節）"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-[11px] font-bold rounded-lg transition"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>{exportingNotices ? '匯出中…' : '匯出清冊'}</span>
+          </button>
         </div>
 
         {/* Filter buttons */}
