@@ -403,17 +403,10 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              id="btn-trigger-print"
-              onClick={handlePrint}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded shadow transition"
-            >
-              <Printer className="w-4 h-4" />
-              <span>立即列印 / 存為 PDF</span>
-            </button>
-            <button
               id="btn-close-print-modal"
               onClick={onClose}
               className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition"
+              aria-label="關閉"
             >
               <X className="w-5 h-5" />
             </button>
@@ -482,6 +475,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           <span>{exporting ? '匯出中…' : '匯出 Excel'}</span>
         </button>
         <button
+          id="btn-trigger-print"
           onClick={handlePrint}
           className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg shadow transition"
         >
