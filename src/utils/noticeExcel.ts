@@ -10,8 +10,38 @@ import {
   type NoticeDocument,
 } from './noticeDocument';
 
-const NOTICE_HEADERS = ['日期', '星期', '節次', '班級', '科目', '鐘點'] as const;
-const COL_WIDTHS = [16, 10, 10, 16, 28, 12];
+/** 通知單清冊欄位（一列＝一節課程） */
+export const NOTICE_ROSTER_HEADERS = [
+  '序',
+  '種類',
+  '假單編號',
+  '請假者',
+  '代課者',
+  '開立日期',
+  '請假日期',
+  '星期',
+  '節次',
+  '班級',
+  '科目',
+  '鐘點',
+] as const;
+
+const COL_WIDTHS = [6, 10, 16, 12, 12, 12, 12, 8, 8, 14, 22, 10];
+
+export type NoticeRosterRow = {
+  seq: number;
+  kind: string;
+  requestNumber: string;
+  applicant: string;
+  substitute: string;
+  issueDate: string;
+  leaveDate: string;
+  weekday: string;
+  period: string;
+  className: string;
+  subjectName: string;
+  hours: string;
+};
 
 async function loadExcelJS(): Promise<typeof ExcelJS> {
   const mod = await import('exceljs');
@@ -25,154 +55,87 @@ const thinBorder: Partial<ExcelJS.Borders> = {
   right: { style: 'thin', color: { argb: 'FF000000' } },
 };
 
-function font(size: number, bold = false): Partial<ExcelJS.Font> {
-  return { name: '標楷體', size, bold };
+function stripTeacherTitle(name?: string): string {
+  return (name || '')
+    .replace(/\s+/g, '')
+    .replace(/(科主任|主任|組長|導師|老師)$/g, '');
 }
 
-function writeNoticeSheet(ws: ExcelJS.Worksheet, doc: NoticeDocument) {
-  ws.pageSetup = {
-    paperSize: 9,
-    orientation: 'portrait',
-    fitToPage: true,
-    fitToWidth: 1,
-    fitToHeight: 0,
-    margins: { left: 0.6, right: 0.6, top: 0.6, bottom: 0.6, header: 0.2, footer: 0.2 },
-  };
-  ws.columns = COL_WIDTHS.map((width) => ({ width }));
-
-  const issueDate = formatNoticeIssueRocDate(resolveNoticeIssueDate(doc.liveRequest, doc.printGroup));
-  const applicant = (doc.liveRequest.applicantTeacherName || '').trim();
-
-  ws.mergeCells('A1:F1');
-  const titleCell = ws.getCell('A1');
-  titleCell.value = doc.title;
-  titleCell.font = font(18, true);
-  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-  titleCell.border = { bottom: { style: 'thin', color: { argb: 'FF000000' } } };
-  ws.getRow(1).height = 28;
-
-  ws.mergeCells('A2:F2');
-  const numberCell = ws.getCell('A2');
-  numberCell.value = `假單編號：${doc.requestNumberLabel}`;
-  numberCell.font = font(12);
-  numberCell.alignment = { horizontal: 'right', vertical: 'middle' };
-  ws.getRow(2).height = 20;
-
-  ws.mergeCells('A3:F3');
-  const addresseeCell = ws.getCell('A3');
-  addresseeCell.value = `${doc.addressee}：`;
-  addresseeCell.font = font(14);
-  addresseeCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-
-  ws.mergeCells('A4:F4');
-  const greetingCell = ws.getCell('A4');
-  greetingCell.value = `　　${doc.greeting}`;
-  greetingCell.font = font(14);
-  greetingCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-  ws.getRow(4).height = 22;
-
-  ws.mergeCells('A5:D5');
-  const closingCell = ws.getCell('A5');
-  closingCell.value = '並請學生記載於教學日誌內。謝謝。';
-  closingCell.font = font(14);
-  closingCell.alignment = { horizontal: 'left', vertical: 'middle' };
-  ws.mergeCells('E5:F5');
-  const officeCell = ws.getCell('E5');
-  officeCell.value = '教務處　啟';
-  officeCell.font = font(14);
-  officeCell.alignment = { horizontal: 'right', vertical: 'middle' };
-
-  const headerRowIndex = 7;
-  NOTICE_HEADERS.forEach((label, index) => {
-    const cell = ws.getCell(headerRowIndex, index + 1);
-    cell.value = label;
-    cell.font = font(12, true);
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.border = thinBorder;
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-  });
-  ws.getRow(headerRowIndex).height = 22;
-
-  const rows = doc.displayRows.length ? doc.displayRows : [];
-  rows.forEach((row, offset) => {
-    const values = [
-      row.date,
-      formatNoticeWeekdayLabel(row.weekday),
-      row.period,
-      row.className,
-      row.subjectName,
-      formatNoticeHoursDisplay(row.hours),
-    ];
-    values.forEach((value, index) => {
-      const cell = ws.getCell(headerRowIndex + 1 + offset, index + 1);
-      cell.value = value;
-      cell.font = font(12);
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      cell.border = thinBorder;
-    });
-    ws.getRow(headerRowIndex + 1 + offset).height = 20;
-  });
-
-  const afterTable = headerRowIndex + Math.max(rows.length, 1) + 2;
-  ws.mergeCells(afterTable, 1, afterTable, 6);
-  const dateCell = ws.getCell(afterTable, 1);
-  dateCell.value = issueDate;
-  dateCell.font = font(14);
-  dateCell.alignment = { horizontal: 'right', vertical: 'middle' };
-
-  const signStart = afterTable + 2;
-  ws.mergeCells(signStart, 1, signStart, 2);
-  ws.mergeCells(signStart, 3, signStart, 4);
-  ws.mergeCells(signStart, 5, signStart, 6);
-  const sign1 = ['承辦人：', '人事室：', '校長：'];
-  sign1.forEach((label, index) => {
-    const cell = ws.getCell(signStart, index * 2 + 1);
-    cell.value = label;
-    cell.font = font(14);
-    cell.alignment = { horizontal: 'left', vertical: 'middle' };
-  });
-  ws.getRow(signStart).height = 22;
-
-  ws.mergeCells(signStart + 1, 1, signStart + 1, 6);
-  const chief = ws.getCell(signStart + 1, 1);
-  chief.value = '教學組長：';
-  chief.font = font(14);
-  ws.getRow(signStart + 1).height = 22;
-
-  ws.mergeCells(signStart + 2, 1, signStart + 2, 6);
-  const director = ws.getCell(signStart + 2, 1);
-  director.value = '教務主任：';
-  director.font = font(14);
-  ws.getRow(signStart + 2).height = 22;
-
-  ws.headerFooter.oddFooter = applicant ? `&C${applicant}` : '';
+/** 種類：代課／調課／對調 */
+export function noticeKindLabel(doc: NoticeDocument): string {
+  const t = doc.liveRequest.requestType;
+  if (t === 'substitute') return '代課';
+  if (t === 'reschedule') return '調課';
+  if (t === 'swap') return '對調';
+  return doc.title.replace('通知單', '') || '其他';
 }
 
-function uniqueSheetName(raw: string, used: Set<string>): string {
-  const cleaned = raw.replace(/[\\/?*[\]:]/g, '_').trim() || '通知單';
-  const base = cleaned.slice(0, 31);
-  if (!used.has(base)) {
-    used.add(base);
-    return base;
-  }
-  for (let n = 2; n < 1000; n += 1) {
-    const suffix = `_${n}`;
-    const next = `${base.slice(0, 31 - suffix.length)}${suffix}`;
-    if (!used.has(next)) {
-      used.add(next);
-      return next;
+/** 代課者：代課＝代理人；對調＝對調對象；調課＝申請人（自行移課） */
+export function noticeCounterpartName(doc: NoticeDocument): string {
+  const r = doc.liveRequest;
+  if (r.requestType === 'substitute') return stripTeacherTitle(r.substituteTeacherName);
+  if (r.requestType === 'swap') return stripTeacherTitle(r.swapTargetTeacherName);
+  if (r.requestType === 'reschedule') return stripTeacherTitle(r.applicantTeacherName);
+  return stripTeacherTitle(doc.addressee);
+}
+
+/** 將通知單展開為清冊列（一節一列） */
+export function buildNoticeRosterRows(docs: NoticeDocument[]): NoticeRosterRow[] {
+  const rows: NoticeRosterRow[] = [];
+  let seq = 0;
+  for (const doc of docs) {
+    const kind = noticeKindLabel(doc);
+    const requestNumber = doc.requestNumberLabel;
+    const applicant = stripTeacherTitle(doc.liveRequest.applicantTeacherName);
+    const substitute = noticeCounterpartName(doc);
+    const issueDate = formatNoticeIssueRocDate(
+      resolveNoticeIssueDate(doc.liveRequest, doc.printGroup)
+    );
+    const courseRows = doc.displayRows.length ? doc.displayRows : [];
+    if (courseRows.length === 0) {
+      seq += 1;
+      rows.push({
+        seq,
+        kind,
+        requestNumber,
+        applicant,
+        substitute,
+        issueDate,
+        leaveDate: '',
+        weekday: '',
+        period: '',
+        className: '',
+        subjectName: '',
+        hours: '',
+      });
+      continue;
+    }
+    for (const row of courseRows) {
+      seq += 1;
+      rows.push({
+        seq,
+        kind,
+        requestNumber,
+        applicant,
+        substitute,
+        issueDate,
+        leaveDate: row.date,
+        weekday: formatNoticeWeekdayLabel(row.weekday),
+        period: row.period,
+        className: row.className,
+        subjectName: row.subjectName,
+        hours: formatNoticeHoursDisplay(row.hours),
+      });
     }
   }
-  const fallback = `通知單_${used.size + 1}`.slice(0, 31);
-  used.add(fallback);
-  return fallback;
+  return rows;
 }
 
-function writeIndexSheet(
+function writeRosterSheet(
   ws: ExcelJS.Worksheet,
   schoolName: string,
   docs: NoticeDocument[],
-  sheetNames: string[]
+  rosterRows: NoticeRosterRow[]
 ) {
   ws.pageSetup = {
     paperSize: 9,
@@ -180,26 +143,26 @@ function writeIndexSheet(
     fitToPage: true,
     fitToWidth: 1,
     fitToHeight: 0,
+    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
   };
-  const headers = ['序', '種類', '假單編號', '受文者', '申請教師', '開立日期', '課程列數', '工作表'];
-  const widths = [6, 14, 22, 16, 16, 14, 12, 28];
-  ws.columns = widths.map((width) => ({ width }));
+  ws.columns = COL_WIDTHS.map((width) => ({ width }));
 
-  ws.mergeCells(1, 1, 1, headers.length);
+  const colCount = NOTICE_ROSTER_HEADERS.length;
+  ws.mergeCells(1, 1, 1, colCount);
   const title = ws.getCell(1, 1);
-  title.value = `${schoolName || '學校'}　調代課通知單`;
+  title.value = `${schoolName || '學校'}　調代課通知單清冊`;
   title.font = { name: '微軟正黑體', size: 16, bold: true };
   title.alignment = { horizontal: 'center', vertical: 'middle' };
   ws.getRow(1).height = 28;
 
-  ws.mergeCells(2, 1, 2, headers.length);
+  ws.mergeCells(2, 1, 2, colCount);
   const note = ws.getCell(2, 1);
-  note.value = `共 ${docs.length} 張（已核准之代課、調課、同班對調；僅代導師不列入）。各張內容與列印通知單相同，含人工儲存的課程表格。`;
+  note.value = `共 ${docs.length} 張通知單、${rosterRows.length} 列課程（已核准之代課、調課、同班對調；僅代導師不列入）。一列一節；課程內容含人工儲存的通知單表格。`;
   note.font = { name: '微軟正黑體', size: 11 };
   note.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
   ws.getRow(2).height = 22;
 
-  headers.forEach((label, index) => {
+  NOTICE_ROSTER_HEADERS.forEach((label, index) => {
     const cell = ws.getCell(4, index + 1);
     cell.value = label;
     cell.font = { name: '微軟正黑體', size: 11, bold: true };
@@ -207,18 +170,22 @@ function writeIndexSheet(
     cell.border = thinBorder;
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
   });
+  ws.getRow(4).height = 22;
 
-  docs.forEach((doc, index) => {
-    const issueDate = formatNoticeIssueRocDate(resolveNoticeIssueDate(doc.liveRequest, doc.printGroup));
+  rosterRows.forEach((row, index) => {
     const values: Array<string | number> = [
-      index + 1,
-      doc.title,
-      doc.requestNumberLabel,
-      doc.addressee,
-      doc.liveRequest.applicantTeacherName || '',
-      issueDate,
-      doc.displayRows.length,
-      sheetNames[index],
+      row.seq,
+      row.kind,
+      row.requestNumber,
+      row.applicant,
+      row.substitute,
+      row.issueDate,
+      row.leaveDate,
+      row.weekday,
+      row.period,
+      row.className,
+      row.subjectName,
+      row.hours,
     ];
     values.forEach((value, col) => {
       const cell = ws.getCell(5 + index, col + 1);
@@ -227,6 +194,7 @@ function writeIndexSheet(
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = thinBorder;
     });
+    ws.getRow(5 + index).height = 20;
   });
 }
 
@@ -245,48 +213,31 @@ async function downloadWorkbook(workbook: ExcelJS.Workbook, fileName: string) {
 
 export function noticeExcelFileName(schoolName: string, doc?: NoticeDocument): string {
   const school = (schoolName || '學校').replace(/[\\/:*?"<>|]/g, '');
-  if (!doc) return `${school}_調代課通知單.xlsx`;
-  const applicant = (doc.liveRequest.applicantTeacherName || '').trim() || '教師';
-  const counterpart = (
-    doc.liveRequest.requestType === 'swap'
-      ? doc.liveRequest.swapTargetTeacherName
-      : doc.liveRequest.substituteTeacherName
-  )?.trim();
+  if (!doc) return `${school}_調代課通知單清冊.xlsx`;
+  const applicant = stripTeacherTitle(doc.liveRequest.applicantTeacherName) || '教師';
+  const counterpart = noticeCounterpartName(doc);
   const number = doc.liveRequest.requestNumber || doc.requestNumberLabel;
+  const kind = noticeKindLabel(doc);
   const stem = counterpart
-    ? `${applicant}${doc.title}_${number}_${counterpart}`
-    : `${applicant}${doc.title}_${number}`;
+    ? `${applicant}${kind}清冊_${number}_${counterpart}`
+    : `${applicant}${kind}清冊_${number}`;
   return `${stem.replace(/[\\/:*?"<>|]/g, '')}.xlsx`;
 }
 
+/** 匯出通知單清冊（單一工作表，不含逐張通知單） */
 export async function buildNoticeWorkbook(
   docs: NoticeDocument[],
   schoolName: string,
-  options?: { includeIndex?: boolean }
+  _options?: { includeIndex?: boolean }
 ): Promise<ExcelJS.Workbook> {
   const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = schoolName || '調代課與鐘點費管理系統';
-  const includeIndex = options?.includeIndex ?? docs.length > 1;
-  const used = new Set<string>(includeIndex ? ['目錄'] : []);
-  const sheetNames = docs.map((doc, index) => {
-    const kind = doc.title.replace('通知單', '');
-    const who = doc.addressee.replace(/老師$/, '');
-    return uniqueSheetName(`${index + 1}_${kind}_${doc.requestNumberLabel}_${who}`, used);
+  const rosterRows = buildNoticeRosterRows(docs);
+  const ws = workbook.addWorksheet('通知單清冊', {
+    views: [{ state: 'frozen', ySplit: 4 }],
   });
-
-  if (includeIndex) {
-    const index = workbook.addWorksheet('目錄', {
-      views: [{ state: 'frozen', ySplit: 4 }],
-    });
-    writeIndexSheet(index, schoolName, docs, sheetNames);
-  }
-
-  docs.forEach((doc, index) => {
-    const ws = workbook.addWorksheet(sheetNames[index]);
-    writeNoticeSheet(ws, doc);
-  });
-
+  writeRosterSheet(ws, schoolName, docs, rosterRows);
   return workbook;
 }
 
@@ -315,9 +266,7 @@ export async function exportNoticesToExcel(params: {
   );
   if (docs.length === 0) return 0;
   const fileName = params.fileName || noticeExcelFileName(params.schoolName);
-  await exportNoticeDocumentsToExcel(docs, params.schoolName, fileName, {
-    includeIndex: true,
-  });
+  await exportNoticeDocumentsToExcel(docs, params.schoolName, fileName);
   return docs.length;
 }
 
@@ -331,7 +280,6 @@ export async function exportSingleNoticeToExcel(params: {
   await exportNoticeDocumentsToExcel(
     [doc],
     params.schoolName,
-    noticeExcelFileName(params.schoolName, doc),
-    { includeIndex: false }
+    noticeExcelFileName(params.schoolName, doc)
   );
 }

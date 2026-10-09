@@ -128,14 +128,14 @@ export const TeacherRequestsList: React.FC = () => {
         sessions,
         schoolName: systemConfig.schoolName,
         scope: myRequests,
-        fileName: `${(systemConfig.schoolName || '學校').replace(/[\\/:*?"<>|]/g, '')}_${(currentTeacher?.name || '教師').replace(/[\\/:*?"<>|]/g, '')}_調代課通知單.xlsx`,
+        fileName: `${(systemConfig.schoolName || '學校').replace(/[\\/:*?"<>|]/g, '')}_${(currentTeacher?.name || '教師').replace(/[\\/:*?"<>|]/g, '')}_調代課通知單清冊.xlsx`,
       });
       if (count === 0) {
         window.alert('目前沒有已核准、可匯出的通知單。僅代導師不產生通知單。');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '匯出失敗';
-      window.alert(`通知單 Excel 匯出失敗：${message}`);
+      window.alert(`通知單清冊 Excel 匯出失敗：${message}`);
     } finally {
       setExportingNotices(false);
     }
@@ -160,11 +160,11 @@ export const TeacherRequestsList: React.FC = () => {
               void handleExportMyNotices();
             }}
             disabled={exportingNotices}
-            title="匯出本人已核准的代課、調課、同班對調通知單"
+            title="匯出本人已核准的代課、調課、同班對調通知單清冊（一列一節）"
             className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-[11px] font-bold rounded-lg transition"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>{exportingNotices ? '匯出中…' : '匯出通知單'}</span>
+            <span>{exportingNotices ? '匯出中…' : '匯出清冊'}</span>
           </button>
         </div>
 

@@ -366,7 +366,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : '匯出失敗';
-      window.alert(`通知單 Excel 匯出失敗：${message}`);
+      window.alert(`通知單清冊 Excel 匯出失敗：${message}`);
     } finally {
       setExporting(false);
     }
