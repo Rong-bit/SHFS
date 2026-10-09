@@ -1,9 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SubstituteNoticeRow, SubstituteRequest } from '../../types';
-import { Printer, X } from 'lucide-react';
+import { FileSpreadsheet, Printer, X } from 'lucide-react';
 import { ModalShell } from '../Common/ModalShell';
 import { useApp } from '../../context/AppContext';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
+import { exportSingleNoticeToExcel } from '../../utils/noticeExcel';
+import {
+  formatNoticeIssueRocDate,
+  formatStampRocDate,
+  resolveNoticeIssueDate,
+} from '../../utils/noticeDocument';
 import {
   MAX_NOTICE_TABLE_ROWS,
   chunkNoticeRows,
@@ -232,59 +238,6 @@ const NOTICE_PRINT_CSS = `
 }
 `;
 
-/** 解析 YYYY-MM-DD 或 YYYY-MM-DD HH:mm 為本地 Date；無效則回 null */
-function parseLocalDateTime(value?: string): Date | null {
-  if (!value?.trim()) return null;
-  const m = value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}))?/);
-  if (!m) return null;
-  const y = Number(m[1]);
-  const month = Number(m[2]);
-  const d = Number(m[3]);
-  const h = Number(m[4] ?? 12);
-  const min = Number(m[5] ?? 0);
-  if (![y, month, d, h, min].every(Number.isFinite)) return null;
-  const dt = new Date(y, month - 1, d, h, min, 0, 0);
-  return Number.isNaN(dt.getTime()) ? null : dt;
-}
-
-/**
- * 通知單開立／戳章日期：以核准（產生）時間為準，補印不隨「今天」變動。
- * 優先 reviewedAt → 同批最早 reviewedAt → createdAt → 現在。
- */
-function resolveNoticeIssueDate(
-  liveRequest: SubstituteRequest,
-  printGroup: SubstituteRequest[]
-): Date {
-  const fromLive = parseLocalDateTime(liveRequest.reviewedAt);
-  if (fromLive) return fromLive;
-
-  let earliest: Date | null = null;
-  for (const req of printGroup) {
-    const dt = parseLocalDateTime(req.reviewedAt);
-    if (!dt) continue;
-    if (!earliest || dt.getTime() < earliest.getTime()) earliest = dt;
-  }
-  if (earliest) return earliest;
-
-  return (
-    parseLocalDateTime(liveRequest.createdAt) ||
-    parseLocalDateTime(printGroup[0]?.createdAt) ||
-    new Date()
-  );
-}
-
-/** 開立通知單日期，例 115.8.28 */
-function formatNoticeIssueRocDate(date: Date = new Date()): string {
-  const roc = date.getFullYear() - 1911;
-  return `${roc}.${date.getMonth() + 1}.${date.getDate()}`;
-}
-
-/** 戳章日期格式，例 115. 8. 28（與表格下開立日期同源） */
-function formatStampRocDate(date: Date = new Date()): string {
-  const roc = date.getFullYear() - 1911;
-  return `${roc}. ${date.getMonth() + 1}. ${date.getDate()}`;
-}
-
 const NoticeCopy: React.FC<{
   title: string;
   requestNumber: string;
@@ -375,7 +328,8 @@ const NoticeCopy: React.FC<{
 };
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { systemConfig } = useApp();
+  const { systemConfig, requests, sessions } = useApp();
+  const [exporting, setExporting] = useState(false);
   const {
     liveRequest,
     printGroup,
@@ -399,6 +353,24 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
   const noticeIssueDate = resolveNoticeIssueDate(liveRequest, printGroup);
   const issueDateLabel = formatNoticeIssueRocDate(noticeIssueDate);
   const stampDateLabel = formatStampRocDate(noticeIssueDate);
+
+  const handleExportExcel = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportSingleNoticeToExcel({
+        request: liveRequest,
+        requests,
+        sessions,
+        schoolName: systemConfig.schoolName,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '匯出失敗';
+      window.alert(`通知單 Excel 匯出失敗：${message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handlePrint = () => {
     const applicant = (liveRequest.applicantTeacherName || '').trim() || '教師';
@@ -424,12 +396,24 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
       <style>{NOTICE_PRINT_CSS}</style>
 
       <div className="print:hidden bg-slate-800 text-white px-5 py-3.5">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center space-x-2 min-w-0">
             <Printer className="w-5 h-5 text-amber-400 shrink-0" />
             <span className="font-semibold text-sm truncate">{previewLabel}</span>
           </div>
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              id="btn-export-notice-excel"
+              type="button"
+              onClick={() => {
+                void handleExportExcel();
+              }}
+              disabled={exporting}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 text-xs font-bold rounded shadow transition"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>{exporting ? '匯出中…' : '匯出 Excel'}</span>
+            </button>
             <button
               id="btn-trigger-print"
               onClick={handlePrint}
@@ -448,7 +432,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           </div>
         </div>
         <p className="print:hidden text-[10px] text-slate-400 mt-2 leading-snug">
-          列印對話框請關閉「頁首與頁尾」，避免出現網址或頁碼。課程表格請先在「修改」分頁儲存後再列印。
+          列印對話框請關閉「頁首與頁尾」，避免出現網址或頁碼。課程表格請先在「修改」分頁儲存後再列印或匯出 Excel。
         </p>
       </div>
 
@@ -490,12 +474,23 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
         })}
       </div>
 
-      <div className="print:hidden bg-slate-100 px-6 py-3 border-t border-slate-200 flex justify-end space-x-3">
+      <div className="print:hidden bg-slate-100 px-6 py-3 border-t border-slate-200 flex flex-wrap justify-end gap-3">
         <button
           onClick={onClose}
           className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition"
         >
           關閉視窗
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void handleExportExcel();
+          }}
+          disabled={exporting}
+          className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold rounded-lg shadow transition"
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>{exporting ? '匯出中…' : '匯出 Excel'}</span>
         </button>
         <button
           onClick={handlePrint}

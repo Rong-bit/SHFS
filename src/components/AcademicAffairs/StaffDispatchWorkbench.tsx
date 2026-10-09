@@ -83,8 +83,10 @@ import {
   Zap,
   HelpCircle,
   Edit2,
-  X
+  X,
+  FileSpreadsheet
 } from 'lucide-react';
+import { exportNoticesToExcel } from '../../utils/noticeExcel';
 
 const RequestNoticeTab: React.FC<{
   request: SubstituteRequest;
@@ -1450,6 +1452,28 @@ export const StaffDispatchWorkbench: React.FC = () => {
       setSelectedRequestIds([]);
     } else {
       setSelectedRequestIds(displayedPendingIds);
+    }
+  };
+
+  const [exportingNotices, setExportingNotices] = useState(false);
+
+  const handleExportAllNotices = async () => {
+    if (exportingNotices) return;
+    setExportingNotices(true);
+    try {
+      const count = await exportNoticesToExcel({
+        requests,
+        sessions,
+        schoolName: systemConfig.schoolName,
+      });
+      if (count === 0) {
+        window.alert('目前沒有已核准、可匯出的通知單。僅代導師不產生通知單。');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '匯出失敗';
+      window.alert(`通知單 Excel 匯出失敗：${message}`);
+    } finally {
+      setExportingNotices(false);
     }
   };
 
@@ -2894,6 +2918,19 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
             {/* Search Box */}
             <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                id="btn-export-all-notices"
+                onClick={() => {
+                  void handleExportAllNotices();
+                }}
+                disabled={exportingNotices}
+                title="匯出所有已核准的代課、調課、同班對調通知單（不含僅代導師）"
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold rounded-lg shadow-sm transition"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>{exportingNotices ? '匯出中…' : '匯出全部通知單'}</span>
+              </button>
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input

@@ -1,133 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle } from 'lucide-react';
-import { CourseSession, DayOfWeek, SubstituteNoticeRow, SubstituteRequest } from '../../types';
-import { resolveOriginalSession } from '../../utils/resolveOriginalSession';
+import { SubstituteRequest } from '../../types';
 import { useApp } from '../../context/AppContext';
-import { resolveLeaveDateEnd } from '../../utils/leaveDates';
-import { leaveTypeRemarkShort } from '../../utils/leaveTypes';
-import { dateToIsoLocal } from '../../utils/holidays';
-import {
-  isTemporarySwap,
-  resolveTemporarySwapOccurrenceDates,
-} from '../../utils/temporarySwap';
-import { parseNoticeRowDateToIso } from '../../utils/noticePayroll';
 import { ModalShell } from '../Common/ModalShell';
+import {
+  buildNoticeDocument,
+  EMPTY_NOTICE_ROW,
+  formatNoticeHoursDisplay,
+  formatNoticeWeekdayLabel,
+  type NoticeRow,
+} from '../../utils/noticeDocument';
 
-export type NoticeRow = SubstituteNoticeRow;
+export type { NoticeRow };
+export { formatNoticeHoursDisplay, formatNoticeWeekdayLabel };
 
 export const MAX_NOTICE_TABLE_ROWS = 7;
-
-const WEEKDAY_PRINT_LABELS: Record<string, string> = {
-  '1': '一',
-  '2': '二',
-  '3': '三',
-  '4': '四',
-  '5': '五',
-};
-
-/** 通知單鐘點欄：兼課顯示「兼課」，其餘留白（不顯示數字節數） */
-export function formatNoticeHoursDisplay(hours: string): string {
-  return hours.trim() === '兼課' ? '兼課' : '';
-}
-
-export function formatNoticeWeekdayLabel(weekday: string): string {
-  const trimmed = weekday.trim();
-  if (!trimmed) return '';
-  if (WEEKDAY_PRINT_LABELS[trimmed]) return WEEKDAY_PRINT_LABELS[trimmed];
-  const n = Number(trimmed);
-  if (Number.isFinite(n) && n >= 1 && n <= 5) return WEEKDAY_PRINT_LABELS[String(n)] || trimmed;
-  return trimmed;
-}
-
-const EMPTY_NOTICE_ROW: NoticeRow = {
-  date: '',
-  weekday: '',
-  period: '',
-  className: '',
-  subjectName: '',
-  hours: '',
-};
-
-function formatNoticeDate(iso?: string): string {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
-  if (!y || !m || !d) return iso.replace(/-/g, '/');
-  return `${Number(y)}/${Number(m)}/${Number(d)}`;
-}
-
-function weekdayFromIso(iso?: string): number | null {
-  if (!iso) return null;
-  const d = new Date(iso.replace(/-/g, '/') + ' 12:00:00');
-  if (Number.isNaN(d.getTime())) return null;
-  const js = d.getDay();
-  if (js < 1 || js > 5) return null;
-  return js;
-}
-
-function listDatesMatchingWeekday(
-  start: string,
-  end: string,
-  dayOfWeek: DayOfWeek
-): string[] {
-  const s = new Date(start.replace(/-/g, '/') + ' 12:00:00');
-  const e = new Date(end.replace(/-/g, '/') + ' 12:00:00');
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) {
-    return start ? [start] : [];
-  }
-  const dates: string[] = [];
-  for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
-    if (cur.getDay() === dayOfWeek) dates.push(dateToIsoLocal(cur));
-  }
-  return dates;
-}
-
-function noticeHoursLabelForSession(session: Pick<CourseSession, 'isConcurrent'>): string {
-  return session.isConcurrent ? '兼課' : '';
-}
-
-function sessionRow(session: CourseSession, dateIso?: string): NoticeRow {
-  const weekday = weekdayFromIso(dateIso) ?? session.dayOfWeek;
-  return {
-    date: formatNoticeDate(dateIso),
-    weekday: String(weekday),
-    period: String(session.period),
-    className: session.className || '',
-    subjectName: session.subjectName || '',
-    hours: noticeHoursLabelForSession(session),
-  };
-}
-
-function sortNoticeRows(rows: NoticeRow[]): NoticeRow[] {
-  const sortKey = (date: string) => parseNoticeRowDateToIso(date) ?? date.replace(/\//g, '-');
-  return [...rows].sort((a, b) => {
-    const dateA = sortKey(a.date);
-    const dateB = sortKey(b.date);
-    if (dateA !== dateB) return dateA.localeCompare(dateB);
-    const periodA = Number(a.period) || 0;
-    const periodB = Number(b.period) || 0;
-    if (periodA !== periodB) return periodA - periodB;
-    return a.className.localeCompare(b.className, 'zh-Hant');
-  });
-}
-
-function buildLeaveRangeNoticeRows(
-  groupedSessions: CourseSession[],
-  leaveStart: string,
-  leaveEnd: string
-): NoticeRow[] {
-  const rows = groupedSessions.flatMap((sess) => {
-    const dates =
-      leaveStart && leaveEnd && sess.dayOfWeek
-        ? listDatesMatchingWeekday(leaveStart, leaveEnd, sess.dayOfWeek)
-        : leaveStart
-          ? [leaveStart]
-          : [''];
-    const dateList = dates.length ? dates : [leaveStart || ''];
-    return dateList.map((iso) => sessionRow(sess, iso || undefined));
-  });
-  return sortNoticeRows(rows);
-}
 
 function rowsEqual(a: NoticeRow[], b: NoticeRow[]): boolean {
   if (a.length !== b.length) return false;
@@ -144,17 +32,6 @@ function rowsEqual(a: NoticeRow[], b: NoticeRow[]): boolean {
   });
 }
 
-function stripTeacherTitle(name?: string): string {
-  return (name || '')
-    .replace(/\s+/g, '')
-    .replace(/(科主任|主任|組長|導師|老師)$/g, '');
-}
-
-function teacherLabel(name?: string, fallback = '代課'): string {
-  const n = stripTeacherTitle(name);
-  return n ? `${n}老師` : `${fallback}老師`;
-}
-
 export function chunkNoticeRows(rows: NoticeRow[], size: number): NoticeRow[][] {
   if (rows.length === 0) return [[]];
   const chunks: NoticeRow[][] = [];
@@ -167,108 +44,20 @@ export function chunkNoticeRows(rows: NoticeRow[], size: number): NoticeRow[][] 
 export function useSubstituteNoticeEditor(request: SubstituteRequest) {
   const { sessions, requests, saveNoticeRows } = useApp();
 
-  const liveRequest = useMemo(
-    () => requests.find((r) => r.id === request.id) ?? request,
-    [requests, request]
+  const noticeDoc = useMemo(
+    () => buildNoticeDocument(request, requests, sessions),
+    [request, requests, sessions]
   );
-
-  /** 同假單編號可有多位代理人；每一張通知單只含該代理人的節次 */
-  const printGroup = useMemo(
-    () =>
-      liveRequest.status === 'approved' && liveRequest.batchGroupId
-        ? requests
-            .filter(
-              (r) =>
-                r.batchGroupId === liveRequest.batchGroupId &&
-                r.status === 'approved' &&
-                (liveRequest.substituteTeacherId
-                  ? r.substituteTeacherId === liveRequest.substituteTeacherId
-                  : true)
-            )
-            .sort(
-              (a, b) =>
-                a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
-                a.originalSession.period - b.originalSession.period
-            )
-        : [liveRequest],
-    [liveRequest, requests]
-  );
-
-  const groupedSessions = useMemo(
-    () => printGroup.map((r) => resolveOriginalSession(r, sessions)),
-    [printGroup, sessions]
-  );
-
-  const originalSession = groupedSessions[0] || resolveOriginalSession(liveRequest, sessions);
-  const leaveShort = leaveTypeRemarkShort(liveRequest.leaveType, liveRequest.reason);
-  const leaveStart = liveRequest.leaveDateStart || '';
-  const leaveEnd = resolveLeaveDateEnd(leaveStart, liveRequest.leaveDateEnd) || leaveStart;
-
-  const noticeMeta = useMemo(() => {
-    if (liveRequest.requestType === 'reschedule') {
-      const target = liveRequest.targetReschedule;
-      return {
-        title: '調課通知單',
-        addressee: teacherLabel(liveRequest.applicantTeacherName, '申請'),
-        greeting: `您好！您申請自行移課如下，請依新時段授課，`,
-        defaultRows: groupedSessions.map((sess) =>
-          sessionRow(
-            target
-              ? {
-                  ...sess,
-                  dayOfWeek: target.dayOfWeek,
-                  period: target.period,
-                  venueId: target.venueId,
-                  venueName: target.venueName,
-                }
-              : sess
-          )
-        ),
-      };
-    }
-
-    if (liveRequest.requestType === 'swap' && liveRequest.swapTargetSession) {
-      let applicantDate: string | undefined;
-      let partnerDate: string | undefined;
-      if (isTemporarySwap(liveRequest) && liveRequest.effectiveDate) {
-        const occ = resolveTemporarySwapOccurrenceDates(
-          liveRequest.effectiveDate,
-          originalSession.dayOfWeek,
-          liveRequest.swapTargetSession.dayOfWeek
-        );
-        applicantDate = occ.applicantDate;
-        partnerDate = occ.partnerDate;
-      }
-      return {
-        title: '調課通知單',
-        addressee: teacherLabel(liveRequest.swapTargetTeacherName, '對調'),
-        greeting: `您好！${teacherLabel(liveRequest.applicantTeacherName, '申請')}申請同班對調如下，請依對調時段授課，`,
-        defaultRows: [
-          sessionRow(originalSession, applicantDate),
-          sessionRow(liveRequest.swapTargetSession, partnerDate),
-        ],
-      };
-    }
-
-    return {
-      title: '代課通知單',
-      addressee: teacherLabel(liveRequest.substituteTeacherName),
-      greeting: `您好！${teacherLabel(liveRequest.applicantTeacherName, '申請')}因${leaveShort}請您代理以下課程，`,
-      defaultRows: buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd),
-    };
-  }, [liveRequest, groupedSessions, originalSession, leaveShort, leaveStart, leaveEnd]);
-
-  const defaultRows = noticeMeta.defaultRows;
-
-  const savedNoticeRows = useMemo(() => {
-    if (liveRequest.noticeRowsCustomized && liveRequest.noticeRows?.length) {
-      return liveRequest.noticeRows;
-    }
-    const batchSaved = printGroup.find(
-      (r) => r.noticeRowsCustomized && r.noticeRows?.length
-    );
-    return batchSaved?.noticeRows ?? null;
-  }, [liveRequest.noticeRows, liveRequest.noticeRowsCustomized, printGroup]);
+  const {
+    liveRequest,
+    printGroup,
+    defaultRows,
+    savedNoticeRows,
+    displayRows,
+    title,
+    addressee,
+    greeting,
+  } = noticeDoc;
 
   const [editableRows, setEditableRows] = useState<NoticeRow[]>(defaultRows);
   const [isDirty, setIsDirty] = useState(false);
@@ -318,8 +107,6 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
     setIsDirty(false);
   };
 
-  const displayRows = savedNoticeRows ?? defaultRows;
-
   return {
     liveRequest,
     printGroup,
@@ -327,9 +114,9 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
     displayRows,
     isDirty,
     defaultRows,
-    title: noticeMeta.title,
-    addressee: noticeMeta.addressee,
-    greeting: noticeMeta.greeting,
+    title,
+    addressee,
+    greeting,
     onRowsChange: handleRowsChange,
     onReset: handleResetRows,
     onSave: persistNoticeRows,
