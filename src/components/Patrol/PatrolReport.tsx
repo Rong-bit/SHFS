@@ -312,7 +312,7 @@ export const PatrolReport: React.FC = () => {
             )}
           </div>
           <div className="bg-white border border-slate-200 rounded-2xl p-4">
-            <h3 className="font-bold text-slate-900 text-sm mb-2">缺失最多的教室</h3>
+            <h3 className="font-bold text-slate-900 text-sm mb-2">空教室檢查缺失最多的教室</h3>
             {checkStats.byRoom.length === 0 ? (
               <p className="text-xs text-slate-400">無</p>
             ) : (
