@@ -40,6 +40,7 @@ import {
   saveCloudSyncSettings,
   isCloudSyncReady,
   pullSharedSchoolData,
+  pullRemoteUpdatedAt,
   pushSharedSchoolData,
   testCloudSyncConnection,
   mergeLocalSecretsIntoRemote,
@@ -960,18 +961,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     let stopped = false;
+    let fullPullDone = false;
     cloudReadyRef.current = false;
     setCloudSyncStatus('connecting');
     setCloudSyncMessage('正在連線同步...');
 
     const pullOnce = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       if (cloudBusyRef.current) {
         cloudDirtyRef.current = true;
         return;
       }
       cloudBusyRef.current = true;
       try {
+        // 免費方案下載額度有限：先比對 updatedAt，雲端有較新資料才下載整份
+        if (fullPullDone) {
+          const remoteAt = await pullRemoteUpdatedAt(cloudSyncSettings);
+          if (stopped) return;
+          if (remoteAt === null || remoteAt <= lastCloudSyncAtRef.current) {
+            if (!cloudConflictRef.current && !cloudDirtyRef.current) setCloudSyncStatus('synced');
+            return;
+          }
+        }
         const remote = await pullSharedSchoolData(cloudSyncSettings);
+        fullPullDone = true;
         if (stopped) return;
         if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
           if (cloudConflictRef.current) {
@@ -1026,10 +1039,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     pullOnce();
-    const timer = window.setInterval(pullOnce, 5000);
+    const timer = window.setInterval(pullOnce, 15000);
+    const onVisible = () => {
+      if (!document.hidden) void pullOnce();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       stopped = true;
       window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudSyncSettings.enabled, cloudSyncSettings.databaseUrl, cloudSyncSettings.schoolKey]);

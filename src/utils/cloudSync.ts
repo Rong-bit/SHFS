@@ -239,6 +239,19 @@ const decryptPayload = async (schoolKey: string, envelope: EncryptedEnvelope): P
   return JSON.parse(decoder.decode(plainBuf)) as SharedSchoolData;
 };
 
+/** 只讀雲端 updatedAt（數十位元組），供輪詢判斷是否需要下載整份資料；節點不存在回傳 null */
+export const pullRemoteUpdatedAt = async (settings: CloudSyncSettings): Promise<number | null> => {
+  if (!isCloudSyncReady(settings)) return null;
+  const base = normalizeDatabaseUrl(settings.databaseUrl);
+  const id = await pathIdForSchool(settings.schoolKey);
+  const res = await fetch(`${base}/shfs/${id}/updatedAt.json`);
+  if (!res.ok) {
+    throw new Error(`同步讀取失敗（HTTP ${res.status}）。請確認資料庫網址與規則。`);
+  }
+  const value = await res.json();
+  return typeof value === 'number' ? value : null;
+};
+
 export const pullSharedSchoolData = async (
   settings: CloudSyncSettings
 ): Promise<SharedSchoolData | null> => {
