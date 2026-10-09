@@ -103,6 +103,7 @@ import { DraftNumberInput } from '../Common/DraftNumberInput';
 type AdminTab =
   | 'config'
   | 'school'
+  | 'calendar'
   | 'security'
   | 'venues'
   | 'teachers'
@@ -114,7 +115,7 @@ type AdminTab =
 type AdminGroup = 'params' | 'venues' | 'roster' | 'data' | 'ops';
 
 const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
-  { id: 'params', label: '標準與參數', tabs: ['config', 'school'] },
+  { id: 'params', label: '標準與參數', tabs: ['config', 'school', 'calendar'] },
   { id: 'venues', label: '場地維護', tabs: ['venues'] },
   { id: 'roster', label: '名冊維護', tabs: ['teachers', 'staff'] },
   { id: 'data', label: '課表與同步', tabs: ['schedules', 'sync'] },
@@ -123,6 +124,59 @@ const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
 
 const groupOfTab = (tab: AdminTab): AdminGroup =>
   ADMIN_GROUPS.find((g) => g.tabs.includes(tab))?.id ?? 'params';
+
+/** 行事曆分頁立即存檔的欄位；其他分頁按儲存時一律沿用已存值 */
+const CALENDAR_KEYS: readonly (keyof SystemConfig)[] = [
+  'nonTeachingDays',
+  'autoSyncNationalHolidays',
+  'nationalHolidaysAutoLoadedAcademicYear',
+  'temporaryScheduleMoves',
+  'partialNonTeachingDays',
+  'examDays',
+];
+
+const pickCalendarFields = (cfg: SystemConfig): Partial<SystemConfig> => ({
+  nonTeachingDays: cfg.nonTeachingDays ?? [],
+  autoSyncNationalHolidays: cfg.autoSyncNationalHolidays !== false,
+  nationalHolidaysAutoLoadedAcademicYear: cfg.nationalHolidaysAutoLoadedAcademicYear,
+  temporaryScheduleMoves: cfg.temporaryScheduleMoves ?? [],
+  partialNonTeachingDays: cfg.partialNonTeachingDays ?? [],
+  examDays: cfg.examDays ?? [],
+});
+
+const configToForm = (systemConfig: SystemConfig): SystemConfig => ({
+  dayHourlyRate: systemConfig?.dayHourlyRate ?? 505,
+  nightHourlyRate: systemConfig?.nightHourlyRate ?? 660,
+  actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
+  maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
+  standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
+  schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
+  maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
+  homeroomDayOfWeek: resolveHomeroomSlot(systemConfig).dayOfWeek,
+  homeroomPeriod: resolveHomeroomSlot(systemConfig).period,
+  counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
+  personalLeavePublicDayThreshold:
+    resolveLeaveThresholds(systemConfig).personalLeavePublicDayThreshold,
+  sickLeaveConsecutiveDayThreshold:
+    resolveLeaveThresholds(systemConfig).sickLeaveConsecutiveDayThreshold,
+  wellnessLeaveHoursPerYear: resolveLeaveThresholds(systemConfig).wellnessLeaveHoursPerYear,
+  schoolName: normalizeSchoolName(systemConfig?.schoolName ?? '高雄市立中正高工'),
+  academicYear: systemConfig?.academicYear ?? '114',
+  semester: systemConfig?.semester ?? '1',
+  currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
+  weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+  counselingStartDate: systemConfig?.counselingStartDate || '',
+  counselingEndDate: systemConfig?.counselingEndDate || '',
+  ...pickCalendarFields(systemConfig),
+  authConfig: {
+    requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
+    // 表單不回填雜湊／明文，留空表示沿用既有密碼
+    defaultTeacherPassword: '',
+    adminPassword: '',
+    academicPassword: '',
+    accountingPassword: '',
+  },
+});
 
 export const AdminSettings: React.FC = () => {
   const { 
@@ -151,57 +205,20 @@ export const AdminSettings: React.FC = () => {
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   
   // Safe form config state
-  const [formConfig, setFormConfig] = useState<SystemConfig>(() => ({
-    dayHourlyRate: systemConfig?.dayHourlyRate ?? 505,
-    nightHourlyRate: systemConfig?.nightHourlyRate ?? 660,
-    actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
-    maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
-    standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
-    schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
-    maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
-    homeroomDayOfWeek: resolveHomeroomSlot(systemConfig).dayOfWeek,
-    homeroomPeriod: resolveHomeroomSlot(systemConfig).period,
-    counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
-    personalLeavePublicDayThreshold:
-      resolveLeaveThresholds(systemConfig).personalLeavePublicDayThreshold,
-    sickLeaveConsecutiveDayThreshold:
-      resolveLeaveThresholds(systemConfig).sickLeaveConsecutiveDayThreshold,
-    wellnessLeaveHoursPerYear: resolveLeaveThresholds(systemConfig).wellnessLeaveHoursPerYear,
-    schoolName: normalizeSchoolName(systemConfig?.schoolName ?? '高雄市立中正高工'),
-    academicYear: systemConfig?.academicYear ?? '114',
-    semester: systemConfig?.semester ?? '1',
-    currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
-    weeksInMonth: systemConfig?.weeksInMonth ?? 4,
-    counselingStartDate: systemConfig?.counselingStartDate || '',
-    counselingEndDate: systemConfig?.counselingEndDate || '',
-    nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
-    autoSyncNationalHolidays: systemConfig?.autoSyncNationalHolidays !== false,
-    nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
-    temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
-    partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
-    examDays: systemConfig?.examDays ?? [],
-    authConfig: {
-      requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
-      // 表單不回填雜湊／明文，留空表示沿用既有密碼
-      defaultTeacherPassword: '',
-      adminPassword: '',
-      academicPassword: '',
-      accountingPassword: '',
-    },
-  }));
+  const [formConfig, setFormConfig] = useState<SystemConfig>(() => configToForm(systemConfig));
 
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayLabel, setNewHolidayLabel] = useState('放假');
   const [holidayImportLoading, setHolidayImportLoading] = useState(false);
-  const academicRocYear = Number(formConfig.academicYear);
+  const academicRocYear = Number(systemConfig.academicYear);
   const holidayYearsLabel = Number.isFinite(academicRocYear)
     ? westernYearsForAcademicYear(academicRocYear).join('、')
     : '';
   const visibleHolidays = Number.isFinite(academicRocYear)
-    ? pruneNonTeachingDaysToAcademicYear(formConfig.nonTeachingDays, academicRocYear)
-    : formConfig.nonTeachingDays || [];
+    ? pruneNonTeachingDaysToAcademicYear(systemConfig.nonTeachingDays, academicRocYear)
+    : systemConfig.nonTeachingDays || [];
   const staleHolidayCount = Number.isFinite(academicRocYear)
-    ? countNonTeachingDaysOutsideAcademicYear(formConfig.nonTeachingDays, academicRocYear)
+    ? countNonTeachingDaysOutsideAcademicYear(systemConfig.nonTeachingDays, academicRocYear)
     : 0;
   const [moveSourceDate, setMoveSourceDate] = useState('');
   const [moveTargetDate, setMoveTargetDate] = useState('');
@@ -217,51 +234,48 @@ export const AdminSettings: React.FC = () => {
     return Array.from({ length: max }, (_, i) => i + 1).filter((p) => p >= 5);
   });
 
-  // Sync if systemConfig changes
-  useEffect(() => {
-    setFormConfig({
-      dayHourlyRate: systemConfig?.dayHourlyRate ?? 505,
-      nightHourlyRate: systemConfig?.nightHourlyRate ?? 660,
-      actingHomeroomDailyRate: systemConfig?.actingHomeroomDailyRate ?? 404,
-      maxWeeklyOverloadPeriods: systemConfig?.maxWeeklyOverloadPeriods ?? 9,
-      standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
-      schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
-      maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
-      homeroomDayOfWeek: resolveHomeroomSlot(systemConfig).dayOfWeek,
-      homeroomPeriod: resolveHomeroomSlot(systemConfig).period,
-      counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
-      personalLeavePublicDayThreshold:
-        resolveLeaveThresholds(systemConfig).personalLeavePublicDayThreshold,
-      sickLeaveConsecutiveDayThreshold:
-        resolveLeaveThresholds(systemConfig).sickLeaveConsecutiveDayThreshold,
-      wellnessLeaveHoursPerYear: resolveLeaveThresholds(systemConfig).wellnessLeaveHoursPerYear,
-      schoolName: normalizeSchoolName(systemConfig?.schoolName ?? '高雄市立中正高工'),
-      academicYear: systemConfig?.academicYear ?? '114',
-      semester: systemConfig?.semester ?? '1',
-      currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
-      weeksInMonth: systemConfig?.weeksInMonth ?? 4,
-      counselingStartDate: systemConfig?.counselingStartDate || '',
-      counselingEndDate: systemConfig?.counselingEndDate || '',
-      nonTeachingDays: systemConfig?.nonTeachingDays ?? [],
-      autoSyncNationalHolidays: systemConfig?.autoSyncNationalHolidays !== false,
-      nationalHolidaysAutoLoadedAcademicYear: systemConfig?.nationalHolidaysAutoLoadedAcademicYear,
-      temporaryScheduleMoves: systemConfig?.temporaryScheduleMoves ?? [],
-      partialNonTeachingDays: systemConfig?.partialNonTeachingDays ?? [],
-      examDays: systemConfig?.examDays ?? [],
-      authConfig: {
-        requirePassword: systemConfig?.authConfig?.requirePassword ?? true,
-        defaultTeacherPassword: '',
-        adminPassword: '',
-        academicPassword: '',
-        accountingPassword: '',
+  const latestConfigRef = useRef(systemConfig);
+  latestConfigRef.current = systemConfig;
+  /** 以最新已存設定計算：非同步匯入或確認視窗按下時，資料可能已被其他動作更新 */
+  const saveCalendar = (
+    patch: Partial<SystemConfig> | ((cfg: SystemConfig) => Partial<SystemConfig>)
+  ) => {
+    updateSystemConfig(typeof patch === 'function' ? patch(latestConfigRef.current) : patch);
+  };
+  const confirmCalendarRemove = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       },
     });
+  };
+
+  // Sync if systemConfig changes：只有行事曆欄位變動時不重設表單，保留其他分頁尚未儲存的修改
+  const prevConfigRef = useRef(systemConfig);
+  useEffect(() => {
+    const prev = prevConfigRef.current;
+    prevConfigRef.current = systemConfig;
+    if (prev === systemConfig) return;
+    const formKeysChanged = (Object.keys(configToForm(systemConfig)) as (keyof SystemConfig)[]).some(
+      (k) => !CALENDAR_KEYS.includes(k) && JSON.stringify(prev[k]) !== JSON.stringify(systemConfig[k])
+    );
+    if (formKeysChanged) {
+      setFormConfig(configToForm(systemConfig));
+    } else {
+      setFormConfig((f) => ({ ...f, ...pickCalendarFields(systemConfig) }));
+    }
   }, [systemConfig]);
 
   const formPeriodDefs = buildPeriodDefinitions(formConfig);
   const formMaxPeriod = resolvePeriodConfig(formConfig).maxPeriod;
+  const savedPeriodDefs = buildPeriodDefinitions(systemConfig);
+  const savedMaxPeriod = resolvePeriodConfig(systemConfig).maxPeriod;
   const afternoonPartialDefault = () =>
-    Array.from({ length: formMaxPeriod }, (_, i) => i + 1).filter((p) => p >= 5);
+    Array.from({ length: savedMaxPeriod }, (_, i) => i + 1).filter((p) => p >= 5);
 
   const applySchoolPreset = () => {
     const level = normalizeSchoolLevel(formConfig.schoolLevel);
@@ -486,8 +500,8 @@ export const AdminSettings: React.FC = () => {
     e.preventDefault();
     const rocYear = Number(formConfig.academicYear);
     const prunedHolidays = Number.isFinite(rocYear)
-      ? pruneNonTeachingDaysToAcademicYear(formConfig.nonTeachingDays, rocYear)
-      : formConfig.nonTeachingDays;
+      ? pruneNonTeachingDaysToAcademicYear(systemConfig.nonTeachingDays, rocYear)
+      : systemConfig.nonTeachingDays;
     const counselingStartDate = formConfig.counselingStartDate?.trim() || undefined;
     const counselingEndDate = formConfig.counselingEndDate?.trim() || undefined;
     if (counselingStartDate && counselingEndDate && counselingStartDate > counselingEndDate) {
@@ -500,6 +514,7 @@ export const AdminSettings: React.FC = () => {
     });
     const nextConfig = {
       ...formConfig,
+      ...pickCalendarFields(systemConfig),
       homeroomDayOfWeek: homeroomSlot.dayOfWeek,
       homeroomPeriod: Math.min(homeroomSlot.period, resolvePeriodConfig(formConfig).maxPeriod),
       schoolName: normalizeSchoolName(formConfig.schoolName),
@@ -938,7 +953,16 @@ export const AdminSettings: React.FC = () => {
               className={subTabClass(activeTab === 'school')}
             >
               <School className="w-3.5 h-3.5 text-indigo-400" />
-              <span>學校與行事曆</span>
+              <span>學校與學制</span>
+            </button>
+            <button
+              id="tab-admin-calendar"
+              type="button"
+              onClick={() => setActiveTab('calendar')}
+              className={subTabClass(activeTab === 'calendar')}
+            >
+              <Calendar className="w-3.5 h-3.5 text-rose-400" />
+              <span>行事曆</span>
             </button>
           </div>
         )}
@@ -1031,7 +1055,7 @@ export const AdminSettings: React.FC = () => {
       {activeTab === 'config' && (
         <form onSubmit={handleConfigSubmit} className="space-y-6">
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-950 leading-relaxed">
-            此分頁只調整<strong>鐘點費率</strong>與兼代課上限。超鐘點依課表「兼課」標記計費。學校名稱、學年度、放假日請改到「學校與行事曆」；登入密碼在「系統維護 → 登入密碼」。
+            此分頁只調整<strong>鐘點費率</strong>與兼代課上限。超鐘點依課表「兼課」標記計費。學校名稱、學年度請改到「學校與學制」，放假日在「行事曆」；登入密碼在「系統維護 → 登入密碼」。
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Hourly Rates Card */}
@@ -1083,7 +1107,7 @@ export const AdminSettings: React.FC = () => {
                     <span className="absolute right-3 top-2.5 text-xs text-slate-400">NTD / 節</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    課輔節（依「學校與行事曆」課輔節次設定）不計入日間超鐘點，改依此費率另計。無課輔時可與日間費率相同。
+                    課輔節（依「學校與學制」課輔節次設定）不計入日間超鐘點，改依此費率另計。無課輔時可與日間費率相同。
                   </p>
                 </div>
 
@@ -1163,7 +1187,7 @@ export const AdminSettings: React.FC = () => {
         </form>
       )}
 
-      {/* TAB: 學校與行事曆 */}
+      {/* TAB: 學校與學制 */}
       {activeTab === 'school' && (
         <form onSubmit={handleConfigSubmit} className="space-y-6">
           {/* 學校名稱 — 獨立置頂 */}
@@ -1472,647 +1496,670 @@ export const AdminSettings: React.FC = () => {
               </div>
             </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* 放假日行事曆 */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-rose-500" />
-                  <span>放假日行事曆</span>
-                </h3>
-                <span className="text-[11px] px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full font-bold border border-rose-200">
-                  國定假日／校慶／彈性放假
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                列入此處的平日：<strong>課輔、代課</strong>一律整天不計；<strong>超鐘點（兼課）</strong>僅薪資職稱「外聘人員」不發，編制內仍依課表週次發給（含國定假日）。教師自己請假未授課之該節超時課仍不發。週末本來就不計，無需登錄。國定假日可自人事行政總處開放資料自動匯入；校慶、彈性放假請手動新增並核對校曆。
-              </p>
-              <label className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formConfig.autoSyncNationalHolidays !== false}
-                  onChange={(e) =>
-                    setFormConfig({
-                      ...formConfig,
-                      autoSyncNationalHolidays: e.target.checked,
-                    })
-                  }
-                  className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                />
-                <span>
-                  <strong className="text-sky-900">新學年度自動匯入國定假日</strong>
-                  （依上方學年度載入國定假日，並自動清除非本學年度之舊資料；僅補缺少的平日，不覆蓋校慶等項目）
-                  {systemConfig.nationalHolidaysAutoLoadedAcademicYear ? (
-                    <span className="block text-[11px] text-sky-700 mt-0.5">
-                      上次自動匯入：{systemConfig.nationalHolidaysAutoLoadedAcademicYear} 學年度
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-              <div className="flex flex-wrap gap-2 items-end">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
-                  <input
-                    type="date"
-                    value={newHolidayDate}
-                    onChange={(e) => setNewHolidayDate(e.target.value)}
-                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[8rem]">
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
-                  <input
-                    type="text"
-                    value={newHolidayLabel}
-                    onChange={(e) => setNewHolidayLabel(e.target.value)}
-                    placeholder="例：國慶日、校慶"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!newHolidayDate) {
-                      alert('請選擇日期');
-                      return;
-                    }
-                    const js = new Date(newHolidayDate.replace(/-/g, '/') + ' 12:00:00').getDay();
-                    if (js === 0 || js === 6) {
-                      alert('週末本來就不計鐘點，無需登錄放假日。');
-                      return;
-                    }
-                    const next: NonTeachingDay = {
-                      date: newHolidayDate,
-                      label: newHolidayLabel.trim() || '放假',
-                    };
-                    setFormConfig({
-                      ...formConfig,
-                      nonTeachingDays: mergeNonTeachingDays(formConfig.nonTeachingDays, [next]),
-                    });
-                    setNewHolidayDate('');
-                    setNewHolidayLabel('放假');
-                  }}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-500"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  新增
-                </button>
-                <button
-                  type="button"
-                  disabled={holidayImportLoading}
-                  onClick={() => {
-                    void (async () => {
-                      const rocYear = Number(formConfig.academicYear);
-                      if (!Number.isFinite(rocYear)) {
-                        alert('請先設定學年度');
-                        return;
-                      }
-                      setHolidayImportLoading(true);
-                      try {
-                        const suggested = await fetchNationalHolidaysForAcademicYear(rocYear);
-                        if (suggested.length === 0) {
-                          const fallback = suggestNationalHolidays(new Date().getFullYear());
-                          if (fallback.length === 0) {
-                            alert(`${rocYear} 學年度暫無公開行事曆資料，請手動新增。`);
-                            return;
-                          }
-                          setFormConfig({
-                            ...formConfig,
-                            nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
-                              mergeNonTeachingDays(formConfig.nonTeachingDays, fallback),
-                              rocYear
-                            ),
-                          });
-                          alert(
-                            `已合併內建建議放假日 ${fallback.length} 筆（請再核對校曆後按「儲存設定」）。`
-                          );
-                          return;
-                        }
-                        const years = westernYearsForAcademicYear(rocYear).join('、');
-                        setFormConfig({
-                          ...formConfig,
-                          nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
-                            mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
-                            rocYear
-                          ),
-                        });
-                        alert(
-                          `已合併 ${rocYear} 學年度（${years} 年）國定假日 ${suggested.length} 筆，並清除非本學年度舊資料（請再核對校曆後按「儲存設定」）。`
-                        );
-                      } catch (err) {
-                        alert(err instanceof Error ? err.message : '匯入國定假日失敗');
-                      } finally {
-                        setHolidayImportLoading(false);
-                      }
-                    })();
-                  }}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
-                >
-                  {holidayImportLoading ? '匯入中…' : `匯入${formConfig.academicYear}學年度國定假日`}
-                </button>
-                <button
-                  type="button"
-                  disabled={holidayImportLoading}
-                  onClick={() => {
-                    void (async () => {
-                      const y = new Date().getFullYear();
-                      const rocYear = Number(formConfig.academicYear);
-                      setHolidayImportLoading(true);
-                      try {
-                        const suggested = await fetchNationalHolidaysFromOpenData(y);
-                        setFormConfig({
-                          ...formConfig,
-                          nonTeachingDays: Number.isFinite(rocYear)
-                            ? pruneNonTeachingDaysToAcademicYear(
-                                mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
-                                rocYear
-                              )
-                            : mergeNonTeachingDays(formConfig.nonTeachingDays, suggested),
-                        });
-                        alert(
-                          `已合併 ${y} 年國定假日 ${suggested.length} 筆（請再核對校曆後按「儲存設定」）。`
-                        );
-                      } catch (err) {
-                        alert(err instanceof Error ? err.message : '匯入國定假日失敗');
-                      } finally {
-                        setHolidayImportLoading(false);
-                      }
-                    })();
-                  }}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
-                >
-                  匯入今年國定假日
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
-                <span>
-                  {Number.isFinite(academicRocYear) ? (
-                    <>
-                      <strong>{formConfig.academicYear} 學年度</strong>（西元 {holidayYearsLabel}）共{' '}
-                      <strong>{visibleHolidays.length}</strong> 筆放假日
-                    </>
-                  ) : (
-                    <>共 {(formConfig.nonTeachingDays || []).length} 筆放假日</>
-                  )}
-                </span>
-                {staleHolidayCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!Number.isFinite(academicRocYear)) return;
-                      const pruned = pruneNonTeachingDaysToAcademicYear(
-                        formConfig.nonTeachingDays,
-                        academicRocYear
-                      );
-                      setFormConfig({ ...formConfig, nonTeachingDays: pruned });
-                      alert(`已清除 ${staleHolidayCount} 筆非本學年度放假日（請按「儲存設定」）。`);
-                    }}
-                    className="text-rose-700 font-semibold hover:underline"
-                  >
-                    清除 {staleHolidayCount} 筆舊學年度資料
-                  </button>
-                ) : null}
-              </div>
-              <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
-                {visibleHolidays.length === 0 ? (
-                  <p className="text-xs text-slate-400 p-3">尚未設定放假日；目前結算會把所有平日都計入。</p>
-                ) : (
-                  visibleHolidays.map((d) => (
-                    <div
-                      key={d.date}
-                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
-                    >
-                      <div>
-                        <span className="font-mono font-semibold text-slate-800">{d.date}</span>
-                        <span className="text-slate-500 ml-2">{d.label}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormConfig({
-                            ...formConfig,
-                            nonTeachingDays: (formConfig.nonTeachingDays || []).filter(
-                              (x) => x.date !== d.date
-                            ),
-                          })
-                        }
-                        className="p-1 text-slate-400 hover:text-rose-600"
-                        title="移除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* 暫時移課／補課 */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-sky-500" />
-                  <span>暫時移課／補課（單日對應）</span>
-                </h3>
-                <span className="text-[11px] px-2 py-0.5 bg-sky-50 text-sky-700 rounded-full font-bold border border-sky-200">
-                  不改週課表模板
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                連假平日對調／週六補課：原日請先列入上方放假日，再於此指定補課日（可選週六）。
-                勿用教師端「自行移課」永久改週模板。可選只移部分節次（空白＝全日第 1～{formMaxPeriod} 節）。
-              </p>
-              <div className="flex flex-wrap gap-2 items-end">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">原日（放假／停課）</label>
-                  <input
-                    type="date"
-                    value={moveSourceDate}
-                    onChange={(e) => setMoveSourceDate(e.target.value)}
-                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">補課日（可週六）</label>
-                  <input
-                    type="date"
-                    value={moveTargetDate}
-                    onChange={(e) => setMoveTargetDate(e.target.value)}
-                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[8rem]">
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
-                  <input
-                    type="text"
-                    value={moveLabel}
-                    onChange={(e) => setMoveLabel(e.target.value)}
-                    placeholder="例：連假補課"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!moveSourceDate || !moveTargetDate) {
-                      alert('請選擇原日與補課日');
-                      return;
-                    }
-                    const srcJs = new Date(moveSourceDate.replace(/-/g, '/') + ' 12:00:00').getDay();
-                    if (srcJs === 0 || srcJs === 6) {
-                      alert('原日須為平日（週一至週五），才能對應週課表模板。');
-                      return;
-                    }
-                    const next: TemporaryScheduleMove = {
-                      id: `move-${Date.now()}`,
-                      sourceDate: moveSourceDate,
-                      targetDate: moveTargetDate,
-                      label: moveLabel.trim() || '暫時移課／補課',
-                      periods: movePeriods.length > 0 ? [...movePeriods].sort((a, b) => a - b) : undefined,
-                    };
-                    setFormConfig({
-                      ...formConfig,
-                      temporaryScheduleMoves: mergeTemporaryScheduleMoves(
-                        formConfig.temporaryScheduleMoves,
-                        [next]
-                      ),
-                    });
-                    setMoveSourceDate('');
-                    setMoveTargetDate('');
-                    setMovePeriods([]);
-                  }}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-bold hover:bg-sky-500"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  新增暫時移課
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[11px] text-slate-500 mr-1">只移節次（可空白＝全日）：</span>
-                {formPeriodDefs.map((pDef) => {
-                  const p = pDef.period;
-                  const on = movePeriods.includes(p);
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() =>
-                        setMovePeriods((prev) =>
-                          on ? prev.filter((x) => x !== p) : [...prev, p].sort((a, b) => a - b)
-                        )
-                      }
-                      className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
-                        on
-                          ? 'bg-sky-600 text-white border-sky-600'
-                          : 'bg-white text-slate-600 border-slate-300'
-                      }`}
-                    >
-                      第{p}節
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
-                {(formConfig.temporaryScheduleMoves || []).length === 0 ? (
-                  <p className="text-xs text-slate-400 p-3">尚未設定暫時移課。</p>
-                ) : (
-                  (formConfig.temporaryScheduleMoves || []).map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
-                    >
-                      <div>
-                        <span className="font-mono font-semibold text-slate-800">
-                          {m.sourceDate} → {m.targetDate}
-                        </span>
-                        <span className="text-slate-500 ml-2">{m.label}</span>
-                        {m.periods && m.periods.length > 0 && (
-                          <span className="text-sky-700 ml-2">
-                            第{m.periods.join('、')}節
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormConfig({
-                            ...formConfig,
-                            temporaryScheduleMoves: (formConfig.temporaryScheduleMoves || []).filter(
-                              (x) => x.id !== m.id
-                            ),
-                          })
-                        }
-                        className="p-1 text-slate-400 hover:text-rose-600"
-                        title="移除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* 半日／節次停課 */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-amber-500" />
-                  <span>半日／節次停課</span>
-                </h3>
-                <span className="text-[11px] px-2 py-0.5 bg-amber-50 text-amber-800 rounded-full font-bold border border-amber-200">
-                  例：下午佈置考場
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                下午佈置考場等：勿標整天放假，請在此勾停課節次。日間兼課僅「外聘人員」不發該節；
-                段考／運動會停課輔請勾第 8 節（課輔清冊全員應減 1 並寫備註）。停課節次不可請假派代。預設勾選第 5～8 節。
-                段考日若需派代老師去代其他節，請勾「同時設為段考日」以解除代課教師正課衝堂。
-              </p>
-              <div className="flex flex-wrap gap-2 items-end">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
-                  <input
-                    type="date"
-                    value={partialDate}
-                    onChange={(e) => setPartialDate(e.target.value)}
-                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[8rem]">
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
-                  <input
-                    type="text"
-                    value={partialLabel}
-                    onChange={(e) => setPartialLabel(e.target.value)}
-                    placeholder="例：佈置考場"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!partialDate) {
-                      alert('請選擇日期');
-                      return;
-                    }
-                    if (partialPeriods.length === 0) {
-                      alert('請至少勾選一節停課節次');
-                      return;
-                    }
-                    const capped = partialPeriods.filter((p) => p >= 1 && p <= formMaxPeriod);
-                    if (capped.length === 0) {
-                      alert(`停課節次須在 1～${formMaxPeriod} 節內`);
-                      return;
-                    }
-                    const next: PartialNonTeachingDay = {
-                      id: `partial-${Date.now()}`,
-                      date: partialDate,
-                      periods: [...capped].sort((a, b) => a - b),
-                      label: partialLabel.trim() || '半日停課',
-                    };
-                    const examDays = partialAlsoExam
-                      ? [
-                          ...(formConfig.examDays || []).filter((d) => d.date !== partialDate),
-                          { date: partialDate, label: next.label || '段考' },
-                        ].sort((a, b) => a.date.localeCompare(b.date))
-                      : formConfig.examDays;
-                    setFormConfig({
-                      ...formConfig,
-                      partialNonTeachingDays: mergePartialNonTeachingDays(
-                        formConfig.partialNonTeachingDays,
-                        [next]
-                      ),
-                      examDays,
-                    });
-                    setPartialDate('');
-                    setPartialPeriods(afternoonPartialDefault());
-                  }}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {partialAlsoExam ? '新增停課＋段考日' : '新增停課節次'}
-                </button>
-                <label
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-700 py-2 cursor-pointer select-none"
-                  title="同一天也加入下方「段考日」，派代時解除代課教師正課衝堂"
-                >
-                  <input
-                    type="checkbox"
-                    checked={partialAlsoExam}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setPartialAlsoExam(checked);
-                      if (checked && (!partialLabel.trim() || partialLabel.trim() === '半日停課')) {
-                        setPartialLabel('段考');
-                      } else if (!checked && partialLabel.trim() === '段考') {
-                        setPartialLabel('半日停課');
-                      }
-                    }}
-                    className="rounded border-slate-300"
-                  />
-                  同時設為段考日
-                </label>
-              </div>
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[11px] text-slate-500 mr-1">停課節次：</span>
-                {formPeriodDefs.map((pDef) => {
-                  const p = pDef.period;
-                  const on = partialPeriods.includes(p);
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() =>
-                        setPartialPeriods((prev) =>
-                          on ? prev.filter((x) => x !== p) : [...prev, p].sort((a, b) => a - b)
-                        )
-                      }
-                      className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
-                        on
-                          ? 'bg-amber-500 text-slate-950 border-amber-500'
-                          : 'bg-white text-slate-600 border-slate-300'
-                      }`}
-                    >
-                      第{p}節
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => setPartialPeriods(afternoonPartialDefault())}
-                  className="ml-1 text-[11px] text-amber-800 font-semibold underline"
-                >
-                  下午（5–8）
-                </button>
-              </div>
-              <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
-                {(formConfig.partialNonTeachingDays || []).length === 0 ? (
-                  <p className="text-xs text-slate-400 p-3">尚未設定停課節次。</p>
-                ) : (
-                  (formConfig.partialNonTeachingDays || []).map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
-                    >
-                      <div>
-                        <span className="font-mono font-semibold text-slate-800">{m.date}</span>
-                        <span className="text-slate-500 ml-2">{m.label}</span>
-                        <span className="text-amber-800 ml-2">第{m.periods.join('、')}節</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormConfig({
-                            ...formConfig,
-                            partialNonTeachingDays: (formConfig.partialNonTeachingDays || []).filter(
-                              (x) => x.id !== m.id
-                            ),
-                          })
-                        }
-                        className="p-1 text-slate-400 hover:text-rose-600"
-                        title="移除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* 段考日（派代解除正課衝堂） */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-indigo-500" />
-                  <span>段考日（派代解除衝堂）</span>
-                </h3>
-                <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-800 rounded-full font-bold border border-indigo-200">
-                  不影響鐘點計算
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                請假日期皆為段考日時，代課教師週課表該節的正課不視為衝堂（標示「段考解除衝堂」並提醒），
-                可直接派代；已有其他派代的時段仍會擋下。系統不知道監考安排，請自行確認該節未排監考。
-              </p>
-              <div className="flex flex-wrap gap-2 items-end">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
-                  <input
-                    type="date"
-                    value={examDate}
-                    onChange={(e) => setExamDate(e.target.value)}
-                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[8rem]">
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
-                  <input
-                    type="text"
-                    value={examLabel}
-                    onChange={(e) => setExamLabel(e.target.value)}
-                    placeholder="例：第一次段考"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!examDate) {
-                      alert('請選擇日期');
-                      return;
-                    }
-                    const label = examLabel.trim() || '段考';
-                    const rest = (formConfig.examDays || []).filter((d) => d.date !== examDate);
-                    setFormConfig({
-                      ...formConfig,
-                      examDays: [...rest, { date: examDate, label }].sort((a, b) =>
-                        a.date.localeCompare(b.date)
-                      ),
-                    });
-                    setExamDate('');
-                  }}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  新增段考日
-                </button>
-              </div>
-              <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
-                {(formConfig.examDays || []).length === 0 ? (
-                  <p className="text-xs text-slate-400 p-3">尚未設定段考日。</p>
-                ) : (
-                  (formConfig.examDays || []).map((d) => (
-                    <div
-                      key={d.date}
-                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
-                    >
-                      <div>
-                        <span className="font-mono font-semibold text-slate-800">{d.date}</span>
-                        <span className="text-slate-500 ml-2">{d.label}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormConfig({
-                            ...formConfig,
-                            examDays: (formConfig.examDays || []).filter((x) => x.date !== d.date),
-                          })
-                        }
-                        className="p-1 text-slate-400 hover:text-rose-600"
-                        title="移除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
           {renderConfigSaveBar()}
         </form>
+      )}
+
+      {/* TAB: 行事曆（新增／刪除即儲存） */}
+      {activeTab === 'calendar' && (
+        <div className="space-y-6">
+          <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 leading-relaxed">
+            本頁的新增、刪除與勾選都會<strong>立即儲存</strong>，不需另按儲存。學年度與每日節次請在「學校與學制」設定並儲存後，本頁才會套用。
+          </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 放假日行事曆 */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-rose-500" />
+                      <span>放假日行事曆</span>
+                    </h3>
+                    <span className="text-[11px] px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full font-bold border border-rose-200">
+                      國定假日／校慶／彈性放假
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    列入此處的平日：<strong>課輔、代課</strong>一律整天不計；<strong>超鐘點（兼課）</strong>僅薪資職稱「外聘人員」不發，編制內仍依課表週次發給（含國定假日）。教師自己請假未授課之該節超時課仍不發。週末本來就不計，無需登錄。國定假日可自人事行政總處開放資料自動匯入；校慶、彈性放假請手動新增並核對校曆。
+                  </p>
+                  <label className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={systemConfig.autoSyncNationalHolidays !== false}
+                      onChange={(e) =>
+                        saveCalendar({
+                          autoSyncNationalHolidays: e.target.checked,
+                        })
+                      }
+                      className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>
+                      <strong className="text-sky-900">新學年度自動匯入國定假日</strong>
+                      （依「學校與學制」已儲存的學年度載入國定假日，並自動清除非本學年度之舊資料；僅補缺少的平日，不覆蓋校慶等項目）
+                      {systemConfig.nationalHolidaysAutoLoadedAcademicYear ? (
+                        <span className="block text-[11px] text-sky-700 mt-0.5">
+                          上次自動匯入：{systemConfig.nationalHolidaysAutoLoadedAcademicYear} 學年度
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
+                      <input
+                        type="date"
+                        value={newHolidayDate}
+                        onChange={(e) => setNewHolidayDate(e.target.value)}
+                        className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[8rem]">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                      <input
+                        type="text"
+                        value={newHolidayLabel}
+                        onChange={(e) => setNewHolidayLabel(e.target.value)}
+                        placeholder="例：國慶日、校慶"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newHolidayDate) {
+                          alert('請選擇日期');
+                          return;
+                        }
+                        const js = new Date(newHolidayDate.replace(/-/g, '/') + ' 12:00:00').getDay();
+                        if (js === 0 || js === 6) {
+                          alert('週末本來就不計鐘點，無需登錄放假日。');
+                          return;
+                        }
+                        const next: NonTeachingDay = {
+                          date: newHolidayDate,
+                          label: newHolidayLabel.trim() || '放假',
+                        };
+                        saveCalendar({
+                          nonTeachingDays: mergeNonTeachingDays(systemConfig.nonTeachingDays, [next]),
+                        });
+                        setNewHolidayDate('');
+                        setNewHolidayLabel('放假');
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-500"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      新增
+                    </button>
+                    <button
+                      type="button"
+                      disabled={holidayImportLoading}
+                      onClick={() => {
+                        void (async () => {
+                          const rocYear = Number(systemConfig.academicYear);
+                          if (!Number.isFinite(rocYear)) {
+                            alert('請先設定學年度');
+                            return;
+                          }
+                          setHolidayImportLoading(true);
+                          try {
+                            const suggested = await fetchNationalHolidaysForAcademicYear(rocYear);
+                            if (suggested.length === 0) {
+                              const fallback = suggestNationalHolidays(new Date().getFullYear());
+                              if (fallback.length === 0) {
+                                alert(`${rocYear} 學年度暫無公開行事曆資料，請手動新增。`);
+                                return;
+                              }
+                              saveCalendar((cfg) => ({
+                                nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
+                                  mergeNonTeachingDays(cfg.nonTeachingDays, fallback),
+                                  rocYear
+                                ),
+                              }));
+                              alert(
+                                `已合併內建建議放假日 ${fallback.length} 筆（已儲存，請再核對校曆）。`
+                              );
+                              return;
+                            }
+                            const years = westernYearsForAcademicYear(rocYear).join('、');
+                            saveCalendar((cfg) => ({
+                              nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
+                                mergeNonTeachingDays(cfg.nonTeachingDays, suggested),
+                                rocYear
+                              ),
+                            }));
+                            alert(
+                              `已合併 ${rocYear} 學年度（${years} 年）國定假日 ${suggested.length} 筆，並清除非本學年度舊資料（已儲存，請再核對校曆）。`
+                            );
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : '匯入國定假日失敗');
+                          } finally {
+                            setHolidayImportLoading(false);
+                          }
+                        })();
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      {holidayImportLoading ? '匯入中…' : `匯入${systemConfig.academicYear}學年度國定假日`}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={holidayImportLoading}
+                      onClick={() => {
+                        void (async () => {
+                          const y = new Date().getFullYear();
+                          const rocYear = Number(systemConfig.academicYear);
+                          setHolidayImportLoading(true);
+                          try {
+                            const suggested = await fetchNationalHolidaysFromOpenData(y);
+                            saveCalendar((cfg) => ({
+                              nonTeachingDays: Number.isFinite(rocYear)
+                                ? pruneNonTeachingDaysToAcademicYear(
+                                    mergeNonTeachingDays(cfg.nonTeachingDays, suggested),
+                                    rocYear
+                                  )
+                                : mergeNonTeachingDays(cfg.nonTeachingDays, suggested),
+                            }));
+                            alert(
+                              `已合併 ${y} 年國定假日 ${suggested.length} 筆（已儲存，請再核對校曆）。`
+                            );
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : '匯入國定假日失敗');
+                          } finally {
+                            setHolidayImportLoading(false);
+                          }
+                        })();
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      匯入今年國定假日
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+                    <span>
+                      {Number.isFinite(academicRocYear) ? (
+                        <>
+                          <strong>{systemConfig.academicYear} 學年度</strong>（西元 {holidayYearsLabel}）共{' '}
+                          <strong>{visibleHolidays.length}</strong> 筆放假日
+                        </>
+                      ) : (
+                        <>共 {(systemConfig.nonTeachingDays || []).length} 筆放假日</>
+                      )}
+                    </span>
+                    {staleHolidayCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!Number.isFinite(academicRocYear)) return;
+                          const count = staleHolidayCount;
+                          confirmCalendarRemove(
+                            '清除舊學年度放假日？',
+                            `將刪除 ${count} 筆非 ${systemConfig.academicYear} 學年度的放假日，刪除後立即生效。`,
+                            () =>
+                              saveCalendar((cfg) => ({
+                                nonTeachingDays: pruneNonTeachingDaysToAcademicYear(
+                                  cfg.nonTeachingDays,
+                                  Number(cfg.academicYear)
+                                ),
+                              }))
+                          );
+                        }}
+                        className="text-rose-700 font-semibold hover:underline"
+                      >
+                        清除 {staleHolidayCount} 筆舊學年度資料
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                    {visibleHolidays.length === 0 ? (
+                      <p className="text-xs text-slate-400 p-3">尚未設定放假日；目前結算會把所有平日都計入。</p>
+                    ) : (
+                      visibleHolidays.map((d) => (
+                        <div
+                          key={d.date}
+                          className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                        >
+                          <div>
+                            <span className="font-mono font-semibold text-slate-800">{d.date}</span>
+                            <span className="text-slate-500 ml-2">{d.label}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              confirmCalendarRemove(
+                                '刪除放假日？',
+                                `將刪除 ${d.date}「${d.label}」，刪除後立即生效。`,
+                                () =>
+                                  saveCalendar((cfg) => ({
+                                    nonTeachingDays: (cfg.nonTeachingDays || []).filter(
+                                      (x) => x.date !== d.date
+                                    ),
+                                  }))
+                              )
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                            title="移除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* 暫時移課／補課 */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-sky-500" />
+                      <span>暫時移課／補課（單日對應）</span>
+                    </h3>
+                    <span className="text-[11px] px-2 py-0.5 bg-sky-50 text-sky-700 rounded-full font-bold border border-sky-200">
+                      不改週課表模板
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    連假平日對調／週六補課：原日請先列入上方放假日，再於此指定補課日（可選週六）。
+                    勿用教師端「自行移課」永久改週模板。可選只移部分節次（空白＝全日第 1～{savedMaxPeriod} 節）。
+                  </p>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">原日（放假／停課）</label>
+                      <input
+                        type="date"
+                        value={moveSourceDate}
+                        onChange={(e) => setMoveSourceDate(e.target.value)}
+                        className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">補課日（可週六）</label>
+                      <input
+                        type="date"
+                        value={moveTargetDate}
+                        onChange={(e) => setMoveTargetDate(e.target.value)}
+                        className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[8rem]">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                      <input
+                        type="text"
+                        value={moveLabel}
+                        onChange={(e) => setMoveLabel(e.target.value)}
+                        placeholder="例：連假補課"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!moveSourceDate || !moveTargetDate) {
+                          alert('請選擇原日與補課日');
+                          return;
+                        }
+                        const srcJs = new Date(moveSourceDate.replace(/-/g, '/') + ' 12:00:00').getDay();
+                        if (srcJs === 0 || srcJs === 6) {
+                          alert('原日須為平日（週一至週五），才能對應週課表模板。');
+                          return;
+                        }
+                        const next: TemporaryScheduleMove = {
+                          id: `move-${Date.now()}`,
+                          sourceDate: moveSourceDate,
+                          targetDate: moveTargetDate,
+                          label: moveLabel.trim() || '暫時移課／補課',
+                          periods: movePeriods.length > 0 ? [...movePeriods].sort((a, b) => a - b) : undefined,
+                        };
+                        saveCalendar({
+                          temporaryScheduleMoves: mergeTemporaryScheduleMoves(
+                            systemConfig.temporaryScheduleMoves,
+                            [next]
+                          ),
+                        });
+                        setMoveSourceDate('');
+                        setMoveTargetDate('');
+                        setMovePeriods([]);
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-sky-600 text-white text-xs font-bold hover:bg-sky-500"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      新增暫時移課
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[11px] text-slate-500 mr-1">只移節次（可空白＝全日）：</span>
+                    {savedPeriodDefs.map((pDef) => {
+                      const p = pDef.period;
+                      const on = movePeriods.includes(p);
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() =>
+                            setMovePeriods((prev) =>
+                              on ? prev.filter((x) => x !== p) : [...prev, p].sort((a, b) => a - b)
+                            )
+                          }
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                            on
+                              ? 'bg-sky-600 text-white border-sky-600'
+                              : 'bg-white text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          第{p}節
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                    {(systemConfig.temporaryScheduleMoves || []).length === 0 ? (
+                      <p className="text-xs text-slate-400 p-3">尚未設定暫時移課。</p>
+                    ) : (
+                      (systemConfig.temporaryScheduleMoves || []).map((m) => (
+                        <div
+                          key={m.id}
+                          className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                        >
+                          <div>
+                            <span className="font-mono font-semibold text-slate-800">
+                              {m.sourceDate} → {m.targetDate}
+                            </span>
+                            <span className="text-slate-500 ml-2">{m.label}</span>
+                            {m.periods && m.periods.length > 0 && (
+                              <span className="text-sky-700 ml-2">
+                                第{m.periods.join('、')}節
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              confirmCalendarRemove(
+                                '刪除暫時移課？',
+                                `將刪除 ${m.sourceDate} → ${m.targetDate}「${m.label || '暫時移課'}」，刪除後立即生效。`,
+                                () =>
+                                  saveCalendar((cfg) => ({
+                                    temporaryScheduleMoves: (cfg.temporaryScheduleMoves || []).filter(
+                                      (x) => x.id !== m.id
+                                    ),
+                                  }))
+                              )
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                            title="移除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* 半日／節次停課 */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-amber-500" />
+                      <span>半日／節次停課</span>
+                    </h3>
+                    <span className="text-[11px] px-2 py-0.5 bg-amber-50 text-amber-800 rounded-full font-bold border border-amber-200">
+                      例：下午佈置考場
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    下午佈置考場等：勿標整天放假，請在此勾停課節次。日間兼課僅「外聘人員」不發該節；
+                    段考／運動會停課輔請勾第 8 節（課輔清冊全員應減 1 並寫備註）。停課節次不可請假派代。預設勾選第 5～8 節。
+                    段考日若需派代老師去代其他節，請勾「同時設為段考日」以解除代課教師正課衝堂。
+                  </p>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
+                      <input
+                        type="date"
+                        value={partialDate}
+                        onChange={(e) => setPartialDate(e.target.value)}
+                        className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[8rem]">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                      <input
+                        type="text"
+                        value={partialLabel}
+                        onChange={(e) => setPartialLabel(e.target.value)}
+                        placeholder="例：佈置考場"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!partialDate) {
+                          alert('請選擇日期');
+                          return;
+                        }
+                        if (partialPeriods.length === 0) {
+                          alert('請至少勾選一節停課節次');
+                          return;
+                        }
+                        const capped = partialPeriods.filter((p) => p >= 1 && p <= savedMaxPeriod);
+                        if (capped.length === 0) {
+                          alert(`停課節次須在 1～${savedMaxPeriod} 節內`);
+                          return;
+                        }
+                        const next: PartialNonTeachingDay = {
+                          id: `partial-${Date.now()}`,
+                          date: partialDate,
+                          periods: [...capped].sort((a, b) => a - b),
+                          label: partialLabel.trim() || '半日停課',
+                        };
+                        const examDays = partialAlsoExam
+                          ? [
+                              ...(systemConfig.examDays || []).filter((d) => d.date !== partialDate),
+                              { date: partialDate, label: next.label || '段考' },
+                            ].sort((a, b) => a.date.localeCompare(b.date))
+                          : systemConfig.examDays;
+                        saveCalendar({
+                          partialNonTeachingDays: mergePartialNonTeachingDays(
+                            systemConfig.partialNonTeachingDays,
+                            [next]
+                          ),
+                          examDays,
+                        });
+                        setPartialDate('');
+                        setPartialPeriods(afternoonPartialDefault());
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      {partialAlsoExam ? '新增停課＋段考日' : '新增停課節次'}
+                    </button>
+                    <label
+                      className="inline-flex items-center gap-1.5 text-xs text-slate-700 py-2 cursor-pointer select-none"
+                      title="同一天也加入下方「段考日」，派代時解除代課教師正課衝堂"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={partialAlsoExam}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setPartialAlsoExam(checked);
+                          if (checked && (!partialLabel.trim() || partialLabel.trim() === '半日停課')) {
+                            setPartialLabel('段考');
+                          } else if (!checked && partialLabel.trim() === '段考') {
+                            setPartialLabel('半日停課');
+                          }
+                        }}
+                        className="rounded border-slate-300"
+                      />
+                      同時設為段考日
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[11px] text-slate-500 mr-1">停課節次：</span>
+                    {savedPeriodDefs.map((pDef) => {
+                      const p = pDef.period;
+                      const on = partialPeriods.includes(p);
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() =>
+                            setPartialPeriods((prev) =>
+                              on ? prev.filter((x) => x !== p) : [...prev, p].sort((a, b) => a - b)
+                            )
+                          }
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                            on
+                              ? 'bg-amber-500 text-slate-950 border-amber-500'
+                              : 'bg-white text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          第{p}節
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setPartialPeriods(afternoonPartialDefault())}
+                      className="ml-1 text-[11px] text-amber-800 font-semibold underline"
+                    >
+                      下午（5–8）
+                    </button>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                    {(systemConfig.partialNonTeachingDays || []).length === 0 ? (
+                      <p className="text-xs text-slate-400 p-3">尚未設定停課節次。</p>
+                    ) : (
+                      (systemConfig.partialNonTeachingDays || []).map((m) => (
+                        <div
+                          key={m.id}
+                          className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                        >
+                          <div>
+                            <span className="font-mono font-semibold text-slate-800">{m.date}</span>
+                            <span className="text-slate-500 ml-2">{m.label}</span>
+                            <span className="text-amber-800 ml-2">第{m.periods.join('、')}節</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              confirmCalendarRemove(
+                                '刪除停課節次？',
+                                `將刪除 ${m.date}「${m.label || '停課'}」第${m.periods.join('、')}節，刪除後立即生效。若同日也設了段考日，請另外到下方刪除。`,
+                                () =>
+                                  saveCalendar((cfg) => ({
+                                    partialNonTeachingDays: (cfg.partialNonTeachingDays || []).filter(
+                                      (x) => x.id !== m.id
+                                    ),
+                                  }))
+                              )
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                            title="移除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* 段考日（派代解除正課衝堂） */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                      <Calendar className="w-4 h-4 text-indigo-500" />
+                      <span>段考日（派代解除衝堂）</span>
+                    </h3>
+                    <span className="text-[11px] px-2 py-0.5 bg-indigo-50 text-indigo-800 rounded-full font-bold border border-indigo-200">
+                      不影響鐘點計算
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    請假日期皆為段考日時，代課教師週課表該節的正課不視為衝堂（標示「段考解除衝堂」並提醒），
+                    可直接派代；已有其他派代的時段仍會擋下。系統不知道監考安排，請自行確認該節未排監考。
+                  </p>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">日期</label>
+                      <input
+                        type="date"
+                        value={examDate}
+                        onChange={(e) => setExamDate(e.target.value)}
+                        className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[8rem]">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">說明</label>
+                      <input
+                        type="text"
+                        value={examLabel}
+                        onChange={(e) => setExamLabel(e.target.value)}
+                        placeholder="例：第一次段考"
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!examDate) {
+                          alert('請選擇日期');
+                          return;
+                        }
+                        const label = examLabel.trim() || '段考';
+                        const rest = (systemConfig.examDays || []).filter((d) => d.date !== examDate);
+                        saveCalendar({
+                          examDays: [...rest, { date: examDate, label }].sort((a, b) =>
+                            a.date.localeCompare(b.date)
+                          ),
+                        });
+                        setExamDate('');
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      新增段考日
+                    </button>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-xl divide-y divide-slate-100">
+                    {(systemConfig.examDays || []).length === 0 ? (
+                      <p className="text-xs text-slate-400 p-3">尚未設定段考日。</p>
+                    ) : (
+                      (systemConfig.examDays || []).map((d) => (
+                        <div
+                          key={d.date}
+                          className="flex items-center justify-between gap-2 px-3 py-2 text-xs sm:text-sm"
+                        >
+                          <div>
+                            <span className="font-mono font-semibold text-slate-800">{d.date}</span>
+                            <span className="text-slate-500 ml-2">{d.label}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              confirmCalendarRemove(
+                                '刪除段考日？',
+                                `將刪除 ${d.date}「${d.label}」，刪除後該日派代恢復正課衝堂檢核。`,
+                                () =>
+                                  saveCalendar((cfg) => ({
+                                    examDays: (cfg.examDays || []).filter((x) => x.date !== d.date),
+                                  }))
+                              )
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                            title="移除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+        </div>
       )}
 
       {/* TAB: 登入密碼 */}
