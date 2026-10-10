@@ -50,9 +50,14 @@ const loadPending = (): PendingOp[] => readJson<PendingOp[]>(PATROL_REVIEW_PENDI
 const savePending = (ops: PendingOp[]) =>
   localStorage.setItem(PATROL_REVIEW_PENDING_KEY, JSON.stringify(ops));
 
+/**
+ * 會辦案掛在既有 shfs_patrol 路徑下，沿用學校已開放的巡堂規則，
+ * 不必另開 shfs_patrol_review（否則常見 HTTP 401）。
+ * 結構：shfs_patrol/{schoolId}/_review/{date}/{caseId}
+ */
 const reviewBase = async (settings: CloudSyncSettings) => {
   const id = await pathIdForSchool(settings.schoolKey);
-  return `${normalizeDatabaseUrl(settings.databaseUrl)}/shfs_patrol_review/${id}`;
+  return `${normalizeDatabaseUrl(settings.databaseUrl)}/shfs_patrol/${id}/_review`;
 };
 
 const pushReview = async (settings: CloudSyncSettings, record: PatrolReviewCase) => {
@@ -84,7 +89,7 @@ export const pullPatrolReviews = async (
   const res = await fetch(`${base}.json?${qs}`);
   if (!res.ok) {
     throw new Error(
-      `巡堂會辦讀取失敗（HTTP ${res.status}）。請確認資料庫規則允許 shfs_patrol_review 路徑。`
+      `巡堂會辦讀取失敗（HTTP ${res.status}）。請確認資料庫規則允許 shfs_patrol 路徑讀寫（會辦案在 shfs_patrol/…/_review）。`
     );
   }
   const json = (await res.json()) as Record<

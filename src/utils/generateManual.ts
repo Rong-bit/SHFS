@@ -347,7 +347,7 @@ export const downloadSystemManual = () => {
     · 段考巡堂：依教室配置逐間巡查（不依課表佔用）；觀察項目同課間
     · 紀錄逐筆加密上傳到雲端（路徑 shfs_patrol），多人同時巡堂不會互相覆蓋；
       未加入同步或離線時先存本機，連線後自動補傳
-    · Firebase 資料庫規則需允許 shfs_patrol、shfs_patrol_review 路徑讀寫
+    · Firebase 資料庫規則需允許 shfs_patrol 路徑讀寫（會辦案在 shfs_patrol/…/_review）
 
   巡堂異常會辦與電子核章：
     · 僅「有缺失／異常」才建立會辦案並寄 email（需於巡堂教室配置頁設定 SMTP）
