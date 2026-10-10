@@ -29,6 +29,26 @@ export const NOTICE_ROSTER_HEADERS = [
 /** Excel 欄寬（字元）；請假日期 13.22 ≈ 93 像素，其餘欄位不變 */
 const COL_WIDTHS = [6, 10, 16, 12, 12, 12, 13.22, 8, 8, 14, 22, 10];
 
+/** 同一假單編號同色；相鄰編號深淺交替 */
+const ROSTER_FILL_LIGHT = 'FFF8FAFC'; // slate-50
+const ROSTER_FILL_DEEP = 'FFE2E8F0'; // slate-200
+
+/** 依假單編號分組，回傳每列底色（ARGB）；同號同色、換號交替 */
+export function rosterRowFillByRequestNumber(requestNumbers: string[]): string[] {
+  const fills: string[] = [];
+  let prev = '';
+  let useDeep = false;
+  for (const num of requestNumbers) {
+    const key = num || '';
+    if (key !== prev) {
+      if (prev !== '') useDeep = !useDeep;
+      prev = key;
+    }
+    fills.push(useDeep ? ROSTER_FILL_DEEP : ROSTER_FILL_LIGHT);
+  }
+  return fills;
+}
+
 export type NoticeRosterRow = {
   seq: number;
   kind: string;
@@ -181,6 +201,7 @@ function writeRosterSheet(
   });
   ws.getRow(4).height = 22;
 
+  const rowFills = rosterRowFillByRequestNumber(rosterRows.map((r) => r.requestNumber));
   rosterRows.forEach((row, index) => {
     const values: Array<string | number> = [
       row.seq,
@@ -196,12 +217,14 @@ function writeRosterSheet(
       row.subjectName,
       row.hours,
     ];
+    const fillArgb = rowFills[index];
     values.forEach((value, col) => {
       const cell = ws.getCell(5 + index, col + 1);
       cell.value = value;
       cell.font = { name: '微軟正黑體', size: 11 };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = thinBorder;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillArgb } };
     });
     ws.getRow(5 + index).height = 20;
   });
