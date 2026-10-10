@@ -95,6 +95,7 @@ export const PatrolMain: React.FC = () => {
       itemLabels[id] = checkItems.find((i) => i.id === id)?.label || id;
     }
     const recPeriod = usesPeriod ? period : undefined;
+    const existing = myRecordFor(room.id);
     saveRecord({
       id: patrolRecordId({ date, kind: mode, period: recPeriod, roomId: room.id, patrollerId: currentTeacher.id }),
       date,
@@ -113,7 +114,7 @@ export const PatrolMain: React.FC = () => {
       note: draft.note,
       patrollerId: currentTeacher.id,
       patrollerName: currentTeacher.name,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
     });
     setOpenRoomId(null);
   };

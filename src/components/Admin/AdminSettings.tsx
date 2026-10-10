@@ -880,8 +880,8 @@ export const AdminSettings: React.FC = () => {
               setConfirmDialog({
                 isOpen: true,
                 title: '確認重設系統預設值',
-                message: '確定要將所有系統參數、師資、工場與課表重設回系統初始示範值嗎？',
-                warningMessage: '此操作將還原所有自訂課表與師資至預設示範狀態。若已啟用跨電腦同步，示範資料會覆蓋全校雲端課表，請謹慎使用。',
+                message: '確定要將所有系統參數、師資、工場、課表與巡堂教室／本機巡堂紀錄重設回系統初始示範值嗎？',
+                warningMessage: '此操作將還原所有自訂課表與師資至預設示範狀態，並清空巡堂教室配置與本機巡堂紀錄。若已啟用跨電腦同步，示範資料會覆蓋全校雲端課表（雲端巡堂逐筆紀錄不會自動刪除），請謹慎使用。',
                 onConfirm: () => {
                   resetToMockData();
                   setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
@@ -3204,7 +3204,7 @@ export const AdminSettings: React.FC = () => {
                         isOpen: true,
                         title: '確認還原初始示範資料',
                         message: '確定要還原所有資料為初始示範狀態嗎？',
-                        warningMessage: '包含預設課表與申請單範例。',
+                        warningMessage: '包含預設課表、申請單範例，並清空巡堂教室配置與本機巡堂紀錄。',
                         onConfirm: () => {
                           resetToMockData();
                           setConfirmDialog((prev) => ({ ...prev, isOpen: false }));

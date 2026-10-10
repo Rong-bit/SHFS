@@ -46,6 +46,10 @@ import {
   mergeLocalSecretsIntoRemote,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
+import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from '../utils/patrolSync';
+
+/** 與 dataBackup.POST_BACKUP_IMPORT_FLAG 相同；避免 AppContext ↔ dataBackup 循環依賴 */
+const POST_BACKUP_IMPORT_FLAG = 'voc_post_backup_import_v1';
 import { countApplicantApprovedLeaveCoverPeriodsInMonth, countBillableDaysForSubstituteApprove, countLeaveSubstitutePeriods, countLeaveSubstitutePeriodsInMonth, dateToDayOfWeek, legacyRequestBelongsToSettlement, resolveLeaveDateEnd, validateSubstituteLeaveInput } from '../utils/leaveDates';
 import {
   buildLeavePayrollContext,
@@ -955,14 +959,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isCloudSyncReady(cloudSyncSettings)) {
       cloudReadyRef.current = false;
       setCloudSyncStatus('off');
+      // 匯入旗標保留到雲端同步啟用時再處理，避免稍後開啟同步時被自動覆寫
       return;
     }
 
     let stopped = false;
     let fullPullDone = false;
     cloudReadyRef.current = false;
-    setCloudSyncStatus('connecting');
-    setCloudSyncMessage('正在連線同步...');
+
+    const justImportedBackup = localStorage.getItem(POST_BACKUP_IMPORT_FLAG) === '1';
+    if (justImportedBackup) {
+      localStorage.removeItem(POST_BACKUP_IMPORT_FLAG);
+      // 整份備份還原後不可立刻被雲端自動覆寫；請使用者明確選擇推送或拉取
+      cloudConflictRef.current = true;
+      cloudDirtyRef.current = false;
+      setCloudSyncStatus('error');
+      setCloudSyncMessage(
+        '剛匯入整份備份，已暫停自動覆寫雲端。若要以本機備份為準請按「強制推送本機」；若要以雲端為準請按「拉取遠端（採用對方）」。'
+      );
+    } else {
+      setCloudSyncStatus('connecting');
+      setCloudSyncMessage('正在連線同步...');
+    }
 
     const pullOnce = async () => {
       if (typeof document !== 'undefined' && document.hidden) return;
@@ -3142,6 +3160,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem(STORAGE_KEYS.REQUESTS);
     localStorage.removeItem(STORAGE_KEYS.CONFIG);
     localStorage.removeItem(STORAGE_KEYS.STAFF_LIST);
+    // 巡堂教室已隨 INITIAL_SYSTEM_CONFIG 清空；本機紀錄／待上傳佇列也一併清除，避免孤兒資料進備份
+    localStorage.removeItem(PATROL_RECORDS_KEY);
+    localStorage.removeItem(PATROL_PENDING_KEY);
   };
 
   const requestBelongsToMonth = (
