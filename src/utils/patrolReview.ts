@@ -127,21 +127,25 @@ export function resolvePatrolReviewRecipients(params: {
     else pushStaff('academic', s);
   }
 
-  // 若名冊尚無明確「學務主任／教務」，仍保留角色槽位提示（無 email 則寄信略過）
+  // 若尚無學務主任／教務角色：把已列入的同人升級為主任角色（避免重複列）
   if (!out.some((r) => r.role === 'dean_student')) {
     const fallback = academicStaffList.find(
       (s) => (s.group || 'academic') === 'student_affairs' && /主任/.test(s.title)
     );
-    if (fallback && !out.some((r) => r.personId === fallback.id)) {
-      pushStaff('dean_student', fallback);
+    if (fallback) {
+      const idx = out.findIndex((r) => r.personId === fallback.id);
+      if (idx >= 0) out[idx] = { ...out[idx], role: 'dean_student' };
+      else pushStaff('dean_student', fallback);
     }
   }
   if (!out.some((r) => r.role === 'dean_academic')) {
     const fallback = academicStaffList.find(
-      (s) => (s.group || 'academic') === 'academic' && /主任|組長/.test(s.title)
+      (s) => (s.group || 'academic') === 'academic' && (/教務主任/.test(s.title) || /主任/.test(s.title))
     );
-    if (fallback && !out.some((r) => r.personId === fallback.id)) {
-      pushStaff('dean_academic', fallback);
+    if (fallback) {
+      const idx = out.findIndex((r) => r.personId === fallback.id);
+      if (idx >= 0) out[idx] = { ...out[idx], role: 'dean_academic' };
+      else pushStaff('dean_academic', fallback);
     }
   }
 
@@ -190,7 +194,10 @@ export function buildPatrolReviewCase(params: {
   const { record, teachers, academicStaffList, existing } = params;
   const now = new Date().toISOString();
   const recipients = resolvePatrolReviewRecipients({ record, teachers, academicStaffList });
-  const reopened = existing?.status === 'closed';
+  /** closed 或「已更正為正常」後再異常 → 視為新一輪會辦，可重寄 */
+  const reopened =
+    existing?.status === 'closed' ||
+    Boolean(existing?.issueSummary?.startsWith('【已更正為正常】'));
   return {
     id: existing?.id || patrolReviewCaseId(record.id),
     recordId: record.id,
@@ -208,8 +215,12 @@ export function buildPatrolReviewCase(params: {
     note: record.note,
     patrollerId: record.patrollerId,
     patrollerName: record.patrollerName,
-    // 自 closed 重開為新會辦；其餘保留進行中狀態
-    status: existing?.status && existing.status !== 'closed' ? existing.status : 'open',
+    // 重開 → open；其餘保留進行中狀態（含 archived 不再降級）
+    status: reopened
+      ? 'open'
+      : existing?.status && existing.status !== 'closed'
+        ? existing.status
+        : 'open',
     recipients: recipients.map((r) => {
       const prev = existing?.recipients.find(
         (p) => p.role === r.role && (p.personId || p.personName) === (r.personId || r.personName)
