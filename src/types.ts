@@ -19,7 +19,7 @@ export interface AcademicStaff {
 /** 科別／領域字串（高職可用電機科等；國中小可用領域或自由標籤） */
 export type DepartmentType = string;
 
-export type TeacherTitle = '專任教師' | '導師' | '組長' | '科主任' | '主任';
+export type TeacherTitle = '專任教師' | '導師' | '組長' | '科主任' | '主任' | '校長';
 
 export interface Teacher {
   id: string;

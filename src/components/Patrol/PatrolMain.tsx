@@ -162,8 +162,9 @@ export const PatrolMain: React.FC = () => {
           onlyEmails: retryOnly,
         });
         if (notifyGenRef.current.get(record.id) !== gen) return;
-        const latest =
-          loadLocalPatrolReviews().find((c) => c.recordId === record.id) || reviewCase;
+        const latest = loadLocalPatrolReviews().find((c) => c.recordId === record.id);
+        // 寄信期間若已刪除會辦案，勿再寫回
+        if (!latest) return;
         const attempted = new Set(
           (retryOnly && retryOnly.length > 0
             ? retryOnly
@@ -255,11 +256,18 @@ export const PatrolMain: React.FC = () => {
   };
 
   const handleDelete = (record: PatrolRecord) => {
+    // 遞增世代，避免進行中的寄信回寫把已刪會辦案救回
+    notifyGenRef.current.set(record.id, (notifyGenRef.current.get(record.id) || 0) + 1);
     deleteRecord(record);
-    const existing = cases.find((c) => c.recordId === record.id);
+    const existing =
+      loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
+      cases.find((c) => c.recordId === record.id);
     if (existing) deleteCase(existing);
     else {
-      const ghost = cases.find((c) => c.id === patrolReviewCaseId(record.id));
+      const ghostId = patrolReviewCaseId(record.id);
+      const ghost =
+        loadLocalPatrolReviews().find((c) => c.id === ghostId) ||
+        cases.find((c) => c.id === ghostId);
       if (ghost) deleteCase(ghost);
     }
     setOpenRoomId(null);

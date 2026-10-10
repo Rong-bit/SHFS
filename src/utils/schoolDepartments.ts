@@ -621,7 +621,7 @@ export const normalizeStandardBasePeriods = (
   director: asNonNegInt(raw?.director, DIRECTOR_BASE_PERIODS),
 });
 
-export const TEACHER_TITLES: TeacherTitle[] = ['導師', '組長', '科主任', '主任', '專任教師'];
+export const TEACHER_TITLES: TeacherTitle[] = ['導師', '組長', '科主任', '主任', '校長', '專任教師'];
 
 export const normalizeTeacherTitle = (title: string): TeacherTitle => {
   if (title === '教學組長') return '組長';
@@ -631,7 +631,7 @@ export const normalizeTeacherTitle = (title: string): TeacherTitle => {
 
 export const isAdminTeacherTitle = (title: string) => {
   const next = normalizeTeacherTitle(title);
-  return next === '組長' || next === '科主任' || next === '主任';
+  return next === '組長' || next === '科主任' || next === '主任' || next === '校長';
 };
 
 /** 真正的實習／實作課（含實務導向學習）；團體活動、普通教室學科不算 */
@@ -756,7 +756,7 @@ export const resolveTeacherBasePeriods = (
   directorStandard = DIRECTOR_BASE_PERIODS
 ) => {
   const title = normalizeTeacherTitle(teacher.title);
-  if (title === '主任') {
+  if (title === '主任' || title === '校長') {
     const dutyReductionPeriods = isLeftoverReduction(teacher.dutyReductionPeriods, [1, 4, 5, 6, 8])
       ? DIRECTOR_DEFAULT_DUTY_REDUCTION
       : Math.max(0, teacher.dutyReductionPeriods ?? DIRECTOR_DEFAULT_DUTY_REDUCTION);

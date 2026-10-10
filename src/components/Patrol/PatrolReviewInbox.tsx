@@ -95,7 +95,11 @@ export const PatrolReviewInbox: React.FC<{
               kind: 'staff' as const,
               id: currentAcademicStaff.id,
               name: currentAcademicStaff.name,
-              staffGroup: currentAcademicStaff.group || (currentRole === 'principal' ? 'principal' : currentRole === 'student_affairs' ? 'student_affairs' : 'academic'),
+              // 頂部角色優先：避免仍選著教學組人員時誤判無法校長／生輔核章
+              staffGroup:
+                currentRole === 'principal' || currentRole === 'student_affairs'
+                  ? currentRole
+                  : currentAcademicStaff.group || 'academic',
               staffTitle: currentAcademicStaff.title,
             }
           : null;
@@ -115,10 +119,7 @@ export const PatrolReviewInbox: React.FC<{
       list = list.filter(
         (c) =>
           c.id === focusCaseId ||
-          c.recipients.some(
-            (r) =>
-              r.personId === viewer.id && (r.role === 'homeroom' || r.role === 'subject_teacher')
-          )
+          viewerReviewRoles({ reviewCase: c, viewer }).length > 0
       );
     }
     return [...list].sort((a, b) => {
@@ -157,7 +158,7 @@ export const PatrolReviewInbox: React.FC<{
     });
     const next = applySignOff(c, signOff, {
       archive: stampAction === '校長核章',
-      instruction: instruction.trim() || undefined,
+      instruction: stampAction === '校長核章' ? instruction.trim() || undefined : undefined,
     });
     saveCase(next);
     setStampingId(null);

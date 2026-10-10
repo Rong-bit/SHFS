@@ -140,9 +140,10 @@ const buildEndpoint = async (settings: CloudSyncSettings) => {
   return `${base}/shfs/${id}.json`;
 };
 
-/** 上傳前剝除登入密文：教師／組員密碼與角色密碼不進雲端 */
+/** 上傳前剝除登入密文：教師／組員密碼、角色密碼與 SMTP 密碼不進雲端 */
 export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchoolData => {
   const auth = data.systemConfig?.authConfig;
+  const mail = data.systemConfig?.patrolMailConfig;
   return {
     ...data,
     teachers: (data.teachers || []).map((t) => {
@@ -162,8 +163,16 @@ export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchool
             adminPassword: '',
             academicPassword: '',
             accountingPassword: '',
+            studentAffairsPassword: '',
+            principalPassword: '',
           }
         : undefined,
+      patrolMailConfig: mail
+        ? {
+            ...mail,
+            pass: '',
+          }
+        : mail,
     },
   };
 };
@@ -176,7 +185,8 @@ export const mergeLocalSecretsIntoRemote = (
   remote: SharedSchoolData,
   localTeachers: Teacher[],
   localAuth?: SystemConfig['authConfig'],
-  localStaff?: AcademicStaff[]
+  localStaff?: AcademicStaff[],
+  localPatrolMailPass?: string
 ): SharedSchoolData => {
   const localPwd = new Map(
     localTeachers.filter((t) => t.password).map((t) => [t.id, t.password as string])
@@ -185,6 +195,7 @@ export const mergeLocalSecretsIntoRemote = (
     (localStaff || []).filter((s) => s.password).map((s) => [s.id, s.password as string])
   );
   const remoteAuth = remote.systemConfig?.authConfig;
+  const remoteMail = remote.systemConfig?.patrolMailConfig;
   return {
     ...remote,
     teachers: (remote.teachers || []).map((t) => ({
@@ -208,7 +219,17 @@ export const mergeLocalSecretsIntoRemote = (
           localAuth?.academicPassword || remoteAuth?.academicPassword || '1234',
         accountingPassword:
           localAuth?.accountingPassword || remoteAuth?.accountingPassword || '1234',
+        studentAffairsPassword:
+          localAuth?.studentAffairsPassword || remoteAuth?.studentAffairsPassword || '',
+        principalPassword:
+          localAuth?.principalPassword || remoteAuth?.principalPassword || '',
       },
+      patrolMailConfig: remoteMail
+        ? {
+            ...remoteMail,
+            pass: localPatrolMailPass || remoteMail.pass || '',
+          }
+        : remoteMail,
     },
   };
 };

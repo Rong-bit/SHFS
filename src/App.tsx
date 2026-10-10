@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { TeacherPortalMain } from './components/TeacherPortal/TeacherPortalMain';
@@ -10,7 +10,10 @@ import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
 import { isActingHomeroomOnlyRequest } from './utils/actingHomeroomPayrollRegister';
-import { readPatrolReviewFocusId } from './utils/patrolDeepLink';
+import {
+  PATROL_REVIEW_FOCUS_CLEARED_EVENT,
+  readPatrolReviewFocusId,
+} from './utils/patrolDeepLink';
 
 const AppContent: React.FC = () => {
   const { 
@@ -23,7 +26,13 @@ const AppContent: React.FC = () => {
     setIsLoginAuthOpen,
     loginAuthTarget
   } = useApp();
-  const patrolFocusId = useMemo(() => readPatrolReviewFocusId(), []);
+  const [patrolFocusId, setPatrolFocusId] = useState(() => readPatrolReviewFocusId());
+
+  useEffect(() => {
+    const clear = () => setPatrolFocusId(null);
+    window.addEventListener(PATROL_REVIEW_FOCUS_CLEARED_EVENT, clear);
+    return () => window.removeEventListener(PATROL_REVIEW_FOCUS_CLEARED_EVENT, clear);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -51,7 +60,7 @@ const AppContent: React.FC = () => {
       {/* Footer */}
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 text-xs py-4 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 sm:grid-cols-3 items-center gap-2 text-center sm:text-left">
-          <div className="sm:justify-self-start">調代課與鐘點費管理系統</div>
+          <div className="sm:justify-self-start">教務系統</div>
           <div className="text-slate-500 sm:justify-self-center sm:text-center">
             Copyright © 2026 Huang Jun-rong
           </div>

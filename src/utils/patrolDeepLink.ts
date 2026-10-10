@@ -30,6 +30,8 @@ export function suggestRoleForPatrolReviewFocus(focusId: string | null):
   return 'academic';
 }
 
+export const PATROL_REVIEW_FOCUS_CLEARED_EVENT = 'shfs:patrol-review-focus-cleared';
+
 export function clearPatrolReviewQueryParam() {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
@@ -37,4 +39,5 @@ export function clearPatrolReviewQueryParam() {
   url.searchParams.delete('patrolReview');
   const next = `${url.pathname}${url.search}${url.hash}`;
   window.history.replaceState({}, '', next);
+  window.dispatchEvent(new CustomEvent(PATROL_REVIEW_FOCUS_CLEARED_EVENT));
 }

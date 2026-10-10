@@ -9,6 +9,7 @@ import {
   PatrolSignOffAction,
   Teacher,
 } from '../types';
+import { teacherNameMatches } from './schoolDepartments';
 
 export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
   student_affairs: '生輔組',
@@ -179,11 +180,13 @@ export function resolvePatrolReviewRecipients(params: {
       .map((n) => n.trim())
       .filter(Boolean);
     for (const name of names) {
-      const t = teachers.find((x) => x.name === name);
+      const t =
+        teachers.find((x) => x.name === name) ||
+        teachers.find((x) => teacherNameMatches(x.name, name));
       out.push({
         role: 'subject_teacher',
         personId: t?.id,
-        personName: name,
+        personName: t?.name || name,
         email: (t?.email || '').trim(),
       });
     }
@@ -287,11 +290,16 @@ export function applySignOff(
   signOff: PatrolSignOff,
   opts?: { archive?: boolean; instruction?: string }
 ): PatrolReviewCase {
+  const isPrincipalStamp =
+    signOff.role === 'principal' || signOff.action === '校長核章';
+  const instruction = isPrincipalStamp
+    ? opts?.instruction ?? signOff.instruction
+    : undefined;
   const nextSignOffs = [
     ...reviewCase.signOffs.filter(
       (s) => !(s.role === signOff.role && s.personId === signOff.personId)
     ),
-    { ...signOff, instruction: opts?.instruction ?? signOff.instruction },
+    { ...signOff, instruction },
   ];
   const now = new Date().toISOString();
   let status = reviewCase.status;
@@ -350,9 +358,13 @@ export function viewerReviewRoles(params: {
   }
   if (viewer.kind === 'teacher') {
     for (const r of reviewCase.recipients) {
-      if (r.personId === viewer.id && (r.role === 'homeroom' || r.role === 'subject_teacher')) {
-        roles.push(r.role);
-      }
+      if (r.role !== 'homeroom' && r.role !== 'subject_teacher') continue;
+      const idMatch = Boolean(r.personId && r.personId === viewer.id);
+      const nameMatch =
+        !r.personId &&
+        Boolean(r.personName) &&
+        teacherNameMatches(r.personName, viewer.name);
+      if (idMatch || nameMatch) roles.push(r.role);
     }
     return [...new Set(roles)];
   }

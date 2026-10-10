@@ -264,7 +264,7 @@ export async function buildNoticeWorkbook(
 ): Promise<ExcelJS.Workbook> {
   const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = schoolName || '調代課與鐘點費管理系統';
+  workbook.creator = schoolName || '教務系統';
   const rosterRows = buildNoticeRosterRows(docs);
   const ws = workbook.addWorksheet('通知單清冊', {
     views: [{ state: 'frozen', ySplit: 4 }],
