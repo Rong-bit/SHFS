@@ -1,10 +1,36 @@
-import { PatrolMailConfig, PatrolReviewCase } from '../types';
-import { PATROL_REVIEW_ROLE_LABELS } from './patrolReview';
+import { PatrolKind, PatrolMailConfig, PatrolReviewCase, PatrolReviewRole } from '../types';
+import {
+  PATROL_REVIEW_ROLE_LABELS,
+  PATROL_REVIEW_ROLE_ORDER,
+} from './patrolReview';
 import { patrolKindLabel } from './patrolExcel';
 
 export function isPatrolMailConfigured(cfg?: PatrolMailConfig | null): boolean {
   if (!cfg?.enabled) return false;
   return Boolean(cfg.host && cfg.fromEmail && (cfg.user || cfg.fromEmail));
+}
+
+/** 依巡堂類型說明應通知哪些身分（固定文案，必含學務／教務主任） */
+export function patrolNotifyAudienceLine(kind: PatrolKind): string {
+  if (kind === 'exam') {
+    return '生輔組、學務主任、教學組、教務主任、該班導師（段考不含任課老師）';
+  }
+  return '生輔組、學務主任、教學組、教務主任、該班導師、任課老師';
+}
+
+function sortedRecipientLines(c: PatrolReviewCase): string[] {
+  const order = new Map(PATROL_REVIEW_ROLE_ORDER.map((r, i) => [r, i]));
+  return [...c.recipients]
+    .sort(
+      (a, b) =>
+        (order.get(a.role) ?? 99) - (order.get(b.role) ?? 99) ||
+        a.personName.localeCompare(b.personName, 'zh-Hant')
+    )
+    .map((r) => {
+      const role = PATROL_REVIEW_ROLE_LABELS[r.role as PatrolReviewRole] || r.role;
+      const mail = r.email ? ` <${r.email}>` : '（無信箱）';
+      return `・${role} ${r.personName}${mail}`;
+    });
 }
 
 export function buildPatrolNotifyEmail(params: {
@@ -19,9 +45,13 @@ export function buildPatrolNotifyEmail(params: {
   const link = appBaseUrl
     ? `${appBaseUrl.replace(/\/$/, '')}/?patrolReview=${encodeURIComponent(c.id)}`
     : '';
-  const recipientLines = c.recipients
-    .map((r) => `・${PATROL_REVIEW_ROLE_LABELS[r.role]} ${r.personName}${r.email ? ` <${r.email}>` : '（無信箱）'}`)
-    .join('\n');
+  const audience = patrolNotifyAudienceLine(c.kind);
+  const recipientLines = sortedRecipientLines(c);
+  const recipientBlock =
+    recipientLines.length > 0
+      ? recipientLines.join('\n')
+      : '・（名冊尚無對應人員或未填信箱，請管理員於成員名冊補齊生輔組、學務主任、教學組、教務主任等）';
+
   const text = [
     `${schoolName} 巡堂異常會辦通知`,
     '',
@@ -37,11 +67,19 @@ export function buildPatrolNotifyEmail(params: {
     '請登入系統於「巡堂會辦」以電子戳章勾選已會畢或已閱畢。',
     link ? `連結：${link}` : '',
     '',
+    `應通知身分：${audience}`,
     '通知對象：',
-    recipientLines,
+    recipientBlock,
   ]
     .filter((line) => line !== '')
     .join('\n');
+
+  const recipientHtml =
+    recipientLines.length > 0
+      ? `<ul style="margin:8px 0 0;padding-left:1.2em">${recipientLines
+          .map((line) => `<li>${line.replace(/^・/, '')}</li>`)
+          .join('')}</ul>`
+      : `<p style="margin:8px 0 0;color:#64748b">名冊尚無對應人員或未填信箱，請管理員於成員名冊補齊<strong>生輔組、學務主任、教學組、教務主任</strong>等。</p>`;
 
   const html = `
     <div style="font-family:'Noto Sans TC',Arial,sans-serif;line-height:1.6;color:#0f172a">
@@ -56,6 +94,9 @@ export function buildPatrolNotifyEmail(params: {
       <p style="margin:0 0 16px;padding:10px 12px;background:#fff1f2;border-radius:8px"><strong>異常</strong> ${c.issueSummary}</p>
       <p>請登入系統於「巡堂會辦」以電子戳章勾選<strong>已會畢</strong>或<strong>已閱畢</strong>。</p>
       ${link ? `<p><a href="${link}">開啟會辦案</a></p>` : ''}
+      <p style="margin:16px 0 0"><strong>應通知身分</strong> ${audience}</p>
+      <p style="margin:8px 0 0"><strong>通知對象</strong></p>
+      ${recipientHtml}
     </div>
   `;
 

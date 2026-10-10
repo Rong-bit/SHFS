@@ -67,6 +67,16 @@ const staff: AcademicStaff[] = [
     responsibleScope: '',
     group: 'academic',
   },
+  {
+    id: 'ac2',
+    name: '吳教務',
+    title: '教務主任',
+    badge: '',
+    email: 'dean-a@school.edu',
+    phone: '',
+    responsibleScope: '',
+    group: 'academic',
+  },
 ];
 
 const base: PatrolRecord = {
@@ -101,6 +111,41 @@ assert.ok(classRecipients.some((r) => r.role === 'subject_teacher' && r.personNa
 assert.ok(classRecipients.some((r) => r.role === 'student_affairs'));
 assert.ok(classRecipients.some((r) => r.role === 'dean_student'));
 assert.ok(classRecipients.some((r) => r.role === 'academic'));
+assert.ok(classRecipients.some((r) => r.role === 'dean_academic' && r.personName === '吳教務'));
+
+const { buildPatrolNotifyEmail } = await import('../src/utils/patrolMail');
+const mail = buildPatrolNotifyEmail({
+  reviewCase: {
+    id: 'review_r1',
+    recordId: 'r1',
+    date: base.date,
+    kind: base.kind,
+    period: base.period,
+    roomId: base.roomId,
+    roomName: base.roomName,
+    building: base.building,
+    floor: base.floor,
+    className: base.className,
+    subjectName: base.subjectName,
+    teacherName: base.teacherName,
+    issueSummary: '玩手機',
+    note: '',
+    patrollerId: base.patrollerId,
+    patrollerName: base.patrollerName,
+    status: 'open',
+    recipients: classRecipients,
+    signOffs: [],
+    createdAt: base.createdAt,
+    updatedAt: base.createdAt,
+  },
+  schoolName: '測試高工',
+  appBaseUrl: 'https://example.com',
+});
+assert.match(mail.text, /應通知身分：.*學務主任.*教務主任/);
+assert.match(mail.text, /學務主任 鄭學務/);
+assert.match(mail.text, /教務主任 吳教務/);
+assert.match(mail.html, /學務主任/);
+assert.match(mail.html, /教務主任/);
 
 const exam: PatrolRecord = { ...base, id: 'r2', kind: 'exam', teacherName: '李任課', subjectName: undefined };
 assert.equal(patrolRecordHasIssue(exam), true);

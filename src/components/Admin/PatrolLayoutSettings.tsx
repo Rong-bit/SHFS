@@ -143,7 +143,7 @@ const PatrolMailSettingsPanel: React.FC<{
       <div>
         <h3 className="text-sm font-extrabold text-slate-900">巡堂異常會辦寄信（SMTP）</h3>
         <p className="text-xs text-slate-500 mt-1">
-          僅在巡堂有缺失時寄信通知生輔組、教學組、教務、學務主任、導師（及非段考之任課老師）。請使用學校信箱或第三方 SMTP；密碼請妥善保管。
+          僅在巡堂有缺失時寄信通知生輔組、學務主任、教學組、教務主任、導師（及非段考之任課老師）。請使用學校信箱或第三方 SMTP；密碼請妥善保管。
         </p>
       </div>
       <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
