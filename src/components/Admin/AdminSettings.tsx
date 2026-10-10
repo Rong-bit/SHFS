@@ -15,7 +15,13 @@ import {
   mergePartialNonTeachingDays,
 } from '../../utils/calendarSettlement';
 import { clipSchoolName, SCHOOL_NAME_MAX_LENGTH, normalizeSchoolName } from '../../utils/schoolName';
-import { buildPeriodDefinitions, resolvePeriodConfig } from '../../utils/periodConfig';
+import {
+  buildPeriodDefinitions,
+  DEFAULT_TIME_RANGES,
+  normalizeTimeRange,
+  resolvePeriodConfig,
+  resolvePeriodTimeRanges,
+} from '../../utils/periodConfig';
 import { resolveHomeroomSlot } from '../../utils/schoolDepartments';
 import {
   applySchoolLevelPreset,
@@ -157,6 +163,9 @@ const configToForm = (systemConfig: SystemConfig): SystemConfig => ({
   standardBasePeriods: normalizeStandardBasePeriods(systemConfig?.standardBasePeriods),
   schoolLevel: normalizeSchoolLevel(systemConfig?.schoolLevel),
   maxPeriod: resolvePeriodConfig(systemConfig).maxPeriod,
+  periodTimeRanges: Object.fromEntries(
+    Object.entries(resolvePeriodTimeRanges(systemConfig)).map(([k, v]) => [String(k), v])
+  ),
   homeroomDayOfWeek: resolveHomeroomSlot(systemConfig).dayOfWeek,
   homeroomPeriod: resolveHomeroomSlot(systemConfig).period,
   counselingPeriods: [...resolvePeriodConfig(systemConfig).counselingPeriods],
@@ -517,11 +526,23 @@ export const AdminSettings: React.FC = () => {
       homeroomDayOfWeek: formConfig.homeroomDayOfWeek ?? systemConfig.homeroomDayOfWeek,
       homeroomPeriod: formConfig.homeroomPeriod ?? systemConfig.homeroomPeriod,
     });
+    const maxP = resolvePeriodConfig(formConfig).maxPeriod;
+    const periodTimeRanges: Record<string, string> = {};
+    for (let p = 1; p <= maxP; p++) {
+      const key = String(p);
+      const normalized =
+        normalizeTimeRange(formConfig.periodTimeRanges?.[key]) ||
+        DEFAULT_TIME_RANGES[p] ||
+        '';
+      if (normalized) periodTimeRanges[key] = normalized;
+    }
     const nextConfig = {
       ...formConfig,
       ...pickCalendarFields(systemConfig),
+      maxPeriod: maxP,
+      periodTimeRanges,
       homeroomDayOfWeek: homeroomSlot.dayOfWeek,
-      homeroomPeriod: Math.min(homeroomSlot.period, resolvePeriodConfig(formConfig).maxPeriod),
+      homeroomPeriod: Math.min(homeroomSlot.period, maxP),
       schoolName: normalizeSchoolName(formConfig.schoolName),
       counselingStartDate,
       counselingEndDate,
@@ -1382,6 +1403,76 @@ export const AdminSettings: React.FC = () => {
                   placeholder="無則留空；高職常見 8"
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-sm font-mono"
                 />
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-700">各節上課時段</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    格式如 08:00 - 08:50。影響課表、請假、巡堂「回到現在」判斷。預設為中正高工常見作息。
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormConfig({
+                      ...formConfig,
+                      periodTimeRanges: Object.fromEntries(
+                        Array.from({ length: formMaxPeriod }, (_, i) => {
+                          const p = i + 1;
+                          return [String(p), DEFAULT_TIME_RANGES[p] || ''];
+                        })
+                      ),
+                    })
+                  }
+                  className="text-[11px] font-semibold text-indigo-700 hover:text-indigo-900"
+                >
+                  還原預設時段
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {Array.from({ length: formMaxPeriod }, (_, i) => {
+                  const p = i + 1;
+                  const key = String(p);
+                  const value =
+                    formConfig.periodTimeRanges?.[key] ||
+                    DEFAULT_TIME_RANGES[p] ||
+                    '';
+                  return (
+                    <label key={p} className="text-[11px] font-semibold text-slate-600">
+                      第{p}節
+                      <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          const normalized = normalizeTimeRange(next);
+                          setFormConfig({
+                            ...formConfig,
+                            periodTimeRanges: {
+                              ...(formConfig.periodTimeRanges || {}),
+                              [key]: normalized || next,
+                            },
+                          });
+                        }}
+                        onBlur={(e) => {
+                          const normalized = normalizeTimeRange(e.target.value);
+                          if (!normalized) return;
+                          setFormConfig({
+                            ...formConfig,
+                            periodTimeRanges: {
+                              ...(formConfig.periodTimeRanges || {}),
+                              [key]: normalized,
+                            },
+                          });
+                        }}
+                        placeholder={DEFAULT_TIME_RANGES[p] || '08:00 - 08:50'}
+                        className="mt-1 w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-mono"
+                      />
+                    </label>
+                  );
+                })}
               </div>
             </div>
             <p className="text-[11px] text-slate-500 leading-relaxed">

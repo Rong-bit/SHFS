@@ -202,6 +202,11 @@ export interface SystemConfig {
   schoolLevel?: 'elementary' | 'junior' | 'senior' | 'vocational';
   /** 每日最大節次（國小常見 6～7；國中／高中職常見 7～8） */
   maxPeriod?: number;
+  /**
+   * 各節上課時段（鍵為節次字串，值如「08:00 - 08:50」）。
+   * 未填的節次使用系統預設（中正高工常見作息）。
+   */
+  periodTimeRanges?: Record<string, string>;
   /** 班會星期（1＝週一 … 5＝週五）。該節團體活動的老師視為該班導師。預設 3（週三） */
   homeroomDayOfWeek?: number;
   /** 班會節次。預設 7 */

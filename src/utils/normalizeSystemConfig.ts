@@ -1,10 +1,32 @@
 import type { SystemConfig } from '../types';
-import { resolvePeriodConfig } from './periodConfig';
+import { normalizeTimeRange, resolvePeriodConfig } from './periodConfig';
 import { resolveHomeroomSlot } from './schoolDepartments';
 import { normalizeSchoolLevel, type SchoolLevel } from './schoolLevelPresets';
 import { resolveLeaveThresholds } from './leavePayrollPolicy';
 import { normalizeSchoolName } from './schoolName';
 import { sanitizeConcurrentFunding } from './concurrentFunding';
+
+function normalizeLoadedPeriodTimeRanges(
+  raw: unknown,
+  base?: Record<string, string>
+): Record<string, string> | undefined {
+  const source =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : base && typeof base === 'object'
+        ? base
+        : null;
+  if (!source) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!/^\d{1,2}$/.test(key)) continue;
+    const n = Number(key);
+    if (n < 1 || n > 12) continue;
+    const normalized = normalizeTimeRange(typeof value === 'string' ? value : '');
+    if (normalized) out[key] = normalized;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 /** 補齊舊 localStorage 缺少的學制／節次／假別欄位 */
 export function normalizeLoadedSystemConfig(
@@ -14,6 +36,7 @@ export function normalizeLoadedSystemConfig(
   SystemConfig,
   | 'schoolLevel'
   | 'maxPeriod'
+  | 'periodTimeRanges'
   | 'homeroomDayOfWeek'
   | 'homeroomPeriod'
   | 'counselingPeriods'
@@ -57,6 +80,10 @@ export function normalizeLoadedSystemConfig(
   return {
     schoolLevel: schoolLevel as SchoolLevel,
     maxPeriod: period.maxPeriod,
+    periodTimeRanges: normalizeLoadedPeriodTimeRanges(
+      parsed.periodTimeRanges,
+      base.periodTimeRanges
+    ),
     homeroomDayOfWeek: homeroom.dayOfWeek,
     homeroomPeriod: homeroom.period,
     counselingPeriods: period.counselingPeriods,
