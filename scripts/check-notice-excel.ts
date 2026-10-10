@@ -206,6 +206,12 @@ NOTICE_ROSTER_HEADERS.forEach((label, index) => {
 assert.equal(workbook.getWorksheet(1)?.getCell('A5').value, 1);
 assert.equal(workbook.getWorksheet(1)?.getCell('B5').value, '代課');
 assert.equal(workbook.getWorksheet(1)?.getCell('L5').value, '兼課');
+// 請假日期（G 欄）寬度對應約 93 像素；其餘欄寬維持原值
+assert.equal(workbook.worksheets[0].getColumn(7).width, 13.22);
+assert.deepEqual(
+  [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12].map((n) => workbook.worksheets[0].getColumn(n).width),
+  [6, 10, 16, 12, 12, 12, 8, 8, 14, 22, 10]
+);
 
 const buffer = await workbook.xlsx.writeBuffer();
 assert.ok(buffer.byteLength > 1000);

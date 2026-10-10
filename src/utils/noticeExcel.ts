@@ -26,7 +26,8 @@ export const NOTICE_ROSTER_HEADERS = [
   '鐘點',
 ] as const;
 
-const COL_WIDTHS = [6, 10, 16, 12, 12, 12, 12, 8, 8, 14, 22, 10];
+/** Excel 欄寬（字元）；請假日期 13.22 ≈ 93 像素，其餘欄位不變 */
+const COL_WIDTHS = [6, 10, 16, 12, 12, 12, 13.22, 8, 8, 14, 22, 10];
 
 export type NoticeRosterRow = {
   seq: number;
