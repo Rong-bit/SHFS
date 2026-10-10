@@ -49,6 +49,7 @@ export const Header: React.FC = () => {
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
+  // 順序：教師 → 教學組 → 出納組 → 生輔組 → 校長 → 系統管理員
   const roles: { key: UserRole; label: string; icon: React.ReactNode; badge?: number }[] = [
     {
       key: 'teacher',
@@ -62,6 +63,11 @@ export const Header: React.FC = () => {
       badge: pendingCount > 0 ? pendingCount : undefined,
     },
     {
+      key: 'accounting',
+      label: '出納組',
+      icon: <Calculator className="w-4 h-4" />,
+    },
+    {
       key: 'student_affairs',
       label: '生輔組',
       icon: <Shield className="w-4 h-4" />,
@@ -70,11 +76,6 @@ export const Header: React.FC = () => {
       key: 'principal',
       label: '校長',
       icon: <Landmark className="w-4 h-4" />,
-    },
-    {
-      key: 'accounting',
-      label: '出納組',
-      icon: <Calculator className="w-4 h-4" />,
     },
     {
       key: 'admin',
