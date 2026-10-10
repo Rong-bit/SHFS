@@ -7,7 +7,9 @@ import { ModalShell } from '../Common/ModalShell';
 export type PatrolRecordDraft = Pick<PatrolRecord, 'observations' | 'checks' | 'note'>;
 
 export const patrolRecordHasIssue = (r: Pick<PatrolRecord, 'kind' | 'observations' | 'checks'>) =>
-  r.kind === 'class' ? r.observations.length > 0 : Object.values(r.checks).some((v) => v === false);
+  r.kind === 'class' || r.kind === 'exam'
+    ? r.observations.length > 0
+    : Object.values(r.checks).some((v) => v === false);
 
 export const occupancySummary = (o: PatrolRoomOccupancy | undefined): string => {
   if (!o) return '';
@@ -69,10 +71,19 @@ export const PatrolRoomSheet: React.FC<{
           <div>
             <h3 className="text-lg font-extrabold text-slate-900">{roomLabel}</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              {kind === 'class' ? `課間巡堂・第${period}節` : kind === 'outdoor' ? `室外課巡查・第${period}節` : '放學巡查'}
+              {kind === 'class'
+                ? `課間巡堂・第${period}節`
+                : kind === 'outdoor'
+                  ? `室外課巡查・第${period}節`
+                  : kind === 'exam'
+                    ? `段考巡堂・第${period}節`
+                    : '放學巡查'}
             </p>
-            {occupancy && kind !== 'after_school' && (
+            {occupancy && kind !== 'after_school' && kind !== 'exam' && (
               <p className="text-sm text-slate-700 mt-1">{occupancySummary(occupancy)}</p>
+            )}
+            {kind === 'exam' && (
+              <p className="text-sm text-slate-700 mt-1">段考巡堂（不通知任課老師）</p>
             )}
           </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100" title="關閉">
@@ -80,7 +91,7 @@ export const PatrolRoomSheet: React.FC<{
           </button>
         </div>
 
-        {kind === 'class' ? (
+        {kind === 'class' || kind === 'exam' ? (
           <>
             <button
               type="button"
@@ -186,8 +197,8 @@ export const PatrolRoomSheet: React.FC<{
             type="button"
             onClick={() =>
               onSave({
-                observations: kind === 'class' ? observations : [],
-                checks: kind === 'class' ? {} : checks,
+                observations: kind === 'class' || kind === 'exam' ? observations : [],
+                checks: kind === 'class' || kind === 'exam' ? {} : checks,
                 note: note.trim(),
               })
             }
@@ -203,7 +214,7 @@ export const PatrolRoomSheet: React.FC<{
             {othersRecords.map((r) => (
               <div key={r.id} className="text-xs text-slate-600">
                 <strong>{r.patrollerName}</strong>（{r.createdAt.slice(11, 16)}）：
-                {r.kind === 'class'
+                {r.kind === 'class' || r.kind === 'exam'
                   ? r.observations.length === 0
                     ? '正常'
                     : r.observations.map((id) => labelOf(r, id, observationItems)).join('、')

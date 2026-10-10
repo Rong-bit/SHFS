@@ -70,9 +70,34 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setIsSuccess(false);
       setIsVerifying(false);
       setShowPassword(false);
+      const roleGroup =
+        target?.type === 'role' && target.targetRole === 'accounting'
+          ? 'accounting'
+          : target?.type === 'role' && target.targetRole === 'student_affairs'
+            ? 'student_affairs'
+            : target?.type === 'role' && target.targetRole === 'principal'
+              ? 'principal'
+              : 'academic';
       let initialStaffId = '';
-      if (target?.type === 'role' && target?.targetRole === 'accounting') {
-        initialStaffId = academicStaffList.find((s) => s.group === 'accounting')?.id || '';
+      if (
+        target?.type === 'role' &&
+        (target.targetRole === 'academic' ||
+          target.targetRole === 'accounting' ||
+          target.targetRole === 'student_affairs' ||
+          target.targetRole === 'principal')
+      ) {
+        initialStaffId =
+          target.academicStaffId ||
+          academicStaffList.find((s) => (s.group || 'academic') === roleGroup)?.id ||
+          '';
+        if (
+          currentAcademicStaffId &&
+          academicStaffList.some(
+            (s) => s.id === currentAcademicStaffId && (s.group || 'academic') === roleGroup
+          )
+        ) {
+          initialStaffId = target.academicStaffId || currentAcademicStaffId;
+        }
       } else {
         initialStaffId =
           target?.academicStaffId ||
@@ -141,6 +166,36 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
         break;
       }
+      case 'student_affairs': {
+        const saStaff = academicStaffList.find(
+          (s) => s.id === selectedStaffId && s.group === 'student_affairs'
+        );
+        targetTitle = saStaff ? saStaff.name : '生輔組';
+        targetSubtitle = saStaff
+          ? `${saStaff.title} · ${saStaff.responsibleScope}`
+          : '請先選擇生輔組／學務身分';
+        targetBadge = saStaff?.title || '生輔會辦權限';
+        expectedPassword =
+          saStaff?.password || auth.studentAffairsPassword || auth.academicPassword || '1234';
+        hint = saStaff?.password
+          ? '已設定個人密碼'
+          : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
+        break;
+      }
+      case 'principal': {
+        const pStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'principal');
+        targetTitle = pStaff ? pStaff.name : '校長';
+        targetSubtitle = pStaff
+          ? `${pStaff.title} · ${pStaff.responsibleScope}`
+          : '請先選擇校長室身分';
+        targetBadge = pStaff?.title || '校長核章';
+        expectedPassword =
+          pStaff?.password || auth.principalPassword || auth.academicPassword || '1234';
+        hint = pStaff?.password
+          ? '已設定個人密碼'
+          : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
+        break;
+      }
       case 'admin':
         targetTitle = '系統管理員';
         targetSubtitle = '標準與參數 · 場地／名冊維護 · 課表匯入';
@@ -173,6 +228,20 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         return;
       }
     }
+    if (target.type === 'role' && target.targetRole === 'student_affairs') {
+      const has = academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'student_affairs');
+      if (!has) {
+        setErrorMsg('請先於成員名冊新增生輔組／學務人員後再登入');
+        return;
+      }
+    }
+    if (target.type === 'role' && target.targetRole === 'principal') {
+      const has = academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'principal');
+      if (!has) {
+        setErrorMsg('請先於成員名冊新增校長室人員後再登入');
+        return;
+      }
+    }
 
     const passToTest = inputPassToTest !== undefined ? inputPassToTest : password;
     setIsVerifying(true);
@@ -189,8 +258,9 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         } else if (target.type === 'teacher_action' && target.teacherId) {
           markLocalAuthTrusted(teacherAuthTrustKey(target.teacherId));
         } else if (target.type === 'role' && target.targetRole) {
+          const staffRoles = ['academic', 'accounting', 'student_affairs', 'principal'] as const;
           const staffId =
-            (target.targetRole === 'academic' || target.targetRole === 'accounting') && selectedStaffId
+            staffRoles.includes(target.targetRole as (typeof staffRoles)[number]) && selectedStaffId
               ? selectedStaffId
               : target.academicStaffId;
           markLocalAuthTrusted(roleAuthTrustKey(target.targetRole, staffId));
@@ -214,6 +284,10 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         setErrorMsg(
           '出納組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若有改過請向管理員確認。'
         );
+      } else if (target.type === 'role' && target.targetRole === 'student_affairs') {
+        setErrorMsg('生輔組登入密碼錯誤。預設多為 1234；請向管理員確認。');
+      } else if (target.type === 'role' && target.targetRole === 'principal') {
+        setErrorMsg('校長室登入密碼錯誤。預設多為 1234；請向管理員確認。');
       } else if (target.type === 'role' && target.targetRole === 'admin') {
         setErrorMsg('系統管理員密碼錯誤，請重新輸入。');
       } else {
@@ -278,15 +352,40 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
             </div>
           </div>
 
-          {target.type === 'role' && (target.targetRole === 'academic' || target.targetRole === 'accounting') && (() => {
-            const isAcademic = target.targetRole === 'academic';
-            const groupMembers = academicStaffList.filter((s) => (s.group || 'academic') === (isAcademic ? 'academic' : 'accounting'));
-            if (groupMembers.length === 0) return null;
+          {target.type === 'role' &&
+            (target.targetRole === 'academic' ||
+              target.targetRole === 'accounting' ||
+              target.targetRole === 'student_affairs' ||
+              target.targetRole === 'principal') && (() => {
+            const group =
+              target.targetRole === 'accounting'
+                ? 'accounting'
+                : target.targetRole === 'student_affairs'
+                  ? 'student_affairs'
+                  : target.targetRole === 'principal'
+                    ? 'principal'
+                    : 'academic';
+            const groupLabel =
+              group === 'accounting'
+                ? '出納組'
+                : group === 'student_affairs'
+                  ? '生輔組'
+                  : group === 'principal'
+                    ? '校長室'
+                    : '教學組';
+            const groupMembers = academicStaffList.filter((s) => (s.group || 'academic') === group);
+            if (groupMembers.length === 0) {
+              return (
+                <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+                  尚未設定{groupLabel}成員。請管理員至「成員名冊」新增後再登入。
+                </p>
+              );
+            }
             return (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-amber-400" />
-                  請選擇{isAcademic ? '教學組' : '出納組'}登入身分（組長 / 組員）
+                  請選擇{groupLabel}登入身分
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {groupMembers.map((staff) => {

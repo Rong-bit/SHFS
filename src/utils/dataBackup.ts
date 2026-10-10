@@ -2,9 +2,10 @@ import { STORAGE_KEYS } from '../context/AppContext';
 import { clearLocalAuthTrust } from './localAuthTrust';
 import { isPasswordHash } from './passwordCrypto';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from './patrolSync';
+import { PATROL_REVIEW_KEY, PATROL_REVIEW_PENDING_KEY } from './patrolReviewSync';
 
 /** 不在 STORAGE_KEYS 的本機資料；還原時舊備份沒有這些欄位就保留現有資料 */
-const EXTRA_BACKUP_KEYS = [PATROL_RECORDS_KEY];
+const EXTRA_BACKUP_KEYS = [PATROL_RECORDS_KEY, PATROL_REVIEW_KEY];
 
 export const BACKUP_APP_ID = 'SHFS';
 export const BACKUP_VERSION = 2;
@@ -55,6 +56,8 @@ function sanitizeConfigJson(raw: string | null): string | null {
         'adminPassword',
         'academicPassword',
         'accountingPassword',
+        'studentAffairsPassword',
+        'principalPassword',
       ]) {
         const v = auth[key];
         if (typeof v === 'string' && v && !isPasswordHash(v)) {
@@ -62,6 +65,11 @@ function sanitizeConfigJson(raw: string | null): string | null {
         }
       }
       cfg.authConfig = auth;
+    }
+    const mail = cfg.patrolMailConfig;
+    if (mail && typeof mail === 'object' && typeof mail.pass === 'string' && mail.pass) {
+      mail.pass = '';
+      cfg.patrolMailConfig = mail;
     }
     return JSON.stringify(cfg);
   } catch {
@@ -168,6 +176,7 @@ export const importSystemBackup = async (file: File): Promise<void> => {
 
   // 待上傳佇列屬本機操作狀態，不可跨機延續，否則可能誤刪／復活雲端巡堂紀錄
   localStorage.removeItem(PATROL_PENDING_KEY);
+  localStorage.removeItem(PATROL_REVIEW_PENDING_KEY);
   // 匯入後密碼可能已變更，清除本機「已驗證」信任以免略過密碼門檻
   clearLocalAuthTrust();
   // 若已啟用雲端同步：暫停自動覆寫，請使用者選擇強制推送或拉取遠端

@@ -68,7 +68,40 @@ export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
     avatarBg: 'from-teal-600 to-teal-800',
     responsibleScope: '每月超鐘點費結算核銷、調代課鐘點費撥付、教師薪資異動通知',
     group: 'accounting',
-  }
+  },
+  {
+    id: 'staff-sa-01',
+    name: '周明德',
+    title: '生輔組長',
+    badge: '巡堂會辦 · 生活輔導',
+    email: '',
+    phone: '分機 410',
+    avatarBg: 'from-sky-600 to-sky-800',
+    responsibleScope: '巡堂異常會辦、生活輔導與秩序關懷',
+    group: 'student_affairs',
+  },
+  {
+    id: 'staff-sa-02',
+    name: '鄭慧君',
+    title: '學務主任',
+    badge: '學務會辦 · 閱畢核章',
+    email: '',
+    phone: '分機 400',
+    avatarBg: 'from-cyan-700 to-cyan-900',
+    responsibleScope: '巡堂異常學務會辦與閱畢',
+    group: 'student_affairs',
+  },
+  {
+    id: 'staff-prin-01',
+    name: '校長',
+    title: '校長',
+    badge: '每周彙整 · 核章指示',
+    email: '',
+    phone: '分機 100',
+    avatarBg: 'from-slate-600 to-slate-900',
+    responsibleScope: '巡堂異常每周彙整核章與指示用語',
+    group: 'principal',
+  },
 ];
 
 import { buildPeriodDefinitions } from '../utils/periodConfig';

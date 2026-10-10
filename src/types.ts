@@ -1,4 +1,6 @@
-export type UserRole = 'teacher' | 'academic' | 'accounting' | 'admin';
+export type UserRole = 'teacher' | 'academic' | 'accounting' | 'student_affairs' | 'principal' | 'admin';
+
+export type AcademicStaffGroup = 'academic' | 'accounting' | 'student_affairs' | 'principal';
 
 export interface AcademicStaff {
   id: string;
@@ -9,8 +11,8 @@ export interface AcademicStaff {
   phone: string;
   avatarBg?: string;
   responsibleScope: string;
-  group?: 'academic' | 'accounting';
-  /** 個人登入密碼雜湊；未填則使用系統教學組／出納組預設密碼 */
+  group?: AcademicStaffGroup;
+  /** 個人登入密碼雜湊；未填則使用系統各組別預設密碼 */
   password?: string;
 }
 
@@ -261,7 +263,27 @@ export interface SystemConfig {
     adminPassword: string; // 系統管理員密碼雜湊
     academicPassword: string; // 教務組經辦密碼雜湊
     accountingPassword: string; // 主計出納密碼雜湊
+    /** 生輔組／學務預設密碼；未設則沿用 academicPassword */
+    studentAffairsPassword?: string;
+    /** 校長預設密碼；未設則沿用 academicPassword */
+    principalPassword?: string;
   };
+  /** 巡堂異常會辦寄信（SMTP；密碼存於本機設定，部署時請妥善保管） */
+  patrolMailConfig?: PatrolMailConfig;
+}
+
+/** 巡堂異常 email 通知 SMTP 設定 */
+export interface PatrolMailConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  fromName: string;
+  fromEmail: string;
+  /** 信內深層連結用的系統網址（例 https://school.example.com） */
+  appBaseUrl?: string;
 }
 
 /** 行事曆放假日（代課／課輔不計；超鐘點僅外聘人員不計） */
@@ -314,7 +336,7 @@ export interface PatrolCheckItem {
   label: string;
 }
 
-export type PatrolKind = 'class' | 'outdoor' | 'after_school';
+export type PatrolKind = 'class' | 'outdoor' | 'after_school' | 'exam';
 
 /** 巡堂紀錄（逐筆同步） */
 export interface PatrolRecord {
@@ -329,7 +351,7 @@ export interface PatrolRecord {
   className?: string;
   subjectName?: string;
   teacherName?: string;
-  /** 課間：勾選的觀察項目 id；空陣列＝正常 */
+  /** 課間／段考：勾選的觀察項目 id；空陣列＝正常 */
   observations: string[];
   /** 室外課／放學：檢查項目 id → 是否合格 */
   checks: Record<string, boolean>;
@@ -339,6 +361,70 @@ export interface PatrolRecord {
   patrollerId: string;
   patrollerName: string;
   createdAt: string;
+}
+
+/** 會辦收件／簽核角色 */
+export type PatrolReviewRole =
+  | 'student_affairs'
+  | 'academic'
+  | 'dean_academic'
+  | 'dean_student'
+  | 'homeroom'
+  | 'subject_teacher'
+  | 'principal';
+
+export type PatrolSignOffAction = '會畢' | '閱畢' | '校長核章';
+
+export type PatrolReviewStatus = 'open' | 'reviewed' | 'principal_done' | 'archived' | 'closed';
+
+export interface PatrolReviewRecipient {
+  role: PatrolReviewRole;
+  personId?: string;
+  personName: string;
+  email: string;
+  /** 寄送成敗；未寄為 undefined */
+  sentOk?: boolean;
+  sentError?: string;
+}
+
+export interface PatrolSignOff {
+  role: PatrolReviewRole;
+  personId: string;
+  personName: string;
+  action: PatrolSignOffAction;
+  /** 校長指示用語等 */
+  instruction?: string;
+  stampedAt: string;
+  stampLabel: string;
+}
+
+/** 巡堂異常會辦案（與 PatrolRecord 分開同步） */
+export interface PatrolReviewCase {
+  id: string;
+  recordId: string;
+  date: string;
+  kind: PatrolKind;
+  period?: number;
+  roomId: string;
+  roomName: string;
+  building: string;
+  floor: string;
+  className?: string;
+  subjectName?: string;
+  teacherName?: string;
+  /** 異常摘要文字（寄信／列表用） */
+  issueSummary: string;
+  note: string;
+  patrollerId: string;
+  patrollerName: string;
+  status: PatrolReviewStatus;
+  recipients: PatrolReviewRecipient[];
+  signOffs: PatrolSignOff[];
+  notifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** 校長核章後教務留存時間 */
+  archivedAt?: string;
 }
 
 export interface MonthlyTeacherSettlement {

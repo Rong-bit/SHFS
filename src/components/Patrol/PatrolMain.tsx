@@ -15,24 +15,37 @@ import {
   PatrolRoomOccupancy,
 } from '../../utils/patrolSchedule';
 import { patrolRecordId, usePatrolRecords } from '../../utils/patrolSync';
+import {
+  buildPatrolReviewCase,
+  patrolReviewCaseId,
+} from '../../utils/patrolReview';
+import { usePatrolReviews } from '../../utils/patrolReviewSync';
+import { isPatrolMailConfigured, sendPatrolReviewNotify } from '../../utils/patrolMail';
 import { occupancySummary, patrolRecordHasIssue, PatrolRoomSheet } from './PatrolRoomSheet';
 
 const MODES: { id: PatrolKind; label: string; hint: string }[] = [
   { id: 'class', label: '課間巡堂', hint: '依課表顯示各教室該節班級與老師，點教室登錄上課情況。' },
   { id: 'outdoor', label: '室外課巡查', hint: '只亮出該節原班外出（體育、實習等）或無課的空教室，檢查關電、門窗、大屏。' },
   { id: 'after_school', label: '放學巡查', hint: '逐間檢查關燈、冷氣、門窗、大屏。' },
+  {
+    id: 'exam',
+    label: '段考巡堂',
+    hint: '依教室配置逐間巡查（不依課表佔用）；有異常會通知導師與行政，不通知任課老師。',
+  },
 ];
 
 export const PatrolMain: React.FC = () => {
-  const { systemConfig, sessions, requests, currentTeacher } = useApp();
+  const { systemConfig, sessions, requests, currentTeacher, teachers, academicStaffList } = useApp();
   const { records, pendingCount, loading, error, cloudReady, saveRecord, deleteRecord, refresh } =
     usePatrolRecords();
+  const { cases, saveCase, deleteCase } = usePatrolReviews();
   const periodDefs = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
   const [mode, setMode] = useState<PatrolKind>('class');
   const [date, setDate] = useState(() => dateToIsoLocal(new Date()));
   const [period, setPeriod] = useState<number>(() => currentPeriod(new Date(), periodDefs) ?? 1);
   const [buildingIdx, setBuildingIdx] = useState(0);
   const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+  const [notifyMsg, setNotifyMsg] = useState('');
 
   const rooms = systemConfig.patrolRooms || [];
   const grouped = useMemo(() => groupPatrolRooms(rooms), [rooms]);
@@ -40,6 +53,7 @@ export const PatrolMain: React.FC = () => {
   const checkItems = resolvePatrolCheckItems(systemConfig);
   const observationItems = resolvePatrolObservationItems(systemConfig);
   const usesPeriod = mode !== 'after_school';
+  const usesOccupancy = mode === 'class' || mode === 'outdoor';
 
   useEffect(() => {
     void refresh(date, date);
@@ -50,10 +64,10 @@ export const PatrolMain: React.FC = () => {
   }, [periodDefs, period]);
 
   const occupancy = useMemo(() => {
-    if (!usesPeriod) return new Map<string, PatrolRoomOccupancy>();
+    if (!usesOccupancy) return new Map<string, PatrolRoomOccupancy>();
     const list = computeRoomOccupancy({ rooms, sessions, requests, config: systemConfig, isoDate: date, period });
     return new Map(list.map((o) => [o.room.id, o]));
-  }, [usesPeriod, rooms, sessions, requests, systemConfig, date, period]);
+  }, [usesOccupancy, rooms, sessions, requests, systemConfig, date, period]);
 
   const slotRecords = useMemo(
     () =>
@@ -70,7 +84,7 @@ export const PatrolMain: React.FC = () => {
 
   /** 該模式下需要巡的教室 */
   const isTarget = (room: PatrolRoom) => {
-    if (mode === 'after_school') return true;
+    if (mode === 'after_school' || mode === 'exam') return true;
     const o = occupancy.get(room.id);
     if (!o || o.status === 'closed') return false;
     if (mode === 'class') return o.status === 'in_class';
@@ -82,6 +96,59 @@ export const PatrolMain: React.FC = () => {
   const openRoom = rooms.find((r) => r.id === openRoomId);
   const myRecordFor = (roomId: string) =>
     (recordsByRoom.get(roomId) || []).find((r) => r.patrollerId === currentTeacher?.id);
+
+  const syncReviewForRecord = async (record: PatrolRecord) => {
+    const existing = cases.find((c) => c.recordId === record.id) || null;
+    if (!patrolRecordHasIssue(record)) {
+      if (existing && existing.status !== 'closed') {
+        saveCase({
+          ...existing,
+          status: 'closed',
+          issueSummary: '已改為正常',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return;
+    }
+    const reviewCase = buildPatrolReviewCase({
+      record,
+      teachers,
+      academicStaffList,
+      existing,
+    });
+    const mailCfg = systemConfig.patrolMailConfig;
+    if (isPatrolMailConfigured(mailCfg) && !reviewCase.notifiedAt) {
+      const result = await sendPatrolReviewNotify({
+        mailConfig: mailCfg!,
+        reviewCase,
+        schoolName: systemConfig.schoolName || '學校',
+      });
+      const withNotify = {
+        ...reviewCase,
+        notifiedAt: result.ok ? new Date().toISOString() : reviewCase.notifiedAt,
+        recipients: reviewCase.recipients.map((r) => {
+          if (!r.email) return { ...r, sentOk: false, sentError: '無信箱' };
+          const fail = result.failed.find((f) => f.email === r.email);
+          if (fail) return { ...r, sentOk: false, sentError: fail.error };
+          return { ...r, sentOk: result.ok, sentError: result.ok ? undefined : result.error };
+        }),
+        updatedAt: new Date().toISOString(),
+      };
+      saveCase(withNotify);
+      if (result.ok) {
+        setNotifyMsg(`已寄出異常會辦通知（${result.sent} 封）`);
+      } else {
+        setNotifyMsg(`會辦案已建立，但寄信失敗：${result.error || '未知錯誤'}`);
+      }
+    } else {
+      saveCase(reviewCase);
+      if (!isPatrolMailConfigured(mailCfg)) {
+        setNotifyMsg('會辦案已建立（尚未設定 SMTP，信未寄出）');
+      } else if (reviewCase.notifiedAt) {
+        setNotifyMsg('會辦案已更新（先前已寄過通知）');
+      }
+    }
+  };
 
   const handleSave = (room: PatrolRoom, draft: Pick<PatrolRecord, 'observations' | 'checks' | 'note'>) => {
     if (!currentTeacher) return;
@@ -96,7 +163,7 @@ export const PatrolMain: React.FC = () => {
     }
     const recPeriod = usesPeriod ? period : undefined;
     const existing = myRecordFor(room.id);
-    saveRecord({
+    const record: PatrolRecord = {
       id: patrolRecordId({ date, kind: mode, period: recPeriod, roomId: room.id, patrollerId: currentTeacher.id }),
       date,
       kind: mode,
@@ -106,7 +173,7 @@ export const PatrolMain: React.FC = () => {
       building: room.building,
       floor: room.floor,
       className: info?.className ?? room.homeroomClass,
-      subjectName: mode === 'after_school' ? undefined : info?.subjectName,
+      subjectName: mode === 'after_school' || mode === 'exam' ? undefined : info?.subjectName,
       teacherName: mode === 'class' ? info?.teacherNames.join('、') : undefined,
       observations: draft.observations,
       checks: draft.checks,
@@ -115,7 +182,20 @@ export const PatrolMain: React.FC = () => {
       patrollerId: currentTeacher.id,
       patrollerName: currentTeacher.name,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
-    });
+    };
+    saveRecord(record);
+    void syncReviewForRecord(record);
+    setOpenRoomId(null);
+  };
+
+  const handleDelete = (record: PatrolRecord) => {
+    deleteRecord(record);
+    const existing = cases.find((c) => c.recordId === record.id);
+    if (existing) deleteCase(existing);
+    else {
+      const ghost = cases.find((c) => c.id === patrolReviewCaseId(record.id));
+      if (ghost) deleteCase(ghost);
+    }
     setOpenRoomId(null);
   };
 
@@ -223,6 +303,14 @@ export const PatrolMain: React.FC = () => {
       {error && (
         <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{error}</p>
       )}
+      {notifyMsg && (
+        <p className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 flex justify-between gap-2">
+          <span>{notifyMsg}</span>
+          <button type="button" className="font-bold underline" onClick={() => setNotifyMsg('')}>
+            關閉
+          </button>
+        </p>
+      )}
 
       {grouped.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -263,11 +351,14 @@ export const PatrolMain: React.FC = () => {
                         className={`text-left rounded-xl border-2 px-2.5 py-2 min-h-[64px] transition active:scale-[0.98] ${tileClass(room)}`}
                       >
                         <div className="text-sm font-extrabold leading-tight">{room.name}</div>
-                        {usesPeriod && (
+                        {usesOccupancy && (
                           <div className="text-[11px] leading-snug mt-0.5 line-clamp-2">
                             {occupancySummary(o)}
                             {o?.away?.isOutdoor ? '（室外）' : ''}
                           </div>
+                        )}
+                        {mode === 'exam' && room.homeroomClass && (
+                          <div className="text-[11px] leading-snug mt-0.5">{room.homeroomClass}</div>
                         )}
                         {recs.length > 0 && (
                           <div className="text-[10px] font-bold mt-0.5">
@@ -275,7 +366,7 @@ export const PatrolMain: React.FC = () => {
                             {recs.length > 1 ? `（${recs.length} 筆）` : ''}
                           </div>
                         )}
-                        {!target && recs.length === 0 && usesPeriod && (
+                        {!target && recs.length === 0 && usesOccupancy && (
                           <div className="text-[10px] mt-0.5">非巡查目標</div>
                         )}
                       </button>
@@ -302,10 +393,7 @@ export const PatrolMain: React.FC = () => {
             (r) => r.patrollerId !== currentTeacher.id
           )}
           onSave={(draft) => handleSave(openRoom, draft)}
-          onDelete={(record) => {
-            deleteRecord(record);
-            setOpenRoomId(null);
-          }}
+          onDelete={handleDelete}
           onClose={() => setOpenRoomId(null)}
         />
       )}

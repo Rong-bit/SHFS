@@ -5,6 +5,7 @@ import { TeacherPortalMain } from './components/TeacherPortal/TeacherPortalMain'
 import { AcademicAffairsMain } from './components/AcademicAffairs/AcademicAffairsMain';
 import { AccountingSettlement } from './components/Accounting/AccountingSettlement';
 import { AdminSettings } from './components/Admin/AdminSettings';
+import { PatrolAffairsMain } from './components/Patrol/PatrolAffairsMain';
 import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
@@ -33,6 +34,7 @@ const AppContent: React.FC = () => {
         {currentRole === 'teacher' && <TeacherPortalMain />}
         {currentRole === 'academic' && <AcademicAffairsMain />}
         {currentRole === 'accounting' && <AccountingSettlement />}
+        {(currentRole === 'student_affairs' || currentRole === 'principal') && <PatrolAffairsMain />}
         {currentRole === 'admin' && <AdminSettings />}
       </main>
 

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { PatrolCheckItem, PatrolRecord, PatrolRoom } from '../types';
+import { PatrolCheckItem, PatrolRecord, PatrolReviewCase, PatrolRoom } from '../types';
 import { newPatrolRoomId, sortPatrolRooms } from './patrolConfig';
 
 const ROOM_HEADERS = ['大樓', '樓層', '教室名稱', '原班級'];
@@ -76,6 +76,7 @@ const KIND_LABELS: Record<PatrolRecord['kind'], string> = {
   class: '課間巡堂',
   outdoor: '室外課巡查',
   after_school: '放學巡查',
+  exam: '段考巡堂',
 };
 
 export function patrolKindLabel(kind: PatrolRecord['kind']) {
@@ -87,8 +88,9 @@ export function exportPatrolRecords(params: {
   checkItems: PatrolCheckItem[];
   observationItems: PatrolCheckItem[];
   fileName: string;
+  reviewCases?: PatrolReviewCase[];
 }) {
-  const { records, checkItems, observationItems, fileName } = params;
+  const { records, checkItems, observationItems, fileName, reviewCases } = params;
   const obsLabel = new Map(observationItems.map((o) => [o.id, o.label]));
   const sorted = [...records].sort(
     (a, b) =>
@@ -97,6 +99,7 @@ export function exportPatrolRecords(params: {
       a.building.localeCompare(b.building, 'zh-Hant') ||
       a.roomName.localeCompare(b.roomName, 'zh-Hant')
   );
+  const reviewByRecord = new Map((reviewCases || []).map((c) => [c.recordId, c]));
   const header = [
     '日期',
     '類型',
@@ -113,10 +116,22 @@ export function exportPatrolRecords(params: {
     '備註',
     '巡堂者',
     '登錄時間',
+    '會辦狀態',
+    '會辦簽核',
+    '校長指示',
   ];
   const rows = sorted.map((r) => {
     const failedChecks = checkItems.filter((c) => r.checks[c.id] === false);
-    const hasIssue = r.kind === 'class' ? r.observations.length > 0 : failedChecks.length > 0;
+    const usesObs = r.kind === 'class' || r.kind === 'exam';
+    const hasIssue = usesObs ? r.observations.length > 0 : failedChecks.length > 0;
+    const review = reviewByRecord.get(r.id);
+    const signText = (review?.signOffs || [])
+      .map((s) => `${s.personName}${s.action}${s.stampedAt.slice(0, 10)}`)
+      .join('；');
+    const instruction = (review?.signOffs || [])
+      .filter((s) => s.instruction)
+      .map((s) => `${s.personName}：${s.instruction}`)
+      .join('；');
     return [
       r.date,
       KIND_LABELS[r.kind],
@@ -129,12 +144,15 @@ export function exportPatrolRecords(params: {
       r.teacherName || '',
       r.observations.map((id) => r.itemLabels?.[id] || obsLabel.get(id) || id).join('、'),
       ...checkItems.map((c) =>
-        r.kind === 'class' ? '' : r.checks[c.id] === false ? '未合格' : r.checks[c.id] ? '合格' : ''
+        usesObs ? '' : r.checks[c.id] === false ? '未合格' : r.checks[c.id] ? '合格' : ''
       ),
       hasIssue ? '有缺失' : '正常',
       r.note,
       r.patrollerName,
       r.createdAt.replace('T', ' ').slice(0, 16),
+      review?.status || '',
+      signText,
+      instruction,
     ];
   });
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
