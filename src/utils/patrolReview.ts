@@ -98,7 +98,9 @@ export function resolvePatrolReviewRecipients(params: {
     const fallback = academicStaffList.find(
       (s) => (s.group || 'academic') === 'student_affairs' && /主任/.test(s.title)
     );
-    if (fallback) pushStaff('dean_student', fallback);
+    if (fallback && !out.some((r) => r.personId === fallback.id)) {
+      pushStaff('dean_student', fallback);
+    }
   }
   if (!out.some((r) => r.role === 'dean_academic')) {
     const fallback = academicStaffList.find(
@@ -154,6 +156,7 @@ export function buildPatrolReviewCase(params: {
   const { record, teachers, academicStaffList, existing } = params;
   const now = new Date().toISOString();
   const recipients = resolvePatrolReviewRecipients({ record, teachers, academicStaffList });
+  const reopened = existing?.status === 'closed';
   return {
     id: existing?.id || patrolReviewCaseId(record.id),
     recordId: record.id,
@@ -171,20 +174,57 @@ export function buildPatrolReviewCase(params: {
     note: record.note,
     patrollerId: record.patrollerId,
     patrollerName: record.patrollerName,
+    // 自 closed 重開為新會辦；其餘保留進行中狀態
     status: existing?.status && existing.status !== 'closed' ? existing.status : 'open',
     recipients: recipients.map((r) => {
       const prev = existing?.recipients.find(
         (p) => p.role === r.role && (p.personId || p.personName) === (r.personId || r.personName)
       );
+      // 重開時清除寄送狀態，以便重新通知
+      if (reopened) return r;
       return prev ? { ...r, sentOk: prev.sentOk, sentError: prev.sentError } : r;
     }),
-    signOffs: existing?.signOffs || [],
-    notifiedAt: existing?.notifiedAt,
+    signOffs: reopened ? [] : existing?.signOffs || [],
+    notifiedAt: reopened ? undefined : existing?.notifiedAt,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
-    archivedAt: existing?.archivedAt,
+    archivedAt: reopened ? undefined : existing?.archivedAt,
   };
 }
+
+/** 異常改回正常時的會辦處理：未通知且未簽核才關閉；已進入會辦則標示更正並保留可見 */
+export function resolveReviewWhenIssueCleared(
+  existing: PatrolReviewCase
+): PatrolReviewCase {
+  const now = new Date().toISOString();
+  const inFlight = Boolean(existing.notifiedAt) || existing.signOffs.length > 0;
+  if (!inFlight) {
+    return {
+      ...existing,
+      status: 'closed',
+      issueSummary: '已改為正常',
+      updatedAt: now,
+      notifiedAt: undefined,
+    };
+  }
+  const alreadyMarked = existing.issueSummary.startsWith('【已更正為正常】');
+  return {
+    ...existing,
+    status: existing.status === 'archived' ? 'archived' : 'reviewed',
+    issueSummary: alreadyMarked
+      ? existing.issueSummary
+      : `【已更正為正常】原：${existing.issueSummary}`,
+    updatedAt: now,
+  };
+}
+
+export const PATROL_REVIEW_STATUS_LABELS: Record<PatrolReviewCase['status'], string> = {
+  open: '待會辦',
+  reviewed: '會辦中',
+  principal_done: '校長已核',
+  archived: '教務留存',
+  closed: '已結案（無異常）',
+};
 
 export function applySignOff(
   reviewCase: PatrolReviewCase,
@@ -199,6 +239,7 @@ export function applySignOff(
   ];
   const now = new Date().toISOString();
   let status = reviewCase.status;
+  // 校長核章預設即教務留存（archived）；principal_done 保留供報表相容
   if (opts?.archive || signOff.action === '校長核章') {
     status = 'archived';
   } else if (status === 'open') {
@@ -263,11 +304,39 @@ export function viewerReviewRoles(params: {
   if (group === 'principal') roles.push('principal');
   if (group === 'student_affairs') {
     roles.push('student_affairs');
-    if (viewer.staffTitle && /學務主任|主任/.test(viewer.staffTitle)) roles.push('dean_student');
+    if (
+      viewer.staffTitle &&
+      isDeanStudentStaff({
+        id: viewer.id,
+        name: viewer.name,
+        title: viewer.staffTitle,
+        badge: '',
+        email: '',
+        phone: '',
+        responsibleScope: '',
+        group: 'student_affairs',
+      })
+    ) {
+      roles.push('dean_student');
+    }
   }
   if (group === 'academic') {
     roles.push('academic');
-    if (viewer.staffTitle && /教務主任|主任|組長/.test(viewer.staffTitle)) roles.push('dean_academic');
+    if (
+      viewer.staffTitle &&
+      isDeanAcademicStaff({
+        id: viewer.id,
+        name: viewer.name,
+        title: viewer.staffTitle,
+        badge: '',
+        email: '',
+        phone: '',
+        responsibleScope: '',
+        group: 'academic',
+      })
+    ) {
+      roles.push('dean_academic');
+    }
   }
   return [...new Set(roles)];
 }

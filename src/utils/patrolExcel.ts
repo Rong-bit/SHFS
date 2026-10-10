@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { PatrolCheckItem, PatrolRecord, PatrolReviewCase, PatrolRoom } from '../types';
 import { newPatrolRoomId, sortPatrolRooms } from './patrolConfig';
+import { isObservationPatrolKind, PATROL_REVIEW_STATUS_LABELS } from './patrolReview';
 
 const ROOM_HEADERS = ['大樓', '樓層', '教室名稱', '原班級'];
 
@@ -121,9 +122,10 @@ export function exportPatrolRecords(params: {
     '校長指示',
   ];
   const rows = sorted.map((r) => {
-    const failedChecks = checkItems.filter((c) => r.checks[c.id] === false);
-    const usesObs = r.kind === 'class' || r.kind === 'exam';
-    const hasIssue = usesObs ? r.observations.length > 0 : failedChecks.length > 0;
+    const usesObs = isObservationPatrolKind(r.kind);
+    const hasIssue = usesObs
+      ? r.observations.length > 0
+      : Object.values(r.checks).some((v) => v === false);
     const review = reviewByRecord.get(r.id);
     const signText = (review?.signOffs || [])
       .map((s) => `${s.personName}${s.action}${s.stampedAt.slice(0, 10)}`)
@@ -150,7 +152,7 @@ export function exportPatrolRecords(params: {
       r.note,
       r.patrollerName,
       r.createdAt.replace('T', ' ').slice(0, 16),
-      review?.status || '',
+      review ? PATROL_REVIEW_STATUS_LABELS[review.status] : '',
       signText,
       instruction,
     ];

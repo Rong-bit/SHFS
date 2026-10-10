@@ -7,19 +7,30 @@ import { Calendar, ClipboardList, FileText, Plus, Cloud, MapPin } from 'lucide-r
 import { CloudSyncJoinModal } from '../Common/CloudSyncJoinModal';
 import { PatrolMain } from '../Patrol/PatrolMain';
 import { PatrolReviewInbox } from '../Patrol/PatrolReviewInbox';
+import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
 
 export const TeacherPortalMain: React.FC = () => {
   const { requests, currentTeacher, requestTeacherActionAuth, cloudSyncStatus } = useApp();
+  const focusCaseId = readPatrolReviewFocusId();
   const [activeTab, setActiveTab] = useState<'schedule' | 'requests' | 'patrol' | 'patrol-review'>(
-    'schedule'
+    () => (focusCaseId ? 'patrol-review' : 'schedule')
   );
   const [isTopRequestModalOpen, setIsTopRequestModalOpen] = useState(false);
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
 
   // 巡堂紀錄記在登入教師名下；切換身分須重新驗證
   useEffect(() => {
-    setActiveTab((tab) => (tab === 'patrol' || tab === 'patrol-review' ? 'schedule' : tab));
-  }, [currentTeacher?.id]);
+    setActiveTab((tab) => {
+      if (tab === 'patrol') return 'schedule';
+      if (tab === 'patrol-review' && focusCaseId) return 'patrol-review';
+      if (tab === 'patrol-review') return 'schedule';
+      return tab;
+    });
+  }, [currentTeacher?.id, focusCaseId]);
+
+  useEffect(() => {
+    if (focusCaseId) setActiveTab('patrol-review');
+  }, [focusCaseId]);
 
   const myPendingCount = requests.filter(
     (r) => r.applicantTeacherId === currentTeacher?.id && r.status === 'pending'
@@ -135,7 +146,9 @@ export const TeacherPortalMain: React.FC = () => {
       {activeTab === 'schedule' && <TeacherSchedule />}
       {activeTab === 'requests' && <TeacherRequestsList />}
       {activeTab === 'patrol' && <PatrolMain />}
-      {activeTab === 'patrol-review' && <PatrolReviewInbox mode="teacher" />}
+      {activeTab === 'patrol-review' && (
+        <PatrolReviewInbox mode="teacher" focusCaseId={focusCaseId} />
+      )}
 
       {/* Top Level Request Modal */}
       {isTopRequestModalOpen && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PendingApprovals } from './PendingApprovals';
 import { SchoolTimetableMatrix } from './SchoolTimetableMatrix';
@@ -6,13 +6,19 @@ import { StaffDispatchWorkbench } from './StaffDispatchWorkbench';
 import { TeacherLeaveCalendar } from './TeacherLeaveCalendar';
 import { PatrolReport } from '../Patrol/PatrolReport';
 import { PatrolReviewInbox } from '../Patrol/PatrolReviewInbox';
+import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
 import { CalendarDays, ClipboardCheck, ClipboardList, Grid, MapPin, UserCheck } from 'lucide-react';
 
 export const AcademicAffairsMain: React.FC = () => {
   const { requests } = useApp();
+  const focusCaseId = readPatrolReviewFocusId();
   const [activeTab, setActiveTab] = useState<
     'dispatch' | 'approvals' | 'matrix' | 'leave-calendar' | 'patrol' | 'patrol-review'
-  >('dispatch');
+  >(() => (focusCaseId ? 'patrol-review' : 'dispatch'));
+
+  useEffect(() => {
+    if (focusCaseId) setActiveTab('patrol-review');
+  }, [focusCaseId]);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
@@ -113,7 +119,9 @@ export const AcademicAffairsMain: React.FC = () => {
       {activeTab === 'matrix' && <SchoolTimetableMatrix />}
       {activeTab === 'leave-calendar' && <TeacherLeaveCalendar />}
       {activeTab === 'patrol' && <PatrolReport />}
-      {activeTab === 'patrol-review' && <PatrolReviewInbox mode="staff" />}
+      {activeTab === 'patrol-review' && (
+        <PatrolReviewInbox mode="staff" focusCaseId={focusCaseId} />
+      )}
 
     </div>
   );

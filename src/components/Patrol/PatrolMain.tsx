@@ -18,8 +18,9 @@ import { patrolRecordId, usePatrolRecords } from '../../utils/patrolSync';
 import {
   buildPatrolReviewCase,
   patrolReviewCaseId,
+  resolveReviewWhenIssueCleared,
 } from '../../utils/patrolReview';
-import { usePatrolReviews } from '../../utils/patrolReviewSync';
+import { loadLocalPatrolReviews, usePatrolReviews } from '../../utils/patrolReviewSync';
 import { isPatrolMailConfigured, sendPatrolReviewNotify } from '../../utils/patrolMail';
 import { occupancySummary, patrolRecordHasIssue, PatrolRoomSheet } from './PatrolRoomSheet';
 
@@ -38,7 +39,7 @@ export const PatrolMain: React.FC = () => {
   const { systemConfig, sessions, requests, currentTeacher, teachers, academicStaffList } = useApp();
   const { records, pendingCount, loading, error, cloudReady, saveRecord, deleteRecord, refresh } =
     usePatrolRecords();
-  const { cases, saveCase, deleteCase } = usePatrolReviews();
+  const { cases, saveCase, deleteCase, refresh: refreshReviews } = usePatrolReviews();
   const periodDefs = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
   const [mode, setMode] = useState<PatrolKind>('class');
   const [date, setDate] = useState(() => dateToIsoLocal(new Date()));
@@ -46,6 +47,7 @@ export const PatrolMain: React.FC = () => {
   const [buildingIdx, setBuildingIdx] = useState(0);
   const [openRoomId, setOpenRoomId] = useState<string | null>(null);
   const [notifyMsg, setNotifyMsg] = useState('');
+  const notifyingIdsRef = React.useRef<Set<string>>(new Set());
 
   const rooms = systemConfig.patrolRooms || [];
   const grouped = useMemo(() => groupPatrolRooms(rooms), [rooms]);
@@ -57,7 +59,8 @@ export const PatrolMain: React.FC = () => {
 
   useEffect(() => {
     void refresh(date, date);
-  }, [date, refresh]);
+    void refreshReviews(date, date);
+  }, [date, refresh, refreshReviews]);
 
   useEffect(() => {
     if (periodDefs.length > 0 && !periodDefs.some((p) => p.period === period)) setPeriod(1);
@@ -98,18 +101,23 @@ export const PatrolMain: React.FC = () => {
     (recordsByRoom.get(roomId) || []).find((r) => r.patrollerId === currentTeacher?.id);
 
   const syncReviewForRecord = async (record: PatrolRecord) => {
-    const existing = cases.find((c) => c.recordId === record.id) || null;
+    // 以本機最新為準，避免 React state 尚未跟上導致重複寄信
+    const existing =
+      loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
+      cases.find((c) => c.recordId === record.id) ||
+      null;
     if (!patrolRecordHasIssue(record)) {
       if (existing && existing.status !== 'closed') {
-        saveCase({
-          ...existing,
-          status: 'closed',
-          issueSummary: '已改為正常',
-          updatedAt: new Date().toISOString(),
-        });
+        saveCase(resolveReviewWhenIssueCleared(existing));
+        setNotifyMsg(
+          existing.notifiedAt || existing.signOffs.length
+            ? '異常已更正；會辦案保留供核章者閱覽'
+            : '已改為正常，會辦案已結案'
+        );
       }
       return;
     }
+    if (notifyingIdsRef.current.has(record.id)) return;
     const reviewCase = buildPatrolReviewCase({
       record,
       teachers,
@@ -118,27 +126,32 @@ export const PatrolMain: React.FC = () => {
     });
     const mailCfg = systemConfig.patrolMailConfig;
     if (isPatrolMailConfigured(mailCfg) && !reviewCase.notifiedAt) {
-      const result = await sendPatrolReviewNotify({
-        mailConfig: mailCfg!,
-        reviewCase,
-        schoolName: systemConfig.schoolName || '學校',
-      });
-      const withNotify = {
-        ...reviewCase,
-        notifiedAt: result.ok ? new Date().toISOString() : reviewCase.notifiedAt,
-        recipients: reviewCase.recipients.map((r) => {
-          if (!r.email) return { ...r, sentOk: false, sentError: '無信箱' };
-          const fail = result.failed.find((f) => f.email === r.email);
-          if (fail) return { ...r, sentOk: false, sentError: fail.error };
-          return { ...r, sentOk: result.ok, sentError: result.ok ? undefined : result.error };
-        }),
-        updatedAt: new Date().toISOString(),
-      };
-      saveCase(withNotify);
-      if (result.ok) {
-        setNotifyMsg(`已寄出異常會辦通知（${result.sent} 封）`);
-      } else {
-        setNotifyMsg(`會辦案已建立，但寄信失敗：${result.error || '未知錯誤'}`);
+      notifyingIdsRef.current.add(record.id);
+      try {
+        const result = await sendPatrolReviewNotify({
+          mailConfig: mailCfg!,
+          reviewCase,
+          schoolName: systemConfig.schoolName || '學校',
+        });
+        const withNotify = {
+          ...reviewCase,
+          notifiedAt: result.ok ? new Date().toISOString() : reviewCase.notifiedAt,
+          recipients: reviewCase.recipients.map((r) => {
+            if (!r.email) return { ...r, sentOk: false, sentError: '無信箱' };
+            const fail = result.failed.find((f) => f.email === r.email);
+            if (fail) return { ...r, sentOk: false, sentError: fail.error };
+            return { ...r, sentOk: result.ok, sentError: result.ok ? undefined : result.error };
+          }),
+          updatedAt: new Date().toISOString(),
+        };
+        saveCase(withNotify);
+        if (result.ok) {
+          setNotifyMsg(`已寄出異常會辦通知（${result.sent} 封）`);
+        } else {
+          setNotifyMsg(`會辦案已建立，但寄信失敗：${result.error || '未知錯誤'}`);
+        }
+      } finally {
+        notifyingIdsRef.current.delete(record.id);
       }
     } else {
       saveCase(reviewCase);

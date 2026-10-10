@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Stamp } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
@@ -12,19 +12,12 @@ import {
   applySignOff,
   makeSignOff,
   PATROL_REVIEW_ROLE_LABELS,
+  PATROL_REVIEW_STATUS_LABELS,
   viewerReviewRoles,
   weekRangeContaining,
 } from '../../utils/patrolReview';
 import { usePatrolReviews } from '../../utils/patrolReviewSync';
 import { ElectronicStamp } from '../Common/ElectronicStamp';
-
-const STATUS_LABEL: Record<PatrolReviewCase['status'], string> = {
-  open: '待會辦',
-  reviewed: '會辦中',
-  principal_done: '校長已核',
-  archived: '教務留存',
-  closed: '已結案（無異常）',
-};
 
 type ViewerMode = 'teacher' | 'staff' | 'admin';
 
@@ -50,6 +43,29 @@ export const PatrolReviewInbox: React.FC<{
   const [stampAction, setStampAction] = useState<PatrolSignOffAction>('閱畢');
   const [stampRole, setStampRole] = useState<PatrolReviewRole | null>(null);
   const [instruction, setInstruction] = useState('');
+  const wideRefreshDoneRef = useRef(false);
+  const focusRangeAppliedRef = useRef(false);
+
+  // 深層連結：若本機尚無該案，先拉近 120 日一次；找到後對齊日期區間
+  useEffect(() => {
+    if (!focusCaseId) return;
+    setOnlyPending(false);
+    const focused = cases.find((c) => c.id === focusCaseId);
+    if (focused) {
+      if (!focusRangeAppliedRef.current) {
+        focusRangeAppliedRef.current = true;
+        if (focused.date < dateFrom) setDateFrom(focused.date);
+        if (focused.date > dateTo) setDateTo(focused.date);
+      }
+      return;
+    }
+    if (wideRefreshDoneRef.current || !cloudReady) return;
+    wideRefreshDoneRef.current = true;
+    const end = dateToIsoLocal(new Date());
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 120);
+    void refresh(dateToIsoLocal(startDate), end);
+  }, [focusCaseId, cases, dateFrom, dateTo, refresh, cloudReady]);
 
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom <= dateTo) void refresh(dateFrom, dateTo);
@@ -82,22 +98,33 @@ export const PatrolReviewInbox: React.FC<{
           : null;
 
   const filtered = useMemo(() => {
-    let list = cases.filter((c) => c.date >= dateFrom && c.date <= dateTo && c.status !== 'closed');
-    if (onlyPending) list = list.filter((c) => c.status !== 'archived');
+    let list = cases.filter((c) => {
+      const inRange = c.date >= dateFrom && c.date <= dateTo;
+      const isFocus = focusCaseId != null && c.id === focusCaseId;
+      if (!inRange && !isFocus) return false;
+      if (c.status === 'closed' && !isFocus) return false;
+      return true;
+    });
+    if (onlyPending) {
+      list = list.filter((c) => c.status !== 'archived' || c.id === focusCaseId);
+    }
     if (viewer?.kind === 'teacher') {
-      list = list.filter((c) =>
-        c.recipients.some(
-          (r) =>
-            r.personId === viewer.id && (r.role === 'homeroom' || r.role === 'subject_teacher')
-        )
+      list = list.filter(
+        (c) =>
+          c.id === focusCaseId ||
+          c.recipients.some(
+            (r) =>
+              r.personId === viewer.id && (r.role === 'homeroom' || r.role === 'subject_teacher')
+          )
       );
     }
-    if (focusCaseId) {
-      list = [...list].sort((a, b) => (a.id === focusCaseId ? -1 : b.id === focusCaseId ? 1 : 0));
-    }
-    return list.sort(
-      (a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt)
-    );
+    return [...list].sort((a, b) => {
+      if (focusCaseId) {
+        if (a.id === focusCaseId) return -1;
+        if (b.id === focusCaseId) return 1;
+      }
+      return b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt);
+    });
   }, [cases, dateFrom, dateTo, onlyPending, viewer, focusCaseId]);
 
   const openStamp = (c: PatrolReviewCase) => {
@@ -226,7 +253,7 @@ export const PatrolReviewInbox: React.FC<{
                             : 'bg-amber-100 text-amber-900'
                         }`}
                       >
-                        {STATUS_LABEL[c.status]}
+                        {PATROL_REVIEW_STATUS_LABELS[c.status]}
                       </span>
                       {!c.notifiedAt && (
                         <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">

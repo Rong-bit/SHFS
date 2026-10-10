@@ -6,16 +6,9 @@ import { dateToIsoLocal } from '../../utils/holidays';
 import { resolvePatrolCheckItems, resolvePatrolObservationItems } from '../../utils/patrolConfig';
 import { exportPatrolRecords, patrolKindLabel } from '../../utils/patrolExcel';
 import { usePatrolRecords } from '../../utils/patrolSync';
+import { PATROL_REVIEW_STATUS_LABELS } from '../../utils/patrolReview';
 import { usePatrolReviews } from '../../utils/patrolReviewSync';
 import { patrolRecordHasIssue } from './PatrolRoomSheet';
-
-const REVIEW_STATUS_LABEL: Record<string, string> = {
-  open: '待會辦',
-  reviewed: '會辦中',
-  principal_done: '校長已核',
-  archived: '教務留存',
-  closed: '已結案',
-};
 
 const firstOfMonth = () => {
   const d = new Date();
@@ -404,7 +397,7 @@ export const PatrolReport: React.FC = () => {
                     </td>
                     <td className="px-2 text-slate-600">
                       {review
-                        ? `${REVIEW_STATUS_LABEL[review.status] || review.status}${
+                        ? `${PATROL_REVIEW_STATUS_LABELS[review.status]}${
                             instruction ? `／${instruction}` : ''
                           }`
                         : '—'}

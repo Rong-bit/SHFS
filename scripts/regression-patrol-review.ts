@@ -3,7 +3,11 @@
  */
 import assert from 'node:assert/strict';
 import { PatrolRecord, AcademicStaff, Teacher } from '../src/types';
-import { resolvePatrolReviewRecipients, buildPatrolReviewCase } from '../src/utils/patrolReview';
+import {
+  resolvePatrolReviewRecipients,
+  buildPatrolReviewCase,
+  resolveReviewWhenIssueCleared,
+} from '../src/utils/patrolReview';
 import { patrolRecordHasIssue } from '../src/components/Patrol/PatrolRoomSheet';
 
 const teachers: Teacher[] = [
@@ -118,5 +122,25 @@ assert.equal(patrolRecordHasIssue(okRecord), false);
 const review = buildPatrolReviewCase({ record: base, teachers, academicStaffList: staff });
 assert.equal(review.status, 'open');
 assert.match(review.issueSummary, /玩手機/);
+
+// 未通知 → 改正常直接結案
+const closed = resolveReviewWhenIssueCleared(review);
+assert.equal(closed.status, 'closed');
+
+// 已通知 → 改正常應保留可見並標示更正
+const notified = { ...review, notifiedAt: new Date().toISOString() };
+const corrected = resolveReviewWhenIssueCleared(notified);
+assert.equal(corrected.status, 'reviewed');
+assert.match(corrected.issueSummary, /已更正為正常/);
+
+// closed 後再異常 → 應重開並清除 notifiedAt 以便重寄
+const reopened = buildPatrolReviewCase({
+  record: base,
+  teachers,
+  academicStaffList: staff,
+  existing: { ...notified, status: 'closed', notifiedAt: '2026-01-01T00:00:00.000Z' },
+});
+assert.equal(reopened.status, 'open');
+assert.equal(reopened.notifiedAt, undefined);
 
 console.log('regression-patrol-review: ok');

@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Stamp } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
 import { PatrolPrincipalWeekly } from './PatrolPrincipalWeekly';
 import { PatrolReviewInbox } from './PatrolReviewInbox';
 
@@ -8,12 +9,16 @@ import { PatrolReviewInbox } from './PatrolReviewInbox';
 export const PatrolAffairsMain: React.FC = () => {
   const { currentRole } = useApp();
   const isPrincipal = currentRole === 'principal';
-  const [tab, setTab] = useState<'inbox' | 'weekly'>(isPrincipal ? 'weekly' : 'inbox');
+  const focusCaseId = useMemo(() => readPatrolReviewFocusId(), []);
+  const [tab, setTab] = useState<'inbox' | 'weekly'>(() =>
+    focusCaseId || !isPrincipal ? 'inbox' : 'weekly'
+  );
 
-  const focusCaseId = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    return new URLSearchParams(window.location.search).get('patrolReview');
-  }, []);
+  // 角色切換時重設分頁，避免校長 weekly 殘留導致生輔組空白
+  useEffect(() => {
+    if (focusCaseId) setTab('inbox');
+    else setTab(isPrincipal ? 'weekly' : 'inbox');
+  }, [currentRole, isPrincipal, focusCaseId]);
 
   return (
     <div className="space-y-6">
