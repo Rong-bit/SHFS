@@ -17,6 +17,7 @@ import {
   viewerReviewRoles,
   weekRangeContaining,
 } from '../../utils/patrolReview';
+import { clearPatrolReviewQueryParam } from '../../utils/patrolDeepLink';
 import { usePatrolReviews } from '../../utils/patrolReviewSync';
 import { ElectronicStamp } from '../Common/ElectronicStamp';
 
@@ -47,7 +48,7 @@ export const PatrolReviewInbox: React.FC<{
   const wideRefreshDoneRef = useRef(false);
   const focusRangeAppliedRef = useRef(false);
 
-  // 深層連結：若本機尚無該案，先拉近 120 日一次；找到後對齊日期區間
+  // 深層連結：若本機尚無該案，先拉近 120 日一次；找到後對齊日期區間並清掉 query
   useEffect(() => {
     if (!focusCaseId) return;
     setOnlyPending(false);
@@ -57,6 +58,7 @@ export const PatrolReviewInbox: React.FC<{
         focusRangeAppliedRef.current = true;
         if (focused.date < dateFrom) setDateFrom(focused.date);
         if (focused.date > dateTo) setDateTo(focused.date);
+        clearPatrolReviewQueryParam();
       }
       return;
     }

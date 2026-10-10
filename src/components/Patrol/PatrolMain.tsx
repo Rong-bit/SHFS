@@ -52,7 +52,8 @@ export const PatrolMain: React.FC = () => {
   const [buildingIdx, setBuildingIdx] = useState(0);
   const [openRoomId, setOpenRoomId] = useState<string | null>(null);
   const [notifyMsg, setNotifyMsg] = useState('');
-  const notifyingIdsRef = React.useRef<Set<string>>(new Set());
+  /** 寄信進行中的 recordId → 世代號；清案／重送時遞增以丟棄過期結果 */
+  const notifyGenRef = React.useRef<Map<string, number>>(new Map());
 
   const rooms = systemConfig.patrolRooms || [];
   const grouped = useMemo(() => groupPatrolRooms(rooms), [rooms]);
@@ -118,6 +119,8 @@ export const PatrolMain: React.FC = () => {
       cases.find((c) => c.recordId === record.id) ||
       null;
     if (!patrolRecordHasIssue(record)) {
+      // 遞增世代，讓進行中的寄信結果失效
+      notifyGenRef.current.set(record.id, (notifyGenRef.current.get(record.id) || 0) + 1);
       if (existing && existing.status !== 'closed') {
         saveCase(resolveReviewWhenIssueCleared(existing));
         setNotifyMsg(
@@ -128,7 +131,6 @@ export const PatrolMain: React.FC = () => {
       }
       return;
     }
-    if (notifyingIdsRef.current.has(record.id)) return;
     const reviewCase = buildPatrolReviewCase({
       record,
       teachers,
@@ -136,33 +138,73 @@ export const PatrolMain: React.FC = () => {
       existing,
     });
     const mailCfg = systemConfig.patrolMailConfig;
-    if (isPatrolMailConfigured(mailCfg) && !reviewCase.notifiedAt) {
-      notifyingIdsRef.current.add(record.id);
+    // 僅對尚未成功寄出的信箱重試，避免部分成功後重寄全體
+    const needMail =
+      isPatrolMailConfigured(mailCfg) &&
+      (!reviewCase.notifiedAt ||
+        reviewCase.recipients.some((r) => r.email && r.sentOk !== true));
+    if (needMail && isPatrolMailConfigured(mailCfg)) {
+      const gen = (notifyGenRef.current.get(record.id) || 0) + 1;
+      notifyGenRef.current.set(record.id, gen);
+      const retryOnly = reviewCase.notifiedAt
+        ? [
+            ...new Set(
+              reviewCase.recipients.filter((r) => r.email && r.sentOk !== true).map((r) => r.email)
+            ),
+          ]
+        : undefined;
+      saveCase(reviewCase);
       try {
         const result = await sendPatrolReviewNotify({
           mailConfig: mailCfg!,
           reviewCase,
           schoolName: systemConfig.schoolName || '學校',
+          onlyEmails: retryOnly,
         });
+        if (notifyGenRef.current.get(record.id) !== gen) return;
+        const latest =
+          loadLocalPatrolReviews().find((c) => c.recordId === record.id) || reviewCase;
+        const attempted = new Set(
+          (retryOnly && retryOnly.length > 0
+            ? retryOnly
+            : reviewCase.recipients.map((r) => r.email).filter(Boolean)
+          ).map((e) => e.toLowerCase())
+        );
+        const failedSet = new Set(result.failed.map((f) => f.email.toLowerCase()));
         const withNotify = {
-          ...reviewCase,
-          notifiedAt: result.ok ? new Date().toISOString() : reviewCase.notifiedAt,
-          recipients: reviewCase.recipients.map((r) => {
-            if (!r.email) return { ...r, sentOk: false, sentError: '無信箱' };
-            const fail = result.failed.find((f) => f.email === r.email);
-            if (fail) return { ...r, sentOk: false, sentError: fail.error };
-            return { ...r, sentOk: result.ok, sentError: result.ok ? undefined : result.error };
+          ...latest,
+          issueSummary: reviewCase.issueSummary,
+          note: reviewCase.note,
+          recipients: latest.recipients.map((r) => {
+            const email = (r.email || '').trim();
+            if (!email) return { ...r, sentOk: false, sentError: '無信箱' };
+            const key = email.toLowerCase();
+            if (failedSet.has(key)) {
+              const err = result.failed.find((f) => f.email.toLowerCase() === key)?.error;
+              return { ...r, sentOk: false, sentError: err };
+            }
+            if (r.sentOk === true) return { ...r, sentOk: true, sentError: undefined };
+            if (attempted.has(key) && result.sent > 0) {
+              return { ...r, sentOk: true, sentError: undefined };
+            }
+            return r;
           }),
+          notifiedAt:
+            result.sent > 0 ? new Date().toISOString() : latest.notifiedAt || reviewCase.notifiedAt,
           updatedAt: new Date().toISOString(),
         };
         saveCase(withNotify);
         if (result.ok) {
           setNotifyMsg(`已寄出異常會辦通知（${result.sent} 封）`);
+        } else if (result.sent > 0) {
+          setNotifyMsg(`已寄出 ${result.sent} 封，部分失敗可於下次更新時重試`);
         } else {
           setNotifyMsg(`會辦案已建立，但寄信失敗：${result.error || '未知錯誤'}`);
         }
-      } finally {
-        notifyingIdsRef.current.delete(record.id);
+      } catch {
+        if (notifyGenRef.current.get(record.id) === gen) {
+          setNotifyMsg('會辦案已建立，但寄信發生錯誤');
+        }
       }
     } else {
       saveCase(reviewCase);

@@ -143,4 +143,19 @@ const reopened = buildPatrolReviewCase({
 assert.equal(reopened.status, 'open');
 assert.equal(reopened.notifiedAt, undefined);
 
+// 「已更正為正常」後再異常 → 亦應重開可重寄
+const fromCorrected = buildPatrolReviewCase({
+  record: base,
+  teachers,
+  academicStaffList: staff,
+  existing: {
+    ...corrected,
+    notifiedAt: '2026-01-01T00:00:00.000Z',
+    status: 'reviewed',
+  },
+});
+assert.equal(fromCorrected.status, 'open');
+assert.equal(fromCorrected.notifiedAt, undefined);
+assert.match(fromCorrected.issueSummary, /玩手機/);
+
 console.log('regression-patrol-review: ok');

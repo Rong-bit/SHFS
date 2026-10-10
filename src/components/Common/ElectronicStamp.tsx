@@ -39,12 +39,13 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const title = (titleLabel || actionLabel || '').trim().replace(/^已/, '') || '—';
   const name = (personName || '').trim() || '—';
 
-  // 依姓名字數微調右側字級
+  // 依字數微調字級，長名用 textLength 壓進右側欄
   const nameLen = [...name].length;
-  const nameFont = nameLen <= 2 ? 36 : nameLen === 3 ? 32 : nameLen === 4 ? 26 : 22;
+  const nameFont = nameLen <= 2 ? 36 : nameLen === 3 ? 32 : nameLen === 4 ? 26 : nameLen <= 6 ? 20 : 16;
   const officeFont = [...office].length >= 4 ? 22 : 26;
   const titleFont = 24;
   const height = size * 0.48;
+  const nameTextLength = nameLen >= 4 ? 100 : undefined;
 
   return (
     <div
@@ -111,6 +112,9 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           fontFamily={STAMP_KAI}
           fontSize={nameFont}
           letterSpacing="0.08em"
+          {...(nameTextLength
+            ? { textLength: nameTextLength, lengthAdjust: 'spacingAndGlyphs' as const }
+            : {})}
         >
           {name}
         </text>
