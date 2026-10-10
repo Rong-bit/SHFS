@@ -640,7 +640,7 @@ export const AdminSettings: React.FC = () => {
   };
 
   const calcTeacherFormBase = (title = teacherFormData.title) => {
-    if (title === '主任') return formConfig.standardBasePeriods.director;
+    if (title === '主任' || title === '校長') return formConfig.standardBasePeriods.director;
     if (title === '科主任') return formConfig.standardBasePeriods.head;
     if (title === '組長') return formConfig.standardBasePeriods.sectionChief;
     if (title === '導師') return formConfig.standardBasePeriods.homeroom;
@@ -650,7 +650,7 @@ export const AdminSettings: React.FC = () => {
   const defaultDutyForTitle = (title: TeacherTitle) => {
     if (title === '科主任') return 2;
     if (title === '導師') return 1;
-    if (title === '組長' || title === '主任') return 0;
+    if (title === '組長' || title === '主任' || title === '校長') return 0;
     return 0;
   };
 
@@ -2794,7 +2794,7 @@ export const AdminSettings: React.FC = () => {
                   <h3 className="font-bold text-sm">全校教師師資名冊</h3>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  超鐘點依課表「兼課」標記。職稱請用下拉選：導師、組長、科主任、主任、專任教師。欄位較多時可左右滑動。
+                  超鐘點依課表「兼課」標記。職稱請用下拉選：導師、組長、科主任、主任、校長、專任教師。欄位較多時可左右滑動。
                 </p>
               </div>
               <span className="text-xs text-slate-400">
@@ -3439,7 +3439,7 @@ export const AdminSettings: React.FC = () => {
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold"
                     required
                   />
-                  <span className="text-[10px] text-slate-500 mt-1 block">導師 1、科主任 2、組長／主任 0；超鐘點依課表「兼課」標記，與減授無關</span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">導師 1、科主任 2、組長／主任／校長 0；超鐘點依課表「兼課」標記，與減授無關</span>
                 </div>
               </div>
 
@@ -3453,8 +3453,8 @@ export const AdminSettings: React.FC = () => {
                     className="w-full bg-slate-100 border border-slate-300 rounded-xl p-2 font-mono font-bold text-slate-700"
                   />
                   <span className="text-[10px] text-slate-500 mt-1 block">
-                    {teacherFormData.title === '主任'
-                      ? `主任基本 ${formConfig.standardBasePeriods.director} 節、減授 0 節`
+                    {teacherFormData.title === '主任' || teacherFormData.title === '校長'
+                      ? `${teacherFormData.title}基本 ${formConfig.standardBasePeriods.director} 節、減授 0 節`
                       : teacherFormData.title === '科主任'
                         ? `科主任基本 ${formConfig.standardBasePeriods.head} 節、減授 ${defaultDutyForTitle('科主任')} 節`
                         : teacherFormData.title === '組長'

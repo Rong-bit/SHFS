@@ -49,7 +49,7 @@ export function isHomeroomTeacher(
 /**
  * 可否列入代導師印領清冊領費。
  * 法令原則：未兼任主管職務、且未接班之「專任教師」代理始支鐘點費。
- * （已接導師／組長／科主任／主任可被指定代理，但不列入領費清冊。）
+ * （已接導師／組長／科主任／主任／校長可被指定代理，但不列入領費清冊。）
  */
 export function canReceiveActingHomeroomFee(
   teacher: Pick<Teacher, 'title' | 'homeroomClass'> | undefined | null
