@@ -403,6 +403,26 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
+              id="btn-export-notice-excel"
+              type="button"
+              onClick={() => {
+                void handleExportExcel();
+              }}
+              disabled={exporting}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 text-xs font-bold rounded shadow transition"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>{exporting ? '匯出中…' : '匯出 Excel'}</span>
+            </button>
+            <button
+              id="btn-trigger-print"
+              onClick={handlePrint}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded shadow transition"
+            >
+              <Printer className="w-4 h-4" />
+              <span>列印通知單</span>
+            </button>
+            <button
               id="btn-close-print-modal"
               onClick={onClose}
               className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700 transition"
@@ -461,26 +481,6 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
           className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition"
         >
           關閉視窗
-        </button>
-        <button
-          id="btn-export-notice-excel"
-          type="button"
-          onClick={() => {
-            void handleExportExcel();
-          }}
-          disabled={exporting}
-          className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold rounded-lg shadow transition"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>{exporting ? '匯出中…' : '匯出 Excel'}</span>
-        </button>
-        <button
-          id="btn-trigger-print"
-          onClick={handlePrint}
-          className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg shadow transition"
-        >
-          <Printer className="w-4 h-4" />
-          <span>列印通知單</span>
         </button>
       </div>
     </ModalShell>
