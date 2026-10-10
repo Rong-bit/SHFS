@@ -1,17 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PendingApprovals } from './PendingApprovals';
 import { SchoolTimetableMatrix } from './SchoolTimetableMatrix';
 import { StaffDispatchWorkbench } from './StaffDispatchWorkbench';
 import { TeacherLeaveCalendar } from './TeacherLeaveCalendar';
 import { PatrolReport } from '../Patrol/PatrolReport';
-import { CalendarDays, ClipboardCheck, Grid, MapPin, UserCheck } from 'lucide-react';
+import { PatrolReviewInbox } from '../Patrol/PatrolReviewInbox';
+import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
+import { CalendarDays, ClipboardCheck, ClipboardList, Grid, MapPin, UserCheck } from 'lucide-react';
 
 export const AcademicAffairsMain: React.FC = () => {
   const { requests } = useApp();
+  const focusCaseId = readPatrolReviewFocusId();
   const [activeTab, setActiveTab] = useState<
-    'dispatch' | 'approvals' | 'matrix' | 'leave-calendar' | 'patrol'
-  >('dispatch');
+    'dispatch' | 'approvals' | 'matrix' | 'leave-calendar' | 'patrol' | 'patrol-review'
+  >(() => (focusCaseId ? 'patrol-review' : 'dispatch'));
+
+  useEffect(() => {
+    if (focusCaseId) setActiveTab('patrol-review');
+  }, [focusCaseId]);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
@@ -91,6 +98,19 @@ export const AcademicAffairsMain: React.FC = () => {
             <MapPin className="w-4 h-4 text-emerald-400" />
             <span>巡堂紀錄彙整</span>
           </button>
+
+          <button
+            id="tab-academic-patrol-review"
+            onClick={() => setActiveTab('patrol-review')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition ${
+              activeTab === 'patrol-review'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4 text-rose-400" />
+            <span>巡堂會辦核章</span>
+          </button>
         </div>
       </div>
 
@@ -99,6 +119,9 @@ export const AcademicAffairsMain: React.FC = () => {
       {activeTab === 'matrix' && <SchoolTimetableMatrix />}
       {activeTab === 'leave-calendar' && <TeacherLeaveCalendar />}
       {activeTab === 'patrol' && <PatrolReport />}
+      {activeTab === 'patrol-review' && (
+        <PatrolReviewInbox mode="staff" focusCaseId={focusCaseId} />
+      )}
 
     </div>
   );

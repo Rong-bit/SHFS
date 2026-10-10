@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { PatrolCheckItem, PatrolRoom, SystemConfig } from '../../types';
+import { PatrolCheckItem, PatrolMailConfig, PatrolRoom, SystemConfig } from '../../types';
 import {
   buildDraftPatrolRooms,
   groupPatrolRooms,
@@ -107,6 +107,143 @@ const ItemListEditor: React.FC<{
           <Plus className="w-3.5 h-3.5" />
           新增
         </button>
+      </div>
+    </div>
+  );
+};
+
+const emptyMailConfig = (): PatrolMailConfig => ({
+  enabled: false,
+  host: '',
+  port: 587,
+  secure: false,
+  user: '',
+  pass: '',
+  fromName: '',
+  fromEmail: '',
+  appBaseUrl: typeof window !== 'undefined' ? window.location.origin : '',
+});
+
+const PatrolMailSettingsPanel: React.FC<{
+  value?: PatrolMailConfig;
+  onSave: (cfg: PatrolMailConfig) => void;
+}> = ({ value, onSave }) => {
+  const [draft, setDraft] = useState<PatrolMailConfig>(() => ({
+    ...emptyMailConfig(),
+    ...(value || {}),
+  }));
+  const [savedHint, setSavedHint] = useState('');
+
+  React.useEffect(() => {
+    setDraft({ ...emptyMailConfig(), ...(value || {}) });
+  }, [value]);
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+      <div>
+        <h3 className="text-sm font-extrabold text-slate-900">巡堂異常會辦寄信（SMTP）</h3>
+        <p className="text-xs text-slate-500 mt-1">
+          僅在巡堂有缺失時寄信通知生輔組、教學組、教務、學務主任、導師（及非段考之任課老師）。請使用學校信箱或第三方 SMTP；密碼請妥善保管。
+        </p>
+      </div>
+      <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <input
+          type="checkbox"
+          checked={draft.enabled}
+          onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
+        />
+        啟用異常會辦 email 通知
+      </label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <label className="font-semibold text-slate-600">
+          SMTP 主機
+          <input
+            value={draft.host}
+            onChange={(e) => setDraft({ ...draft, host: e.target.value })}
+            placeholder="smtp.example.edu.tw"
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
+        <label className="font-semibold text-slate-600">
+          Port
+          <input
+            type="number"
+            value={draft.port}
+            onChange={(e) => setDraft({ ...draft, port: Number(e.target.value) || 587 })}
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
+        <label className="font-semibold text-slate-600">
+          帳號
+          <input
+            value={draft.user}
+            onChange={(e) => setDraft({ ...draft, user: e.target.value })}
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
+        <label className="font-semibold text-slate-600">
+          密碼／應用程式密碼
+          <input
+            type="password"
+            value={draft.pass}
+            onChange={(e) => setDraft({ ...draft, pass: e.target.value })}
+            placeholder={value?.pass ? '已設定，可覆寫' : ''}
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
+        <label className="font-semibold text-slate-600">
+          寄件顯示名稱
+          <input
+            value={draft.fromName}
+            onChange={(e) => setDraft({ ...draft, fromName: e.target.value })}
+            placeholder="巡堂會辦通知"
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
+        <label className="font-semibold text-slate-600">
+          寄件信箱
+          <input
+            type="email"
+            value={draft.fromEmail}
+            onChange={(e) => setDraft({ ...draft, fromEmail: e.target.value })}
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
+        <label className="font-semibold text-slate-600 sm:col-span-2">
+          系統網址（信內深層連結）
+          <input
+            value={draft.appBaseUrl || ''}
+            onChange={(e) => setDraft({ ...draft, appBaseUrl: e.target.value })}
+            placeholder="https://your-school.example.com"
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={draft.secure}
+            onChange={(e) => setDraft({ ...draft, secure: e.target.checked })}
+          />
+          使用 TLS／SSL（通常 Port 465 勾選；587 可不勾）
+        </label>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            const next = {
+              ...draft,
+              pass: draft.pass.trim() || value?.pass || '',
+            };
+            onSave(next);
+            setSavedHint('已儲存寄信設定');
+            window.setTimeout(() => setSavedHint(''), 2500);
+          }}
+          className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500"
+        >
+          儲存寄信設定
+        </button>
+        {savedHint && <span className="text-xs text-emerald-700 font-semibold">{savedHint}</span>}
       </div>
     </div>
   );
@@ -480,8 +617,8 @@ export const PatrolLayoutSettings: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ItemListEditor
-          title="課間觀察項目"
-          hint="課間巡堂可複選，只記有無；未勾任何項目即為「正常」。"
+          title="課間／段考觀察項目"
+          hint="課間與段考巡堂可複選，只記有無；未勾任何項目即為「正常」。"
           items={observationItems}
           placeholder="例：學生睡覺"
           onChange={(items) => save({ patrolObservationItems: items })}
@@ -508,6 +645,11 @@ export const PatrolLayoutSettings: React.FC = () => {
           onAskRemove={(label, onConfirm) => ask('移除關鍵字？', `將移除「${label}」。`, onConfirm)}
         />
       </div>
+
+      <PatrolMailSettingsPanel
+        value={systemConfig.patrolMailConfig}
+        onSave={(patrolMailConfig) => save({ patrolMailConfig })}
+      />
 
       {confirm && (
         <ModalShell panelClassName="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md">

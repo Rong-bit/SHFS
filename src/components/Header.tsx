@@ -14,6 +14,8 @@ import {
   Loader2,
   KeyRound,
   Type,
+  Shield,
+  Landmark,
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
@@ -60,6 +62,16 @@ export const Header: React.FC = () => {
       badge: pendingCount > 0 ? pendingCount : undefined,
     },
     {
+      key: 'student_affairs',
+      label: '生輔組',
+      icon: <Shield className="w-4 h-4" />,
+    },
+    {
+      key: 'principal',
+      label: '校長',
+      icon: <Landmark className="w-4 h-4" />,
+    },
+    {
       key: 'accounting',
       label: '出納組',
       icon: <Calculator className="w-4 h-4" />,
@@ -70,6 +82,17 @@ export const Header: React.FC = () => {
       icon: <Settings className="w-4 h-4" />,
     },
   ];
+
+  const staffRoleGroup = (role: UserRole) =>
+    role === 'academic'
+      ? 'academic'
+      : role === 'accounting'
+        ? 'accounting'
+        : role === 'student_affairs'
+          ? 'student_affairs'
+          : role === 'principal'
+            ? 'principal'
+            : null;
 
   return (
     <>
@@ -213,73 +236,65 @@ export const Header: React.FC = () => {
             </div>
           )}
 
-          {/* Info & Identity selector for Academic role */}
-          {currentRole === 'academic' && (
-            <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
-              <span className="text-slate-400 flex items-center gap-1">
-                <ClipboardCheck className="w-3.5 h-3.5 text-amber-400" />
-                教學組經辦登入：
-              </span>
-              <select
-                id="select-header-academic-staff"
-                value={currentAcademicStaffId}
-                onChange={(e) => requestRoleSwitchWithAuth('academic', e.target.value)}
-                className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
-              >
-                {academicStaffList
-                  .filter((s) => (s.group || 'academic') === 'academic')
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.title})
-                    </option>
-                  ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setIsStaffPasswordOpen(true)}
-                title="自行修改登入密碼"
-                className="px-2 py-0.5 bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded text-[11px] font-medium flex items-center gap-1 transition"
-              >
-                <KeyRound className="w-3 h-3" />
-                改密碼
-              </button>
-            </div>
-          )}
-
-          {currentRole === 'accounting' && (
-            <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
-              <span className="text-slate-400 flex items-center gap-1">
-                <Calculator className="w-3.5 h-3.5 text-amber-400" />
-                出納組登入：
-              </span>
-              <select
-                id="select-header-accounting-staff"
-                value={currentAcademicStaffId}
-                onChange={(e) => requestRoleSwitchWithAuth('accounting', e.target.value)}
-                className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
-              >
-                {academicStaffList
-                  .filter((s) => s.group === 'accounting')
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.title})
-                    </option>
-                  ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setIsStaffPasswordOpen(true)}
-                title="自行修改登入密碼"
-                className="px-2 py-0.5 bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded text-[11px] font-medium flex items-center gap-1 transition"
-              >
-                <KeyRound className="w-3 h-3" />
-                改密碼
-              </button>
-              <span className="hidden md:inline text-slate-500 pl-1.5 border-l border-slate-700">
-                日間 {systemConfig.dayHourlyRate}元／課輔 {systemConfig.nightHourlyRate}元
-              </span>
-            </div>
-          )}
+          {/* Info & Identity selector for staff roles */}
+          {(currentRole === 'academic' ||
+            currentRole === 'accounting' ||
+            currentRole === 'student_affairs' ||
+            currentRole === 'principal') &&
+            (() => {
+              const group = staffRoleGroup(currentRole);
+              const label =
+                currentRole === 'academic'
+                  ? '教學組經辦登入'
+                  : currentRole === 'accounting'
+                    ? '出納組登入'
+                    : currentRole === 'student_affairs'
+                      ? '生輔組登入'
+                      : '校長室登入';
+              const members = academicStaffList.filter((s) => (s.group || 'academic') === group);
+              return (
+                <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
+                  <span className="text-slate-400 flex items-center gap-1">
+                    {currentRole === 'accounting' ? (
+                      <Calculator className="w-3.5 h-3.5 text-amber-400" />
+                    ) : currentRole === 'student_affairs' ? (
+                      <Shield className="w-3.5 h-3.5 text-amber-400" />
+                    ) : currentRole === 'principal' ? (
+                      <Landmark className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ClipboardCheck className="w-3.5 h-3.5 text-amber-400" />
+                    )}
+                    {label}：
+                  </span>
+                  <select
+                    id={`select-header-${currentRole}-staff`}
+                    value={currentAcademicStaffId}
+                    onChange={(e) => requestRoleSwitchWithAuth(currentRole, e.target.value)}
+                    className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
+                  >
+                    {members.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.title})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setIsStaffPasswordOpen(true)}
+                    title="自行修改登入密碼"
+                    className="px-2 py-0.5 bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded text-[11px] font-medium flex items-center gap-1 transition"
+                  >
+                    <KeyRound className="w-3 h-3" />
+                    改密碼
+                  </button>
+                  {currentRole === 'accounting' && (
+                    <span className="hidden md:inline text-slate-500 pl-1.5 border-l border-slate-700">
+                      日間 {systemConfig.dayHourlyRate}元／課輔 {systemConfig.nightHourlyRate}元
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
 
           {currentRole === 'admin' && (
             <div className="text-xs text-slate-400 flex items-center space-x-1.5">
@@ -293,10 +308,21 @@ export const Header: React.FC = () => {
 
     {isStaffPasswordOpen &&
       currentAcademicStaff &&
-      (currentRole === 'academic' || currentRole === 'accounting') && (
+      (currentRole === 'academic' ||
+        currentRole === 'accounting' ||
+        currentRole === 'student_affairs' ||
+        currentRole === 'principal') && (
         <StaffChangePasswordModal
           staff={currentAcademicStaff}
-          groupLabel={currentRole === 'accounting' ? '出納組' : '教學組'}
+          groupLabel={
+            currentRole === 'accounting'
+              ? '出納組'
+              : currentRole === 'student_affairs'
+                ? '生輔組'
+                : currentRole === 'principal'
+                  ? '校長室'
+                  : '教學組'
+          }
           onSave={(pw) => updateAcademicStaffPassword(currentAcademicStaff.id, pw)}
           onClose={() => setIsStaffPasswordOpen(false)}
         />

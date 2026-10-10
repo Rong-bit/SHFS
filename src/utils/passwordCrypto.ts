@@ -80,6 +80,8 @@ export type AuthPasswordFields = {
   adminPassword?: string;
   academicPassword?: string;
   accountingPassword?: string;
+  studentAffairsPassword?: string;
+  principalPassword?: string;
 };
 
 /** 將 authConfig 內仍為明文的欄位改為雜湊；已是雜湊則保留 */
@@ -89,6 +91,8 @@ export async function hashAuthConfigPasswords<T extends AuthPasswordFields>(auth
     'adminPassword',
     'academicPassword',
     'accountingPassword',
+    'studentAffairsPassword',
+    'principalPassword',
   ] as const;
   const next = { ...auth };
   for (const key of keys) {
@@ -122,5 +126,7 @@ export async function resolveAuthConfigForSave(
     adminPassword: await pick('adminPassword'),
     academicPassword: await pick('academicPassword'),
     accountingPassword: await pick('accountingPassword'),
+    studentAffairsPassword: await pick('studentAffairsPassword'),
+    principalPassword: await pick('principalPassword'),
   };
 }

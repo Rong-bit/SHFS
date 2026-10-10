@@ -6,6 +6,8 @@ import { dateToIsoLocal } from '../../utils/holidays';
 import { resolvePatrolCheckItems, resolvePatrolObservationItems } from '../../utils/patrolConfig';
 import { exportPatrolRecords, patrolKindLabel } from '../../utils/patrolExcel';
 import { usePatrolRecords } from '../../utils/patrolSync';
+import { PATROL_REVIEW_STATUS_LABELS } from '../../utils/patrolReview';
+import { usePatrolReviews } from '../../utils/patrolReviewSync';
 import { patrolRecordHasIssue } from './PatrolRoomSheet';
 
 const firstOfMonth = () => {
@@ -21,6 +23,7 @@ const topEntries = (counts: Map<string, number>, limit: number) =>
 export const PatrolReport: React.FC = () => {
   const { systemConfig } = useApp();
   const { records, loading, error, cloudReady, refresh } = usePatrolRecords();
+  const { cases: reviewCases, refresh: refreshReviews } = usePatrolReviews();
   const checkItems = resolvePatrolCheckItems(systemConfig);
   const observationItems = resolvePatrolObservationItems(systemConfig);
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
@@ -29,10 +32,19 @@ export const PatrolReport: React.FC = () => {
   const [building, setBuilding] = useState('all');
   const [classQuery, setClassQuery] = useState('');
   const [onlyIssues, setOnlyIssues] = useState(false);
+  const [onlyArchived, setOnlyArchived] = useState(false);
 
   useEffect(() => {
-    if (dateFrom && dateTo && dateFrom <= dateTo) void refresh(dateFrom, dateTo);
-  }, [dateFrom, dateTo, refresh]);
+    if (dateFrom && dateTo && dateFrom <= dateTo) {
+      void refresh(dateFrom, dateTo);
+      void refreshReviews(dateFrom, dateTo);
+    }
+  }, [dateFrom, dateTo, refresh, refreshReviews]);
+
+  const reviewByRecord = useMemo(
+    () => new Map(reviewCases.map((c) => [c.recordId, c])),
+    [reviewCases]
+  );
 
   const inRange = useMemo(
     () => records.filter((r) => r.date >= dateFrom && r.date <= dateTo),
@@ -49,13 +61,17 @@ export const PatrolReport: React.FC = () => {
       .filter((r) => building === 'all' || r.building === building)
       .filter((r) => !q || (r.className || '').includes(q) || r.roomName.includes(q))
       .filter((r) => !onlyIssues || patrolRecordHasIssue(r))
+      .filter((r) => {
+        if (!onlyArchived) return true;
+        return reviewByRecord.get(r.id)?.status === 'archived';
+      })
       .sort(
         (a, b) =>
           b.date.localeCompare(a.date) ||
           (b.period ?? 0) - (a.period ?? 0) ||
           b.createdAt.localeCompare(a.createdAt)
       );
-  }, [inRange, kind, building, classQuery, onlyIssues]);
+  }, [inRange, kind, building, classQuery, onlyIssues, onlyArchived, reviewByRecord]);
 
   const labelOf = (r: PatrolRecord, id: string) =>
     r.itemLabels?.[id] ||
@@ -70,7 +86,7 @@ export const PatrolReport: React.FC = () => {
       { total: number; issues: number; obs: Map<string, number>; slots: Map<string, number> }
     >();
     for (const r of filtered) {
-      if (r.kind !== 'class') continue;
+      if (r.kind !== 'class' && r.kind !== 'exam') continue;
       const key = r.className || r.roomName;
       const row = byClass.get(key) || { total: 0, issues: 0, obs: new Map(), slots: new Map() };
       row.total += 1;
@@ -103,7 +119,7 @@ export const PatrolReport: React.FC = () => {
     const byRoom = new Map<string, number>();
     let total = 0;
     for (const r of filtered) {
-      if (r.kind === 'class') continue;
+      if (r.kind === 'class' || r.kind === 'exam') continue;
       total += 1;
       const failed = Object.entries(r.checks).filter(([, v]) => v === false);
       if (failed.length === 0) continue;
@@ -120,7 +136,7 @@ export const PatrolReport: React.FC = () => {
   const issueCount = filtered.filter((r) => patrolRecordHasIssue(r)).length;
 
   const describe = (r: PatrolRecord) => {
-    if (r.kind === 'class') {
+    if (r.kind === 'class' || r.kind === 'exam') {
       return r.observations.length === 0 ? '正常' : r.observations.map((id) => labelOf(r, id)).join('、');
     }
     const failed = Object.entries(r.checks).filter(([, v]) => v === false);
@@ -159,6 +175,7 @@ export const PatrolReport: React.FC = () => {
             <option value="class">課間巡堂</option>
             <option value="outdoor">室外課巡查</option>
             <option value="after_school">放學巡查</option>
+            <option value="exam">段考巡堂</option>
           </select>
         </label>
         <label className="text-[11px] font-semibold text-slate-600">
@@ -189,11 +206,18 @@ export const PatrolReport: React.FC = () => {
           <input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} />
           只看有缺失
         </label>
+        <label className="flex items-center gap-1.5 text-xs text-slate-700 pb-2">
+          <input type="checkbox" checked={onlyArchived} onChange={(e) => setOnlyArchived(e.target.checked)} />
+          只看教務留存
+        </label>
         <div className="ml-auto flex gap-2">
           {cloudReady && (
             <button
               type="button"
-              onClick={() => void refresh(dateFrom, dateTo)}
+              onClick={() => {
+                void refresh(dateFrom, dateTo);
+                void refreshReviews(dateFrom, dateTo);
+              }}
               className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -208,6 +232,7 @@ export const PatrolReport: React.FC = () => {
                 records: filtered,
                 checkItems,
                 observationItems,
+                reviewCases,
                 fileName: `巡堂紀錄_${dateFrom}_${dateTo}.xlsx`,
               })
             }
@@ -252,7 +277,7 @@ export const PatrolReport: React.FC = () => {
 
       {classStats.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2">
-          <h3 className="font-bold text-slate-900 text-sm">課間巡堂：各班觀察項目次數</h3>
+          <h3 className="font-bold text-slate-900 text-sm">課間／段考巡堂：各班觀察項目次數</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -344,12 +369,19 @@ export const PatrolReport: React.FC = () => {
                   <th className="text-left px-2">教室</th>
                   <th className="text-left px-2">班級／科目／老師</th>
                   <th className="text-left px-2">結果</th>
+                  <th className="text-left px-2">會辦</th>
                   <th className="text-left px-2">備註</th>
                   <th className="text-left pl-2">巡堂者</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 500).map((r) => (
+                {filtered.slice(0, 500).map((r) => {
+                  const review = reviewByRecord.get(r.id);
+                  const instruction = (review?.signOffs || [])
+                    .filter((s) => s.instruction)
+                    .map((s) => s.instruction)
+                    .join('；');
+                  return (
                   <tr key={r.id} className="border-b border-slate-100 align-top">
                     <td className="py-1.5 pr-2 whitespace-nowrap">{r.date}</td>
                     <td className="px-2 whitespace-nowrap">{patrolKindLabel(r.kind)}</td>
@@ -363,10 +395,18 @@ export const PatrolReport: React.FC = () => {
                     <td className={`px-2 ${patrolRecordHasIssue(r) ? 'text-rose-700 font-bold' : 'text-emerald-700'}`}>
                       {describe(r)}
                     </td>
+                    <td className="px-2 text-slate-600">
+                      {review
+                        ? `${PATROL_REVIEW_STATUS_LABELS[review.status]}${
+                            instruction ? `／${instruction}` : ''
+                          }`
+                        : '—'}
+                    </td>
                     <td className="px-2 text-slate-600">{r.note}</td>
                     <td className="pl-2 whitespace-nowrap">{r.patrollerName}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             {filtered.length > 500 && (

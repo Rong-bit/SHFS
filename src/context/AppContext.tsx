@@ -482,15 +482,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     requestRoleSwitchWithAuth(role);
   };
 
+  const isStaffSelectableRole = (role: UserRole) =>
+    role === 'academic' ||
+    role === 'accounting' ||
+    role === 'student_affairs' ||
+    role === 'principal';
+
   const requestRoleSwitchWithAuth = (targetRole: UserRole, academicStaffId?: string) => {
     if (targetRole === 'teacher') {
       setCurrentRole('teacher');
       return;
     }
 
-    const resolvedStaffId =
-      academicStaffId ||
-      ((targetRole === 'academic' || targetRole === 'accounting') ? currentAcademicStaffId : undefined);
+    const groupForRole =
+      targetRole === 'academic'
+        ? 'academic'
+        : targetRole === 'accounting'
+          ? 'accounting'
+          : targetRole === 'student_affairs'
+            ? 'student_affairs'
+            : targetRole === 'principal'
+              ? 'principal'
+              : null;
+
+    let resolvedStaffId = academicStaffId;
+    if (!resolvedStaffId && groupForRole) {
+      const currentInGroup =
+        (academicStaffListRef.current.find((s) => s.id === currentAcademicStaffId)?.group ||
+          'academic') === groupForRole
+          ? currentAcademicStaffId
+          : undefined;
+      resolvedStaffId =
+        currentInGroup ||
+        academicStaffListRef.current.find((s) => (s.group || 'academic') === groupForRole)?.id;
+    }
 
     if (targetRole === currentRole && (!academicStaffId || academicStaffId === currentAcademicStaffId)) {
       return;
@@ -498,7 +523,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const requirePass = systemConfig.authConfig?.requirePassword !== false;
     if (!requirePass) {
       setCurrentRole(targetRole);
-      if (resolvedStaffId && (targetRole === 'academic' || targetRole === 'accounting')) {
+      if (resolvedStaffId && isStaffSelectableRole(targetRole)) {
         setCurrentAcademicStaffId(resolvedStaffId);
       }
       return;
@@ -508,8 +533,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (trustKey && isLocalAuthTrusted(trustKey)) {
       completeAuthenticatedLogin({
         role: targetRole,
-        academicStaffId:
-          targetRole === 'academic' || targetRole === 'accounting' ? resolvedStaffId : undefined,
+        academicStaffId: isStaffSelectableRole(targetRole) ? resolvedStaffId : undefined,
       });
       return;
     }
@@ -594,9 +618,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let nextAuth = auth;
       if (auth) {
         const hashedAuth = await hashAuthConfigPasswords(auth);
-        authChanged = (['defaultTeacherPassword', 'adminPassword', 'academicPassword', 'accountingPassword'] as const).some(
-          (k) => hashedAuth[k] !== auth[k]
-        );
+        authChanged = ([
+          'defaultTeacherPassword',
+          'adminPassword',
+          'academicPassword',
+          'accountingPassword',
+          'studentAffairsPassword',
+          'principalPassword',
+        ] as const).some((k) => hashedAuth[k] !== auth[k]);
         if (authChanged) nextAuth = hashedAuth;
       }
 

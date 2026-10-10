@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { TeacherPortalMain } from './components/TeacherPortal/TeacherPortalMain';
 import { AcademicAffairsMain } from './components/AcademicAffairs/AcademicAffairsMain';
 import { AccountingSettlement } from './components/Accounting/AccountingSettlement';
 import { AdminSettings } from './components/Admin/AdminSettings';
+import { PatrolAffairsMain } from './components/Patrol/PatrolAffairsMain';
 import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
 import { isActingHomeroomOnlyRequest } from './utils/actingHomeroomPayrollRegister';
+import { readPatrolReviewFocusId } from './utils/patrolDeepLink';
 
 const AppContent: React.FC = () => {
   const { 
@@ -21,6 +23,7 @@ const AppContent: React.FC = () => {
     setIsLoginAuthOpen,
     loginAuthTarget
   } = useApp();
+  const patrolFocusId = useMemo(() => readPatrolReviewFocusId(), []);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -28,11 +31,20 @@ const AppContent: React.FC = () => {
       {/* Universal Top Bar & Role Navigation */}
       <Header />
 
+      {patrolFocusId && (
+        <div className="print:hidden bg-amber-50 border-b border-amber-200 text-amber-950 text-sm px-4 py-2 text-center">
+          您正從會辦通知信開啟案件。請切換至對應身分（教師／教學組／生輔組／校長）並開啟「巡堂會辦」後核章。
+        </div>
+      )}
+
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentRole === 'teacher' && <TeacherPortalMain />}
         {currentRole === 'academic' && <AcademicAffairsMain />}
         {currentRole === 'accounting' && <AccountingSettlement />}
+        {(currentRole === 'student_affairs' || currentRole === 'principal') && (
+          <PatrolAffairsMain key={currentRole} />
+        )}
         {currentRole === 'admin' && <AdminSettings />}
       </main>
 

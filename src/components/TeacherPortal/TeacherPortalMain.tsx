@@ -3,20 +3,34 @@ import { useApp } from '../../context/AppContext';
 import { TeacherSchedule } from './TeacherSchedule';
 import { TeacherRequestsList } from './TeacherRequestsList';
 import { RequestModal } from './RequestModal';
-import { Calendar, FileText, Plus, Cloud, MapPin } from 'lucide-react';
+import { Calendar, ClipboardList, FileText, Plus, Cloud, MapPin } from 'lucide-react';
 import { CloudSyncJoinModal } from '../Common/CloudSyncJoinModal';
 import { PatrolMain } from '../Patrol/PatrolMain';
+import { PatrolReviewInbox } from '../Patrol/PatrolReviewInbox';
+import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
 
 export const TeacherPortalMain: React.FC = () => {
   const { requests, currentTeacher, requestTeacherActionAuth, cloudSyncStatus } = useApp();
-  const [activeTab, setActiveTab] = useState<'schedule' | 'requests' | 'patrol'>('schedule');
+  const focusCaseId = readPatrolReviewFocusId();
+  const [activeTab, setActiveTab] = useState<'schedule' | 'requests' | 'patrol' | 'patrol-review'>(
+    () => (focusCaseId ? 'patrol-review' : 'schedule')
+  );
   const [isTopRequestModalOpen, setIsTopRequestModalOpen] = useState(false);
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
 
   // 巡堂紀錄記在登入教師名下；切換身分須重新驗證
   useEffect(() => {
-    setActiveTab((tab) => (tab === 'patrol' ? 'schedule' : tab));
-  }, [currentTeacher?.id]);
+    setActiveTab((tab) => {
+      if (tab === 'patrol') return 'schedule';
+      if (tab === 'patrol-review' && focusCaseId) return 'patrol-review';
+      if (tab === 'patrol-review') return 'schedule';
+      return tab;
+    });
+  }, [currentTeacher?.id, focusCaseId]);
+
+  useEffect(() => {
+    if (focusCaseId) setActiveTab('patrol-review');
+  }, [focusCaseId]);
 
   const myPendingCount = requests.filter(
     (r) => r.applicantTeacherId === currentTeacher?.id && r.status === 'pending'
@@ -93,6 +107,19 @@ export const TeacherPortalMain: React.FC = () => {
             <MapPin className="w-4 h-4 text-emerald-400" />
             <span>巡堂</span>
           </button>
+
+          <button
+            id="tab-teacher-patrol-review"
+            onClick={() => setActiveTab('patrol-review')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition ${
+              activeTab === 'patrol-review'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4 text-rose-400" />
+            <span>巡堂會辦</span>
+          </button>
         </div>
 
         {currentTeacher && (
@@ -119,6 +146,9 @@ export const TeacherPortalMain: React.FC = () => {
       {activeTab === 'schedule' && <TeacherSchedule />}
       {activeTab === 'requests' && <TeacherRequestsList />}
       {activeTab === 'patrol' && <PatrolMain />}
+      {activeTab === 'patrol-review' && (
+        <PatrolReviewInbox mode="teacher" focusCaseId={focusCaseId} />
+      )}
 
       {/* Top Level Request Modal */}
       {isTopRequestModalOpen && (

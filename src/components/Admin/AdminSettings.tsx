@@ -2958,7 +2958,7 @@ export const AdminSettings: React.FC = () => {
                 <span>行政經辦人員名冊維護</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」。
+                此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」；生輔組／學務主任／校長連動「巡堂異常會辦與核章」。請務必填寫公務信箱，異常會辦才能寄出通知。
               </p>
             </div>
 
@@ -2973,13 +2973,17 @@ export const AdminSettings: React.FC = () => {
           </div>
 
           {/* Staff Cards by Group */}
-          {(['academic', 'accounting'] as const).map((grp) => {
-            const groupLabel = grp === 'academic' ? '教學組' : '出納組';
+          {([
+            { grp: 'academic' as const, label: '教學組', dot: 'bg-indigo-500' },
+            { grp: 'accounting' as const, label: '出納組', dot: 'bg-teal-500' },
+            { grp: 'student_affairs' as const, label: '生輔組／學務', dot: 'bg-sky-500' },
+            { grp: 'principal' as const, label: '校長室', dot: 'bg-slate-600' },
+          ]).map(({ grp, label: groupLabel, dot }) => {
             const members = academicStaffList.filter((s) => (s.group || 'academic') === grp);
             return (
               <div key={grp} className="space-y-3">
                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${grp === 'academic' ? 'bg-indigo-500' : 'bg-teal-500'}`} />
+                  <span className={`w-2 h-2 rounded-full ${dot}`} />
                   {groupLabel}（{members.length} 人）
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -3525,7 +3529,7 @@ export const AdminSettings: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-indigo-600" />
-                <span>{editingStaff ? '修改教學組成員資料' : '新增教學組成員'}</span>
+                <span>{editingStaff ? '修改成員資料' : '新增成員'}</span>
               </h3>
               <button
                 onClick={() => setIsStaffModalOpen(false)}
@@ -3555,19 +3559,53 @@ export const AdminSettings: React.FC = () => {
                   <select
                     value={staffFormData.group || 'academic'}
                     onChange={(e) => {
-                      const group = e.target.value as 'academic' | 'accounting';
-                      const defaultTitle = group === 'academic' ? '教學組長' : '出納組長';
+                      const group = e.target.value as
+                        | 'academic'
+                        | 'accounting'
+                        | 'student_affairs'
+                        | 'principal';
+                      const defaultTitle =
+                        group === 'academic'
+                          ? '教學組長'
+                          : group === 'accounting'
+                            ? '出納組長'
+                            : group === 'student_affairs'
+                              ? '生輔組長'
+                              : '校長';
                       const defaults: Record<string, { badge: string; responsibleScope: string }> = {
-                        '教學組長': { badge: '全權審核 · 決行簽結', responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調' },
-                        '出納組長': { badge: '鐘點費核銷 · 出納結算', responsibleScope: '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理' },
+                        教學組長: {
+                          badge: '全權審核 · 決行簽結',
+                          responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調',
+                        },
+                        出納組長: {
+                          badge: '鐘點費核銷 · 出納結算',
+                          responsibleScope:
+                            '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理',
+                        },
+                        生輔組長: {
+                          badge: '巡堂會辦 · 生活輔導',
+                          responsibleScope: '巡堂異常會辦、生活輔導與秩序關懷',
+                        },
+                        校長: {
+                          badge: '每周彙整 · 核章指示',
+                          responsibleScope: '巡堂異常每周彙整核章與指示用語',
+                        },
                       };
                       const preset = defaults[defaultTitle];
-                      setStaffFormData({ ...staffFormData, group, title: defaultTitle, badge: preset.badge, responsibleScope: preset.responsibleScope });
+                      setStaffFormData({
+                        ...staffFormData,
+                        group,
+                        title: defaultTitle,
+                        badge: preset.badge,
+                        responsibleScope: preset.responsibleScope,
+                      });
                     }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
                     <option value="academic">教學組</option>
                     <option value="accounting">出納組</option>
+                    <option value="student_affairs">生輔組／學務</option>
+                    <option value="principal">校長室</option>
                   </select>
                 </div>
               </div>
@@ -3578,13 +3616,41 @@ export const AdminSettings: React.FC = () => {
                     value={staffFormData.title}
                     onChange={(e) => {
                       const title = e.target.value;
-                      const group = staffFormData.group || 'academic';
                       const presets: Record<string, { badge: string; responsibleScope: string }> = {
-                        '教學組長': { badge: '全權審核 · 決行簽結', responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調' },
-                        '教學組組員': { badge: '經辦 · 專業實習與突發公差派代', responsibleScope: '專業實習工場調代課經辦、突發病假與公假派代、實習檢定移課' },
-                        '教學組助理': { badge: '協辦 · 課表登錄與代課通知單印發', responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合' },
-                        '出納組長': { badge: '鐘點費核銷 · 出納結算', responsibleScope: '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理' },
-                        '出納組組員': { badge: '經辦 · 鐘點費造冊與帳務', responsibleScope: '鐘點費清冊核對與造冊、代課費撥款簽收、零用金保管、各項收支傳票製作與帳務登錄' },
+                        教學組長: {
+                          badge: '全權審核 · 決行簽結',
+                          responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調',
+                        },
+                        教學組組員: {
+                          badge: '經辦 · 專業實習與突發公差派代',
+                          responsibleScope: '專業實習工場調代課經辦、突發病假與公假派代、實習檢定移課',
+                        },
+                        教學組助理: {
+                          badge: '協辦 · 課表登錄與代課通知單印發',
+                          responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合',
+                        },
+                        出納組長: {
+                          badge: '鐘點費核銷 · 出納結算',
+                          responsibleScope:
+                            '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理',
+                        },
+                        出納組組員: {
+                          badge: '經辦 · 鐘點費造冊與帳務',
+                          responsibleScope:
+                            '鐘點費清冊核對與造冊、代課費撥款簽收、零用金保管、各項收支傳票製作與帳務登錄',
+                        },
+                        生輔組長: {
+                          badge: '巡堂會辦 · 生活輔導',
+                          responsibleScope: '巡堂異常會辦、生活輔導與秩序關懷',
+                        },
+                        學務主任: {
+                          badge: '學務會辦 · 閱畢核章',
+                          responsibleScope: '巡堂異常學務會辦與閱畢',
+                        },
+                        校長: {
+                          badge: '每周彙整 · 核章指示',
+                          responsibleScope: '巡堂異常每周彙整核章與指示用語',
+                        },
                       };
                       const preset = presets[title];
                       setStaffFormData({
@@ -3601,11 +3667,18 @@ export const AdminSettings: React.FC = () => {
                         <option value="教學組組員">教學組組員</option>
                         <option value="教學組助理">教學組助理</option>
                       </>
-                    ) : (
+                    ) : (staffFormData.group || 'academic') === 'accounting' ? (
                       <>
                         <option value="出納組長">出納組長</option>
                         <option value="出納組組員">出納組組員</option>
                       </>
+                    ) : (staffFormData.group || 'academic') === 'student_affairs' ? (
+                      <>
+                        <option value="生輔組長">生輔組長</option>
+                        <option value="學務主任">學務主任</option>
+                      </>
+                    ) : (
+                      <option value="校長">校長</option>
                     )}
                   </select>
                 </div>
