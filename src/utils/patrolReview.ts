@@ -13,12 +13,23 @@ import {
 export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
   student_affairs: '生輔組',
   academic: '教學組',
-  dean_academic: '教務',
+  dean_academic: '教務主任',
   dean_student: '學務主任',
   homeroom: '導師',
   subject_teacher: '任課老師',
   principal: '校長',
 };
+
+/** 信內／畫面通知對象排序 */
+export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
+  'student_affairs',
+  'dean_student',
+  'academic',
+  'dean_academic',
+  'homeroom',
+  'subject_teacher',
+  'principal',
+];
 
 /** 長方紅戳：左上處室、左下職稱／動作（仿實物原子章） */
 export function stampOfficeAndTitle(

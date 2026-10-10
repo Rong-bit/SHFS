@@ -26,6 +26,17 @@ export const withMigratedAuthConfig = (auth?: SystemConfig['authConfig']): NonNu
 
 export const INITIAL_ACADEMIC_STAFF: AcademicStaff[] = [
   {
+    id: 'staff-dean-ac-01',
+    name: '吳教務',
+    title: '教務主任',
+    badge: '教務會辦 · 閱畢核章',
+    email: '',
+    phone: '分機 200',
+    avatarBg: 'from-violet-600 to-violet-900',
+    responsibleScope: '巡堂異常教務會辦與閱畢',
+    group: 'academic',
+  },
+  {
     id: 'staff-01',
     name: '陳雅筑',
     title: '教學組長',
