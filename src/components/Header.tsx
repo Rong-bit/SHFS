@@ -116,7 +116,7 @@ export const Header: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
-                調代課與鐘點費管理系統
+                調代課、鐘點費與巡堂管理系統
               </p>
             </div>
           </div>

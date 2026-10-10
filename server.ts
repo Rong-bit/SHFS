@@ -152,7 +152,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`調代課與鐘點費管理系統 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`調代課、鐘點費與巡堂管理系統 Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
