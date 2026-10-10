@@ -10,6 +10,7 @@ import {
   buildNoticeWorkbook,
   noticeKindLabel,
   noticeCounterpartName,
+  rosterRowFillByRequestNumber,
 } from '../src/utils/noticeExcel';
 
 function session(partial: Partial<CourseSession> & Pick<CourseSession, 'id' | 'dayOfWeek' | 'period'>): CourseSession {
@@ -197,6 +198,16 @@ assert.equal(roster[3].substitute, '李小華');
 assert.equal(roster[4].kind, '對調');
 assert.equal(roster[4].seq, 5);
 
+// 同號同色、換號深淺交替：0001×2 淺、0002 深、0003×2 淺
+const fillByNumber = rosterRowFillByRequestNumber(roster.map((r) => r.requestNumber));
+assert.deepEqual(fillByNumber, [
+  'FFF8FAFC',
+  'FFF8FAFC',
+  'FFE2E8F0',
+  'FFF8FAFC',
+  'FFF8FAFC',
+]);
+
 const workbook = await buildNoticeWorkbook(docs, '測試高中');
 assert.equal(workbook.worksheets.length, 1);
 assert.equal(workbook.worksheets[0].name, '通知單清冊');
@@ -209,6 +220,14 @@ assert.equal(workbook.getWorksheet(1)?.getCell('B5').value, '代課');
 assert.equal(workbook.getWorksheet(1)?.getCell('I5').value, 2);
 assert.equal(typeof workbook.getWorksheet(1)?.getCell('I5').value, 'number');
 assert.equal(workbook.getWorksheet(1)?.getCell('L5').value, '兼課');
+assert.equal(
+  (workbook.getWorksheet(1)?.getCell('C5').fill as { fgColor?: { argb?: string } })?.fgColor?.argb,
+  'FFF8FAFC'
+);
+assert.equal(
+  (workbook.getWorksheet(1)?.getCell('C7').fill as { fgColor?: { argb?: string } })?.fgColor?.argb,
+  'FFE2E8F0'
+);
 // 請假日期（G 欄）寬度對應約 93 像素；其餘欄寬維持原值
 assert.equal(workbook.worksheets[0].getColumn(7).width, 13.22);
 assert.deepEqual(
