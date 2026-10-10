@@ -22,7 +22,12 @@ import {
 } from '../../utils/patrolReview';
 import { loadLocalPatrolReviews, usePatrolReviews } from '../../utils/patrolReviewSync';
 import { isPatrolMailConfigured, sendPatrolReviewNotify } from '../../utils/patrolMail';
-import { occupancySummary, patrolRecordHasIssue, PatrolRoomSheet } from './PatrolRoomSheet';
+import {
+  occupancySummary,
+  patrolRecordHasIssue,
+  PatrolRoomSheet,
+  resolveHomeroomTutorNames,
+} from './PatrolRoomSheet';
 
 const MODES: { id: PatrolKind; label: string; hint: string }[] = [
   { id: 'class', label: '課間巡堂', hint: '依課表顯示各教室該節班級與老師，點教室登錄上課情況。' },
@@ -99,6 +104,12 @@ export const PatrolMain: React.FC = () => {
   const openRoom = rooms.find((r) => r.id === openRoomId);
   const myRecordFor = (roomId: string) =>
     (recordsByRoom.get(roomId) || []).find((r) => r.patrollerId === currentTeacher?.id);
+
+  const tutorNamesForRoom = (room: PatrolRoom) => {
+    const o = occupancy.get(room.id);
+    const className = o?.here?.className ?? o?.away?.className ?? room.homeroomClass;
+    return resolveHomeroomTutorNames(className, teachers);
+  };
 
   const syncReviewForRecord = async (record: PatrolRecord) => {
     // 以本機最新為準，避免 React state 尚未跟上導致重複寄信
@@ -364,6 +375,15 @@ export const PatrolMain: React.FC = () => {
                         className={`text-left rounded-xl border-2 px-2.5 py-2 min-h-[64px] transition active:scale-[0.98] ${tileClass(room)}`}
                       >
                         <div className="text-sm font-extrabold leading-tight">{room.name}</div>
+                        {(mode === 'class' || mode === 'exam') && (() => {
+                          const tutors = tutorNamesForRoom(room);
+                          if (tutors.length === 0) return null;
+                          return (
+                            <div className="text-[11px] font-bold text-slate-800 mt-0.5 leading-snug">
+                              導師：{tutors.join('、')}
+                            </div>
+                          );
+                        })()}
                         {usesOccupancy && (
                           <div className="text-[11px] leading-snug mt-0.5 line-clamp-2">
                             {occupancySummary(o)}
@@ -399,6 +419,7 @@ export const PatrolMain: React.FC = () => {
           period={usesPeriod ? period : undefined}
           occupancy={occupancy.get(openRoom.id)}
           roomLabel={`${openRoom.building} ${openRoom.floor}・${openRoom.name}`}
+          tutorNames={tutorNamesForRoom(openRoom)}
           checkItems={checkItems}
           observationItems={observationItems}
           myRecord={myRecordFor(openRoom.id)}

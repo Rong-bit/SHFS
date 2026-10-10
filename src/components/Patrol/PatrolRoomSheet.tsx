@@ -25,11 +25,23 @@ export const occupancySummary = (o: PatrolRoomOccupancy | undefined): string => 
   return '本節無課';
 };
 
+/** 依班級名稱對應名冊導師（可多人） */
+export const resolveHomeroomTutorNames = (
+  className: string | undefined,
+  teachers: { name: string; homeroomClass?: string }[]
+): string[] => {
+  const key = (className || '').trim();
+  if (!key) return [];
+  return teachers.filter((t) => (t.homeroomClass || '').trim() === key).map((t) => t.name);
+};
+
 export const PatrolRoomSheet: React.FC<{
   kind: PatrolKind;
   period?: number;
   occupancy?: PatrolRoomOccupancy;
   roomLabel: string;
+  /** 該班導師姓名（課間／段考顯示） */
+  tutorNames?: string[];
   checkItems: PatrolCheckItem[];
   observationItems: PatrolCheckItem[];
   myRecord?: PatrolRecord;
@@ -42,6 +54,7 @@ export const PatrolRoomSheet: React.FC<{
   period,
   occupancy,
   roomLabel,
+  tutorNames,
   checkItems,
   observationItems,
   myRecord,
@@ -79,11 +92,18 @@ export const PatrolRoomSheet: React.FC<{
                     ? `段考巡堂・第${period}節`
                     : '放學巡查'}
             </p>
+            {(kind === 'class' || kind === 'exam') && (tutorNames?.length ?? 0) > 0 && (
+              <p className="text-sm font-bold text-slate-800 mt-1">
+                導師：{tutorNames!.join('、')}
+              </p>
+            )}
             {occupancy && kind !== 'after_school' && kind !== 'exam' && (
               <p className="text-sm text-slate-700 mt-1">{occupancySummary(occupancy)}</p>
             )}
             {kind === 'exam' && (
-              <p className="text-sm text-slate-700 mt-1">段考巡堂（不通知任課老師）</p>
+              <p className="text-sm text-slate-700 mt-1">
+                {occupancy?.here?.className || '段考巡堂'}（不通知任課老師）
+              </p>
             )}
           </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100" title="關閉">
