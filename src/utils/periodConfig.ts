@@ -75,36 +75,88 @@ const PERIOD_LABELS: Record<number, string> = {
   12: '第十二節',
 };
 
-const DEFAULT_TIME_RANGES: Record<number, string> = {
-  1: '08:10 - 09:00',
-  2: '09:10 - 10:00',
+/**
+ * 預設作息（對齊高雄市立中正高工常見日課表）。
+ * 他校可於「系統管理員 → 學校與學制 → 各節上課時段」自行調整。
+ */
+export const DEFAULT_TIME_RANGES: Record<number, string> = {
+  1: '08:00 - 08:50',
+  2: '09:00 - 09:50',
   3: '10:10 - 11:00',
   4: '11:10 - 12:00',
-  5: '13:10 - 14:00',
-  6: '14:10 - 15:00',
-  7: '15:10 - 16:00',
-  8: '16:10 - 17:00',
-  9: '17:10 - 18:00',
-  10: '18:10 - 19:00',
-  11: '19:10 - 20:00',
-  12: '20:10 - 21:00',
+  5: '13:30 - 14:20',
+  6: '14:30 - 15:20',
+  7: '15:30 - 16:20',
+  8: '16:30 - 17:20',
+  9: '17:30 - 18:20',
+  10: '18:30 - 19:20',
+  11: '19:30 - 20:20',
+  12: '20:30 - 21:20',
 };
 
-/** 依系統設定產生節次定義（UI 勾選／課表矩陣用） */
+const TIME_RANGE_RE = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/;
+
+/** 正規化「HH:MM - HH:MM」；無效則回傳 null */
+export function normalizeTimeRange(raw: string | undefined | null): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const m = TIME_RANGE_RE.exec(raw.trim().replace(/～|—|–/g, '-'));
+  if (!m) return null;
+  const h1 = Number(m[1]);
+  const min1 = Number(m[2]);
+  const h2 = Number(m[3]);
+  const min2 = Number(m[4]);
+  if (
+    h1 > 23 ||
+    h2 > 23 ||
+    min1 > 59 ||
+    min2 > 59 ||
+    h1 * 60 + min1 >= h2 * 60 + min2
+  ) {
+    return null;
+  }
+  const fmt = (h: number, min: number) =>
+    `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  return `${fmt(h1, min1)} - ${fmt(h2, min2)}`;
+}
+
+function parseStartMinutes(timeRange: string): number | null {
+  const m = TIME_RANGE_RE.exec(timeRange.trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/** 合併自訂時段與預設；缺漏或格式錯用預設 */
+export function resolvePeriodTimeRanges(
+  config?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods' | 'periodTimeRanges'> | null
+): Record<number, string> {
+  const { maxPeriod } = resolvePeriodConfig(config);
+  const custom = config?.periodTimeRanges || {};
+  const out: Record<number, string> = {};
+  for (let period = 1; period <= Math.max(maxPeriod, 12); period++) {
+    const normalized = normalizeTimeRange(custom[String(period)]);
+    out[period] = normalized || DEFAULT_TIME_RANGES[period] || '';
+  }
+  return out;
+}
+
+/** 依系統設定產生節次定義（UI 勾選／課表矩陣／巡堂節次用） */
 export function buildPeriodDefinitions(
-  config?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null
+  config?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods' | 'periodTimeRanges'> | null
 ): PeriodDefinition[] {
   const { maxPeriod, counselingPeriods } = resolvePeriodConfig(config);
+  const timeRanges = resolvePeriodTimeRanges(config);
   const counselingSet = new Set(counselingPeriods);
   return Array.from({ length: maxPeriod }, (_, i) => {
     const period = i + 1;
     const isCounseling = counselingSet.has(period);
     const baseLabel = PERIOD_LABELS[period] || `第${period}節`;
+    const timeRange = timeRanges[period] || '';
+    const startMins = parseStartMinutes(timeRange);
     return {
       period,
       label: isCounseling ? `${baseLabel}(課輔)` : baseLabel,
-      timeRange: DEFAULT_TIME_RANGES[period] || '',
-      isAfternoon: period >= 5,
+      timeRange,
+      isAfternoon: startMins != null ? startMins >= 12 * 60 : period >= 5,
     };
   });
 }
