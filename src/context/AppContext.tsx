@@ -785,7 +785,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       remote,
       teachersRef.current,
       systemConfigRef.current.authConfig,
-      academicStaffListRef.current
+      academicStaffListRef.current,
+      systemConfigRef.current.patrolMailConfig?.pass
     );
     const remoteTeachers = normalizePeopleEmails(merged.teachers || []);
     const remoteSessions = (merged.sessions || []).map((s) => ({
@@ -1179,6 +1180,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const firstAcc = academicStaffList.find((s) => s.group === 'accounting');
     if (firstAcc && firstAcc.id !== currentAcademicStaffId) {
       setCurrentAcademicStaffId(firstAcc.id);
+    }
+  }, [currentRole, currentAcademicStaffId, academicStaffList]);
+
+  // 生輔組／校長作業時對齊對應組別人員（避免殘留教學組身分導致核章錯人）
+  useEffect(() => {
+    if (currentRole !== 'student_affairs' && currentRole !== 'principal') return;
+    const current = academicStaffList.find((s) => s.id === currentAcademicStaffId);
+    if (current && current.group === currentRole) return;
+    const first = academicStaffList.find((s) => s.group === currentRole);
+    if (first && first.id !== currentAcademicStaffId) {
+      setCurrentAcademicStaffId(first.id);
     }
   }, [currentRole, currentAcademicStaffId, academicStaffList]);
 

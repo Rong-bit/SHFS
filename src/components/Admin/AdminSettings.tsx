@@ -3406,6 +3406,11 @@ export const AdminSettings: React.FC = () => {
                       <option key={title} value={title}>{title}</option>
                     ))}
                   </select>
+                  {teacherFormData.title === '校長' && (
+                    <span className="text-[10px] text-amber-700 mt-1 block">
+                      此為師資職稱。若要登入「校長」做巡堂會辦核章，請另於成員名冊 → 校長室建立身分。
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -3629,6 +3634,10 @@ export const AdminSettings: React.FC = () => {
                           badge: '協辦 · 課表登錄與代課通知單印發',
                           responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合',
                         },
+                        教務主任: {
+                          badge: '教務會辦 · 閱畢核章',
+                          responsibleScope: '巡堂異常教務會辦與閱畢',
+                        },
                         出納組長: {
                           badge: '鐘點費核銷 · 出納結算',
                           responsibleScope:
@@ -3666,6 +3675,7 @@ export const AdminSettings: React.FC = () => {
                         <option value="教學組長">教學組長</option>
                         <option value="教學組組員">教學組組員</option>
                         <option value="教學組助理">教學組助理</option>
+                        <option value="教務主任">教務主任</option>
                       </>
                     ) : (staffFormData.group || 'academic') === 'accounting' ? (
                       <>

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { TeacherPortalMain } from './components/TeacherPortal/TeacherPortalMain';
@@ -10,7 +10,10 @@ import { PrintNoticeModal } from './components/TeacherPortal/PrintNoticeModal';
 import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportModal';
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
 import { isActingHomeroomOnlyRequest } from './utils/actingHomeroomPayrollRegister';
-import { readPatrolReviewFocusId } from './utils/patrolDeepLink';
+import {
+  PATROL_REVIEW_FOCUS_CLEARED_EVENT,
+  readPatrolReviewFocusId,
+} from './utils/patrolDeepLink';
 
 const AppContent: React.FC = () => {
   const { 
@@ -23,7 +26,13 @@ const AppContent: React.FC = () => {
     setIsLoginAuthOpen,
     loginAuthTarget
   } = useApp();
-  const patrolFocusId = useMemo(() => readPatrolReviewFocusId(), []);
+  const [patrolFocusId, setPatrolFocusId] = useState(() => readPatrolReviewFocusId());
+
+  useEffect(() => {
+    const clear = () => setPatrolFocusId(null);
+    window.addEventListener(PATROL_REVIEW_FOCUS_CLEARED_EVENT, clear);
+    return () => window.removeEventListener(PATROL_REVIEW_FOCUS_CLEARED_EVENT, clear);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">

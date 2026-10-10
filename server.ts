@@ -39,6 +39,24 @@ app.post("/api/patrol/notify", async (req, res) => {
   const body = req.body as NotifyBody;
   const smtp = body?.smtp;
   const to = Array.isArray(body?.to) ? body.to.filter((e) => typeof e === "string" && e.includes("@")) : [];
+  const notifyToken = process.env.PATROL_NOTIFY_TOKEN;
+  if (notifyToken) {
+    const provided =
+      (typeof req.headers["x-patrol-notify-token"] === "string"
+        ? req.headers["x-patrol-notify-token"]
+        : "") ||
+      (typeof (body as { token?: string })?.token === "string"
+        ? (body as { token?: string }).token
+        : "");
+    if (provided !== notifyToken) {
+      return res.status(401).json({
+        ok: false,
+        sent: 0,
+        failed: [],
+        error: "未授權的寄信請求",
+      });
+    }
+  }
   if (!smtp?.host || !smtp?.fromEmail) {
     return res.status(400).json({
       ok: false,
@@ -53,6 +71,14 @@ app.post("/api/patrol/notify", async (req, res) => {
       sent: 0,
       failed: [],
       error: "沒有有效收件信箱",
+    });
+  }
+  if (to.length > 40) {
+    return res.status(400).json({
+      ok: false,
+      sent: 0,
+      failed: [],
+      error: "單次收件人數超過上限（40）",
     });
   }
   if (!body.subject || !body.text) {

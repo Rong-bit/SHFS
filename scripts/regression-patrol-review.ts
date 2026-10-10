@@ -203,4 +203,61 @@ assert.equal(fromCorrected.status, 'open');
 assert.equal(fromCorrected.notifiedAt, undefined);
 assert.match(fromCorrected.issueSummary, /玩手機/);
 
+// 任課姓名模糊比對（課表「李任課老師」應對上名冊「李任課」）
+const fuzzyRecipients = resolvePatrolReviewRecipients({
+  record: { ...base, id: 'r3', teacherName: '李任課老師' },
+  teachers,
+  academicStaffList: staff,
+});
+assert.ok(
+  fuzzyRecipients.some((r) => r.role === 'subject_teacher' && r.personId === 't2'),
+  '任課姓名應能模糊對上名冊'
+);
+
+const { applySignOff, makeSignOff, viewerReviewRoles } = await import('../src/utils/patrolReview');
+const stamp = makeSignOff({
+  role: 'student_affairs',
+  personId: 'sa1',
+  personName: '周生輔',
+  action: '閱畢',
+  instruction: undefined,
+});
+const noBleed = applySignOff(review, stamp, { instruction: '不應寫入非校長章' });
+assert.equal(noBleed.signOffs[0]?.instruction, undefined, '非校長章不得帶指示用語');
+const principalStamp = makeSignOff({
+  role: 'principal',
+  personId: 'p1',
+  personName: '校長',
+  action: '校長核章',
+});
+const withInstruction = applySignOff(review, principalStamp, {
+  archive: true,
+  instruction: '請持續關懷',
+});
+assert.equal(withInstruction.signOffs.at(-1)?.instruction, '請持續關懷');
+assert.equal(withInstruction.status, 'archived');
+
+const teacherRoles = viewerReviewRoles({
+  reviewCase: {
+    ...review,
+    recipients: [
+      { role: 'subject_teacher', personName: '李任課老師', email: 'sub@school.edu' },
+    ],
+  },
+  viewer: { kind: 'teacher', id: 't2', name: '李任課' },
+});
+assert.ok(teacherRoles.includes('subject_teacher'), '無 personId 時應能以姓名核章');
+
+const principalAsAcademic = viewerReviewRoles({
+  reviewCase: review,
+  viewer: {
+    kind: 'staff',
+    id: 'p1',
+    name: '校長',
+    staffGroup: 'principal',
+    staffTitle: '校長',
+  },
+});
+assert.ok(principalAsAcademic.includes('principal'));
+
 console.log('regression-patrol-review: ok');

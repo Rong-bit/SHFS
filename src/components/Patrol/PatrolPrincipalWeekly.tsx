@@ -14,7 +14,7 @@ import { ElectronicStamp } from '../Common/ElectronicStamp';
 
 /** 校長每周彙整：勾選異常案、填指示、批次電子核章並留存教務處 */
 export const PatrolPrincipalWeekly: React.FC = () => {
-  const { systemConfig, currentAcademicStaff } = useApp();
+  const { systemConfig, currentAcademicStaff, academicStaffList } = useApp();
   const { cases, loading, error, cloudReady, saveCase, refresh } = usePatrolReviews();
   const initial = weekRangeContaining(dateToIsoLocal(new Date()));
   const [dateFrom, setDateFrom] = useState(initial.from);
@@ -22,6 +22,10 @@ export const PatrolPrincipalWeekly: React.FC = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [instruction, setInstruction] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const principalStaff =
+    (currentAcademicStaff?.group === 'principal' ? currentAcademicStaff : null) ||
+    academicStaffList.find((s) => s.group === 'principal') ||
+    null;
 
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom <= dateTo) void refresh(dateFrom, dateTo);
@@ -56,8 +60,9 @@ export const PatrolPrincipalWeekly: React.FC = () => {
   };
 
   const applyBatch = () => {
-    const personId = currentAcademicStaff?.id || 'principal';
-    const personName = currentAcademicStaff?.name || '校長';
+    if (!principalStaff) return;
+    const personId = principalStaff.id;
+    const personName = principalStaff.name;
     for (const c of list) {
       if (!selected.has(c.id)) continue;
       const signOff = makeSignOff({
@@ -141,14 +146,20 @@ export const PatrolPrincipalWeekly: React.FC = () => {
           </label>
           <button
             type="button"
-            disabled={selected.size === 0}
+            disabled={selected.size === 0 || !principalStaff}
             onClick={() => setConfirmOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold disabled:opacity-40"
+            title={!principalStaff ? '請先於成員名冊新增校長室人員' : undefined}
           >
             <Stamp className="w-3.5 h-3.5" />
             批次校長核章（{selected.size}）
           </button>
         </div>
+        {!principalStaff && (
+          <p className="text-sm text-amber-800 px-4 py-3 bg-amber-50 border-b border-amber-100">
+            成員名冊尚無校長室人員，無法核章。請至系統管理員 → 成員名冊新增「校長」。
+          </p>
+        )}
         {list.length === 0 ? (
           <p className="text-sm text-slate-500 px-4 py-8 text-center">本週無待校長彙整的異常會辦。</p>
         ) : (
@@ -200,7 +211,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
               <ElectronicStamp
                 officeLabel="校長室"
                 titleLabel="核章"
-                personName={currentAcademicStaff?.name || '校長'}
+                personName={principalStaff?.name || '校長'}
                 size={200}
               />
               {/* 版面：左上處室、左下動作、右側姓名（仿實物紅框原子章） */}
