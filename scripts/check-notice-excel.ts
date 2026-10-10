@@ -182,13 +182,14 @@ assert.equal(roster[0].substitute, '陳代課');
 assert.equal(roster[0].issueDate, '115.9.2');
 assert.equal(roster[0].leaveDate, '2026/9/7');
 assert.equal(roster[0].weekday, '一');
-assert.equal(roster[0].period, '2');
+assert.equal(roster[0].period, 2);
+assert.equal(typeof roster[0].period, 'number');
 assert.equal(roster[0].className, '電機二甲');
 assert.equal(roster[0].subjectName, '電工機械');
 assert.equal(roster[0].hours, '兼課');
 
 assert.equal(roster[1].substitute, '林另一位');
-assert.equal(roster[1].period, '3');
+assert.equal(roster[1].period, 3);
 assert.equal(roster[2].kind, '調課');
 assert.equal(roster[2].substitute, '王大明');
 assert.equal(roster[3].kind, '對調');
@@ -205,6 +206,8 @@ NOTICE_ROSTER_HEADERS.forEach((label, index) => {
 });
 assert.equal(workbook.getWorksheet(1)?.getCell('A5').value, 1);
 assert.equal(workbook.getWorksheet(1)?.getCell('B5').value, '代課');
+assert.equal(workbook.getWorksheet(1)?.getCell('I5').value, 2);
+assert.equal(typeof workbook.getWorksheet(1)?.getCell('I5').value, 'number');
 assert.equal(workbook.getWorksheet(1)?.getCell('L5').value, '兼課');
 // 請假日期（G 欄）寬度對應約 93 像素；其餘欄寬維持原值
 assert.equal(workbook.worksheets[0].getColumn(7).width, 13.22);

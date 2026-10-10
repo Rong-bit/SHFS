@@ -38,11 +38,19 @@ export type NoticeRosterRow = {
   issueDate: string;
   leaveDate: string;
   weekday: string;
-  period: string;
+  /** 節次以數字寫入 Excel；無節次時為空字串 */
+  period: number | '';
   className: string;
   subjectName: string;
   hours: string;
 };
+
+/** 清冊節次：可解析為數字則輸出 number，否則留空 */
+export function toNoticeRosterPeriod(period: string | number | undefined | null): number | '' {
+  if (period === '' || period === null || period === undefined) return '';
+  const n = typeof period === 'number' ? period : Number(String(period).trim());
+  return Number.isFinite(n) ? n : '';
+}
 
 async function loadExcelJS(): Promise<typeof ExcelJS> {
   const mod = await import('exceljs');
@@ -104,7 +112,7 @@ export function buildNoticeRosterRows(docs: NoticeDocument[]): NoticeRosterRow[]
         issueDate,
         leaveDate: '',
         weekday: '',
-        period: '',
+        period: '' as const,
         className: '',
         subjectName: '',
         hours: '',
@@ -122,7 +130,7 @@ export function buildNoticeRosterRows(docs: NoticeDocument[]): NoticeRosterRow[]
         issueDate,
         leaveDate: row.date,
         weekday: formatNoticeWeekdayLabel(row.weekday),
-        period: row.period,
+        period: toNoticeRosterPeriod(row.period),
         className: row.className,
         subjectName: row.subjectName,
         hours: formatNoticeHoursDisplay(row.hours),
