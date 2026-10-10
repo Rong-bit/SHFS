@@ -198,11 +198,12 @@ export const PatrolPrincipalWeekly: React.FC = () => {
             </label>
             <div className="flex justify-center">
               <ElectronicStamp
-                schoolName={systemConfig.schoolName || ''}
-                officeLabel="校長"
-                actionLabel="校長核章"
-                size={120}
+                officeLabel="校長室"
+                titleLabel="核章"
+                personName={currentAcademicStaff?.name || '校長'}
+                size={200}
               />
+              {/* 版面：左上處室、左下動作、右側姓名（仿實物紅框原子章） */}
             </div>
             <div className="flex justify-end gap-2">
               <button

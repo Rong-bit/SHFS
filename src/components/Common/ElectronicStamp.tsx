@@ -1,152 +1,118 @@
 import React from 'react';
-import { clipSchoolName, DEFAULT_SCHOOL_NAME } from '../../utils/schoolName';
-import { formatStampRocDate } from '../../utils/noticeDocument';
 
-const STAMP_BLUE = '#2a4f9c';
+/** 官章紅（接近實物原子印章） */
+const STAMP_RED = '#c41e3a';
 const STAMP_KAI =
-  '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", serif';
-const STAMP_DATE_FONT = 'Arial, "Helvetica Neue", "Noto Sans TC", sans-serif';
-
-const CX = 100;
-const CY = 102;
-const R = 93;
-const LINE_OFFSET = 18;
-const ARC_FONT_SIZE = 22;
-const ARC_RADIUS = 75;
-const OFFICE_FONT_SIZE = 22;
-const DATE_FONT_SIZE = 20;
-const ACTION_FONT_SIZE = 22;
-
-function circleChord(y: number) {
-  const dy = y - CY;
-  const half = Math.sqrt(Math.max(0, R * R - dy * dy));
-  return { x1: CX - half, x2: CX + half };
-}
-
-function ArcSchoolName({ text, radius, fontSize }: { text: string; radius: number; fontSize: number }) {
-  const chars = [...text];
-  const startDeg = 152;
-  const endDeg = 28;
-  const span = startDeg - endDeg;
-
-  return (
-    <>
-      {chars.map((ch, i) => {
-        const t = chars.length === 1 ? 0.5 : i / (chars.length - 1);
-        const deg = startDeg - t * span;
-        const rad = (deg * Math.PI) / 180;
-        const x = CX + radius * Math.cos(rad);
-        const y = CY - radius * Math.sin(rad);
-        const rotate = 90 - deg;
-        return (
-          <text
-            key={`${ch}-${i}`}
-            x={x}
-            y={y}
-            fill={STAMP_BLUE}
-            fontFamily={STAMP_KAI}
-            fontSize={fontSize}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            transform={`rotate(${rotate}, ${x}, ${y})`}
-          >
-            {ch}
-          </text>
-        );
-      })}
-    </>
-  );
-}
+  '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", "Noto Serif TC", serif';
 
 type ElectronicStampProps = {
-  schoolName: string;
-  /** 中間處室／角色，如 生輔組、校長 */
+  /** 左上處室／單位，如 會計室、生輔組 */
   officeLabel: string;
-  /** 底部動作，如 已會畢、已閱畢、校長核章 */
-  actionLabel: string;
-  dateLabel?: string;
-  stampedAt?: string;
+  /** 左下職稱或動作，如 主任、會畢、閱畢 */
+  titleLabel: string;
+  /** 右側姓名 */
+  personName: string;
+  /** 寬度（px）；高度依比例約 0.48 */
   size?: number;
   className?: string;
+  /** @deprecated 圓戳時代欄位；矩形戳章不再使用 */
+  schoolName?: string;
+  /** @deprecated 改以 titleLabel 呈現 */
+  actionLabel?: string;
+  dateLabel?: string;
+  stampedAt?: string;
 };
 
 /**
- * 通用圓形電子戳章（巡堂會辦／核章）
- * 上弧校名 → 處室 → 日期 → 動作
+ * 長方紅框電子戳章（仿實物原子章）
+ * 左上處室、左下職稱／動作、右側姓名
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
-  schoolName,
   officeLabel,
+  titleLabel,
+  personName,
   actionLabel,
-  dateLabel,
-  stampedAt,
-  size = 96,
+  size = 160,
   className = '',
 }) => {
-  const label = clipSchoolName(schoolName) || DEFAULT_SCHOOL_NAME;
-  const date =
-    dateLabel ||
-    formatStampRocDate(stampedAt ? new Date(stampedAt) : new Date());
-  const lineTop = CY - LINE_OFFSET;
-  const lineBottom = CY + LINE_OFFSET;
-  const topChord = circleChord(lineTop);
-  const bottomChord = circleChord(lineBottom);
+  const office = (officeLabel || '').trim() || '—';
+  const title = (titleLabel || actionLabel || '').trim().replace(/^已/, '') || '—';
+  const name = (personName || '').trim() || '—';
+
+  // 依姓名字數微調右側字級
+  const nameLen = [...name].length;
+  const nameFont = nameLen <= 2 ? 36 : nameLen === 3 ? 32 : nameLen === 4 ? 26 : 22;
+  const officeFont = [...office].length >= 4 ? 22 : 26;
+  const titleFont = 24;
+  const height = size * 0.48;
 
   return (
-    <div className={className} style={{ width: size, height: size * 1.025 }} aria-hidden>
-      <svg viewBox="0 0 200 205" xmlns="http://www.w3.org/2000/svg" role="img" width="100%" height="100%">
-        <circle cx={CX} cy={CY} r={R} fill="none" stroke={STAMP_BLUE} strokeWidth="2" />
-        <ArcSchoolName text={label} radius={ARC_RADIUS} fontSize={ARC_FONT_SIZE} />
+    <div
+      className={className}
+      style={{ width: size, height }}
+      aria-hidden
+      title={`${office} ${title} ${name}`}
+    >
+      <svg
+        viewBox="0 0 240 115"
+        xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        width="100%"
+        height="100%"
+      >
+        {/* 外框 */}
+        <rect
+          x="4"
+          y="4"
+          width="232"
+          height="107"
+          fill="none"
+          stroke={STAMP_RED}
+          strokeWidth="3.2"
+          rx="1"
+        />
+        {/* 中央分隔線（虛線感可選；實物多半無線，改以留白分欄） */}
+
+        {/* 左上：處室 */}
         <text
-          x={CX}
-          y={70}
+          x="72"
+          y="42"
           textAnchor="middle"
           dominantBaseline="middle"
-          fill={STAMP_BLUE}
+          fill={STAMP_RED}
           fontFamily={STAMP_KAI}
-          fontSize={OFFICE_FONT_SIZE}
+          fontSize={officeFont}
+          letterSpacing="0.12em"
         >
-          {officeLabel}
+          {office}
         </text>
-        <line
-          x1={topChord.x1}
-          y1={lineTop}
-          x2={topChord.x2}
-          y2={lineTop}
-          stroke={STAMP_BLUE}
-          strokeWidth="1.6"
-        />
-        <line
-          x1={bottomChord.x1}
-          y1={lineBottom}
-          x2={bottomChord.x2}
-          y2={lineBottom}
-          stroke={STAMP_BLUE}
-          strokeWidth="1.6"
-        />
+
+        {/* 左下：職稱／動作 */}
         <text
-          x={CX}
-          y={CY}
+          x="72"
+          y="82"
           textAnchor="middle"
           dominantBaseline="middle"
-          fill={STAMP_BLUE}
-          fontFamily={STAMP_DATE_FONT}
-          fontSize={DATE_FONT_SIZE}
+          fill={STAMP_RED}
+          fontFamily={STAMP_KAI}
+          fontSize={titleFont}
+          letterSpacing="0.2em"
+        >
+          {title}
+        </text>
+
+        {/* 右側：姓名（跨兩列高度置中） */}
+        <text
+          x="168"
+          y="58"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={STAMP_RED}
+          fontFamily={STAMP_KAI}
+          fontSize={nameFont}
           letterSpacing="0.08em"
         >
-          {date}
-        </text>
-        <text
-          x={CX}
-          y={(lineBottom + CY + R) / 2}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={STAMP_BLUE}
-          fontFamily={STAMP_KAI}
-          fontSize={ACTION_FONT_SIZE}
-          letterSpacing="0.05em"
-        >
-          {actionLabel}
+          {name}
         </text>
       </svg>
     </div>

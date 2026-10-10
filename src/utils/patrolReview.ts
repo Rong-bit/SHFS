@@ -20,6 +20,40 @@ export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
   principal: '校長',
 };
 
+/** 長方紅戳：左上處室、左下職稱／動作（仿實物原子章） */
+export function stampOfficeAndTitle(
+  role: PatrolReviewRole,
+  action?: PatrolSignOffAction | string
+): { officeLabel: string; titleLabel: string } {
+  const actionTitle =
+    action === '校長核章' || action === '核章'
+      ? '核章'
+      : action === '會畢' || action === '已會畢'
+        ? '會畢'
+        : action === '閱畢' || action === '已閱畢'
+          ? '閱畢'
+          : (action || '').replace(/^已/, '') || '核章';
+
+  switch (role) {
+    case 'dean_academic':
+      return { officeLabel: '教務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+    case 'dean_student':
+      return { officeLabel: '學務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+    case 'student_affairs':
+      return { officeLabel: '生輔組', titleLabel: actionTitle };
+    case 'academic':
+      return { officeLabel: '教學組', titleLabel: actionTitle };
+    case 'principal':
+      return { officeLabel: '校長室', titleLabel: actionTitle === '閱畢' || actionTitle === '會畢' ? actionTitle : '核章' };
+    case 'homeroom':
+      return { officeLabel: '導師', titleLabel: actionTitle };
+    case 'subject_teacher':
+      return { officeLabel: '任課', titleLabel: actionTitle };
+    default:
+      return { officeLabel: PATROL_REVIEW_ROLE_LABELS[role], titleLabel: actionTitle };
+  }
+}
+
 export const isObservationPatrolKind = (kind: PatrolKind) => kind === 'class' || kind === 'exam';
 
 export function patrolIssueSummary(r: Pick<PatrolRecord, 'kind' | 'observations' | 'checks' | 'itemLabels' | 'note'>): string {

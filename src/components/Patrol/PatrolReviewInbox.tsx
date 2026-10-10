@@ -13,6 +13,7 @@ import {
   makeSignOff,
   PATROL_REVIEW_ROLE_LABELS,
   PATROL_REVIEW_STATUS_LABELS,
+  stampOfficeAndTitle,
   viewerReviewRoles,
   weekRangeContaining,
 } from '../../utils/patrolReview';
@@ -286,11 +287,9 @@ export const PatrolReviewInbox: React.FC<{
                     {c.signOffs.map((s) => (
                       <div key={`${s.role}-${s.personId}-${s.stampedAt}`} className="flex items-center gap-2">
                         <ElectronicStamp
-                          schoolName={systemConfig.schoolName || ''}
-                          officeLabel={PATROL_REVIEW_ROLE_LABELS[s.role]}
-                          actionLabel={s.action === '校長核章' ? '校長核章' : `已${s.action}`}
-                          stampedAt={s.stampedAt}
-                          size={72}
+                          {...stampOfficeAndTitle(s.role, s.action)}
+                          personName={s.personName}
+                          size={140}
                         />
                         <div className="text-[11px] text-slate-600">
                           <div className="font-bold text-slate-800">{s.personName}</div>
@@ -364,10 +363,9 @@ export const PatrolReviewInbox: React.FC<{
             )}
             <div className="flex justify-center py-2">
               <ElectronicStamp
-                schoolName={systemConfig.schoolName || ''}
-                officeLabel={PATROL_REVIEW_ROLE_LABELS[stampRole]}
-                actionLabel={stampRole === 'principal' ? '校長核章' : `已${stampAction}`}
-                size={120}
+                {...stampOfficeAndTitle(stampRole, stampRole === 'principal' ? '核章' : stampAction)}
+                personName={viewer.name}
+                size={200}
               />
             </div>
             <div className="flex justify-end gap-2">
