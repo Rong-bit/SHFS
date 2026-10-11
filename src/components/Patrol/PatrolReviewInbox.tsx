@@ -271,7 +271,7 @@ export const PatrolReviewInbox: React.FC<{
                       {c.teacherName ? `・任課 ${c.teacherName}` : ''}
                     </p>
                     <p className="text-sm text-rose-800 font-semibold">{c.issueSummary}</p>
-                    <p className="text-xs text-slate-500">尋堂：{c.patrollerName}</p>
+                    <p className="text-xs text-slate-500">巡堂：{c.patrollerName}</p>
                   </div>
                   {canStamp && (
                     <button
