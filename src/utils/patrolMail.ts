@@ -61,7 +61,7 @@ export function buildPatrolNotifyEmail(params: {
     `班級：${c.className || '—'}`,
     c.subjectName ? `科目：${c.subjectName}` : '',
     c.teacherName ? `任課：${c.teacherName}` : '',
-    `尋堂：${c.patrollerName}`,
+    `巡堂：${c.patrollerName}`,
     `異常：${c.issueSummary}`,
     '',
     '請登入系統於「巡堂會辦」以電子戳章勾選已會畢或已閱畢。',
@@ -90,7 +90,7 @@ export function buildPatrolNotifyEmail(params: {
       <p style="margin:0 0 8px"><strong>班級</strong> ${c.className || '—'}</p>
       ${c.subjectName ? `<p style="margin:0 0 8px"><strong>科目</strong> ${c.subjectName}</p>` : ''}
       ${c.teacherName ? `<p style="margin:0 0 8px"><strong>任課</strong> ${c.teacherName}</p>` : ''}
-      <p style="margin:0 0 8px"><strong>尋堂</strong> ${c.patrollerName}</p>
+      <p style="margin:0 0 8px"><strong>巡堂</strong> ${c.patrollerName}</p>
       <p style="margin:0 0 16px;padding:10px 12px;background:#fff1f2;border-radius:8px"><strong>異常</strong> ${c.issueSummary}</p>
       <p>請登入系統於「巡堂會辦」以電子戳章勾選<strong>已會畢</strong>或<strong>已閱畢</strong>。</p>
       ${link ? `<p><a href="${link}">開啟會辦案</a></p>` : ''}

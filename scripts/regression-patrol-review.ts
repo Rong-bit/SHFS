@@ -96,7 +96,7 @@ const base: PatrolRecord = {
   itemLabels: { phone: '玩手機' },
   note: '',
   patrollerId: 'p1',
-  patrollerName: '尋堂',
+  patrollerName: '王巡堂',
   createdAt: new Date().toISOString(),
 };
 
