@@ -510,6 +510,29 @@ export const StaffDispatchWorkbench: React.FC = () => {
     });
   };
 
+  /** 連續節次：自指定課堂起，將代理人套用／清除至後續已勾選節次 */
+  const applySubstituteFromSessionForward = (fromSessionId: string, teacherId: string) => {
+    setSessionSubstituteIds((prev) => {
+      const next = { ...prev };
+      const startIdx = batchSelectedSessions.findIndex((session) => session.id === fromSessionId);
+      const from = startIdx >= 0 ? startIdx : 0;
+      const targets =
+        startIdx >= 0
+          ? batchSelectedSessions.slice(from)
+          : batchSelectedSessions.filter((session) => session.id === fromSessionId);
+      if (targets.length === 0) {
+        if (teacherId) next[fromSessionId] = teacherId;
+        else delete next[fromSessionId];
+        return next;
+      }
+      targets.forEach((session) => {
+        if (teacherId) next[session.id] = teacherId;
+        else delete next[session.id];
+      });
+      return next;
+    });
+  };
+
   /** 導師請假日無授課課堂：僅需代導師，不必選原課堂／代課教師 */
   const canActingHomeroomOnly = Boolean(
     requestType === 'substitute' &&
@@ -2123,7 +2146,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         將一次派代「{dayNames[rangeDayOfWeek]} 第
                         {Math.min(rangePeriodStart, rangePeriodEnd)}～
                         {Math.max(rangePeriodStart, rangePeriodEnd)}節」內有課的節次（目前{' '}
-                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。各節可指定不同代理人；假單編號相同，通知單分張列印。
+                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。各節可指定不同代理人；指定本節代理人會自動套用至後續已勾選節次，中途改選則自該節起變更。假單編號相同，通知單分張列印。
                       </p>
                     </div>
                   )}
@@ -2216,10 +2239,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                     currentTeacherId={sessionSubId}
                                     onSelectTeacher={(id) => {
                                       setHasUserChosenSubstituteTeacher(true);
-                                      setSessionSubstituteIds((prev) => ({
-                                        ...prev,
-                                        [s.id]: id,
-                                      }));
+                                      applySubstituteFromSessionForward(s.id, id);
                                       setSubstituteTeacherId(id);
                                     }}
                                     placeholder="指定本節代課教師…"
