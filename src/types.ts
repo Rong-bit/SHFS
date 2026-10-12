@@ -277,7 +277,7 @@ export interface SystemConfig {
   patrolMailConfig?: PatrolMailConfig;
 }
 
-/** 巡堂會辦／通知對象身分勾選（未設定視為全開） */
+/** 巡堂會辦／通知對象身分勾選（未設定時舊身分全開；新增身分預設關閉以免舊群組突然擴大） */
 export interface PatrolNotifyRoles {
   student_affairs: boolean;
   dean_student: boolean;
@@ -285,6 +285,14 @@ export interface PatrolNotifyRoles {
   dean_academic: boolean;
   homeroom: boolean;
   subject_teacher: boolean;
+  /** 實習組 */
+  internship: boolean;
+  /** 實習主任 */
+  dean_internship: boolean;
+  /** 總務主任 */
+  dean_general_affairs: boolean;
+  /** 各一級主任與二組組長（名冊職稱含主任／組長者） */
+  unit_chiefs: boolean;
 }
 
 /** 可自訂的會辦通知群組（巡堂異常時勾選要通知哪些群組） */
@@ -321,7 +329,7 @@ export interface PatrolMailConfig {
    * @deprecated 改用 notifyGroups；僅供舊資料相容（單一「預設」群組）
    * 會辦案納入／寄信的身分；未設定＝全部開啟
    */
-  notifyRoles?: PatrolNotifyRoles;
+  notifyRoles?: Partial<PatrolNotifyRoles>;
 }
 
 /** 行事曆放假日（代課／課輔不計；超鐘點僅外聘人員不計） */
@@ -409,7 +417,11 @@ export type PatrolReviewRole =
   | 'dean_student'
   | 'homeroom'
   | 'subject_teacher'
-  | 'principal';
+  | 'principal'
+  | 'internship'
+  | 'dean_internship'
+  | 'dean_general_affairs'
+  | 'unit_chiefs';
 
 export type PatrolSignOffAction = '會畢' | '閱畢' | '校長核章';
 
