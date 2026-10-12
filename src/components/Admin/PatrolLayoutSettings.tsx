@@ -14,7 +14,14 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { PatrolCheckItem, PatrolMailConfig, PatrolRoom, SystemConfig } from '../../types';
+import {
+  PatrolCheckItem,
+  PatrolMailConfig,
+  PatrolNotifyRoles,
+  PatrolRoom,
+  SystemConfig,
+} from '../../types';
+import { DEFAULT_PATROL_NOTIFY_ROLES, resolvePatrolNotifyRoles } from '../../utils/patrolReview';
 import {
   buildDraftPatrolRooms,
   groupPatrolRooms,
@@ -122,7 +129,17 @@ const emptyMailConfig = (): PatrolMailConfig => ({
   fromName: '',
   fromEmail: '',
   appBaseUrl: typeof window !== 'undefined' ? window.location.origin : '',
+  notifyRoles: { ...DEFAULT_PATROL_NOTIFY_ROLES },
 });
+
+const NOTIFY_ROLE_OPTIONS: { key: keyof PatrolNotifyRoles; label: string }[] = [
+  { key: 'student_affairs', label: '生輔組' },
+  { key: 'dean_student', label: '學務主任' },
+  { key: 'academic', label: '教學組' },
+  { key: 'dean_academic', label: '教務主任' },
+  { key: 'homeroom', label: '導師' },
+  { key: 'subject_teacher', label: '任課老師（段考仍不納入）' },
+];
 
 const PatrolMailSettingsPanel: React.FC<{
   value?: PatrolMailConfig;
@@ -131,19 +148,26 @@ const PatrolMailSettingsPanel: React.FC<{
   const [draft, setDraft] = useState<PatrolMailConfig>(() => ({
     ...emptyMailConfig(),
     ...(value || {}),
+    notifyRoles: resolvePatrolNotifyRoles(value?.notifyRoles),
   }));
   const [savedHint, setSavedHint] = useState('');
 
   React.useEffect(() => {
-    setDraft({ ...emptyMailConfig(), ...(value || {}) });
+    setDraft({
+      ...emptyMailConfig(),
+      ...(value || {}),
+      notifyRoles: resolvePatrolNotifyRoles(value?.notifyRoles),
+    });
   }, [value]);
+
+  const notifyRoles = resolvePatrolNotifyRoles(draft.notifyRoles);
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
       <div>
         <h3 className="text-sm font-extrabold text-slate-900">巡堂異常會辦寄信（SMTP）</h3>
         <p className="text-xs text-slate-500 mt-1">
-          僅在巡堂有缺失時寄信通知生輔組、學務主任、教學組、教務主任、導師（及非段考之任課老師）。請使用學校信箱或第三方 SMTP；密碼請妥善保管。
+          僅在巡堂有缺失時，依下方勾選身分建立會辦並寄信。請使用學校信箱或第三方 SMTP；密碼請妥善保管。
         </p>
       </div>
       <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -154,6 +178,34 @@ const PatrolMailSettingsPanel: React.FC<{
         />
         啟用異常會辦 email 通知
       </label>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2">
+        <div>
+          <h4 className="text-xs font-extrabold text-slate-800">會辦／通知對象</h4>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            取消勾選則建立異常會辦時不納入該身分（亦不寄信）。預設全部勾選。
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          {NOTIFY_ROLE_OPTIONS.map(({ key, label }) => (
+            <label
+              key={key}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700"
+            >
+              <input
+                type="checkbox"
+                checked={notifyRoles[key]}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    notifyRoles: { ...notifyRoles, [key]: e.target.checked },
+                  })
+                }
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
         <label className="font-semibold text-slate-600">
           SMTP 主機
@@ -234,6 +286,7 @@ const PatrolMailSettingsPanel: React.FC<{
             const next = {
               ...draft,
               pass: draft.pass.trim() || value?.pass || '',
+              notifyRoles: resolvePatrolNotifyRoles(draft.notifyRoles),
             };
             onSave(next);
             setSavedHint('已儲存寄信設定');
