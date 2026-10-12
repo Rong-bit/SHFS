@@ -25,7 +25,6 @@ export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
   internship: '實習組',
   dean_internship: '實習主任',
   dean_general_affairs: '總務主任',
-  unit_chiefs: '一級主任／二組組長',
 };
 
 /** 會辦通知對象預設（舊六項全開；新增身分預設關，避免舊群組突然擴大） */
@@ -39,7 +38,6 @@ export const DEFAULT_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
   internship: false,
   dean_internship: false,
   dean_general_affairs: false,
-  unit_chiefs: false,
 };
 
 /** 全關（新建空白群組用） */
@@ -53,7 +51,6 @@ export const EMPTY_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
   internship: false,
   dean_internship: false,
   dean_general_affairs: false,
-  unit_chiefs: false,
 };
 
 export function resolvePatrolNotifyRoles(
@@ -149,7 +146,6 @@ export function summarizeNotifyGroupRoles(roles: PatrolNotifyRoles): string {
   if (r.internship) parts.push('實習組');
   if (r.dean_internship) parts.push('實習主任');
   if (r.dean_general_affairs) parts.push('總務主任');
-  if (r.unit_chiefs) parts.push('一級主任／二組組長');
   if (r.homeroom) parts.push('導師');
   if (r.subject_teacher) parts.push('任課');
   return parts.length > 0 ? parts.join('、') : '（未勾選身分）';
@@ -227,7 +223,6 @@ export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
   'internship',
   'dean_internship',
   'dean_general_affairs',
-  'unit_chiefs',
   'homeroom',
   'subject_teacher',
   'principal',
@@ -262,8 +257,6 @@ export function stampOfficeAndTitle(
       return { officeLabel: '教學組', titleLabel: actionTitle };
     case 'internship':
       return { officeLabel: '實習組', titleLabel: actionTitle };
-    case 'unit_chiefs':
-      return { officeLabel: '行政', titleLabel: actionTitle };
     case 'principal':
       return { officeLabel: '校長室', titleLabel: actionTitle === '閱畢' || actionTitle === '會畢' ? actionTitle : '核章' };
     case 'homeroom':
@@ -321,15 +314,6 @@ export function isInternshipStaff(s: AcademicStaff): boolean {
 export function isDeanGeneralAffairsStaff(s: AcademicStaff): boolean {
   const t = staffText(s);
   return /總務主任|總務處主任/.test(t) || (/總務/.test(t) && /主任/.test(s.title || ''));
-}
-
-/**
- * 各一級主任與二組組長：職稱含「主任」或「組長」。
- * （不含校長；與特定處室主任／組別重疊時仍可列入，收件以人去重）
- */
-export function isUnitChiefStaff(s: AcademicStaff): boolean {
-  if ((s.group || '') === 'principal' || /校長/.test(s.title || '')) return false;
-  return /主任|組長/.test(s.title || '');
 }
 
 function uniqRecipients(list: PatrolReviewRecipient[]): PatrolReviewRecipient[] {
@@ -426,16 +410,6 @@ export function resolvePatrolReviewRecipients(params: {
   if (roles.dean_general_affairs) {
     for (const s of academicStaffList) {
       if (isDeanGeneralAffairsStaff(s)) pushStaff('dean_general_affairs', s);
-    }
-  }
-
-  if (roles.unit_chiefs) {
-    const already = new Set(out.map((r) => r.personId).filter(Boolean) as string[]);
-    for (const s of academicStaffList) {
-      if (!isUnitChiefStaff(s)) continue;
-      if (already.has(s.id)) continue;
-      pushStaff('unit_chiefs', s);
-      already.add(s.id);
     }
   }
 
@@ -646,7 +620,6 @@ export function viewerReviewRoles(params: {
       'internship',
       'dean_internship',
       'dean_general_affairs',
-      'unit_chiefs',
       'principal',
     ];
   }
@@ -686,14 +659,13 @@ export function viewerReviewRoles(params: {
       roles.push('dean_academic');
     }
   }
-  // 實習／總務／一級二組：依職稱辨識，並需為此案收件人身分之一
+  // 實習／總務：依職稱辨識，並需為此案收件人身分之一
   if (viewer.staffTitle) {
     const titled = stub(viewer.staffTitle, group as AcademicStaff['group']);
     const maybe: PatrolReviewRole[] = [];
     if (isDeanInternshipStaff(titled)) maybe.push('dean_internship');
     else if (isInternshipStaff(titled)) maybe.push('internship');
     if (isDeanGeneralAffairsStaff(titled)) maybe.push('dean_general_affairs');
-    if (isUnitChiefStaff(titled)) maybe.push('unit_chiefs');
     for (const role of maybe) {
       if (reviewCase.recipients.some((r) => r.role === role && r.personId === viewer.id)) {
         roles.push(role);

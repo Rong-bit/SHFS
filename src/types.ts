@@ -291,8 +291,6 @@ export interface PatrolNotifyRoles {
   dean_internship: boolean;
   /** 總務主任 */
   dean_general_affairs: boolean;
-  /** 各一級主任與二組組長（名冊職稱含主任／組長者） */
-  unit_chiefs: boolean;
 }
 
 /** 可自訂的會辦通知群組（巡堂異常時勾選要通知哪些群組） */
@@ -420,8 +418,7 @@ export type PatrolReviewRole =
   | 'principal'
   | 'internship'
   | 'dean_internship'
-  | 'dean_general_affairs'
-  | 'unit_chiefs';
+  | 'dean_general_affairs';
 
 export type PatrolSignOffAction = '會畢' | '閱畢' | '校長核章';
 

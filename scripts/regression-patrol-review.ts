@@ -358,7 +358,7 @@ const fullMap = resolveNotifyGroupsForRecord({
 assert.equal(fullMap.fullyMapped, true);
 assert.deepEqual(fullMap.groupIds, ['png-affairs']);
 
-// 新增身分：實習組／實習主任／總務主任／一級二組
+// 新增身分：實習組／實習主任／總務主任
 const extraRecipients = resolvePatrolReviewRecipients({
   record: base,
   teachers,
@@ -373,22 +373,11 @@ const extraRecipients = resolvePatrolReviewRecipients({
     internship: true,
     dean_internship: true,
     dean_general_affairs: true,
-    unit_chiefs: true,
   },
 });
 assert.ok(extraRecipients.some((r) => r.role === 'internship' && r.personName === '林實習'));
 assert.ok(extraRecipients.some((r) => r.role === 'dean_internship' && r.personName === '黃實習主'));
 assert.ok(extraRecipients.some((r) => r.role === 'dean_general_affairs' && r.personName === '蔡總務'));
-// 一級二組：職稱含主任／組長，且略過已列入其他身分者
-assert.ok(
-  extraRecipients.some((r) => r.role === 'unit_chiefs'),
-  '應納入至少一位一級主任／二組組長'
-);
-assert.equal(
-  extraRecipients.some((r) => r.role === 'unit_chiefs' && r.personName === '黃實習主'),
-  false,
-  '已列實習主任者不應再以 unit_chiefs 重複'
-);
 
 const okRecord: PatrolRecord = { ...base, observations: [] };
 assert.equal(patrolRecordHasIssue(okRecord), false);

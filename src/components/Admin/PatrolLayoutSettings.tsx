@@ -149,7 +149,6 @@ const NOTIFY_ROLE_OPTIONS: { key: keyof PatrolNotifyRoles; label: string }[] = [
   { key: 'internship', label: '實習組' },
   { key: 'dean_internship', label: '實習主任' },
   { key: 'dean_general_affairs', label: '總務主任' },
-  { key: 'unit_chiefs', label: '各一級主任與二組組長' },
   { key: 'homeroom', label: '導師' },
   { key: 'subject_teacher', label: '任課老師（段考仍不納入）' },
 ];
