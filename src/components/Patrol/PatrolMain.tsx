@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { PatrolKind, PatrolRecord, PatrolRoom } from '../../types';
+import { PatrolKind, PatrolNotifyRoles, PatrolRecord, PatrolRoom } from '../../types';
 import { dateToIsoLocal } from '../../utils/holidays';
 import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import {
@@ -17,17 +17,32 @@ import {
 import { patrolRecordId, usePatrolRecords } from '../../utils/patrolSync';
 import {
   buildPatrolReviewCase,
+  EMPTY_PATROL_NOTIFY_ROLES,
+  mergeNotifyRolesFromGroups,
   patrolReviewCaseId,
+  resolvePatrolNotifyGroups,
   resolveReviewWhenIssueCleared,
+  summarizeNotifyGroupRoles,
 } from '../../utils/patrolReview';
 import { loadLocalPatrolReviews, usePatrolReviews } from '../../utils/patrolReviewSync';
 import { isPatrolMailConfigured, sendPatrolReviewNotify } from '../../utils/patrolMail';
+import { ModalShell } from '../Common/ModalShell';
 import {
   occupancySummary,
   patrolRecordHasIssue,
   PatrolRoomSheet,
   resolveHomeroomTutorNames,
 } from './PatrolRoomSheet';
+
+function notifyRolesFromExistingRecipients(
+  recipients: { role: string }[]
+): PatrolNotifyRoles {
+  const roles: PatrolNotifyRoles = { ...EMPTY_PATROL_NOTIFY_ROLES };
+  for (const r of recipients) {
+    if (r.role in roles) roles[r.role as keyof PatrolNotifyRoles] = true;
+  }
+  return roles;
+}
 
 const MODES: { id: PatrolKind; label: string; hint: string }[] = [
   { id: 'class', label: '課間巡堂', hint: '依課表顯示各教室該節班級與老師，點教室登錄上課情況。' },
@@ -52,8 +67,18 @@ export const PatrolMain: React.FC = () => {
   const [buildingIdx, setBuildingIdx] = useState(0);
   const [openRoomId, setOpenRoomId] = useState<string | null>(null);
   const [notifyMsg, setNotifyMsg] = useState('');
+  /** 異常會辦：勾選要通知的群組 */
+  const [groupPick, setGroupPick] = useState<{
+    record: PatrolRecord;
+    selectedIds: string[];
+  } | null>(null);
   /** 寄信進行中的 recordId → 世代號；清案／重送時遞增以丟棄過期結果 */
   const notifyGenRef = React.useRef<Map<string, number>>(new Map());
+
+  const notifyGroups = useMemo(
+    () => resolvePatrolNotifyGroups(systemConfig.patrolMailConfig),
+    [systemConfig.patrolMailConfig]
+  );
 
   const rooms = systemConfig.patrolRooms || [];
   const grouped = useMemo(() => groupPatrolRooms(rooms), [rooms]);
@@ -112,7 +137,10 @@ export const PatrolMain: React.FC = () => {
     return resolveHomeroomTutorNames(className, teachers);
   };
 
-  const syncReviewForRecord = async (record: PatrolRecord) => {
+  const syncReviewForRecord = async (
+    record: PatrolRecord,
+    selectedGroupIds?: string[]
+  ) => {
     // 以本機最新為準，避免 React state 尚未跟上導致重複寄信
     const existing =
       loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
@@ -132,12 +160,22 @@ export const PatrolMain: React.FC = () => {
       return;
     }
     const mailCfg = systemConfig.patrolMailConfig;
+    const groups = resolvePatrolNotifyGroups(mailCfg);
+    const notifyRoles =
+      selectedGroupIds && selectedGroupIds.length > 0
+        ? mergeNotifyRolesFromGroups(groups, selectedGroupIds)
+        : existing?.notifiedAt
+          ? notifyRolesFromExistingRecipients(existing.recipients)
+          : mergeNotifyRolesFromGroups(
+              groups,
+              groups.map((g) => g.id)
+            );
     const reviewCase = buildPatrolReviewCase({
       record,
       teachers,
       academicStaffList,
       existing,
-      notifyRoles: mailCfg?.notifyRoles,
+      notifyRoles,
     });
     // 僅對尚未成功寄出的信箱重試，避免部分成功後重寄全體
     const needMail =
@@ -252,8 +290,39 @@ export const PatrolMain: React.FC = () => {
       createdAt: existing?.createdAt ?? new Date().toISOString(),
     };
     saveRecord(record);
+    if (patrolRecordHasIssue(record)) {
+      const existingReview =
+        loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
+        cases.find((c) => c.recordId === record.id) ||
+        null;
+      // 首次建立／尚未寄出：先選通知群組；已寄過則沿用原收件人身分更新
+      if (!existingReview?.notifiedAt && notifyGroups.length > 0) {
+        setGroupPick({
+          record,
+          selectedIds: notifyGroups.map((g) => g.id),
+        });
+        setOpenRoomId(null);
+        return;
+      }
+    }
     void syncReviewForRecord(record);
     setOpenRoomId(null);
+  };
+
+  const confirmGroupPick = () => {
+    if (!groupPick) return;
+    if (groupPick.selectedIds.length === 0) {
+      alert('請至少勾選一個通知群組。');
+      return;
+    }
+    const { record, selectedIds } = groupPick;
+    setGroupPick(null);
+    void syncReviewForRecord(record, selectedIds);
+  };
+
+  const cancelGroupPick = () => {
+    setGroupPick(null);
+    setNotifyMsg('已儲存巡堂紀錄；未建立會辦（未確認通知群組）');
   };
 
   const handleDelete = (record: PatrolRecord) => {
@@ -481,6 +550,71 @@ export const PatrolMain: React.FC = () => {
           onDelete={handleDelete}
           onClose={() => setOpenRoomId(null)}
         />
+      )}
+
+      {groupPick && (
+        <ModalShell panelClassName="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md">
+          <div className="p-5 space-y-4">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">選擇會辦通知群組</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                巡堂紀錄已儲存。請勾選要建立會辦／寄信的群組（可複選）。群組內容可於「巡堂教室配置 → 寄信設定」調整。
+              </p>
+            </div>
+            <div className="space-y-2">
+              {notifyGroups.map((g) => {
+                const checked = groupPick.selectedIds.includes(g.id);
+                return (
+                  <label
+                    key={g.id}
+                    className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition ${
+                      checked
+                        ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500/20'
+                        : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={checked}
+                      onChange={(e) => {
+                        setGroupPick((prev) => {
+                          if (!prev) return prev;
+                          const nextIds = e.target.checked
+                            ? [...prev.selectedIds, g.id]
+                            : prev.selectedIds.filter((id) => id !== g.id);
+                          return { ...prev, selectedIds: nextIds };
+                        });
+                      }}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-slate-900">{g.name}</span>
+                      <span className="block text-[11px] text-slate-500 mt-0.5">
+                        {summarizeNotifyGroupRoles(g.roles)}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={cancelGroupPick}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                略過會辦
+              </button>
+              <button
+                type="button"
+                onClick={confirmGroupPick}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500"
+              >
+                確認建立會辦
+              </button>
+            </div>
+          </div>
+        </ModalShell>
       )}
     </div>
   );

@@ -7,6 +7,9 @@ import {
   resolvePatrolReviewRecipients,
   buildPatrolReviewCase,
   resolveReviewWhenIssueCleared,
+  resolvePatrolNotifyGroups,
+  mergeNotifyRolesFromGroups,
+  defaultPatrolNotifyGroups,
 } from '../src/utils/patrolReview';
 import { patrolRecordHasIssue } from '../src/components/Patrol/PatrolRoomSheet';
 
@@ -216,6 +219,45 @@ assert.match(
   }),
   /段考不含任課老師/
 );
+
+// 通知群組：預設兩組；勾選聯集；舊版 notifyRoles 收成一組
+const defaultGroups = defaultPatrolNotifyGroups();
+assert.equal(defaultGroups.length, 2);
+const resolvedDefault = resolvePatrolNotifyGroups(null);
+assert.equal(resolvedDefault.length, 2);
+const legacyOne = resolvePatrolNotifyGroups({
+  notifyRoles: {
+    student_affairs: true,
+    dean_student: false,
+    academic: false,
+    dean_academic: false,
+    homeroom: true,
+    subject_teacher: false,
+  },
+});
+assert.equal(legacyOne.length, 1);
+assert.equal(legacyOne[0].name, '預設');
+const affairsOnly = mergeNotifyRolesFromGroups(defaultGroups, ['png-affairs']);
+assert.equal(affairsOnly.student_affairs, true);
+assert.equal(affairsOnly.dean_student, true);
+assert.equal(affairsOnly.homeroom, true);
+assert.equal(affairsOnly.academic, false);
+assert.equal(affairsOnly.subject_teacher, false);
+const bothGroups = mergeNotifyRolesFromGroups(defaultGroups, [
+  'png-affairs',
+  'png-academic',
+]);
+assert.equal(bothGroups.academic, true);
+assert.equal(bothGroups.subject_teacher, true);
+const groupRecipients = resolvePatrolReviewRecipients({
+  record: base,
+  teachers,
+  academicStaffList: staff,
+  notifyRoles: affairsOnly,
+});
+assert.ok(groupRecipients.some((r) => r.role === 'student_affairs'));
+assert.equal(groupRecipients.some((r) => r.role === 'academic'), false);
+assert.equal(groupRecipients.some((r) => r.role === 'subject_teacher'), false);
 
 const okRecord: PatrolRecord = { ...base, observations: [] };
 assert.equal(patrolRecordHasIssue(okRecord), false);
