@@ -143,6 +143,50 @@ export function summarizeNotifyGroupRoles(roles: PatrolNotifyRoles): string {
   return parts.length > 0 ? parts.join('、') : '（未勾選身分）';
 }
 
+/**
+ * 依巡堂紀錄的異常項目，從設定對應表解析應通知的群組 id（聯集去重）。
+ * 課間／段考看 observations；室外課／放學看不合格 checks。
+ */
+export function resolveNotifyGroupIdsForRecord(params: {
+  record: Pick<PatrolRecord, 'kind' | 'observations' | 'checks'>;
+  mailConfig?: Pick<PatrolMailConfig, 'notifyGroups' | 'notifyRoles' | 'itemNotifyGroupIds'> | null;
+}): string[] {
+  const { record, mailConfig } = params;
+  const groups = resolvePatrolNotifyGroups(mailConfig);
+  const validIds = new Set(groups.map((g) => g.id));
+  const map = mailConfig?.itemNotifyGroupIds || {};
+  const issueItemIds =
+    record.kind === 'class' || record.kind === 'exam'
+      ? record.observations || []
+      : Object.entries(record.checks || {})
+          .filter(([, ok]) => ok === false)
+          .map(([id]) => id);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const itemId of issueItemIds) {
+    for (const gid of map[itemId] || []) {
+      if (!validIds.has(gid) || seen.has(gid)) continue;
+      seen.add(gid);
+      out.push(gid);
+    }
+  }
+  return out;
+}
+
+/** 儲存時清理：只保留仍存在的群組 id */
+export function sanitizeItemNotifyGroupIds(
+  map: Record<string, string[]> | undefined,
+  groups: PatrolNotifyGroup[]
+): Record<string, string[]> {
+  const valid = new Set(groups.map((g) => g.id));
+  const next: Record<string, string[]> = {};
+  for (const [itemId, ids] of Object.entries(map || {})) {
+    const cleaned = [...new Set((ids || []).filter((id) => valid.has(id)))];
+    if (cleaned.length > 0) next[itemId] = cleaned;
+  }
+  return next;
+}
+
 /** 信內／畫面通知對象排序 */
 export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
   'student_affairs',

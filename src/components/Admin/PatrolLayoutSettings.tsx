@@ -27,6 +27,7 @@ import {
   newPatrolNotifyGroupId,
   resolvePatrolNotifyGroups,
   resolvePatrolNotifyRoles,
+  sanitizeItemNotifyGroupIds,
   summarizeNotifyGroupRoles,
 } from '../../utils/patrolReview';
 import {
@@ -137,6 +138,7 @@ const emptyMailConfig = (): PatrolMailConfig => ({
   fromEmail: '',
   appBaseUrl: typeof window !== 'undefined' ? window.location.origin : '',
   notifyGroups: resolvePatrolNotifyGroups(null),
+  itemNotifyGroupIds: {},
 });
 
 const NOTIFY_ROLE_OPTIONS: { key: keyof PatrolNotifyRoles; label: string }[] = [
@@ -151,11 +153,14 @@ const NOTIFY_ROLE_OPTIONS: { key: keyof PatrolNotifyRoles; label: string }[] = [
 const PatrolMailSettingsPanel: React.FC<{
   value?: PatrolMailConfig;
   onSave: (cfg: PatrolMailConfig) => void;
-}> = ({ value, onSave }) => {
+  observationItems: PatrolCheckItem[];
+  checkItems: PatrolCheckItem[];
+}> = ({ value, onSave, observationItems, checkItems }) => {
   const [draft, setDraft] = useState<PatrolMailConfig>(() => ({
     ...emptyMailConfig(),
     ...(value || {}),
     notifyGroups: resolvePatrolNotifyGroups(value),
+    itemNotifyGroupIds: value?.itemNotifyGroupIds || {},
   }));
   const [savedHint, setSavedHint] = useState('');
 
@@ -164,10 +169,12 @@ const PatrolMailSettingsPanel: React.FC<{
       ...emptyMailConfig(),
       ...(value || {}),
       notifyGroups: resolvePatrolNotifyGroups(value),
+      itemNotifyGroupIds: value?.itemNotifyGroupIds || {},
     });
   }, [value]);
 
   const notifyGroups = resolvePatrolNotifyGroups(draft);
+  const itemMap = draft.itemNotifyGroupIds || {};
 
   const updateGroup = (id: string, patch: Partial<PatrolNotifyGroup>) => {
     setDraft({
@@ -196,7 +203,23 @@ const PatrolMailSettingsPanel: React.FC<{
       alert('至少需保留一組通知群組。');
       return;
     }
-    setDraft({ ...draft, notifyGroups: notifyGroups.filter((g) => g.id !== id) });
+    const nextGroups = notifyGroups.filter((g) => g.id !== id);
+    setDraft({
+      ...draft,
+      notifyGroups: nextGroups,
+      itemNotifyGroupIds: sanitizeItemNotifyGroupIds(itemMap, nextGroups),
+    });
+  };
+
+  const toggleItemGroup = (itemId: string, groupId: string, checked: boolean) => {
+    const prev = itemMap[itemId] || [];
+    const nextIds = checked
+      ? [...new Set([...prev, groupId])]
+      : prev.filter((id) => id !== groupId);
+    const nextMap = { ...itemMap };
+    if (nextIds.length === 0) delete nextMap[itemId];
+    else nextMap[itemId] = nextIds;
+    setDraft({ ...draft, itemNotifyGroupIds: nextMap });
   };
 
   return (
@@ -220,7 +243,7 @@ const PatrolMailSettingsPanel: React.FC<{
           <div>
             <h4 className="text-xs font-extrabold text-slate-800">會辦／通知群組</h4>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              可新增多組，每組各自勾選身分。巡堂登錄異常時再勾選要通知哪些群組（可複選）。
+              可新增多組，每組各自勾選身分。下方再為各異常項目指定要通知的群組（例如「學生睡覺 → 學務線」）。
             </p>
           </div>
           <button
@@ -277,6 +300,68 @@ const PatrolMailSettingsPanel: React.FC<{
               </div>
             );
           })}
+        </div>
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-3 space-y-2">
+          <div>
+            <h4 className="text-xs font-extrabold text-slate-800">異常項目 → 通知群組</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              巡堂勾選該項目時，自動通知對應群組（可複選）。未對應任何群組的項目不會自動會辦，可於現場再手動選組。
+            </p>
+          </div>
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+              課間／段考觀察項目
+            </p>
+            {observationItems.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-2 space-y-1.5"
+              >
+                <div className="text-xs font-bold text-slate-800">{item.label}</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {notifyGroups.map((g) => (
+                    <label
+                      key={g.id}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(itemMap[item.id] || []).includes(g.id)}
+                        onChange={(e) => toggleItemGroup(item.id, g.id, e.target.checked)}
+                      />
+                      {g.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide pt-1">
+              室外課／放學檢查（不合格時）
+            </p>
+            {checkItems.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-2 space-y-1.5"
+              >
+                <div className="text-xs font-bold text-slate-800">{item.label}</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {notifyGroups.map((g) => (
+                    <label
+                      key={g.id}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(itemMap[item.id] || []).includes(g.id)}
+                        onChange={(e) => toggleItemGroup(item.id, g.id, e.target.checked)}
+                      />
+                      {g.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -365,6 +450,7 @@ const PatrolMailSettingsPanel: React.FC<{
               ...draft,
               pass: draft.pass.trim() || value?.pass || '',
               notifyGroups: groups,
+              itemNotifyGroupIds: sanitizeItemNotifyGroupIds(draft.itemNotifyGroupIds, groups),
               notifyRoles: undefined,
             };
             onSave(next);
@@ -780,6 +866,8 @@ export const PatrolLayoutSettings: React.FC = () => {
 
       <PatrolMailSettingsPanel
         value={systemConfig.patrolMailConfig}
+        observationItems={observationItems}
+        checkItems={checkItems}
         onSave={(patrolMailConfig) => save({ patrolMailConfig })}
       />
 
