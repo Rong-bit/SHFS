@@ -11,6 +11,7 @@ import {
   mergeNotifyRolesFromGroups,
   defaultPatrolNotifyGroups,
   resolveNotifyGroupIdsForRecord,
+  resolveNotifyGroupsForRecord,
   sanitizeItemNotifyGroupIds,
 } from '../src/utils/patrolReview';
 import { patrolRecordHasIssue } from '../src/components/Patrol/PatrolRoomSheet';
@@ -303,6 +304,29 @@ const sanitized = sanitizeItemNotifyGroupIds(
   defaultGroups
 );
 assert.deepEqual(sanitized, { sleeping: ['png-affairs'] });
+
+// 部分項目有對應、部分沒有 → 不可自動會辦（避免漏通知）
+const partialMap = resolveNotifyGroupsForRecord({
+  record: { ...base, observations: ['sleeping', 'teacher_absent'] },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: { sleeping: ['png-affairs'] },
+  },
+});
+assert.equal(partialMap.fullyMapped, false);
+assert.deepEqual(partialMap.groupIds, ['png-affairs']);
+const fullMap = resolveNotifyGroupsForRecord({
+  record: { ...base, observations: ['sleeping', 'phone'] },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: {
+      sleeping: ['png-affairs'],
+      phone: ['png-affairs'],
+    },
+  },
+});
+assert.equal(fullMap.fullyMapped, true);
+assert.deepEqual(fullMap.groupIds, ['png-affairs']);
 
 const okRecord: PatrolRecord = { ...base, observations: [] };
 assert.equal(patrolRecordHasIssue(okRecord), false);

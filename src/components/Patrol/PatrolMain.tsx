@@ -20,7 +20,7 @@ import {
   EMPTY_PATROL_NOTIFY_ROLES,
   mergeNotifyRolesFromGroups,
   patrolReviewCaseId,
-  resolveNotifyGroupIdsForRecord,
+  resolveNotifyGroupsForRecord,
   resolvePatrolNotifyGroups,
   resolveReviewWhenIssueCleared,
   summarizeNotifyGroupRoles,
@@ -296,20 +296,21 @@ export const PatrolMain: React.FC = () => {
         loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
         cases.find((c) => c.recordId === record.id) ||
         null;
-      // 首次建立／尚未寄出：依異常項目對應群組；無對應則彈窗手動選
+      // 首次建立／尚未寄出：全部異常項目都有對應才自動會辦；否則彈窗（預勾已對應群組）
       if (!existingReview?.notifiedAt && notifyGroups.length > 0) {
-        const mappedIds = resolveNotifyGroupIdsForRecord({
+        const { groupIds: mappedIds, fullyMapped } = resolveNotifyGroupsForRecord({
           record,
           mailConfig: systemConfig.patrolMailConfig,
         });
-        if (mappedIds.length > 0) {
+        if (fullyMapped && mappedIds.length > 0) {
           setOpenRoomId(null);
           void syncReviewForRecord(record, mappedIds);
           return;
         }
         setGroupPick({
           record,
-          selectedIds: notifyGroups.map((g) => g.id),
+          selectedIds:
+            mappedIds.length > 0 ? mappedIds : notifyGroups.map((g) => g.id),
         });
         setOpenRoomId(null);
         return;
@@ -568,7 +569,7 @@ export const PatrolMain: React.FC = () => {
             <div>
               <h3 className="text-base font-extrabold text-slate-900">選擇會辦通知群組</h3>
               <p className="text-xs text-slate-500 mt-1">
-                巡堂紀錄已儲存，但異常項目尚未在設定中對應通知群組。請勾選要通知的群組，或至「巡堂教室配置 → 寄信設定」為各項目指定群組（例如睡覺 → 學務線）。
+                巡堂紀錄已儲存。部分或全部異常項目尚未對應通知群組，請勾選要通知的群組；亦可至「寄信設定」為各項目指定群組（例如睡覺 → 學務線）。
               </p>
             </div>
             <div className="space-y-2">

@@ -305,7 +305,7 @@ const PatrolMailSettingsPanel: React.FC<{
           <div>
             <h4 className="text-xs font-extrabold text-slate-800">異常項目 → 通知群組</h4>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              巡堂勾選該項目時，自動通知對應群組（可複選）。未對應任何群組的項目不會自動會辦，可於現場再手動選組。
+              巡堂勾選該項目時，自動通知對應群組（可複選）。須「本次勾選的每個異常項目都有對應」才自動會辦；否則會彈窗手動選組。
             </p>
           </div>
           <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
