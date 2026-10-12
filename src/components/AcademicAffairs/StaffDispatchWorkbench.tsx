@@ -494,8 +494,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   ]);
 
   const substituteIdForSession = (sessionId: string) => {
+    // 連續節次以各節 map 為準，不可 fallback 到全域 substituteTeacherId，
+    // 否則中段改選代理人時，較早尚未寫入 map 的節次會被誤顯示／送出為新代理人。
     if (sessionPickMode === 'periodRange') {
-      return sessionSubstituteIds[sessionId] || substituteTeacherId;
+      return sessionSubstituteIds[sessionId] || '';
     }
     return substituteTeacherId;
   };
@@ -505,6 +507,23 @@ export const StaffDispatchWorkbench: React.FC = () => {
       const next = { ...prev };
       batchSelectedSessions.forEach((session) => {
         next[session.id] = teacherId;
+      });
+      return next;
+    });
+  };
+
+  /** 連續節次：自指定課堂起，將代理人套用／清除至後續已勾選節次 */
+  const applySubstituteFromSessionForward = (fromSessionId: string, teacherId: string) => {
+    setSessionSubstituteIds((prev) => {
+      const next = { ...prev };
+      const startIdx = batchSelectedSessions.findIndex((session) => session.id === fromSessionId);
+      const targetIds =
+        startIdx >= 0
+          ? batchSelectedSessions.slice(startIdx).map((session) => session.id)
+          : [fromSessionId];
+      targetIds.forEach((sessionId) => {
+        if (teacherId) next[sessionId] = teacherId;
+        else delete next[sessionId];
       });
       return next;
     });
@@ -2123,7 +2142,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         將一次派代「{dayNames[rangeDayOfWeek]} 第
                         {Math.min(rangePeriodStart, rangePeriodEnd)}～
                         {Math.max(rangePeriodStart, rangePeriodEnd)}節」內有課的節次（目前{' '}
-                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。各節可指定不同代理人；假單編號相同，通知單分張列印。
+                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。各節可指定不同代理人；指定本節代理人會自動套用至後續已勾選節次，中途改選則自該節起變更。假單編號相同，通知單分張列印。
                       </p>
                     </div>
                   )}
@@ -2216,10 +2235,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                     currentTeacherId={sessionSubId}
                                     onSelectTeacher={(id) => {
                                       setHasUserChosenSubstituteTeacher(true);
-                                      setSessionSubstituteIds((prev) => ({
-                                        ...prev,
-                                        [s.id]: id,
-                                      }));
+                                      applySubstituteFromSessionForward(s.id, id);
+                                      // 僅作智慧推薦／底部搜尋的選取狀態；各節實際代理人以 sessionSubstituteIds 為準
                                       setSubstituteTeacherId(id);
                                     }}
                                     placeholder="指定本節代課教師…"
