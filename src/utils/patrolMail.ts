@@ -28,6 +28,9 @@ export function patrolNotifyAudienceLine(
   if (roles.dean_student) parts.push('學務主任');
   if (roles.academic) parts.push('教學組');
   if (roles.dean_academic) parts.push('教務主任');
+  if (roles.internship) parts.push('實習組');
+  if (roles.dean_internship) parts.push('實習主任');
+  if (roles.dean_general_affairs) parts.push('總務主任');
   if (roles.homeroom) parts.push('該班導師');
   if (kind === 'exam') {
     const base = parts.length > 0 ? parts.join('、') : '（選項未勾選任何身分）';
@@ -73,6 +76,9 @@ export function buildPatrolNotifyEmail(params: {
       dean_student: c.recipients.some((r) => r.role === 'dean_student'),
       academic: c.recipients.some((r) => r.role === 'academic'),
       dean_academic: c.recipients.some((r) => r.role === 'dean_academic'),
+      internship: c.recipients.some((r) => r.role === 'internship'),
+      dean_internship: c.recipients.some((r) => r.role === 'dean_internship'),
+      dean_general_affairs: c.recipients.some((r) => r.role === 'dean_general_affairs'),
       homeroom: c.recipients.some((r) => r.role === 'homeroom'),
       subject_teacher:
         c.kind === 'exam' ? true : c.recipients.some((r) => r.role === 'subject_teacher'),

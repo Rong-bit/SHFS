@@ -22,9 +22,12 @@ export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
   homeroom: '導師',
   subject_teacher: '任課老師',
   principal: '校長',
+  internship: '實習組',
+  dean_internship: '實習主任',
+  dean_general_affairs: '總務主任',
 };
 
-/** 會辦通知對象預設全開（向下相容舊設定） */
+/** 會辦通知對象預設（舊六項全開；新增身分預設關，避免舊群組突然擴大） */
 export const DEFAULT_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
   student_affairs: true,
   dean_student: true,
@@ -32,6 +35,9 @@ export const DEFAULT_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
   dean_academic: true,
   homeroom: true,
   subject_teacher: true,
+  internship: false,
+  dean_internship: false,
+  dean_general_affairs: false,
 };
 
 /** 全關（新建空白群組用） */
@@ -42,6 +48,9 @@ export const EMPTY_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
   dean_academic: false,
   homeroom: false,
   subject_teacher: false,
+  internship: false,
+  dean_internship: false,
+  dean_general_affairs: false,
 };
 
 export function resolvePatrolNotifyRoles(
@@ -61,23 +70,19 @@ export function defaultPatrolNotifyGroups(): PatrolNotifyGroup[] {
       id: 'png-affairs',
       name: '學務線',
       roles: {
+        ...EMPTY_PATROL_NOTIFY_ROLES,
         student_affairs: true,
         dean_student: true,
-        academic: false,
-        dean_academic: false,
         homeroom: true,
-        subject_teacher: false,
       },
     },
     {
       id: 'png-academic',
       name: '教務線',
       roles: {
-        student_affairs: false,
-        dean_student: false,
+        ...EMPTY_PATROL_NOTIFY_ROLES,
         academic: true,
         dean_academic: true,
-        homeroom: false,
         subject_teacher: true,
       },
     },
@@ -138,6 +143,9 @@ export function summarizeNotifyGroupRoles(roles: PatrolNotifyRoles): string {
   if (r.dean_student) parts.push('學務主任');
   if (r.academic) parts.push('教學組');
   if (r.dean_academic) parts.push('教務主任');
+  if (r.internship) parts.push('實習組');
+  if (r.dean_internship) parts.push('實習主任');
+  if (r.dean_general_affairs) parts.push('總務主任');
   if (r.homeroom) parts.push('導師');
   if (r.subject_teacher) parts.push('任課');
   return parts.length > 0 ? parts.join('、') : '（未勾選身分）';
@@ -212,6 +220,9 @@ export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
   'dean_student',
   'academic',
   'dean_academic',
+  'internship',
+  'dean_internship',
+  'dean_general_affairs',
   'homeroom',
   'subject_teacher',
   'principal',
@@ -236,10 +247,16 @@ export function stampOfficeAndTitle(
       return { officeLabel: '教務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
     case 'dean_student':
       return { officeLabel: '學務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+    case 'dean_internship':
+      return { officeLabel: '實習處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+    case 'dean_general_affairs':
+      return { officeLabel: '總務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
     case 'student_affairs':
       return { officeLabel: '生輔組', titleLabel: actionTitle };
     case 'academic':
       return { officeLabel: '教學組', titleLabel: actionTitle };
+    case 'internship':
+      return { officeLabel: '實習組', titleLabel: actionTitle };
     case 'principal':
       return { officeLabel: '校長室', titleLabel: actionTitle === '閱畢' || actionTitle === '會畢' ? actionTitle : '核章' };
     case 'homeroom':
@@ -266,16 +283,37 @@ export function patrolIssueSummary(r: Pick<PatrolRecord, 'kind' | 'observations'
   return r.note ? `${base}；${r.note}` : base;
 }
 
+function staffText(s: Pick<AcademicStaff, 'title' | 'badge' | 'responsibleScope'>): string {
+  return `${s.title || ''}${s.badge || ''}${s.responsibleScope || ''}`;
+}
+
 /** 依職稱／組別判斷是否為學務主任 */
 export function isDeanStudentStaff(s: AcademicStaff): boolean {
-  const t = `${s.title}${s.badge}${s.responsibleScope}`;
-  return /學務主任|學務處主任/.test(t);
+  return /學務主任|學務處主任/.test(staffText(s));
 }
 
 /** 依職稱判斷是否為教務主任／教務 */
 export function isDeanAcademicStaff(s: AcademicStaff): boolean {
   const t = `${s.title}${s.badge}`;
   return /教務主任|教務處主任/.test(t) || (s.group === 'academic' && /教務/.test(s.title) && /主任/.test(s.title));
+}
+
+/** 實習主任 */
+export function isDeanInternshipStaff(s: AcademicStaff): boolean {
+  const t = staffText(s);
+  return /實習主任|實習處主任/.test(t) || (/實習/.test(t) && /主任/.test(s.title || ''));
+}
+
+/** 實習組（非實習主任） */
+export function isInternshipStaff(s: AcademicStaff): boolean {
+  if (isDeanInternshipStaff(s)) return false;
+  return /實習/.test(staffText(s));
+}
+
+/** 總務主任 */
+export function isDeanGeneralAffairsStaff(s: AcademicStaff): boolean {
+  const t = staffText(s);
+  return /總務主任|總務處主任/.test(t) || (/總務/.test(t) && /主任/.test(s.title || ''));
 }
 
 function uniqRecipients(list: PatrolReviewRecipient[]): PatrolReviewRecipient[] {
@@ -356,6 +394,22 @@ export function resolvePatrolReviewRecipients(params: {
       const idx = out.findIndex((r) => r.personId === fallback.id);
       if (idx >= 0) out[idx] = { ...out[idx], role: 'dean_academic' };
       else pushStaff('dean_academic', fallback);
+    }
+  }
+
+  if (roles.internship || roles.dean_internship) {
+    for (const s of academicStaffList) {
+      if (isDeanInternshipStaff(s)) {
+        if (roles.dean_internship) pushStaff('dean_internship', s);
+      } else if (roles.internship && isInternshipStaff(s)) {
+        pushStaff('internship', s);
+      }
+    }
+  }
+
+  if (roles.dean_general_affairs) {
+    for (const s of academicStaffList) {
+      if (isDeanGeneralAffairsStaff(s)) pushStaff('dean_general_affairs', s);
     }
   }
 
@@ -558,7 +612,16 @@ export function viewerReviewRoles(params: {
   const roles: PatrolReviewRole[] = [];
   const { reviewCase, viewer } = params;
   if (viewer.isAdmin) {
-    return ['student_affairs', 'academic', 'dean_academic', 'dean_student', 'principal'];
+    return [
+      'student_affairs',
+      'academic',
+      'dean_academic',
+      'dean_student',
+      'internship',
+      'dean_internship',
+      'dean_general_affairs',
+      'principal',
+    ];
   }
   if (viewer.kind === 'teacher') {
     for (const r of reviewCase.recipients) {
@@ -572,42 +635,47 @@ export function viewerReviewRoles(params: {
     }
     return [...new Set(roles)];
   }
+  const stub = (title: string, group: AcademicStaff['group']): AcademicStaff => ({
+    id: viewer.id,
+    name: viewer.name,
+    title,
+    badge: '',
+    email: '',
+    phone: '',
+    responsibleScope: '',
+    group,
+  });
   const group = viewer.staffGroup || 'academic';
   if (group === 'principal') roles.push('principal');
   if (group === 'student_affairs') {
     roles.push('student_affairs');
-    if (
-      viewer.staffTitle &&
-      isDeanStudentStaff({
-        id: viewer.id,
-        name: viewer.name,
-        title: viewer.staffTitle,
-        badge: '',
-        email: '',
-        phone: '',
-        responsibleScope: '',
-        group: 'student_affairs',
-      })
-    ) {
+    if (viewer.staffTitle && isDeanStudentStaff(stub(viewer.staffTitle, 'student_affairs'))) {
       roles.push('dean_student');
     }
   }
   if (group === 'academic') {
     roles.push('academic');
-    if (
-      viewer.staffTitle &&
-      isDeanAcademicStaff({
-        id: viewer.id,
-        name: viewer.name,
-        title: viewer.staffTitle,
-        badge: '',
-        email: '',
-        phone: '',
-        responsibleScope: '',
-        group: 'academic',
-      })
-    ) {
+    if (viewer.staffTitle && isDeanAcademicStaff(stub(viewer.staffTitle, 'academic'))) {
       roles.push('dean_academic');
+    }
+  }
+  // 實習／總務：依職稱辨識，並需為此案收件人身分之一
+  if (viewer.staffTitle) {
+    const titled = stub(viewer.staffTitle, group as AcademicStaff['group']);
+    const maybe: PatrolReviewRole[] = [];
+    if (isDeanInternshipStaff(titled)) maybe.push('dean_internship');
+    else if (isInternshipStaff(titled)) maybe.push('internship');
+    if (isDeanGeneralAffairsStaff(titled)) maybe.push('dean_general_affairs');
+    for (const role of maybe) {
+      if (reviewCase.recipients.some((r) => r.role === role && r.personId === viewer.id)) {
+        roles.push(role);
+      } else if (
+        reviewCase.recipients.some(
+          (r) => r.role === role && !r.personId && teacherNameMatches(r.personName, viewer.name)
+        )
+      ) {
+        roles.push(role);
+      }
     }
   }
   return [...new Set(roles)];

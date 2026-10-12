@@ -83,6 +83,36 @@ const staff: AcademicStaff[] = [
     responsibleScope: '',
     group: 'academic',
   },
+  {
+    id: 'in1',
+    name: '林實習',
+    title: '實習組長',
+    badge: '實習課務',
+    email: 'intern@school.edu',
+    phone: '',
+    responsibleScope: '實習工場',
+    group: 'academic',
+  },
+  {
+    id: 'in2',
+    name: '黃實習主',
+    title: '實習主任',
+    badge: '',
+    email: 'dean-i@school.edu',
+    phone: '',
+    responsibleScope: '',
+    group: 'academic',
+  },
+  {
+    id: 'ga1',
+    name: '蔡總務',
+    title: '總務主任',
+    badge: '',
+    email: 'dean-g@school.edu',
+    phone: '',
+    responsibleScope: '',
+    group: 'academic',
+  },
 ];
 
 const base: PatrolRecord = {
@@ -327,6 +357,27 @@ const fullMap = resolveNotifyGroupsForRecord({
 });
 assert.equal(fullMap.fullyMapped, true);
 assert.deepEqual(fullMap.groupIds, ['png-affairs']);
+
+// 新增身分：實習組／實習主任／總務主任
+const extraRecipients = resolvePatrolReviewRecipients({
+  record: base,
+  teachers,
+  academicStaffList: staff,
+  notifyRoles: {
+    student_affairs: false,
+    dean_student: false,
+    academic: false,
+    dean_academic: false,
+    homeroom: false,
+    subject_teacher: false,
+    internship: true,
+    dean_internship: true,
+    dean_general_affairs: true,
+  },
+});
+assert.ok(extraRecipients.some((r) => r.role === 'internship' && r.personName === '林實習'));
+assert.ok(extraRecipients.some((r) => r.role === 'dean_internship' && r.personName === '黃實習主'));
+assert.ok(extraRecipients.some((r) => r.role === 'dean_general_affairs' && r.personName === '蔡總務'));
 
 const okRecord: PatrolRecord = { ...base, observations: [] };
 assert.equal(patrolRecordHasIssue(okRecord), false);
