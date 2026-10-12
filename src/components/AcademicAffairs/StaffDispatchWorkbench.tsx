@@ -515,19 +515,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
     setSessionSubstituteIds((prev) => {
       const next = { ...prev };
       const startIdx = batchSelectedSessions.findIndex((session) => session.id === fromSessionId);
-      const from = startIdx >= 0 ? startIdx : 0;
-      const targets =
+      const targetIds =
         startIdx >= 0
-          ? batchSelectedSessions.slice(from)
-          : batchSelectedSessions.filter((session) => session.id === fromSessionId);
-      if (targets.length === 0) {
-        if (teacherId) next[fromSessionId] = teacherId;
-        else delete next[fromSessionId];
-        return next;
-      }
-      targets.forEach((session) => {
-        if (teacherId) next[session.id] = teacherId;
-        else delete next[session.id];
+          ? batchSelectedSessions.slice(startIdx).map((session) => session.id)
+          : [fromSessionId];
+      targetIds.forEach((sessionId) => {
+        if (teacherId) next[sessionId] = teacherId;
+        else delete next[sessionId];
       });
       return next;
     });
