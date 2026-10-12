@@ -312,6 +312,12 @@ export interface PatrolMailConfig {
    */
   notifyGroups?: PatrolNotifyGroup[];
   /**
+   * 觀察／檢查項目 id → 要通知的群組 id 列表。
+   * 例：學生睡覺 → [學務線]；教師未到 → [教務線]。
+   * 巡堂勾選該異常時，自動依對應群組建立會辦。
+   */
+  itemNotifyGroupIds?: Record<string, string[]>;
+  /**
    * @deprecated 改用 notifyGroups；僅供舊資料相容（單一「預設」群組）
    * 會辦案納入／寄信的身分；未設定＝全部開啟
    */

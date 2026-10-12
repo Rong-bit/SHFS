@@ -10,6 +10,9 @@ import {
   resolvePatrolNotifyGroups,
   mergeNotifyRolesFromGroups,
   defaultPatrolNotifyGroups,
+  resolveNotifyGroupIdsForRecord,
+  resolveNotifyGroupsForRecord,
+  sanitizeItemNotifyGroupIds,
 } from '../src/utils/patrolReview';
 import { patrolRecordHasIssue } from '../src/components/Patrol/PatrolRoomSheet';
 
@@ -258,6 +261,72 @@ const groupRecipients = resolvePatrolReviewRecipients({
 assert.ok(groupRecipients.some((r) => r.role === 'student_affairs'));
 assert.equal(groupRecipients.some((r) => r.role === 'academic'), false);
 assert.equal(groupRecipients.some((r) => r.role === 'subject_teacher'), false);
+
+// 異常項目 → 群組對應：睡覺／玩手機 → 學務線；教師未到 → 教務線
+const itemMapped = resolveNotifyGroupIdsForRecord({
+  record: { ...base, observations: ['sleeping', 'phone'] },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: {
+      sleeping: ['png-affairs'],
+      phone: ['png-affairs'],
+      teacher_absent: ['png-academic'],
+    },
+  },
+});
+assert.deepEqual(itemMapped, ['png-affairs']);
+const itemMappedBoth = resolveNotifyGroupIdsForRecord({
+  record: { ...base, observations: ['sleeping', 'teacher_absent'] },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: {
+      sleeping: ['png-affairs'],
+      teacher_absent: ['png-academic'],
+    },
+  },
+});
+assert.deepEqual(itemMappedBoth, ['png-affairs', 'png-academic']);
+const outdoorMapped = resolveNotifyGroupIdsForRecord({
+  record: {
+    ...base,
+    kind: 'after_school',
+    observations: [],
+    checks: { lights: false, aircon: true },
+  },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: { lights: ['png-academic'] },
+  },
+});
+assert.deepEqual(outdoorMapped, ['png-academic']);
+const sanitized = sanitizeItemNotifyGroupIds(
+  { sleeping: ['png-affairs', 'gone'], phone: ['gone'] },
+  defaultGroups
+);
+assert.deepEqual(sanitized, { sleeping: ['png-affairs'] });
+
+// 部分項目有對應、部分沒有 → 不可自動會辦（避免漏通知）
+const partialMap = resolveNotifyGroupsForRecord({
+  record: { ...base, observations: ['sleeping', 'teacher_absent'] },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: { sleeping: ['png-affairs'] },
+  },
+});
+assert.equal(partialMap.fullyMapped, false);
+assert.deepEqual(partialMap.groupIds, ['png-affairs']);
+const fullMap = resolveNotifyGroupsForRecord({
+  record: { ...base, observations: ['sleeping', 'phone'] },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: {
+      sleeping: ['png-affairs'],
+      phone: ['png-affairs'],
+    },
+  },
+});
+assert.equal(fullMap.fullyMapped, true);
+assert.deepEqual(fullMap.groupIds, ['png-affairs']);
 
 const okRecord: PatrolRecord = { ...base, observations: [] };
 assert.equal(patrolRecordHasIssue(okRecord), false);

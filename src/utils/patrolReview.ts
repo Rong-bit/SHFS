@@ -143,6 +143,69 @@ export function summarizeNotifyGroupRoles(roles: PatrolNotifyRoles): string {
   return parts.length > 0 ? parts.join('、') : '（未勾選身分）';
 }
 
+/** 取得該筆巡堂紀錄造成異常的項目 id */
+export function issueItemIdsForRecord(
+  record: Pick<PatrolRecord, 'kind' | 'observations' | 'checks'>
+): string[] {
+  if (record.kind === 'class' || record.kind === 'exam') {
+    return record.observations || [];
+  }
+  return Object.entries(record.checks || {})
+    .filter(([, ok]) => ok === false)
+    .map(([id]) => id);
+}
+
+/**
+ * 依巡堂紀錄的異常項目，從設定對應表解析應通知的群組。
+ * - groupIds：各異常項目對應群組的聯集（去重）
+ * - fullyMapped：每個異常項目都至少有一個有效群組對應（才可自動會辦、略過彈窗）
+ */
+export function resolveNotifyGroupsForRecord(params: {
+  record: Pick<PatrolRecord, 'kind' | 'observations' | 'checks'>;
+  mailConfig?: Pick<PatrolMailConfig, 'notifyGroups' | 'notifyRoles' | 'itemNotifyGroupIds'> | null;
+}): { groupIds: string[]; fullyMapped: boolean; issueItemIds: string[] } {
+  const { record, mailConfig } = params;
+  const groups = resolvePatrolNotifyGroups(mailConfig);
+  const validIds = new Set(groups.map((g) => g.id));
+  const map = mailConfig?.itemNotifyGroupIds || {};
+  const issueItemIds = issueItemIdsForRecord(record);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let fullyMapped = issueItemIds.length > 0;
+  for (const itemId of issueItemIds) {
+    const mapped = (map[itemId] || []).filter((gid) => validIds.has(gid));
+    if (mapped.length === 0) fullyMapped = false;
+    for (const gid of mapped) {
+      if (seen.has(gid)) continue;
+      seen.add(gid);
+      out.push(gid);
+    }
+  }
+  return { groupIds: out, fullyMapped, issueItemIds };
+}
+
+/** @deprecated 請用 resolveNotifyGroupsForRecord；保留給舊呼叫端 */
+export function resolveNotifyGroupIdsForRecord(params: {
+  record: Pick<PatrolRecord, 'kind' | 'observations' | 'checks'>;
+  mailConfig?: Pick<PatrolMailConfig, 'notifyGroups' | 'notifyRoles' | 'itemNotifyGroupIds'> | null;
+}): string[] {
+  return resolveNotifyGroupsForRecord(params).groupIds;
+}
+
+/** 儲存時清理：只保留仍存在的群組 id */
+export function sanitizeItemNotifyGroupIds(
+  map: Record<string, string[]> | undefined,
+  groups: PatrolNotifyGroup[]
+): Record<string, string[]> {
+  const valid = new Set(groups.map((g) => g.id));
+  const next: Record<string, string[]> = {};
+  for (const [itemId, ids] of Object.entries(map || {})) {
+    const cleaned = [...new Set((ids || []).filter((id) => valid.has(id)))];
+    if (cleaned.length > 0) next[itemId] = cleaned;
+  }
+  return next;
+}
+
 /** 信內／畫面通知對象排序 */
 export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
   'student_affairs',
