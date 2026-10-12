@@ -1,6 +1,7 @@
 import {
   AcademicStaff,
   PatrolKind,
+  PatrolNotifyRoles,
   PatrolRecord,
   PatrolReviewCase,
   PatrolReviewRecipient,
@@ -20,6 +21,22 @@ export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
   subject_teacher: '任課老師',
   principal: '校長',
 };
+
+/** 會辦通知對象預設全開（向下相容舊設定） */
+export const DEFAULT_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
+  student_affairs: true,
+  dean_student: true,
+  academic: true,
+  dean_academic: true,
+  homeroom: true,
+  subject_teacher: true,
+};
+
+export function resolvePatrolNotifyRoles(
+  partial?: Partial<PatrolNotifyRoles> | null
+): PatrolNotifyRoles {
+  return { ...DEFAULT_PATROL_NOTIFY_ROLES, ...(partial || {}) };
+}
 
 /** 信內／畫面通知對象排序 */
 export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
@@ -108,13 +125,16 @@ function uniqRecipients(list: PatrolReviewRecipient[]): PatrolReviewRecipient[] 
 /**
  * 解析異常會辦收件名單。
  * 段考不含任課老師；其餘類型有任課老師時一併通知。
+ * 可依 notifyRoles（選項勾選）過濾身分；未傳入視為全開。
  */
 export function resolvePatrolReviewRecipients(params: {
   record: PatrolRecord;
   teachers: Teacher[];
   academicStaffList: AcademicStaff[];
+  notifyRoles?: Partial<PatrolNotifyRoles> | null;
 }): PatrolReviewRecipient[] {
   const { record, teachers, academicStaffList } = params;
+  const roles = resolvePatrolNotifyRoles(params.notifyRoles);
   const out: PatrolReviewRecipient[] = [];
 
   const pushStaff = (role: PatrolReviewRole, staff: AcademicStaff) => {
@@ -126,21 +146,31 @@ export function resolvePatrolReviewRecipients(params: {
     });
   };
 
-  for (const s of academicStaffList) {
-    if ((s.group || 'academic') === 'student_affairs') {
-      if (isDeanStudentStaff(s)) pushStaff('dean_student', s);
-      else pushStaff('student_affairs', s);
+  if (roles.student_affairs || roles.dean_student) {
+    for (const s of academicStaffList) {
+      if ((s.group || 'academic') === 'student_affairs') {
+        if (isDeanStudentStaff(s)) {
+          if (roles.dean_student) pushStaff('dean_student', s);
+        } else if (roles.student_affairs) {
+          pushStaff('student_affairs', s);
+        }
+      }
     }
   }
 
-  for (const s of academicStaffList) {
-    if ((s.group || 'academic') !== 'academic') continue;
-    if (isDeanAcademicStaff(s)) pushStaff('dean_academic', s);
-    else pushStaff('academic', s);
+  if (roles.academic || roles.dean_academic) {
+    for (const s of academicStaffList) {
+      if ((s.group || 'academic') !== 'academic') continue;
+      if (isDeanAcademicStaff(s)) {
+        if (roles.dean_academic) pushStaff('dean_academic', s);
+      } else if (roles.academic) {
+        pushStaff('academic', s);
+      }
+    }
   }
 
   // 若尚無學務主任／教務角色：把已列入的同人升級為主任角色（避免重複列）
-  if (!out.some((r) => r.role === 'dean_student')) {
+  if (roles.dean_student && !out.some((r) => r.role === 'dean_student')) {
     const fallback = academicStaffList.find(
       (s) => (s.group || 'academic') === 'student_affairs' && /主任/.test(s.title)
     );
@@ -150,7 +180,7 @@ export function resolvePatrolReviewRecipients(params: {
       else pushStaff('dean_student', fallback);
     }
   }
-  if (!out.some((r) => r.role === 'dean_academic')) {
+  if (roles.dean_academic && !out.some((r) => r.role === 'dean_academic')) {
     const fallback = academicStaffList.find(
       (s) => (s.group || 'academic') === 'academic' && (/教務主任/.test(s.title) || /主任/.test(s.title))
     );
@@ -162,7 +192,7 @@ export function resolvePatrolReviewRecipients(params: {
   }
 
   const className = (record.className || '').trim();
-  if (className) {
+  if (roles.homeroom && className) {
     const tutors = teachers.filter((t) => (t.homeroomClass || '').trim() === className);
     for (const t of tutors) {
       out.push({
@@ -174,7 +204,7 @@ export function resolvePatrolReviewRecipients(params: {
     }
   }
 
-  if (record.kind !== 'exam' && record.teacherName) {
+  if (roles.subject_teacher && record.kind !== 'exam' && record.teacherName) {
     const names = record.teacherName
       .split(/[、,，/／]/)
       .map((n) => n.trim())
@@ -204,10 +234,16 @@ export function buildPatrolReviewCase(params: {
   teachers: Teacher[];
   academicStaffList: AcademicStaff[];
   existing?: PatrolReviewCase | null;
+  notifyRoles?: Partial<PatrolNotifyRoles> | null;
 }): PatrolReviewCase {
   const { record, teachers, academicStaffList, existing } = params;
   const now = new Date().toISOString();
-  const recipients = resolvePatrolReviewRecipients({ record, teachers, academicStaffList });
+  const recipients = resolvePatrolReviewRecipients({
+    record,
+    teachers,
+    academicStaffList,
+    notifyRoles: params.notifyRoles,
+  });
   /** closed 或「已更正為正常」後再異常 → 視為新一輪會辦，可重寄 */
   const reopened =
     existing?.status === 'closed' ||

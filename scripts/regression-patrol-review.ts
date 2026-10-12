@@ -113,7 +113,7 @@ assert.ok(classRecipients.some((r) => r.role === 'dean_student'));
 assert.ok(classRecipients.some((r) => r.role === 'academic'));
 assert.ok(classRecipients.some((r) => r.role === 'dean_academic' && r.personName === '吳教務'));
 
-const { buildPatrolNotifyEmail } = await import('../src/utils/patrolMail');
+const { buildPatrolNotifyEmail, patrolNotifyAudienceLine } = await import('../src/utils/patrolMail');
 const mail = buildPatrolNotifyEmail({
   reviewCase: {
     id: 'review_r1',
@@ -159,6 +159,62 @@ assert.equal(
   examRecipients.some((r) => r.role === 'subject_teacher'),
   false,
   '段考不應通知任課老師'
+);
+
+// 選項關閉部分身分 → 解析結果不含該角色
+const filteredRecipients = resolvePatrolReviewRecipients({
+  record: base,
+  teachers,
+  academicStaffList: staff,
+  notifyRoles: {
+    student_affairs: false,
+    dean_student: true,
+    academic: false,
+    dean_academic: true,
+    homeroom: true,
+    subject_teacher: false,
+  },
+});
+assert.equal(
+  filteredRecipients.some((r) => r.role === 'student_affairs'),
+  false,
+  '選項關閉生輔組後不應納入'
+);
+assert.equal(
+  filteredRecipients.some((r) => r.role === 'academic'),
+  false,
+  '選項關閉教學組後不應納入'
+);
+assert.equal(
+  filteredRecipients.some((r) => r.role === 'subject_teacher'),
+  false,
+  '選項關閉任課老師後不應納入'
+);
+assert.ok(filteredRecipients.some((r) => r.role === 'dean_student'));
+assert.ok(filteredRecipients.some((r) => r.role === 'dean_academic'));
+assert.ok(filteredRecipients.some((r) => r.role === 'homeroom'));
+
+assert.match(
+  patrolNotifyAudienceLine('class', {
+    student_affairs: false,
+    dean_student: true,
+    academic: false,
+    dean_academic: true,
+    homeroom: true,
+    subject_teacher: false,
+  }),
+  /^學務主任、教務主任、該班導師$/
+);
+assert.match(
+  patrolNotifyAudienceLine('exam', {
+    student_affairs: true,
+    dean_student: true,
+    academic: true,
+    dean_academic: true,
+    homeroom: true,
+    subject_teacher: true,
+  }),
+  /段考不含任課老師/
 );
 
 const okRecord: PatrolRecord = { ...base, observations: [] };

@@ -277,6 +277,16 @@ export interface SystemConfig {
   patrolMailConfig?: PatrolMailConfig;
 }
 
+/** 巡堂會辦／通知對象身分勾選（未設定視為全開） */
+export interface PatrolNotifyRoles {
+  student_affairs: boolean;
+  dean_student: boolean;
+  academic: boolean;
+  dean_academic: boolean;
+  homeroom: boolean;
+  subject_teacher: boolean;
+}
+
 /** 巡堂異常 email 通知 SMTP 設定 */
 export interface PatrolMailConfig {
   enabled: boolean;
@@ -289,6 +299,8 @@ export interface PatrolMailConfig {
   fromEmail: string;
   /** 信內深層連結用的系統網址（例 https://school.example.com） */
   appBaseUrl?: string;
+  /** 會辦案納入／寄信的身分；未設定＝全部開啟 */
+  notifyRoles?: PatrolNotifyRoles;
 }
 
 /** 行事曆放假日（代課／課輔不計；超鐘點僅外聘人員不計） */

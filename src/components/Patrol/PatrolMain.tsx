@@ -131,13 +131,14 @@ export const PatrolMain: React.FC = () => {
       }
       return;
     }
+    const mailCfg = systemConfig.patrolMailConfig;
     const reviewCase = buildPatrolReviewCase({
       record,
       teachers,
       academicStaffList,
       existing,
+      notifyRoles: mailCfg?.notifyRoles,
     });
-    const mailCfg = systemConfig.patrolMailConfig;
     // 僅對尚未成功寄出的信箱重試，避免部分成功後重寄全體
     const needMail =
       isPatrolMailConfigured(mailCfg) &&

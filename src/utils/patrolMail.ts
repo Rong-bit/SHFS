@@ -1,7 +1,14 @@
-import { PatrolKind, PatrolMailConfig, PatrolReviewCase, PatrolReviewRole } from '../types';
+import {
+  PatrolKind,
+  PatrolMailConfig,
+  PatrolNotifyRoles,
+  PatrolReviewCase,
+  PatrolReviewRole,
+} from '../types';
 import {
   PATROL_REVIEW_ROLE_LABELS,
   PATROL_REVIEW_ROLE_ORDER,
+  resolvePatrolNotifyRoles,
 } from './patrolReview';
 import { patrolKindLabel } from './patrolExcel';
 
@@ -10,12 +17,24 @@ export function isPatrolMailConfigured(cfg?: PatrolMailConfig | null): boolean {
   return Boolean(cfg.host && cfg.fromEmail && (cfg.user || cfg.fromEmail));
 }
 
-/** 依巡堂類型說明應通知哪些身分（固定文案，必含學務／教務主任） */
-export function patrolNotifyAudienceLine(kind: PatrolKind): string {
+/** 依巡堂類型與選項勾選說明應通知哪些身分 */
+export function patrolNotifyAudienceLine(
+  kind: PatrolKind,
+  notifyRoles?: Partial<PatrolNotifyRoles> | null
+): string {
+  const roles = resolvePatrolNotifyRoles(notifyRoles);
+  const parts: string[] = [];
+  if (roles.student_affairs) parts.push('生輔組');
+  if (roles.dean_student) parts.push('學務主任');
+  if (roles.academic) parts.push('教學組');
+  if (roles.dean_academic) parts.push('教務主任');
+  if (roles.homeroom) parts.push('該班導師');
   if (kind === 'exam') {
-    return '生輔組、學務主任、教學組、教務主任、該班導師（段考不含任課老師）';
+    const base = parts.length > 0 ? parts.join('、') : '（選項未勾選任何身分）';
+    return `${base}（段考不含任課老師）`;
   }
-  return '生輔組、學務主任、教學組、教務主任、該班導師、任課老師';
+  if (roles.subject_teacher) parts.push('任課老師');
+  return parts.length > 0 ? parts.join('、') : '（選項未勾選任何身分）';
 }
 
 function sortedRecipientLines(c: PatrolReviewCase): string[] {
@@ -37,6 +56,8 @@ export function buildPatrolNotifyEmail(params: {
   reviewCase: PatrolReviewCase;
   schoolName: string;
   appBaseUrl?: string;
+  /** 選項勾選的通知身分；未傳則依會辦案實際 recipients 推估 */
+  notifyRoles?: Partial<PatrolNotifyRoles> | null;
 }): { subject: string; text: string; html: string } {
   const { reviewCase: c, schoolName, appBaseUrl } = params;
   const period = c.period ? `第${c.period}節` : '';
@@ -45,7 +66,18 @@ export function buildPatrolNotifyEmail(params: {
   const link = appBaseUrl
     ? `${appBaseUrl.replace(/\/$/, '')}/?patrolReview=${encodeURIComponent(c.id)}`
     : '';
-  const audience = patrolNotifyAudienceLine(c.kind);
+  const audienceRoles =
+    params.notifyRoles ??
+    ({
+      student_affairs: c.recipients.some((r) => r.role === 'student_affairs'),
+      dean_student: c.recipients.some((r) => r.role === 'dean_student'),
+      academic: c.recipients.some((r) => r.role === 'academic'),
+      dean_academic: c.recipients.some((r) => r.role === 'dean_academic'),
+      homeroom: c.recipients.some((r) => r.role === 'homeroom'),
+      subject_teacher:
+        c.kind === 'exam' ? true : c.recipients.some((r) => r.role === 'subject_teacher'),
+    } satisfies PatrolNotifyRoles);
+  const audience = patrolNotifyAudienceLine(c.kind, audienceRoles);
   const recipientLines = sortedRecipientLines(c);
   const recipientBlock =
     recipientLines.length > 0
@@ -136,6 +168,7 @@ export async function sendPatrolReviewNotify(params: {
     reviewCase,
     schoolName,
     appBaseUrl: mailConfig.appBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''),
+    notifyRoles: mailConfig.notifyRoles,
   });
   try {
     const res = await fetch('/api/patrol/notify', {
