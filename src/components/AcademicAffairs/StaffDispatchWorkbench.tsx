@@ -494,8 +494,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   ]);
 
   const substituteIdForSession = (sessionId: string) => {
+    // 連續節次以各節 map 為準，不可 fallback 到全域 substituteTeacherId，
+    // 否則中段改選代理人時，較早尚未寫入 map 的節次會被誤顯示／送出為新代理人。
     if (sessionPickMode === 'periodRange') {
-      return sessionSubstituteIds[sessionId] || substituteTeacherId;
+      return sessionSubstituteIds[sessionId] || '';
     }
     return substituteTeacherId;
   };
@@ -2234,6 +2236,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                     onSelectTeacher={(id) => {
                                       setHasUserChosenSubstituteTeacher(true);
                                       applySubstituteFromSessionForward(s.id, id);
+                                      // 僅作智慧推薦／底部搜尋的選取狀態；各節實際代理人以 sessionSubstituteIds 為準
                                       setSubstituteTeacherId(id);
                                     }}
                                     placeholder="指定本節代課教師…"
