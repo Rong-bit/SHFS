@@ -287,6 +287,13 @@ export interface PatrolNotifyRoles {
   subject_teacher: boolean;
 }
 
+/** 可自訂的會辦通知群組（巡堂異常時勾選要通知哪些群組） */
+export interface PatrolNotifyGroup {
+  id: string;
+  name: string;
+  roles: PatrolNotifyRoles;
+}
+
 /** 巡堂異常 email 通知 SMTP 設定 */
 export interface PatrolMailConfig {
   enabled: boolean;
@@ -299,7 +306,15 @@ export interface PatrolMailConfig {
   fromEmail: string;
   /** 信內深層連結用的系統網址（例 https://school.example.com） */
   appBaseUrl?: string;
-  /** 會辦案納入／寄信的身分；未設定＝全部開啟 */
+  /**
+   * 會辦通知群組（可多組；異常時勾選要通知哪些）。
+   * 未設定時由 notifyRoles 或預設兩組推導。
+   */
+  notifyGroups?: PatrolNotifyGroup[];
+  /**
+   * @deprecated 改用 notifyGroups；僅供舊資料相容（單一「預設」群組）
+   * 會辦案納入／寄信的身分；未設定＝全部開啟
+   */
   notifyRoles?: PatrolNotifyRoles;
 }
 

@@ -1,6 +1,8 @@
 import {
   AcademicStaff,
   PatrolKind,
+  PatrolMailConfig,
+  PatrolNotifyGroup,
   PatrolNotifyRoles,
   PatrolRecord,
   PatrolReviewCase,
@@ -32,10 +34,113 @@ export const DEFAULT_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
   subject_teacher: true,
 };
 
+/** 全關（新建空白群組用） */
+export const EMPTY_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
+  student_affairs: false,
+  dean_student: false,
+  academic: false,
+  dean_academic: false,
+  homeroom: false,
+  subject_teacher: false,
+};
+
 export function resolvePatrolNotifyRoles(
   partial?: Partial<PatrolNotifyRoles> | null
 ): PatrolNotifyRoles {
   return { ...DEFAULT_PATROL_NOTIFY_ROLES, ...(partial || {}) };
+}
+
+export function newPatrolNotifyGroupId(): string {
+  return `png-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** 預設兩組：學務線／教務線（可再於設定增刪） */
+export function defaultPatrolNotifyGroups(): PatrolNotifyGroup[] {
+  return [
+    {
+      id: 'png-affairs',
+      name: '學務線',
+      roles: {
+        student_affairs: true,
+        dean_student: true,
+        academic: false,
+        dean_academic: false,
+        homeroom: true,
+        subject_teacher: false,
+      },
+    },
+    {
+      id: 'png-academic',
+      name: '教務線',
+      roles: {
+        student_affairs: false,
+        dean_student: false,
+        academic: true,
+        dean_academic: true,
+        homeroom: false,
+        subject_teacher: true,
+      },
+    },
+  ];
+}
+
+/**
+ * 解析會辦通知群組：
+ * - 有 notifyGroups → 使用並正規化 roles
+ * - 僅有舊版 notifyRoles → 收成單一「預設」群組
+ * - 皆無 → 預設兩組
+ */
+export function resolvePatrolNotifyGroups(
+  mailConfig?: Pick<PatrolMailConfig, 'notifyGroups' | 'notifyRoles'> | null
+): PatrolNotifyGroup[] {
+  const groups = mailConfig?.notifyGroups;
+  if (groups && groups.length > 0) {
+    return groups.map((g, i) => ({
+      id: g.id || `png-legacy-${i}`,
+      name: (g.name || '').trim() || `群組${i + 1}`,
+      roles: resolvePatrolNotifyRoles(g.roles),
+    }));
+  }
+  if (mailConfig?.notifyRoles) {
+    return [
+      {
+        id: 'png-default',
+        name: '預設',
+        roles: resolvePatrolNotifyRoles(mailConfig.notifyRoles),
+      },
+    ];
+  }
+  return defaultPatrolNotifyGroups();
+}
+
+/** 將勾選的群組身分取聯集 */
+export function mergeNotifyRolesFromGroups(
+  groups: PatrolNotifyGroup[],
+  selectedGroupIds: string[]
+): PatrolNotifyRoles {
+  const idSet = new Set(selectedGroupIds);
+  const picked = groups.filter((g) => idSet.has(g.id));
+  if (picked.length === 0) return { ...EMPTY_PATROL_NOTIFY_ROLES };
+  const merged: PatrolNotifyRoles = { ...EMPTY_PATROL_NOTIFY_ROLES };
+  for (const g of picked) {
+    const roles = resolvePatrolNotifyRoles(g.roles);
+    (Object.keys(merged) as (keyof PatrolNotifyRoles)[]).forEach((key) => {
+      if (roles[key]) merged[key] = true;
+    });
+  }
+  return merged;
+}
+
+export function summarizeNotifyGroupRoles(roles: PatrolNotifyRoles): string {
+  const r = resolvePatrolNotifyRoles(roles);
+  const parts: string[] = [];
+  if (r.student_affairs) parts.push('生輔組');
+  if (r.dean_student) parts.push('學務主任');
+  if (r.academic) parts.push('教學組');
+  if (r.dean_academic) parts.push('教務主任');
+  if (r.homeroom) parts.push('導師');
+  if (r.subject_teacher) parts.push('任課');
+  return parts.length > 0 ? parts.join('、') : '（未勾選身分）';
 }
 
 /** 信內／畫面通知對象排序 */

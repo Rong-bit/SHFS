@@ -17,11 +17,18 @@ import { useApp } from '../../context/AppContext';
 import {
   PatrolCheckItem,
   PatrolMailConfig,
+  PatrolNotifyGroup,
   PatrolNotifyRoles,
   PatrolRoom,
   SystemConfig,
 } from '../../types';
-import { DEFAULT_PATROL_NOTIFY_ROLES, resolvePatrolNotifyRoles } from '../../utils/patrolReview';
+import {
+  EMPTY_PATROL_NOTIFY_ROLES,
+  newPatrolNotifyGroupId,
+  resolvePatrolNotifyGroups,
+  resolvePatrolNotifyRoles,
+  summarizeNotifyGroupRoles,
+} from '../../utils/patrolReview';
 import {
   buildDraftPatrolRooms,
   groupPatrolRooms,
@@ -129,7 +136,7 @@ const emptyMailConfig = (): PatrolMailConfig => ({
   fromName: '',
   fromEmail: '',
   appBaseUrl: typeof window !== 'undefined' ? window.location.origin : '',
-  notifyRoles: { ...DEFAULT_PATROL_NOTIFY_ROLES },
+  notifyGroups: resolvePatrolNotifyGroups(null),
 });
 
 const NOTIFY_ROLE_OPTIONS: { key: keyof PatrolNotifyRoles; label: string }[] = [
@@ -148,7 +155,7 @@ const PatrolMailSettingsPanel: React.FC<{
   const [draft, setDraft] = useState<PatrolMailConfig>(() => ({
     ...emptyMailConfig(),
     ...(value || {}),
-    notifyRoles: resolvePatrolNotifyRoles(value?.notifyRoles),
+    notifyGroups: resolvePatrolNotifyGroups(value),
   }));
   const [savedHint, setSavedHint] = useState('');
 
@@ -156,18 +163,48 @@ const PatrolMailSettingsPanel: React.FC<{
     setDraft({
       ...emptyMailConfig(),
       ...(value || {}),
-      notifyRoles: resolvePatrolNotifyRoles(value?.notifyRoles),
+      notifyGroups: resolvePatrolNotifyGroups(value),
     });
   }, [value]);
 
-  const notifyRoles = resolvePatrolNotifyRoles(draft.notifyRoles);
+  const notifyGroups = resolvePatrolNotifyGroups(draft);
+
+  const updateGroup = (id: string, patch: Partial<PatrolNotifyGroup>) => {
+    setDraft({
+      ...draft,
+      notifyGroups: notifyGroups.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+    });
+  };
+
+  const setGroupRole = (id: string, key: keyof PatrolNotifyRoles, checked: boolean) => {
+    const g = notifyGroups.find((x) => x.id === id);
+    if (!g) return;
+    updateGroup(id, { roles: { ...resolvePatrolNotifyRoles(g.roles), [key]: checked } });
+  };
+
+  const addGroup = () => {
+    const next: PatrolNotifyGroup = {
+      id: newPatrolNotifyGroupId(),
+      name: `群組${notifyGroups.length + 1}`,
+      roles: { ...EMPTY_PATROL_NOTIFY_ROLES },
+    };
+    setDraft({ ...draft, notifyGroups: [...notifyGroups, next] });
+  };
+
+  const removeGroup = (id: string) => {
+    if (notifyGroups.length <= 1) {
+      alert('至少需保留一組通知群組。');
+      return;
+    }
+    setDraft({ ...draft, notifyGroups: notifyGroups.filter((g) => g.id !== id) });
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
       <div>
         <h3 className="text-sm font-extrabold text-slate-900">巡堂異常會辦寄信（SMTP）</h3>
         <p className="text-xs text-slate-500 mt-1">
-          僅在巡堂有缺失時，依下方勾選身分建立會辦並寄信。請使用學校信箱或第三方 SMTP；密碼請妥善保管。
+          僅在巡堂有缺失時，依下方通知群組建立會辦並寄信。請使用學校信箱或第三方 SMTP；密碼請妥善保管。
         </p>
       </div>
       <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -178,32 +215,68 @@ const PatrolMailSettingsPanel: React.FC<{
         />
         啟用異常會辦 email 通知
       </label>
-      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2">
-        <div>
-          <h4 className="text-xs font-extrabold text-slate-800">會辦／通知對象</h4>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            取消勾選則建立異常會辦時不納入該身分（亦不寄信）。預設全部勾選。
-          </p>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h4 className="text-xs font-extrabold text-slate-800">會辦／通知群組</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              可新增多組，每組各自勾選身分。巡堂登錄異常時再勾選要通知哪些群組（可複選）。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={addGroup}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-700"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            新增群組
+          </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-          {NOTIFY_ROLE_OPTIONS.map(({ key, label }) => (
-            <label
-              key={key}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700"
-            >
-              <input
-                type="checkbox"
-                checked={notifyRoles[key]}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    notifyRoles: { ...notifyRoles, [key]: e.target.checked },
-                  })
-                }
-              />
-              {label}
-            </label>
-          ))}
+        <div className="space-y-2.5">
+          {notifyGroups.map((g) => {
+            const roles = resolvePatrolNotifyRoles(g.roles);
+            return (
+              <div
+                key={g.id}
+                className="rounded-xl border border-slate-200 bg-white p-3 space-y-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={g.name}
+                    onChange={(e) => updateGroup(g.id, { name: e.target.value })}
+                    className="flex-1 min-w-[8rem] bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-900"
+                    placeholder="群組名稱"
+                  />
+                  <button
+                    type="button"
+                    title="刪除此群組"
+                    onClick={() => removeGroup(g.id)}
+                    className="text-slate-400 hover:text-rose-600 p-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  含：{summarizeNotifyGroupRoles(roles)}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {NOTIFY_ROLE_OPTIONS.map(({ key, label }) => (
+                    <label
+                      key={key}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={roles[key]}
+                        onChange={(e) => setGroupRole(g.id, key, e.target.checked)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -283,10 +356,16 @@ const PatrolMailSettingsPanel: React.FC<{
         <button
           type="button"
           onClick={() => {
-            const next = {
+            const groups = resolvePatrolNotifyGroups(draft).map((g) => ({
+              ...g,
+              name: g.name.trim() || '未命名群組',
+              roles: resolvePatrolNotifyRoles(g.roles),
+            }));
+            const next: PatrolMailConfig = {
               ...draft,
               pass: draft.pass.trim() || value?.pass || '',
-              notifyRoles: resolvePatrolNotifyRoles(draft.notifyRoles),
+              notifyGroups: groups,
+              notifyRoles: undefined,
             };
             onSave(next);
             setSavedHint('已儲存寄信設定');
