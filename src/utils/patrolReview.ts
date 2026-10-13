@@ -617,16 +617,26 @@ export const PATROL_REVIEW_STATUS_LABELS: Record<PatrolReviewCase['status'], str
   closed: '已結案（無異常）',
 };
 
+/** 校長指示／各處室主任簽文可寫入 signOff.instruction */
+export function signOffAllowsRemark(role: PatrolReviewRole): boolean {
+  return (
+    role === 'principal' ||
+    role === 'dean_academic' ||
+    role === 'dean_student' ||
+    role === 'dean_internship' ||
+    role === 'dean_general_affairs'
+  );
+}
+
 export function applySignOff(
   reviewCase: PatrolReviewCase,
   signOff: PatrolSignOff,
   opts?: { archive?: boolean; instruction?: string }
 ): PatrolReviewCase {
-  const isPrincipalStamp =
-    signOff.role === 'principal' || signOff.action === '校長核章';
-  const instruction = isPrincipalStamp
-    ? opts?.instruction ?? signOff.instruction
-    : undefined;
+  const allowRemark =
+    signOffAllowsRemark(signOff.role) || signOff.action === '校長核章';
+  const raw = allowRemark ? opts?.instruction ?? signOff.instruction : undefined;
+  const instruction = raw?.trim() ? raw.trim() : undefined;
   const nextSignOffs = [
     ...reviewCase.signOffs.filter(
       (s) => !(s.role === signOff.role && s.personId === signOff.personId)
