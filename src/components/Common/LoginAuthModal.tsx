@@ -14,6 +14,7 @@ import {
   officeMembers,
   resolveStaffSubunit,
   subunitLoginLabel,
+  type StaffSubunit,
 } from '../../utils/academicOfficeStaff';
 
 export interface LoginTarget {
@@ -21,6 +22,8 @@ export interface LoginTarget {
   teacherId?: string;
   targetRole?: UserRole;
   academicStaffId?: string;
+  /** 處室分層（主任／組別）；有值時登入名單只顯示該層，不回落到其他組 */
+  staffSubunit?: StaffSubunit;
   actionName?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
@@ -91,17 +94,28 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
           target.targetRole === 'student_affairs' ||
           target.targetRole === 'principal')
       ) {
-        initialStaffId =
-          target.academicStaffId ||
-          academicStaffList.find((s) => (s.group || 'academic') === roleGroup)?.id ||
-          '';
-        if (
-          currentAcademicStaffId &&
-          academicStaffList.some(
-            (s) => s.id === currentAcademicStaffId && (s.group || 'academic') === roleGroup
-          )
-        ) {
-          initialStaffId = target.academicStaffId || currentAcademicStaffId;
+        if (target.staffSubunit) {
+          const subunitMembers = officeMembers(academicStaffList, target.staffSubunit);
+          initialStaffId =
+            (target.academicStaffId &&
+            subunitMembers.some((s) => s.id === target.academicStaffId)
+              ? target.academicStaffId
+              : undefined) ||
+            subunitMembers[0]?.id ||
+            '';
+        } else {
+          initialStaffId =
+            target.academicStaffId ||
+            academicStaffList.find((s) => (s.group || 'academic') === roleGroup)?.id ||
+            '';
+          if (
+            currentAcademicStaffId &&
+            academicStaffList.some(
+              (s) => s.id === currentAcademicStaffId && (s.group || 'academic') === roleGroup
+            )
+          ) {
+            initialStaffId = target.academicStaffId || currentAcademicStaffId;
+          }
         }
       } else {
         initialStaffId =
@@ -147,7 +161,10 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   } else if (target.type === 'role') {
     switch (target.targetRole) {
       case 'academic': {
-        const sub = resolveStaffSubunit(targetStaff, 'academic') || 'teaching';
+        const sub =
+          target.staffSubunit ||
+          resolveStaffSubunit(targetStaff, 'academic') ||
+          'teaching';
         const subLabel = subunitLoginLabel(sub);
         targetTitle = targetStaff ? targetStaff.name : subLabel;
         targetSubtitle = targetStaff
@@ -178,7 +195,10 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         const saStaff = academicStaffList.find(
           (s) => s.id === selectedStaffId && s.group === 'student_affairs'
         );
-        const saSub = resolveStaffSubunit(saStaff, 'student_affairs') || 'student_section';
+        const saSub =
+          target.staffSubunit ||
+          resolveStaffSubunit(saStaff, 'student_affairs') ||
+          'student_section';
         const saLabel = subunitLoginLabel(saSub);
         targetTitle = saStaff ? saStaff.name : saLabel;
         targetSubtitle = saStaff
@@ -228,7 +248,14 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
   const handleVerify = async (inputPassToTest?: string) => {
     if (target.type === 'role' && target.targetRole === 'academic' && !selectedStaffId) {
-      setErrorMsg('請先選擇教務處教學組組長或組員身分');
+      const sub =
+        target.staffSubunit ||
+        resolveStaffSubunit(
+          academicStaffList.find((s) => s.id === target.academicStaffId),
+          'academic'
+        ) ||
+        'teaching';
+      setErrorMsg(`請先選擇${subunitLoginLabel(sub)}身分（若名單空白請至成員名冊新增）`);
       return;
     }
     if (target.type === 'role' && target.targetRole === 'accounting') {
@@ -239,9 +266,16 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       }
     }
     if (target.type === 'role' && target.targetRole === 'student_affairs') {
-      const has = academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'student_affairs');
+      const saSub = target.staffSubunit;
+      const has = saSub
+        ? officeMembers(academicStaffList, saSub).some((s) => s.id === selectedStaffId)
+        : academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'student_affairs');
       if (!has) {
-        setErrorMsg('請先於成員名冊新增學務處人員後再登入');
+        setErrorMsg(
+          saSub
+            ? `請先於成員名冊新增${subunitLoginLabel(saSub)}人員後再登入`
+            : '請先於成員名冊新增學務處人員後再登入'
+        );
         return;
       }
     }
@@ -379,6 +413,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
               academicStaffList.find((s) => s.id === selectedStaffId) ||
               academicStaffList.find((s) => s.id === target.academicStaffId);
             const sub =
+              target.staffSubunit ||
               resolveStaffSubunit(picked, target.targetRole) ||
               (group === 'accounting'
                 ? 'cashier'

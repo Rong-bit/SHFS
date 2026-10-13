@@ -153,7 +153,13 @@ export const Header: React.FC = () => {
   const switchSubunit = (subunit: StaffSubunit) => {
     setOpenOfficeMenu(null);
     const members = officeMembers(academicStaffList, subunit);
-    requestRoleSwitchWithAuth(roleForSubunit(subunit), members[0]?.id);
+    const preferred =
+      currentSubunit === subunit && members.some((m) => m.id === currentAcademicStaffId)
+        ? currentAcademicStaffId
+        : members[0]?.id;
+    requestRoleSwitchWithAuth(roleForSubunit(subunit), preferred, {
+      staffSubunit: subunit,
+    });
   };
 
   const menuItemClass = (active: boolean) =>
@@ -545,15 +551,27 @@ export const Header: React.FC = () => {
                   </span>
                   <select
                     id={`select-header-${currentRole}-staff`}
-                    value={currentAcademicStaffId}
-                    onChange={(e) => requestRoleSwitchWithAuth(currentRole, e.target.value)}
+                    value={
+                      members.some((m) => m.id === currentAcademicStaffId)
+                        ? currentAcademicStaffId
+                        : members[0]?.id || ''
+                    }
+                    onChange={(e) =>
+                      requestRoleSwitchWithAuth(currentRole, e.target.value, {
+                        staffSubunit: sub,
+                      })
+                    }
                     className="bg-slate-900 text-amber-300 font-medium px-2 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-xs"
                   >
-                    {members.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.title})
-                      </option>
-                    ))}
+                    {members.length === 0 ? (
+                      <option value="">（名冊尚無此身分）</option>
+                    ) : (
+                      members.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.title})
+                        </option>
+                      ))
+                    )}
                   </select>
                   <button
                     type="button"

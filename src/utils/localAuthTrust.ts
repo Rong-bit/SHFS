@@ -30,7 +30,13 @@ function pruneStore(store: TrustStore, now = Date.now()): TrustStore {
 
 export function roleAuthTrustKey(role: string, staffId?: string): string {
   if (role === 'admin') return 'role:admin';
-  if (role === 'academic' || role === 'accounting') {
+  // 處室／組別切換需綁定人員，避免教務主任信任後直接進實習主任等
+  if (
+    role === 'academic' ||
+    role === 'accounting' ||
+    role === 'student_affairs' ||
+    role === 'principal'
+  ) {
     return `role:${role}:${staffId || ''}`;
   }
   return `role:${role}`;
