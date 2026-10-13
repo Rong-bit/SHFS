@@ -55,6 +55,7 @@ import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
+import { resolveDisplayClassSubject } from '../../utils/noticeDocument';
 import {
   MAX_NOTICE_TABLE_ROWS,
   NoticeTableEditor,
@@ -3028,8 +3029,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         ...new Set(
                           items
                             .map((r) => {
-                              const s = r.originalSession;
-                              return s ? `${s.className} 《${s.subjectName}》` : '';
+                              const d = resolveDisplayClassSubject(r, items);
+                              return d.className || d.subjectName
+                                ? `${d.className} 《${d.subjectName}》`
+                                : '';
                             })
                             .filter(Boolean)
                         ),
@@ -3038,6 +3041,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         items.map((r) => r.originalSession).filter(Boolean),
                         dayNames
                       );
+                      const primaryDisplay = resolveDisplayClassSubject(req, items);
                       const subNames = [
                         ...new Set(
                           items
@@ -3125,7 +3129,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             {items.length === 1 ? (
                               <>
                                 <div className="font-semibold text-slate-800">
-                                  {req.originalSession.className} 《{req.originalSession.subjectName}》
+                                  {primaryDisplay.className} 《{primaryDisplay.subjectName}》
                                 </div>
                                 <div className="text-[11px] text-slate-500 mt-0.5">
                                   {dayNames[req.originalSession.dayOfWeek]} 第{req.originalSession.period}節

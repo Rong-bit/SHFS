@@ -48,6 +48,44 @@ export const EMPTY_NOTICE_ROW: NoticeRow = {
   hours: '',
 };
 
+/**
+ * 列表顯示用班級／科目：通知單曾改科目（如改成「監考」）時優先用通知單列，
+ * 否則回退 originalSession（課表原科目）。
+ */
+export function resolveDisplayClassSubject(
+  req: SubstituteRequest,
+  siblingRequests?: SubstituteRequest[]
+): { className: string; subjectName: string } {
+  const session = req.originalSession;
+  const fallback = {
+    className: session?.className || '',
+    subjectName: session?.subjectName || '',
+  };
+  if (!session) return fallback;
+
+  const pool = [req, ...(siblingRequests || [])];
+  const customized = pool.find((r) => r.noticeRowsCustomized && r.noticeRows?.length);
+  const rows = customized?.noticeRows;
+  if (!rows?.length) return fallback;
+
+  const periodStr = String(session.period);
+  const classKey = (session.className || '').trim();
+  const match =
+    rows.find(
+      (row) =>
+        row.period.trim() === periodStr &&
+        (!row.className.trim() || row.className.trim() === classKey) &&
+        row.subjectName.trim()
+    ) ||
+    rows.find((row) => row.period.trim() === periodStr && row.subjectName.trim());
+
+  if (!match) return fallback;
+  return {
+    className: match.className.trim() || fallback.className,
+    subjectName: match.subjectName.trim() || fallback.subjectName,
+  };
+}
+
 function formatNoticeDate(iso?: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');

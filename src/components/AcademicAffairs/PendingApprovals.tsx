@@ -7,6 +7,7 @@ import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/actingHomeroomPayrollRegister';
 import { ModalShell } from '../Common/ModalShell';
 import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
+import { resolveDisplayClassSubject } from '../../utils/noticeDocument';
 import { 
   ClipboardCheck, 
   CheckCircle, 
@@ -245,7 +246,10 @@ export const PendingApprovals: React.FC = () => {
                       原授課堂
                     </div>
                     <div className="font-bold text-slate-900 text-sm">
-                      {req.originalSession.className} ｜ 《{req.originalSession.subjectName}》
+                      {(() => {
+                        const d = resolveDisplayClassSubject(req);
+                        return `${d.className} ｜ 《${d.subjectName}》`;
+                      })()}
                     </div>
                     <div className="text-slate-600 mt-1">
                       {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)}
