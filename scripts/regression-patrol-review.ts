@@ -486,9 +486,9 @@ const academicStamp = stampOfficeAndTitle('academic', '閱畢', '教學組長');
 assert.equal(academicStamp.officeLabel, '教學組');
 assert.equal(academicStamp.titleLabel, '組長', '教學組長戳章左下應為職稱');
 assert.notEqual(academicStamp.titleLabel, '閱畢');
-const deanStamp = stampOfficeAndTitle('dean_academic', '會畢');
-assert.equal(deanStamp.officeLabel, '教務處');
-assert.equal(deanStamp.titleLabel, '主任');
+const deanStampLayout = stampOfficeAndTitle('dean_academic', '會畢');
+assert.equal(deanStampLayout.officeLabel, '教務處');
+assert.equal(deanStampLayout.titleLabel, '主任');
 const principalStampLayout = stampOfficeAndTitle('principal', '校長核章');
 assert.equal(principalStampLayout.titleLabel, '校長');
 // 教務主任即使誤帶 academic 角色，戳章仍應為教務處／主任
@@ -502,8 +502,22 @@ const stamp = makeSignOff({
   action: '閱畢',
   instruction: undefined,
 });
-const noBleed = applySignOff(review, stamp, { instruction: '不應寫入非校長章' });
-assert.equal(noBleed.signOffs[0]?.instruction, undefined, '非校長章不得帶指示用語');
+const noBleed = applySignOff(review, stamp, { instruction: '不應寫入組長章' });
+assert.equal(noBleed.signOffs[0]?.instruction, undefined, '生輔組長不得帶簽文');
+const deanSignOff = makeSignOff({
+  role: 'dean_academic',
+  personId: 'ac2',
+  personName: '陳柏宇',
+  action: '會畢',
+});
+const withDeanRemark = applySignOff(review, deanSignOff, {
+  instruction: '請加強該班秩序宣導',
+});
+assert.equal(
+  withDeanRemark.signOffs.find((s) => s.role === 'dean_academic')?.instruction,
+  '請加強該班秩序宣導',
+  '教務主任可寫簽文'
+);
 const principalStamp = makeSignOff({
   role: 'principal',
   personId: 'p1',

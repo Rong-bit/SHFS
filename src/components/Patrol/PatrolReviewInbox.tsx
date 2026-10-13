@@ -14,6 +14,7 @@ import {
   PATROL_REVIEW_ROLE_LABELS,
   PATROL_REVIEW_STATUS_LABELS,
   preferredStampRole,
+  signOffAllowsRemark,
   stampOfficeAndTitle,
   viewerReviewRoles,
   weekRangeContaining,
@@ -150,17 +151,21 @@ export const PatrolReviewInbox: React.FC<{
     if (!viewer || !stampingId || !stampRole) return;
     const c = cases.find((x) => x.id === stampingId);
     if (!c) return;
+    const remark =
+      signOffAllowsRemark(stampRole) || stampAction === '校長核章'
+        ? instruction.trim() || undefined
+        : undefined;
     const signOff = makeSignOff({
       role: stampRole,
       personId: viewer.id,
       personName: viewer.name,
       action: stampAction,
-      instruction: stampAction === '校長核章' ? instruction.trim() || undefined : undefined,
+      instruction: remark,
       schoolName: systemConfig.schoolName,
     });
     const next = applySignOff(c, signOff, {
       archive: stampAction === '校長核章',
-      instruction: stampAction === '校長核章' ? instruction.trim() || undefined : undefined,
+      instruction: remark,
     });
     saveCase(next);
     setStampingId(null);
@@ -303,8 +308,8 @@ export const PatrolReviewInbox: React.FC<{
                           {s.action}
                         </div>
                         {s.instruction && (
-                          <div className="text-[10px] text-amber-800 text-center max-w-[10rem]">
-                            指示：{s.instruction}
+                          <div className="text-[10px] text-amber-800 text-center max-w-[12rem]">
+                            {s.role === 'principal' ? '指示' : '簽文'}：{s.instruction}
                           </div>
                         )}
                       </div>
@@ -361,9 +366,18 @@ export const PatrolReviewInbox: React.FC<{
                     </button>
                   ))}
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  主任、組長可點選「已會畢」完成會辦核章；僅需閱覽確認者可選「已閱畢」。
-                </p>
+                {signOffAllowsRemark(stampRole) && (
+                  <label className="block text-[11px] font-semibold text-slate-600">
+                    簽文說明（選填）
+                    <textarea
+                      value={instruction}
+                      onChange={(e) => setInstruction(e.target.value)}
+                      rows={2}
+                      placeholder="例：請導師加強秩序宣導，並回報改善情形"
+                      className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm font-normal"
+                    />
+                  </label>
+                )}
               </div>
             ) : (
               <label className="block text-[11px] font-semibold text-slate-600">
@@ -391,10 +405,10 @@ export const PatrolReviewInbox: React.FC<{
                 {stampAction}
               </div>
               <div className="text-[11px] text-slate-500">{viewer.name}</div>
-              {stampRole !== 'principal' && (
-                <p className="text-[11px] text-slate-500 text-center leading-relaxed px-2">
-                  戳章為處室＋職稱＋姓名；下方文字為會辦結果（會畢／閱畢）。
-                </p>
+              {instruction.trim() && signOffAllowsRemark(stampRole) && (
+                <div className="text-[11px] text-amber-800 text-center max-w-sm px-2">
+                  {stampRole === 'principal' ? '指示' : '簽文'}：{instruction.trim()}
+                </div>
               )}
             </div>
             <div className="flex justify-end gap-2">
