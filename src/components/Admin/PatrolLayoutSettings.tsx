@@ -445,8 +445,7 @@ const PatrolMailSettingsPanel: React.FC<{
             <li>
               在校內電腦專案根目錄雙擊{' '}
               <code className="font-mono bg-white/70 px-1 rounded">start-mail-host.bat</code>
-              （或 <code className="font-mono bg-white/70 px-1 rounded">啟動寄信主機.bat</code>
-              ；需已安裝 Node.js，<strong>不必</strong>安裝 Python）
+              （英文檔名；需已安裝 Node.js，不必 Python）
             </li>
             <li>
               操作時請開 <code className="font-mono bg-white/70 px-1 rounded">http://那台IP:3000</code>

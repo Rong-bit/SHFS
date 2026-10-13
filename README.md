@@ -24,11 +24,11 @@
 > GitHub Pages 只適合平常瀏覽，**不能寄信**。請在校內電腦：
 >
 > 1. 安裝 **Node.js（LTS）** 後，在專案根目錄雙擊 **`start-mail-host.bat`**
->    （`啟動寄信主機.bat` 相同；**不必**裝 Python）
+>    （檔名請用英文；避免 Windows 中文批次檔亂碼）
 > 2. 瀏覽器開 `http://那台IP:3000`（**不要**開 github.io）
 > 3. 寄信設定：API 根網址**留空**；SMTP 用 `smtp.gmail.com:587`
 >
-> 若視窗一閃就關：多半沒裝 Node，或 bat 不在專案根目錄（需與 `package.json` 同層，並 `git pull` 完整專案）。
+> 若出現「語法錯誤／不是內部或外部命令」：請只用 `start-mail-host.bat`，並 `git pull` 更新。
 >
 > 操作電腦可與寄信主機不同台，但網址都要指向寄信主機的 `:3000`。  
 > Render 免費方案會封鎖 SMTP，不建議再用。
