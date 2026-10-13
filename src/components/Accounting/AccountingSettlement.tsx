@@ -150,7 +150,7 @@ export const AccountingSettlement: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Calculator className="w-6 h-6 text-emerald-600" />
             <h2 className="text-lg font-bold text-slate-900">
-              出納組 · 每月教師超鐘點費與調代課鐘點費結算清冊
+              總務處・出納組 · 每月教師超鐘點費與調代課鐘點費結算清冊
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">

@@ -5,12 +5,12 @@ import { ModalShell } from './ModalShell';
 
 interface StaffChangePasswordModalProps {
   staff: AcademicStaff;
-  groupLabel: '教學組' | '出納組';
+  groupLabel: string;
   onSave: (newPassword: string) => void;
   onClose: () => void;
 }
 
-/** 教學組／出納組組員自行設定個人登入密碼 */
+/** 處室組員自行設定個人登入密碼 */
 export const StaffChangePasswordModal: React.FC<StaffChangePasswordModalProps> = ({
   staff,
   groupLabel,
