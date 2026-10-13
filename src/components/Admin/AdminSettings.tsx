@@ -88,6 +88,7 @@ import {
   lookupTeacherEmail,
   parseTeacherEmailWorkbook,
   readTeacherEmailFile,
+  resolveStaffEmailForNameChange,
 } from '../../utils/teacherEmailImporter';
 import {
   downloadConcurrentFundingTemplate,
@@ -3836,13 +3837,16 @@ export const AdminSettings: React.FC = () => {
                     value={staffFormData.name}
                     onChange={(e) => {
                       const name = e.target.value;
-                      const next = { ...staffFormData, name };
-                      // 信箱空白時，依姓名從師資名冊帶入
-                      if (!normalizeSchoolEmail(staffFormData.email)) {
-                        const fromTeacher = lookupTeacherEmail(teachers, name.trim());
-                        if (fromTeacher) next.email = fromTeacher;
-                      }
-                      setStaffFormData(next);
+                      setStaffFormData({
+                        ...staffFormData,
+                        name,
+                        email: resolveStaffEmailForNameChange({
+                          teachers,
+                          previousName: staffFormData.name,
+                          nextName: name,
+                          currentEmail: staffFormData.email,
+                        }),
+                      });
                     }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-sm"
                     placeholder="請輸入姓名（例：陳雅筑、張志強）"

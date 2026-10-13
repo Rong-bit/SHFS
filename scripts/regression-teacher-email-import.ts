@@ -8,6 +8,7 @@ import {
   applyTeacherEmails,
   lookupTeacherEmail,
   parseTeacherEmailWorkbook,
+  resolveStaffEmailForNameChange,
   syncEmptyStaffEmailsFromTeachers,
 } from '../src/utils/teacherEmailImporter';
 
@@ -97,5 +98,37 @@ assert.equal(synced.filled, 1);
 assert.equal(synced.staffList[0].email, 'wang@mail2.ccvs.kh.edu.tw');
 assert.equal(synced.staffList[1].email, 'keep@mail2.ccvs.kh.edu.tw', '已有信箱不覆寫');
 assert.equal(lookupTeacherEmail(applied.teachers, '王小明'), 'wang@mail2.ccvs.kh.edu.tw');
+
+// 改名：自動帶入的信箱應跟著換，手動信箱保留
+assert.equal(
+  resolveStaffEmailForNameChange({
+    teachers: applied.teachers,
+    previousName: '王小明',
+    nextName: '李小華',
+    currentEmail: 'wang@mail2.ccvs.kh.edu.tw',
+  }),
+  'lee@mail2.ccvs.kh.edu.tw',
+  '自動帶入信箱應隨改名更新'
+);
+assert.equal(
+  resolveStaffEmailForNameChange({
+    teachers: applied.teachers,
+    previousName: '王小明',
+    nextName: '尚無此人',
+    currentEmail: 'wang@mail2.ccvs.kh.edu.tw',
+  }),
+  '',
+  '改成名冊無人時應清空自動帶入信箱'
+);
+assert.equal(
+  resolveStaffEmailForNameChange({
+    teachers: applied.teachers,
+    previousName: '王小明',
+    nextName: '李小華',
+    currentEmail: 'manual@mail2.ccvs.kh.edu.tw',
+  }),
+  'manual@mail2.ccvs.kh.edu.tw',
+  '手動信箱不因改名被覆寫'
+);
 
 console.log('regression-teacher-email-import: ok');
