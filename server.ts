@@ -118,14 +118,17 @@ app.post("/api/patrol/notify", async (req, res) => {
     host: smtp.host,
     port,
     secure: Boolean(smtp.secure),
-    // 強制 IPv4，避免雲端 ENETUNREACH 2607:f8b0:…（Gmail IPv6）
-    family: 4,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: smtp.user
       ? {
           user: smtp.user,
           pass: smtp.pass || "",
         }
       : undefined,
+    // 強制 IPv4（型別未宣告 family，用展開傳入）
+    ...({ family: 4 } as Record<string, unknown>),
   });
 
   const from = smtp.fromName
