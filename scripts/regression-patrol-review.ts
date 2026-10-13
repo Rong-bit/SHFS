@@ -633,4 +633,43 @@ assert.equal(
   '同時有教學組與教務主任時應預選教務主任'
 );
 
+// 成員名冊教務主任信箱空白 → 依姓名從師資名冊帶入
+const deanNoStaffEmail: AcademicStaff = {
+  id: 'ac-empty',
+  name: '吳教務',
+  title: '教務主任',
+  badge: '',
+  email: '',
+  phone: '',
+  responsibleScope: '',
+  group: 'academic',
+};
+const teachersWithDeanMail: Teacher[] = [
+  ...teachers,
+  {
+    id: 't-dean',
+    name: '吳教務',
+    title: '專任教師',
+    department: '電機科',
+    basePeriods: 16,
+    weeklyActualPeriods: 16,
+    email: 'dean-from-roster@school.edu',
+    phone: '',
+    certifications: [],
+  },
+];
+const deanRecipients = resolvePatrolReviewRecipients({
+  record: base,
+  teachers: teachersWithDeanMail,
+  academicStaffList: [deanNoStaffEmail],
+  notifyRoles: { dean_academic: true },
+});
+const deanRow = deanRecipients.find((r) => r.role === 'dean_academic');
+assert.ok(deanRow, '應解析到教務主任收件人');
+assert.equal(
+  deanRow?.email,
+  'dean-from-roster@school.edu',
+  '成員名冊信箱空白時應從師資名冊帶入'
+);
+
 console.log('regression-patrol-review: ok');
