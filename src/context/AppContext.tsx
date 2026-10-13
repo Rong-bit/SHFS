@@ -2713,6 +2713,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = requests.find((r) => r.id === requestId);
     const batchGroupId = target?.batchGroupId;
     const substituteTeacherId = target?.substituteTeacherId;
+    const requestNumber = (target?.requestNumber || '').trim();
 
     const patchNoticeRows = (r: SubstituteRequest): SubstituteRequest => {
       if (rows && rows.length > 0) {
@@ -2723,11 +2724,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     // 同編號假單可有多位代理人：儲存表格只連動「同一代理人」的節次
-    const inSameNoticeBatch = (r: SubstituteRequest) =>
-      r.id === requestId ||
-      (batchGroupId != null &&
-        r.batchGroupId === batchGroupId &&
-        (!substituteTeacherId || r.substituteTeacherId === substituteTeacherId));
+    // 相容無 batchGroupId 的同號多節：以申請單號＋代課教師連動
+    const inSameNoticeBatch = (r: SubstituteRequest) => {
+      if (r.id === requestId) return true;
+      if (batchGroupId != null) {
+        return (
+          r.batchGroupId === batchGroupId &&
+          (!substituteTeacherId || r.substituteTeacherId === substituteTeacherId)
+        );
+      }
+      if (requestNumber && substituteTeacherId) {
+        return (
+          r.requestNumber === requestNumber && r.substituteTeacherId === substituteTeacherId
+        );
+      }
+      return false;
+    };
 
     setRequests((prev) =>
       prev.map((r) => (inSameNoticeBatch(r) ? patchNoticeRows(r) : r))
