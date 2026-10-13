@@ -13,6 +13,7 @@ import {
   Teacher,
 } from '../types';
 import { teacherNameMatches } from './schoolDepartments';
+import { lookupTeacherEmail } from './teacherEmailImporter';
 
 export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
   student_affairs: '生輔組',
@@ -490,11 +491,14 @@ export function resolvePatrolReviewRecipients(params: {
   const out: PatrolReviewRecipient[] = [];
 
   const pushStaff = (role: PatrolReviewRole, staff: AcademicStaff) => {
+    // 成員名冊信箱空白時，依姓名從師資名冊帶入（教務主任改名後常見）
+    const email =
+      (staff.email || '').trim() || lookupTeacherEmail(teachers, staff.name) || '';
     out.push({
       role,
       personId: staff.id,
       personName: staff.name,
-      email: (staff.email || '').trim(),
+      email,
     });
   };
 

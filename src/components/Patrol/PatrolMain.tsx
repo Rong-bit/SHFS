@@ -235,12 +235,34 @@ export const PatrolMain: React.FC = () => {
           updatedAt: new Date().toISOString(),
         };
         saveCase(withNotify);
+        const noMailNames = reviewCase.recipients
+          .filter((r) => !(r.email || '').trim())
+          .map((r) => r.personName)
+          .filter(Boolean);
+        const noMailHint =
+          noMailNames.length > 0
+            ? `；未寄：${noMailNames.slice(0, 3).join('、')}${
+                noMailNames.length > 3 ? '等' : ''
+              }（成員名冊／師資名冊無信箱）`
+            : result.skippedNoEmail > 0
+              ? `；${result.skippedNoEmail} 人無信箱未寄`
+              : '';
+        const wantedDean = Boolean(notifyRoles.dean_academic);
+        const hasDean = reviewCase.recipients.some((r) => r.role === 'dean_academic');
+        const deanHint =
+          wantedDean && !hasDean
+            ? '；成員名冊找不到教務主任（請確認職稱為「教務主任」且處室為教務處）'
+            : '';
         if (result.ok) {
-          setNotifyMsg(`已寄出異常會辦通知（${result.sent} 封）`);
+          setNotifyMsg(`已寄出異常會辦通知（${result.sent} 封）${noMailHint}${deanHint}`);
         } else if (result.sent > 0) {
-          setNotifyMsg(`已寄出 ${result.sent} 封，部分失敗可於下次更新時重試`);
+          setNotifyMsg(
+            `已寄出 ${result.sent} 封，部分失敗可於下次更新時重試${noMailHint}${deanHint}`
+          );
         } else {
-          setNotifyMsg(`會辦案已建立，但寄信失敗：${result.error || '未知錯誤'}`);
+          setNotifyMsg(
+            `會辦案已建立，但寄信失敗：${result.error || '未知錯誤'}${noMailHint}${deanHint}`
+          );
         }
       } catch {
         if (notifyGenRef.current.get(record.id) === gen) {
