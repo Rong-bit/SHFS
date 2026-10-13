@@ -83,6 +83,14 @@ import {
   readSalaryCodeFile,
 } from '../../utils/salaryCodeImporter';
 import {
+  downloadTeacherEmailTemplate,
+  exportTeacherEmailsToExcel,
+  lookupTeacherEmail,
+  parseTeacherEmailWorkbook,
+  readTeacherEmailFile,
+  resolveStaffEmailForNameChange,
+} from '../../utils/teacherEmailImporter';
+import {
   downloadConcurrentFundingTemplate,
   exportConcurrentFundingToExcel,
   parseConcurrentFundingWorkbook,
@@ -281,6 +289,7 @@ export const AdminSettings: React.FC = () => {
     addTeacher,
     updateTeacher,
     deleteTeacher,
+    importTeacherEmails,
     updateTeacherPassword,
     academicStaffList,
     updateAcademicStaff,
@@ -451,9 +460,43 @@ export const AdminSettings: React.FC = () => {
   /** 輸入法組字中：勿套 maxLength／即時截斷，否則注音佔位會擋最後幾字 */
   const schoolNameComposingRef = useRef(false);
   const [salaryCodeNotice, setSalaryCodeNotice] = useState('');
+  const [teacherEmailNotice, setTeacherEmailNotice] = useState('');
+  const teacherEmailFileRef = useRef<HTMLInputElement>(null);
 
   const salaryCodesByName = systemConfig.teacherSalaryCodesByName || {};
   const salaryCodeCount = countSalaryCodes(systemConfig);
+  const teacherEmailFilledCount = teachers.filter((t) => (t.email || '').trim()).length;
+
+  const handleTeacherEmailImport = async (file: File) => {
+    try {
+      const workbook = await readTeacherEmailFile(file);
+      const parsed = parseTeacherEmailWorkbook(workbook);
+      if (parsed.imported === 0) {
+        setTeacherEmailNotice(
+          parsed.invalid.length > 0
+            ? `沒有可匯入的信箱（格式無效 ${parsed.invalid.length} 人）`
+            : '檔案沒有可匯入的姓名／信箱列'
+        );
+        return;
+      }
+      const result = importTeacherEmails(parsed.emailsByName);
+      const invalidNote =
+        parsed.invalid.length > 0 ? `；格式無效略過 ${parsed.invalid.length} 人` : '';
+      const unmatchedNote =
+        result.unmatched.length > 0
+          ? `；師資名冊尚無 ${result.unmatched.length} 人（未寫入）`
+          : '';
+      const staffNote =
+        result.staffEmailsFilled > 0
+          ? `；成員名冊同名空白信箱已帶入 ${result.staffEmailsFilled} 人`
+          : '';
+      setTeacherEmailNotice(
+        `已更新 ${result.updated} 人信箱（師資對上 ${result.matchedInRoster} 人／檔案 ${parsed.imported} 筆）${invalidNote}${unmatchedNote}${staffNote}`
+      );
+    } catch (err) {
+      setTeacherEmailNotice(err instanceof Error ? err.message : '師資信箱匯入失敗');
+    }
+  };
 
   useEffect(() => {
     if (salaryMigratedRef.current) return;
@@ -805,11 +848,12 @@ export const AdminSettings: React.FC = () => {
 
   const handleOpenEditStaff = (staff: AcademicStaff) => {
     setEditingStaff(staff);
+    const existingEmail = normalizeSchoolEmail(staff.email);
     setStaffFormData({
       name: staff.name,
       title: staff.title,
       badge: staff.badge,
-      email: staff.email,
+      email: existingEmail || lookupTeacherEmail(teachers, staff.name) || staff.email || '',
       phone: staff.phone,
       avatarBg: staff.avatarBg || 'from-indigo-600 to-indigo-800',
       responsibleScope: staff.responsibleScope,
@@ -822,12 +866,16 @@ export const AdminSettings: React.FC = () => {
     e.preventDefault();
     if (!staffFormData.name.trim()) return;
 
+    const name = staffFormData.name.trim();
+    const email =
+      normalizeSchoolEmail(staffFormData.email) || lookupTeacherEmail(teachers, name) || '';
+
     if (editingStaff) {
       updateAcademicStaff(editingStaff.id, {
-        name: staffFormData.name.trim(),
+        name,
         title: staffFormData.title,
         badge: staffFormData.badge,
-        email: normalizeSchoolEmail(staffFormData.email),
+        email,
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
@@ -835,10 +883,10 @@ export const AdminSettings: React.FC = () => {
       });
     } else {
       addAcademicStaff({
-        name: staffFormData.name.trim(),
+        name,
         title: staffFormData.title,
         badge: staffFormData.badge,
-        email: normalizeSchoolEmail(staffFormData.email),
+        email,
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
@@ -2762,6 +2810,64 @@ export const AdminSettings: React.FC = () => {
             </p>
           </div>
 
+          <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-sky-950 flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4 text-sky-600" />
+                  師資信箱批次匯入（巡堂會辦寄信用）
+                </h3>
+                <p className="text-[11px] text-sky-800 mt-1 leading-relaxed max-w-2xl">
+                  以<strong>教師姓名</strong>對上師資名冊後寫入信箱，供導師／任課老師收到巡堂異常會辦通知。
+                  必要欄：<strong>姓名、信箱</strong>（亦接受 email／電子郵件）。空白信箱列略過；對不到師資名冊者不寫入。
+                  若「成員名冊」已有同名教務主任／組長等且信箱空白，匯入後會自動帶入，底下不必再填。
+                </p>
+                {teacherEmailNotice && (
+                  <p className="text-[11px] text-sky-900 mt-2 font-medium">{teacherEmailNotice}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadTeacherEmailTemplate()}
+                  className="px-3 py-1.5 bg-white border border-sky-300 rounded-lg text-xs font-bold text-sky-800 hover:bg-sky-100"
+                >
+                  下載範本
+                </button>
+                <button
+                  type="button"
+                  onClick={() => teacherEmailFileRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  匯入信箱
+                </button>
+                <input
+                  ref={teacherEmailFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleTeacherEmailImport(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => exportTeacherEmailsToExcel(teachers)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-sky-300 rounded-lg text-xs font-bold text-sky-800 hover:bg-sky-100"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  匯出對照表
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-sky-700">
+              名冊已填信箱 <strong>{teacherEmailFilledCount}</strong>／{teachers.length} 人；亦可在下方名冊「聯絡資訊」個別修改。
+            </p>
+          </div>
+
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -3128,7 +3234,8 @@ export const AdminSettings: React.FC = () => {
               <p className="text-xs text-slate-500 mt-1">
                 此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」；生輔組／學務／實習／總務／校長連動「巡堂異常會辦與核章」。
                 巡堂會辦收件人來自本名冊（非「全校教師師資名冊」）：新增成員時用職稱下拉選
-                教務主任、教學組長、實習主任、實習組長、生輔組長、學務主任、總務主任、校長等，並填公務信箱即可寄信會辦。
+                教務主任、教學組長、實習主任、實習組長、生輔組長、學務主任、總務主任、校長等。
+                若該人已在師資名冊有信箱（或已批次匯入），姓名對上後會自動帶入，不必重複輸入。
               </p>
             </div>
 
@@ -3728,7 +3835,19 @@ export const AdminSettings: React.FC = () => {
                   <input
                     type="text"
                     value={staffFormData.name}
-                    onChange={(e) => setStaffFormData({ ...staffFormData, name: e.target.value })}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setStaffFormData({
+                        ...staffFormData,
+                        name,
+                        email: resolveStaffEmailForNameChange({
+                          teachers,
+                          previousName: staffFormData.name,
+                          nextName: name,
+                          currentEmail: staffFormData.email,
+                        }),
+                      });
+                    }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold text-sm"
                     placeholder="請輸入姓名（例：陳雅筑、張志強）"
                     required
@@ -3859,7 +3978,13 @@ export const AdminSettings: React.FC = () => {
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
                     placeholder={SCHOOL_EMAIL_EXAMPLE}
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">未填信箱仍可建會辦案，但無法寄出通知信</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {lookupTeacherEmail(teachers, staffFormData.name.trim()) &&
+                    normalizeSchoolEmail(staffFormData.email) ===
+                      lookupTeacherEmail(teachers, staffFormData.name.trim())
+                      ? '已從師資名冊帶入同名信箱，可直接儲存或手動修改'
+                      : '若師資名冊已有同名信箱，輸入姓名後會自動帶入；未填仍可建會辦案，但無法寄出通知信'}
+                  </p>
                 </div>
               </div>
 
