@@ -10,6 +10,7 @@ import { dateToIsoLocal } from './holidays';
 import { dateToDayOfWeek, resolveLeaveDateEnd } from './leaveDates';
 import { leaveTypeRemarkShort, normalizeLeaveTypeForForm } from './leaveTypes';
 import { buildPeriodDefinitions } from './periodConfig';
+import { resolveDisplayClassSubject } from './noticeDocument';
 import { isPlaceholderSession } from './resolveOriginalSession';
 
 export type LeaveCalendarPeriodDetail = {
@@ -229,11 +230,12 @@ export function buildLeaveCalendarEvents(requests: SubstituteRequest[]): LeaveCa
 
       if (placeholder || orig?.period == null) continue;
 
+      const display = resolveDisplayClassSubject(r);
       const existing = bucket.details.find((d) => d.period === orig.period);
       const detail: LeaveCalendarPeriodDetail = {
         period: orig.period,
-        className: orig.className,
-        subjectName: orig.subjectName,
+        className: display.className,
+        subjectName: display.subjectName,
         venueName: orig.venueName,
         substituteTeacherName: r.substituteTeacherName,
         requestNumber: r.requestNumber,

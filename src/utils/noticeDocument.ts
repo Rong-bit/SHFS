@@ -48,9 +48,21 @@ export const EMPTY_NOTICE_ROW: NoticeRow = {
   hours: '',
 };
 
+/** 節次字串正規化：5、05、第5節 → 5 */
+export function normalizeNoticePeriod(period: string | number | null | undefined): string {
+  const raw = String(period ?? '')
+    .trim()
+    .replace(/^第\s*/, '')
+    .replace(/\s*節$/, '');
+  if (!raw) return '';
+  const n = Number(raw);
+  return Number.isFinite(n) ? String(n) : raw;
+}
+
 /**
- * 列表顯示用班級／科目：通知單曾改科目（如改成「監考」）時優先用通知單列，
- * 否則回退 originalSession（課表原科目）。
+ * 列表顯示用班級／科目：通知單曾改班級／科目（如改成「監考」）時優先用通知單列，
+ * 否則回退 originalSession（課表原班級／科目）。
+ * 比對以節次為主，不要求班級仍與課表相同（否則改班後會對不到）。
  */
 export function resolveDisplayClassSubject(
   req: SubstituteRequest,
@@ -68,21 +80,19 @@ export function resolveDisplayClassSubject(
   const rows = customized?.noticeRows;
   if (!rows?.length) return fallback;
 
-  const periodStr = String(session.period);
+  const periodKey = normalizeNoticePeriod(session.period);
   const classKey = (session.className || '').trim();
-  const match =
-    rows.find(
-      (row) =>
-        row.period.trim() === periodStr &&
-        (!row.className.trim() || row.className.trim() === classKey) &&
-        row.subjectName.trim()
-    ) ||
-    rows.find((row) => row.period.trim() === periodStr && row.subjectName.trim());
+  const samePeriod = rows.filter((row) => normalizeNoticePeriod(row.period) === periodKey);
+  const candidates = samePeriod.length > 0 ? samePeriod : rows.length === 1 ? rows : [];
+  if (candidates.length === 0) return fallback;
 
-  if (!match) return fallback;
+  // 多列同節時：先試原班級（未改班），再取第一列（已改班也能對到）
+  const match =
+    candidates.find((row) => (row.className || '').trim() === classKey) || candidates[0];
+
   return {
-    className: match.className.trim() || fallback.className,
-    subjectName: match.subjectName.trim() || fallback.subjectName,
+    className: (match.className || '').trim() || fallback.className,
+    subjectName: (match.subjectName || '').trim() || fallback.subjectName,
   };
 }
 

@@ -78,4 +78,22 @@ const siblingCustom = resolveDisplayClassSubject(base, [
 ]);
 assert.equal(siblingCustom.subjectName, '監考');
 
+// 通知單改班級（不再要求班級仍等於課表原班）
+const classChanged = resolveDisplayClassSubject({
+  ...base,
+  noticeRowsCustomized: true,
+  noticeRows: [
+    {
+      date: '2026/10/16',
+      weekday: '5',
+      period: '第5節',
+      className: '汽車三孝',
+      subjectName: '監考',
+      hours: '',
+    },
+  ],
+});
+assert.equal(classChanged.className, '汽車三孝', '通知單改班級後列表應顯示新班級');
+assert.equal(classChanged.subjectName, '監考');
+
 console.log('regression-notice-display-subject: OK');
