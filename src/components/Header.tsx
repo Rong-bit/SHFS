@@ -19,6 +19,7 @@ import {
   Landmark,
   ChevronDown,
   Building2,
+  Factory,
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
@@ -29,6 +30,14 @@ import {
   UI_FONT_SCALE_OPTIONS,
   type UiFontScale,
 } from '../utils/uiFontScale';
+import {
+  officeMembers,
+  officeNavActive,
+  resolveStaffSubunit,
+  roleForSubunit,
+  subunitLoginLabel,
+  type StaffSubunit,
+} from '../utils/academicOfficeStaff';
 
 type OfficeMenuPos = { top: number; left: number; minWidth: number };
 
@@ -105,59 +114,59 @@ export const Header: React.FC = () => {
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
   const [isStaffPasswordOpen, setIsStaffPasswordOpen] = useState(false);
   const [uiFontScale, setUiFontScale] = useState<UiFontScale>(() => readUiFontScale());
-  const [academicOfficeOpen, setAcademicOfficeOpen] = useState(false);
-  const [generalAffairsOpen, setGeneralAffairsOpen] = useState(false);
+  type OfficeMenuKey = 'academic' | 'internship' | 'general' | 'student_affairs';
+  const [openOfficeMenu, setOpenOfficeMenu] = useState<OfficeMenuKey | null>(null);
   const academicOfficeBtnRef = useRef<HTMLButtonElement>(null);
+  const internshipOfficeBtnRef = useRef<HTMLButtonElement>(null);
   const generalAffairsBtnRef = useRef<HTMLButtonElement>(null);
+  const studentAffairsBtnRef = useRef<HTMLButtonElement>(null);
   const academicMenuRef = useRef<HTMLDivElement>(null);
+  const internshipMenuRef = useRef<HTMLDivElement>(null);
   const generalAffairsMenuRef = useRef<HTMLDivElement>(null);
+  const studentAffairsMenuRef = useRef<HTMLDivElement>(null);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
+  const currentSubunit = resolveStaffSubunit(currentAcademicStaff, currentRole);
 
   useEffect(() => {
-    if (!academicOfficeOpen && !generalAffairsOpen) return;
+    if (!openOfficeMenu) return;
+    const pairs: Record<
+      OfficeMenuKey,
+      { btn: React.RefObject<HTMLButtonElement | null>; menu: React.RefObject<HTMLDivElement | null> }
+    > = {
+      academic: { btn: academicOfficeBtnRef, menu: academicMenuRef },
+      internship: { btn: internshipOfficeBtnRef, menu: internshipMenuRef },
+      general: { btn: generalAffairsBtnRef, menu: generalAffairsMenuRef },
+      student_affairs: { btn: studentAffairsBtnRef, menu: studentAffairsMenuRef },
+    };
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
-      const inAcademic =
-        academicOfficeBtnRef.current?.contains(t) || academicMenuRef.current?.contains(t);
-      const inGeneral =
-        generalAffairsBtnRef.current?.contains(t) || generalAffairsMenuRef.current?.contains(t);
-      if (academicOfficeOpen && !inAcademic) setAcademicOfficeOpen(false);
-      if (generalAffairsOpen && !inGeneral) setGeneralAffairsOpen(false);
+      const pair = pairs[openOfficeMenu];
+      if (!pair.btn.current?.contains(t) && !pair.menu.current?.contains(t)) {
+        setOpenOfficeMenu(null);
+      }
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [academicOfficeOpen, generalAffairsOpen]);
+  }, [openOfficeMenu]);
 
-  // 學務處／校長／系統管理員（教師、教務處、總務處另以處室下拉呈現）
-  const flatRoles: { key: UserRole; label: string; icon: React.ReactNode }[] = [
-    {
-      key: 'student_affairs',
-      label: '學務處',
-      icon: <Shield className="w-4 h-4" />,
-    },
-    {
-      key: 'principal',
-      label: '校長',
-      icon: <Landmark className="w-4 h-4" />,
-    },
-    {
-      key: 'admin',
-      label: '系統管理員',
-      icon: <Settings className="w-4 h-4" />,
-    },
-  ];
+  const switchSubunit = (subunit: StaffSubunit) => {
+    setOpenOfficeMenu(null);
+    const members = officeMembers(academicStaffList, subunit);
+    requestRoleSwitchWithAuth(roleForSubunit(subunit), members[0]?.id);
+  };
 
-  const staffRoleGroup = (role: UserRole) =>
-    role === 'academic'
-      ? 'academic'
-      : role === 'accounting'
-        ? 'accounting'
-        : role === 'student_affairs'
-          ? 'student_affairs'
-          : role === 'principal'
-            ? 'principal'
-            : null;
+  const menuItemClass = (active: boolean) =>
+    `w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
+      active ? 'bg-amber-500/20 text-amber-300' : 'text-slate-200 hover:bg-slate-800'
+    }`;
+
+  const officeBtnClass = (active: boolean) =>
+    `flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+      active
+        ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+        : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+    }`;
 
   return (
     <>
@@ -254,7 +263,6 @@ export const Header: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between border-t border-slate-800/80 py-2 gap-2 overflow-visible">
           {/* Role Navigation Pills（勿加 overflow-x，否則會裁掉處室下拉選單） */}
           <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-            {/* 教師端 */}
             <button
               id="nav-role-teacher"
               onClick={() => requestRoleSwitchWithAuth('teacher')}
@@ -268,22 +276,17 @@ export const Header: React.FC = () => {
               <span>教師端</span>
             </button>
 
-            {/* 教務處 → 教學組 */}
+            {/* 教務處 → 教務主任／教學組 */}
             <button
               type="button"
               ref={academicOfficeBtnRef}
               id="nav-role-academic-office"
               aria-haspopup="menu"
-              aria-expanded={academicOfficeOpen}
-              onClick={() => {
-                setAcademicOfficeOpen((o) => !o);
-                setGeneralAffairsOpen(false);
-              }}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                currentRole === 'academic'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
-              }`}
+              aria-expanded={openOfficeMenu === 'academic'}
+              onClick={() =>
+                setOpenOfficeMenu((m) => (m === 'academic' ? null : 'academic'))
+              }
+              className={officeBtnClass(officeNavActive('academic', currentRole, currentAcademicStaff))}
             >
               <ClipboardCheck className="w-4 h-4" />
               <span>教務處</span>
@@ -293,27 +296,30 @@ export const Header: React.FC = () => {
                 </span>
               )}
               <ChevronDown
-                className={`w-3.5 h-3.5 transition ${academicOfficeOpen ? 'rotate-180' : ''}`}
+                className={`w-3.5 h-3.5 transition ${openOfficeMenu === 'academic' ? 'rotate-180' : ''}`}
               />
             </button>
             <OfficeRoleMenu
-              open={academicOfficeOpen}
+              open={openOfficeMenu === 'academic'}
               anchorRef={academicOfficeBtnRef}
               menuRef={academicMenuRef}
             >
               <button
                 type="button"
                 role="menuitem"
+                id="nav-role-academic-dean"
+                onClick={() => switchSubunit('academic_dean')}
+                className={menuItemClass(currentSubunit === 'academic_dean')}
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                教務主任
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 id="nav-role-academic"
-                onClick={() => {
-                  setAcademicOfficeOpen(false);
-                  requestRoleSwitchWithAuth('academic');
-                }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
-                  currentRole === 'academic'
-                    ? 'bg-amber-500/20 text-amber-300'
-                    : 'text-slate-200 hover:bg-slate-800'
-                }`}
+                onClick={() => switchSubunit('teaching')}
+                className={menuItemClass(currentSubunit === 'teaching')}
               >
                 <ClipboardCheck className="w-3.5 h-3.5" />
                 教學組
@@ -325,71 +331,167 @@ export const Header: React.FC = () => {
               </button>
             </OfficeRoleMenu>
 
-            {/* 總務處 → 出納組 */}
+            {/* 實習處 → 實習主任／實習組 */}
+            <button
+              type="button"
+              ref={internshipOfficeBtnRef}
+              id="nav-role-internship-office"
+              aria-haspopup="menu"
+              aria-expanded={openOfficeMenu === 'internship'}
+              onClick={() =>
+                setOpenOfficeMenu((m) => (m === 'internship' ? null : 'internship'))
+              }
+              className={officeBtnClass(officeNavActive('internship', currentRole, currentAcademicStaff))}
+            >
+              <Factory className="w-4 h-4" />
+              <span>實習處</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition ${openOfficeMenu === 'internship' ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <OfficeRoleMenu
+              open={openOfficeMenu === 'internship'}
+              anchorRef={internshipOfficeBtnRef}
+              menuRef={internshipMenuRef}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                id="nav-role-internship-dean"
+                onClick={() => switchSubunit('internship_dean')}
+                className={menuItemClass(currentSubunit === 'internship_dean')}
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                實習主任
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                id="nav-role-internship-section"
+                onClick={() => switchSubunit('internship_section')}
+                className={menuItemClass(currentSubunit === 'internship_section')}
+              >
+                <Factory className="w-3.5 h-3.5" />
+                實習組
+              </button>
+            </OfficeRoleMenu>
+
+            {/* 總務處 → 總務主任／出納組 */}
             <button
               type="button"
               ref={generalAffairsBtnRef}
               id="nav-role-general-affairs"
               aria-haspopup="menu"
-              aria-expanded={generalAffairsOpen}
-              onClick={() => {
-                setGeneralAffairsOpen((o) => !o);
-                setAcademicOfficeOpen(false);
-              }}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                currentRole === 'accounting'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
-              }`}
+              aria-expanded={openOfficeMenu === 'general'}
+              onClick={() => setOpenOfficeMenu((m) => (m === 'general' ? null : 'general'))}
+              className={officeBtnClass(officeNavActive('general', currentRole, currentAcademicStaff))}
             >
               <Building2 className="w-4 h-4" />
               <span>總務處</span>
               <ChevronDown
-                className={`w-3.5 h-3.5 transition ${generalAffairsOpen ? 'rotate-180' : ''}`}
+                className={`w-3.5 h-3.5 transition ${openOfficeMenu === 'general' ? 'rotate-180' : ''}`}
               />
             </button>
             <OfficeRoleMenu
-              open={generalAffairsOpen}
+              open={openOfficeMenu === 'general'}
               anchorRef={generalAffairsBtnRef}
               menuRef={generalAffairsMenuRef}
             >
               <button
                 type="button"
                 role="menuitem"
+                id="nav-role-general-dean"
+                onClick={() => switchSubunit('general_dean')}
+                className={menuItemClass(currentSubunit === 'general_dean')}
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                總務主任
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 id="nav-role-accounting"
-                onClick={() => {
-                  setGeneralAffairsOpen(false);
-                  requestRoleSwitchWithAuth('accounting');
-                }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
-                  currentRole === 'accounting'
-                    ? 'bg-amber-500/20 text-amber-300'
-                    : 'text-slate-200 hover:bg-slate-800'
-                }`}
+                onClick={() => switchSubunit('cashier')}
+                className={menuItemClass(currentSubunit === 'cashier')}
               >
                 <Calculator className="w-3.5 h-3.5" />
                 出納組
               </button>
             </OfficeRoleMenu>
 
-            {flatRoles.map((r) => {
-              const isActive = currentRole === r.key;
-              return (
-                <button
-                  key={r.key}
-                  id={`nav-role-${r.key}`}
-                  onClick={() => requestRoleSwitchWithAuth(r.key)}
-                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
-                  }`}
-                >
-                  {r.icon}
-                  <span>{r.label}</span>
-                </button>
-              );
-            })}
+            {/* 學務處 → 學務主任／生輔組 */}
+            <button
+              type="button"
+              ref={studentAffairsBtnRef}
+              id="nav-role-student-affairs-office"
+              aria-haspopup="menu"
+              aria-expanded={openOfficeMenu === 'student_affairs'}
+              onClick={() =>
+                setOpenOfficeMenu((m) => (m === 'student_affairs' ? null : 'student_affairs'))
+              }
+              className={officeBtnClass(
+                officeNavActive('student_affairs', currentRole, currentAcademicStaff)
+              )}
+            >
+              <Shield className="w-4 h-4" />
+              <span>學務處</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition ${
+                  openOfficeMenu === 'student_affairs' ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+            <OfficeRoleMenu
+              open={openOfficeMenu === 'student_affairs'}
+              anchorRef={studentAffairsBtnRef}
+              menuRef={studentAffairsMenuRef}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                id="nav-role-student-dean"
+                onClick={() => switchSubunit('student_dean')}
+                className={menuItemClass(currentSubunit === 'student_dean')}
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                學務主任
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                id="nav-role-student-section"
+                onClick={() => switchSubunit('student_section')}
+                className={menuItemClass(currentSubunit === 'student_section')}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                生輔組
+              </button>
+            </OfficeRoleMenu>
+
+            <button
+              id="nav-role-principal"
+              onClick={() => requestRoleSwitchWithAuth('principal')}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                currentRole === 'principal'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+              }`}
+            >
+              <Landmark className="w-4 h-4" />
+              <span>校長</span>
+            </button>
+            <button
+              id="nav-role-admin"
+              onClick={() => requestRoleSwitchWithAuth('admin')}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                currentRole === 'admin'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>系統管理員</span>
+            </button>
           </div>
 
           {/* Teacher identity: searchable login switcher */}
@@ -414,24 +516,27 @@ export const Header: React.FC = () => {
             currentRole === 'student_affairs' ||
             currentRole === 'principal') &&
             (() => {
-              const group = staffRoleGroup(currentRole);
-              const label =
-                currentRole === 'academic'
-                  ? '教務處・教學組登入'
-                  : currentRole === 'accounting'
-                    ? '總務處・出納組登入'
+              const sub =
+                currentSubunit ||
+                (currentRole === 'accounting'
+                  ? 'cashier'
+                  : currentRole === 'principal'
+                    ? 'principal'
                     : currentRole === 'student_affairs'
-                      ? '學務處登入'
-                      : '校長室登入';
-              const members = academicStaffList.filter((s) => (s.group || 'academic') === group);
+                      ? 'student_section'
+                      : 'teaching');
+              const label = `${subunitLoginLabel(sub)}登入`;
+              const members = officeMembers(academicStaffList, sub);
               return (
                 <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
                   <span className="text-slate-400 flex items-center gap-1">
-                    {currentRole === 'accounting' ? (
-                      <Calculator className="w-3.5 h-3.5 text-amber-400" />
-                    ) : currentRole === 'student_affairs' ? (
+                    {sub === 'cashier' || sub === 'general_dean' ? (
+                      <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                    ) : sub === 'student_dean' || sub === 'student_section' ? (
                       <Shield className="w-3.5 h-3.5 text-amber-400" />
-                    ) : currentRole === 'principal' ? (
+                    ) : sub === 'internship_dean' || sub === 'internship_section' ? (
+                      <Factory className="w-3.5 h-3.5 text-amber-400" />
+                    ) : sub === 'principal' ? (
                       <Landmark className="w-3.5 h-3.5 text-amber-400" />
                     ) : (
                       <ClipboardCheck className="w-3.5 h-3.5 text-amber-400" />
@@ -487,13 +592,14 @@ export const Header: React.FC = () => {
         <StaffChangePasswordModal
           staff={currentAcademicStaff}
           groupLabel={
-            currentRole === 'accounting'
-              ? '總務處（出納組）'
-              : currentRole === 'student_affairs'
-                ? '學務處'
-                : currentRole === 'principal'
-                  ? '校長室'
-                  : '教務處（教學組）'
+            currentSubunit
+              ? (() => {
+                  const label = subunitLoginLabel(currentSubunit);
+                  if (!label.includes('・')) return label;
+                  const [office, unit] = label.split('・');
+                  return `${office}（${unit}）`;
+                })()
+              : '行政'
           }
           onSave={(pw) => updateAcademicStaffPassword(currentAcademicStaff.id, pw)}
           onClose={() => setIsStaffPasswordOpen(false)}

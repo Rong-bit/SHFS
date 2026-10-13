@@ -10,6 +10,11 @@ import {
   teacherAuthTrustKey,
 } from '../../utils/localAuthTrust';
 import { ModalShell } from './ModalShell';
+import {
+  officeMembers,
+  resolveStaffSubunit,
+  subunitLoginLabel,
+} from '../../utils/academicOfficeStaff';
 
 export interface LoginTarget {
   type: 'teacher' | 'role' | 'teacher_action';
@@ -141,18 +146,21 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     hint = custom ? '已設定個人密碼' : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
   } else if (target.type === 'role') {
     switch (target.targetRole) {
-      case 'academic':
-        targetTitle = targetStaff ? targetStaff.name : '教務處・教學組';
+      case 'academic': {
+        const sub = resolveStaffSubunit(targetStaff, 'academic') || 'teaching';
+        const subLabel = subunitLoginLabel(sub);
+        targetTitle = targetStaff ? targetStaff.name : subLabel;
         targetSubtitle = targetStaff
           ? `${targetStaff.title} · ${targetStaff.responsibleScope}`
-          : '請先選擇教學組組長或組員身分';
-        targetBadge = targetStaff?.title || '教學組行政權限';
+          : `請先選擇${subLabel}身分`;
+        targetBadge = targetStaff?.title || `${subLabel}權限`;
         expectedPassword =
           targetStaff?.password || auth.academicPassword || '1234';
         hint = targetStaff?.password
           ? '已設定個人密碼'
           : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
         break;
+      }
       case 'accounting': {
         const accStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'accounting');
         targetTitle = accStaff ? accStaff.name : '總務處・出納組';
@@ -170,10 +178,12 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         const saStaff = academicStaffList.find(
           (s) => s.id === selectedStaffId && s.group === 'student_affairs'
         );
-        targetTitle = saStaff ? saStaff.name : '學務處';
+        const saSub = resolveStaffSubunit(saStaff, 'student_affairs') || 'student_section';
+        const saLabel = subunitLoginLabel(saSub);
+        targetTitle = saStaff ? saStaff.name : saLabel;
         targetSubtitle = saStaff
           ? `${saStaff.title} · ${saStaff.responsibleScope}`
-          : '請先選擇學務處／生輔身分';
+          : `請先選擇${saLabel}身分`;
         targetBadge = saStaff?.title || '學務會辦權限';
         expectedPassword =
           saStaff?.password || auth.studentAffairsPassword || auth.academicPassword || '1234';
@@ -365,15 +375,20 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   : target.targetRole === 'principal'
                     ? 'principal'
                     : 'academic';
-            const groupLabel =
-              group === 'accounting'
-                ? '總務處・出納組'
+            const picked =
+              academicStaffList.find((s) => s.id === selectedStaffId) ||
+              academicStaffList.find((s) => s.id === target.academicStaffId);
+            const sub =
+              resolveStaffSubunit(picked, target.targetRole) ||
+              (group === 'accounting'
+                ? 'cashier'
                 : group === 'student_affairs'
-                  ? '學務處'
+                  ? 'student_section'
                   : group === 'principal'
-                    ? '校長室'
-                    : '教務處・教學組';
-            const groupMembers = academicStaffList.filter((s) => (s.group || 'academic') === group);
+                    ? 'principal'
+                    : 'teaching');
+            const groupLabel = subunitLoginLabel(sub);
+            const groupMembers = officeMembers(academicStaffList, sub);
             if (groupMembers.length === 0) {
               return (
                 <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
