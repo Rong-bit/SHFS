@@ -53,8 +53,8 @@ function explainNonJsonApiResponse(status: number, raw: string): string {
   const looksHtml = /^<!DOCTYPE/i.test(trimmed) || /^<html/i.test(trimmed);
   if (looksHtml || (trimmed.startsWith('<') && trimmed.includes('<head'))) {
     return (
-      '寄信 API 未啟動或目前為純靜態網站（如 GitHub Pages），收到網頁而非 JSON。' +
-      '請用「npm run build && npm start」部署 Node 伺服器，或於寄信設定填寫「寄信 API 根網址」。'
+      '寄信 API 未啟動或目前為 GitHub Pages 靜態站（無寄信功能）。' +
+      '請在校內電腦執行「啟動寄信API.bat」或 npm start，並改開 http://那台IP:3000（API 根網址留空）。'
     );
   }
   if (!trimmed) return `寄信 API 無回應（HTTP ${status}）`;
@@ -293,13 +293,24 @@ export async function probePatrolNotifyApi(
   mailConfig?: Pick<PatrolMailConfig, 'notifyApiBaseUrl'> | null
 ): Promise<{ ok: boolean; message: string }> {
   const url = resolvePatrolHealthApiUrl(mailConfig);
+  const base = (mailConfig?.notifyApiBaseUrl || '').toLowerCase();
+  const renderWarn = base.includes('onrender.com')
+    ? ' ※注意：Render 免費方案封鎖 SMTP，API 正常仍可能寄不出；請改校內 npm start。'
+    : '';
+  if (typeof window !== 'undefined' && /github\.io$/i.test(window.location.hostname) && !base) {
+    return {
+      ok: false,
+      message:
+        '目前在 GitHub Pages，未填外掛 API 時無法寄信。請改開校內 http://IP:3000（API 根網址留空）。',
+    };
+  }
   try {
     const res = await fetch(url, { method: 'GET' });
     const raw = await res.text();
     try {
       const json = JSON.parse(raw) as { status?: string };
       if (res.ok && json.status === 'ok') {
-        return { ok: true, message: `寄信 API 正常（${url}）` };
+        return { ok: true, message: `寄信 API 正常（${url}）${renderWarn}` };
       }
       return { ok: false, message: `寄信 API 異常（HTTP ${res.status}）` };
     } catch {
@@ -356,6 +367,13 @@ export async function sendPatrolMailTest(params: {
     return { ...json, skippedNoEmail: 0 };
   } catch (err) {
     const msg = err instanceof Error ? err.message : '寄信失敗';
-    return { ok: false, sent: 0, failed: [{ email, error: msg }], skippedNoEmail: 0, error: msg };
+    const onPages =
+      typeof window !== 'undefined' && /github\.io$/i.test(window.location.hostname);
+    const hint = /Failed to fetch|NetworkError|Load failed/i.test(msg)
+      ? onPages
+        ? `${msg}（目前在 GitHub Pages，無法寄信。請改開校內 http://IP:3000）`
+        : `${msg}（請確認校內已執行 npm start，且寄信 API 根網址留空或填正確 https 位址）`
+      : msg;
+    return { ok: false, sent: 0, failed: [{ email, error: hint }], skippedNoEmail: 0, error: hint };
   }
 }

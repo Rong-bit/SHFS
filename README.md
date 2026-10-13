@@ -20,9 +20,17 @@
 2. 將 **Build and deployment** ➔ **Source** 選擇為 **GitHub Actions**。
 3. 系統將自動編譯並部署至 `https://<您的帳號>.github.io/SHFS/`。
 
-> **巡堂 SMTP 寄信**：GitHub Pages 是純靜態站，**沒有** `/api/patrol/notify`。  
-> 若要寄會辦信，請另架 Node（`npm run build && npm start`），並在「巡堂寄信設定」填寫 **寄信 API 根網址**。  
-> 若出現 `Unexpected token '<'`／收到 HTML，即表示打到靜態網頁而非寄信 API。
+> **巡堂 SMTP 寄信（建議校內常開電腦）**  
+> GitHub Pages 只適合平常瀏覽，**不能寄信**。請在校內電腦：
+>
+> 1. 安裝 Node.js 與 Python 後，雙擊 `啟動寄信主機.py` 或 `啟動寄信主機.bat`
+> 2. 瀏覽器開 `http://那台IP:3000`（**不要**開 github.io）
+> 3. 寄信設定：API 根網址**留空**；SMTP 用 `smtp.gmail.com:587`
+>
+> 若要打包成 `.exe`：在 Windows 執行 `scripts\build-mail-host-exe.bat`，再把 `dist\啟動寄信主機.exe` 放到專案根目錄使用。
+>
+> 操作電腦可與寄信主機不同台，但網址都要指向寄信主機的 `:3000`。  
+> Render 免費方案會封鎖 SMTP，不建議再用。
 
 ## 💻 本地端開發 (Local Development)
 
@@ -36,6 +44,8 @@ npm run dev
 # 專案打包編譯
 npm run build
 
-# 正式環境（靜態頁 + 寄信 API 同站）
+# 正式環境（靜態頁 + 寄信 API 同站；校內寄信請用此方式）
 npm start
+
+# Windows 亦可雙擊專案根目錄「啟動寄信API.bat」
 ```
