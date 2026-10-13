@@ -80,14 +80,32 @@ export function orderedNoticeRequests(
 }
 
 /**
- * 通知單列數與申請節次數相同時，把各列節次／星期對回實際課堂
- *（避免手改節次變成 2、3，申請卻是 3、4，導致對不到）。
+ * 是否明顯「整表節次錯位」（例如同號 2 節寫成 2、3，申請卻是 3、4）。
+ * 單列手改節次（5→3）不視為錯位，必須能正常儲存。
+ */
+export function shouldAlignNoticeRowPeriods(
+  rows: NoticeRow[],
+  requests: SubstituteRequest[]
+): boolean {
+  if (rows.length < 2 || rows.length !== requests.length) return false;
+  const reqPeriods = requests.map((r) => normalizeNoticePeriod(r.originalSession?.period));
+  const rowPeriods = rows.map((r) => normalizeNoticePeriod(r.period));
+  if (reqPeriods.every((p, i) => p === rowPeriods[i])) return false;
+  const reqSet = [...reqPeriods].sort().join('|');
+  const rowSet = [...rowPeriods].sort().join('|');
+  if (reqSet === rowSet) return false; // 僅順序不同，保留手改
+  const matched = rowPeriods.filter((p) => p && reqPeriods.includes(p)).length;
+  return matched < rows.length;
+}
+
+/**
+ * 整表節次明顯錯位時，把各列節次／星期對回實際課堂（保留科目／班級手改）。
  */
 export function alignNoticeRowsToRequests(
   rows: NoticeRow[],
   requests: SubstituteRequest[]
 ): NoticeRow[] {
-  if (!rows.length || rows.length !== requests.length) return rows;
+  if (!shouldAlignNoticeRowPeriods(rows, requests)) return rows;
   return rows.map((row, i) => {
     const sess = requests[i]?.originalSession;
     if (!sess) return row;
