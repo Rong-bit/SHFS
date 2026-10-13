@@ -2886,6 +2886,7 @@ export const AdminSettings: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
                   超鐘點依課表「兼課」標記。職稱請用下拉選：導師、組長、科主任、主任、校長、專任教師。欄位較多時可左右滑動。
+                  巡堂異常會辦給教務主任、教學組長、學務主任、生輔組長時，請至「成員名冊」建立對應身分並填公務信箱；此處師資職稱不作為會辦收件依據。
                 </p>
               </div>
               <span className="text-xs text-slate-400">
@@ -3049,7 +3050,8 @@ export const AdminSettings: React.FC = () => {
                 <span>行政經辦人員名冊維護</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」；生輔組／學務主任／校長連動「巡堂異常會辦與核章」。請務必填寫公務信箱，異常會辦才能寄出通知。
+                此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」；生輔組／學務主任／校長連動「巡堂異常會辦與核章」。
+                巡堂會辦收件人來自本名冊（非師資名冊）：教學組請建「教學組長／教務主任」、生輔組／學務請建「生輔組長／學務主任」，並務必填寫公務信箱，異常會辦才能寄出通知。
               </p>
             </div>
 
@@ -3147,6 +3149,9 @@ export const AdminSettings: React.FC = () => {
               <span className="font-bold text-amber-950">💡 提示與姓名修正連動說明：</span>
               <p>
                 點選上方「修改組員姓名/資料」按鈕即可直接更換教學組或出納組組長、組員的姓名。修改後將即時同步於全校調代課經辦簽章與代課通知單中。
+              </p>
+              <p>
+                巡堂異常會辦：教務主任、教學組長請建於「教學組」；學務主任、生輔組長請建於「生輔組／學務」；校長請建於「校長室」。師資名冊即使有主任／組長職稱，也不會自動列入會辦收件。
               </p>
             </div>
           </div>
@@ -3497,9 +3502,13 @@ export const AdminSettings: React.FC = () => {
                       <option key={title} value={title}>{title}</option>
                     ))}
                   </select>
-                  {teacherFormData.title === '校長' && (
+                  {(teacherFormData.title === '校長' ||
+                    teacherFormData.title === '主任' ||
+                    teacherFormData.title === '組長') && (
                     <span className="text-[10px] text-amber-700 mt-1 block">
-                      此為師資職稱。若要登入「校長」做巡堂會辦核章，請另於成員名冊 → 校長室建立身分。
+                      此為師資節數／減授用職稱，不會成為巡堂會辦收件人。
+                      若要會辦給教務主任、教學組長、學務主任或生輔組長，請另於「成員名冊」依組別建立身分並填公務信箱
+                      {teacherFormData.title === '校長' ? '；校長核章請於成員名冊 → 校長室建立。' : '。'}
                     </span>
                   )}
                 </div>
