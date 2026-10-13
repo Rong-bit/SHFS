@@ -59,9 +59,50 @@ export function normalizeNoticePeriod(period: string | number | null | undefined
   return Number.isFinite(n) ? String(n) : raw;
 }
 
+/** 同號申請列依星期／節次排序並去重 */
+export function orderedNoticeRequests(
+  req: SubstituteRequest,
+  siblingRequests?: SubstituteRequest[]
+): SubstituteRequest[] {
+  const pool = siblingRequests?.length ? siblingRequests : [req];
+  const seen = new Set<string>();
+  return [...pool]
+    .sort(
+      (a, b) =>
+        (a.originalSession?.dayOfWeek || 0) - (b.originalSession?.dayOfWeek || 0) ||
+        (a.originalSession?.period || 0) - (b.originalSession?.period || 0)
+    )
+    .filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
+}
+
+/**
+ * 通知單列數與申請節次數相同時，把各列節次／星期對回實際課堂
+ *（避免手改節次變成 2、3，申請卻是 3、4，導致對不到）。
+ */
+export function alignNoticeRowsToRequests(
+  rows: NoticeRow[],
+  requests: SubstituteRequest[]
+): NoticeRow[] {
+  if (!rows.length || rows.length !== requests.length) return rows;
+  return rows.map((row, i) => {
+    const sess = requests[i]?.originalSession;
+    if (!sess) return row;
+    return {
+      ...row,
+      period: String(sess.period),
+      weekday: String(sess.dayOfWeek),
+    };
+  });
+}
+
 /**
  * 同號多節可能各存一份 noticeRows（舊資料／分次儲存）。
  * 依節次合併，若同一節有多個版本，優先採用「已相對課表原科目／班級改過」的那一列。
+ * 若節次對不上申請列，仍保留最完整的一張表格供「依列順序」對應。
  */
 export function resolveSharedNoticeRows(
   req: SubstituteRequest,
@@ -69,9 +110,13 @@ export function resolveSharedNoticeRows(
 ): NoticeRow[] | null {
   const pool = [req, ...(siblingRequests || [])];
   const byPeriod = new Map<string, NoticeRow[]>();
+  let primaryTable: NoticeRow[] | null = null;
 
   for (const r of pool) {
     if (!r.noticeRowsCustomized || !r.noticeRows?.length) continue;
+    if (!primaryTable || r.noticeRows.length > primaryTable.length) {
+      primaryTable = r.noticeRows;
+    }
     for (const row of r.noticeRows) {
       const key = normalizeNoticePeriod(row.period);
       if (!key) continue;
@@ -80,7 +125,9 @@ export function resolveSharedNoticeRows(
       byPeriod.set(key, list);
     }
   }
-  if (byPeriod.size === 0) return null;
+  if (byPeriod.size === 0) {
+    return primaryTable && primaryTable.length > 0 ? [...primaryTable] : null;
+  }
 
   const merged: NoticeRow[] = [];
   for (const [periodKey, rows] of byPeriod) {
@@ -104,13 +151,22 @@ export function resolveSharedNoticeRows(
         : rows[rows.length - 1];
     merged.push(pick);
   }
-  return merged;
+
+  // 合併結果節次數少於完整表格時（節次被改偏），改回完整表格供順序對應
+  if (primaryTable && primaryTable.length > merged.length) {
+    return [...primaryTable];
+  }
+  return merged.sort(
+    (a, b) =>
+      (Number(normalizeNoticePeriod(a.period)) || 0) -
+      (Number(normalizeNoticePeriod(b.period)) || 0)
+  );
 }
 
 /**
  * 列表顯示用班級／科目：通知單曾改班級／科目（如改成「監考」）時優先用通知單列，
  * 否則回退 originalSession（課表原班級／科目）。
- * 比對以節次為主，不要求班級仍與課表相同（否則改班後會對不到）。
+ * 比對以節次為主；對不到時依同號節次順序對應列（相容節次被手改偏掉）。
  */
 export function resolveDisplayClassSubject(
   req: SubstituteRequest,
@@ -123,19 +179,30 @@ export function resolveDisplayClassSubject(
   };
   if (!session) return fallback;
 
-  const rows = resolveSharedNoticeRows(req, siblingRequests);
+  const orderedReqs = orderedNoticeRequests(req, siblingRequests);
+  const rows = resolveSharedNoticeRows(req, orderedReqs);
   if (!rows?.length) return fallback;
 
   const periodKey = normalizeNoticePeriod(session.period);
   const classKey = (session.className || '').trim();
   const samePeriod = rows.filter((row) => normalizeNoticePeriod(row.period) === periodKey);
-  const candidates = samePeriod.length > 0 ? samePeriod : rows.length === 1 ? rows : [];
-  if (candidates.length === 0) return fallback;
 
-  // 多列同節時：先試原班級（未改班），再取第一列（已改班也能對到）
-  const match =
-    candidates.find((row) => (row.className || '').trim() === classKey) || candidates[0];
+  let match: NoticeRow | undefined;
+  if (samePeriod.length > 0) {
+    match = samePeriod.find((row) => (row.className || '').trim() === classKey) || samePeriod[0];
+  } else if (rows.length === 1) {
+    match = rows[0];
+  } else {
+    const idx = orderedReqs.findIndex((r) => r.id === req.id);
+    const orderedRows = [...rows].sort(
+      (a, b) =>
+        (Number(normalizeNoticePeriod(a.period)) || 0) -
+        (Number(normalizeNoticePeriod(b.period)) || 0)
+    );
+    if (idx >= 0 && idx < orderedRows.length) match = orderedRows[idx];
+  }
 
+  if (!match) return fallback;
   return {
     className: (match.className || '').trim() || fallback.className,
     subjectName: (match.subjectName || '').trim() || fallback.subjectName,
@@ -364,12 +431,16 @@ export function buildNoticeDocument(
   }
 
   // 同號多節合併各節已存表格，避免其中一節仍留舊科目（如英文閱讀）
-  const savedNoticeRows =
+  const rawSaved =
     resolveSharedNoticeRows(liveRequest, printGroup) ||
     (liveRequest.noticeRowsCustomized && liveRequest.noticeRows?.length
       ? liveRequest.noticeRows
       : printGroup.find((r) => r.noticeRowsCustomized && r.noticeRows?.length)?.noticeRows ??
         null);
+  // 節次若被手改偏（如 3～4 變成 2、3），載入時對回實際課堂節次
+  const savedNoticeRows = rawSaved
+    ? alignNoticeRowsToRequests(rawSaved, printGroup)
+    : null;
 
   const requestNumberLabel =
     printGroup.length > 1
