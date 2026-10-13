@@ -3,10 +3,12 @@
  */
 import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
-import type { Teacher } from '../src/types';
+import type { AcademicStaff, Teacher } from '../src/types';
 import {
   applyTeacherEmails,
+  lookupTeacherEmail,
   parseTeacherEmailWorkbook,
+  syncEmptyStaffEmailsFromTeachers,
 } from '../src/utils/teacherEmailImporter';
 
 const teachers: Teacher[] = [
@@ -66,5 +68,34 @@ assert.equal(applied.teachers.find((t) => t.id === 't2')?.email, 'lee@mail2.ccvs
 const bad = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(bad, XLSX.utils.aoa_to_sheet([['姓名'], ['王']]), 'x');
 assert.throws(() => parseTeacherEmailWorkbook(bad), /信箱/);
+
+// 成員名冊空白信箱：自師資／匯入對照帶入；已有信箱不覆寫
+const staff: AcademicStaff[] = [
+  {
+    id: 's1',
+    name: '王小明',
+    title: '教務主任',
+    badge: '',
+    email: '',
+    phone: '',
+    responsibleScope: '',
+    group: 'academic',
+  },
+  {
+    id: 's2',
+    name: '李小華',
+    title: '教學組長',
+    badge: '',
+    email: 'keep@mail2.ccvs.kh.edu.tw',
+    phone: '',
+    responsibleScope: '',
+    group: 'academic',
+  },
+];
+const synced = syncEmptyStaffEmailsFromTeachers(staff, applied.teachers, parsed.emailsByName);
+assert.equal(synced.filled, 1);
+assert.equal(synced.staffList[0].email, 'wang@mail2.ccvs.kh.edu.tw');
+assert.equal(synced.staffList[1].email, 'keep@mail2.ccvs.kh.edu.tw', '已有信箱不覆寫');
+assert.equal(lookupTeacherEmail(applied.teachers, '王小明'), 'wang@mail2.ccvs.kh.edu.tw');
 
 console.log('regression-teacher-email-import: ok');

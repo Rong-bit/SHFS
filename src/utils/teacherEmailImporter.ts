@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Teacher } from '../types';
+import type { AcademicStaff, Teacher } from '../types';
 import { normalizeSchoolEmail } from './schoolEmail';
 import { teacherNameMatches } from './schoolDepartments';
 
@@ -76,6 +76,51 @@ export function parseTeacherEmailWorkbook(workbook: XLSX.WorkBook): TeacherEmail
 export async function readTeacherEmailFile(file: File): Promise<XLSX.WorkBook> {
   const buffer = await file.arrayBuffer();
   return XLSX.read(buffer, { type: 'array' });
+}
+
+/** 依姓名從師資名冊（或匯入對照）找出信箱 */
+export function lookupTeacherEmail(
+  teachers: Teacher[],
+  name: string,
+  emailsByName?: Record<string, string>
+): string {
+  const key = name.trim();
+  if (!key) return '';
+
+  if (emailsByName) {
+    const exact = emailsByName[key];
+    if (exact) return normalizeSchoolEmail(exact);
+    const fuzzyKey = Object.keys(emailsByName).find(
+      (n) => teacherNameMatches(n, key) || teacherNameMatches(key, n)
+    );
+    if (fuzzyKey) return normalizeSchoolEmail(emailsByName[fuzzyKey]);
+  }
+
+  const exactTeacher = teachers.find((t) => t.name.trim() === key);
+  if (exactTeacher) return normalizeSchoolEmail(exactTeacher.email);
+  const fuzzyTeacher = teachers.find(
+    (t) => teacherNameMatches(t.name, key) || teacherNameMatches(key, t.name)
+  );
+  return normalizeSchoolEmail(fuzzyTeacher?.email);
+}
+
+/**
+ * 成員名冊信箱若空白，依姓名從師資名冊／匯入對照帶入（已有信箱者不覆寫）。
+ */
+export function syncEmptyStaffEmailsFromTeachers(
+  staffList: AcademicStaff[],
+  teachers: Teacher[],
+  emailsByName?: Record<string, string>
+): { staffList: AcademicStaff[]; filled: number } {
+  let filled = 0;
+  const next = staffList.map((s) => {
+    if (normalizeSchoolEmail(s.email)) return s;
+    const email = lookupTeacherEmail(teachers, s.name, emailsByName);
+    if (!email) return s;
+    filled += 1;
+    return { ...s, email };
+  });
+  return { staffList: next, filled };
 }
 
 /** 依姓名寫入師資名冊信箱（精確相符優先，其次模糊比對老師／教師／導師後綴） */
