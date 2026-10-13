@@ -23,9 +23,11 @@
 > **巡堂 SMTP 寄信（建議校內常開電腦）**  
 > GitHub Pages 只適合平常瀏覽，**不能寄信**。請在校內電腦：
 >
-> 1. `npm install` 後雙擊 `啟動寄信API.bat`（或 `npm run build && npm start`）
+> 1. 安裝 Node.js 與 Python 後，雙擊 `啟動寄信主機.py` 或 `啟動寄信主機.bat`
 > 2. 瀏覽器開 `http://那台IP:3000`（**不要**開 github.io）
 > 3. 寄信設定：API 根網址**留空**；SMTP 用 `smtp.gmail.com:587`
+>
+> 若要打包成 `.exe`：在 Windows 執行 `scripts\build-mail-host-exe.bat`，再把 `dist\啟動寄信主機.exe` 放到專案根目錄使用。
 >
 > 操作電腦可與寄信主機不同台，但網址都要指向寄信主機的 `:3000`。  
 > Render 免費方案會封鎖 SMTP，不建議再用。
