@@ -79,9 +79,17 @@ export function orderedNoticeRequests(
     });
 }
 
+/** 通知單列節次是否皆有效且互不重複（可視為刻意改節次，如 3、4→2、3） */
+export function noticeRowPeriodsAreDistinct(rows: NoticeRow[]): boolean {
+  const nums = rows
+    .map((r) => Number(normalizeNoticePeriod(r.period)))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return nums.length === rows.length && new Set(nums).size === rows.length;
+}
+
 /**
- * 是否明顯「整表節次錯位」（例如同號 2 節寫成 2、3，申請卻是 3、4）。
- * 單列手改節次（5→3）不視為錯位，必須能正常儲存。
+ * 是否需強制對回課表節次：僅在多列但節次重複／無效時。
+ * 單列手改（5→3）、或刻意改成另一組不重複節次（3、4→2、3）皆可正常儲存。
  */
 export function shouldAlignNoticeRowPeriods(
   rows: NoticeRow[],
@@ -94,6 +102,8 @@ export function shouldAlignNoticeRowPeriods(
   const reqSet = [...reqPeriods].sort().join('|');
   const rowSet = [...rowPeriods].sort().join('|');
   if (reqSet === rowSet) return false; // 僅順序不同，保留手改
+  // 各列節次有效且不重複 → 使用者刻意改節次，勿改回課表
+  if (noticeRowPeriodsAreDistinct(rows)) return false;
   const matched = rowPeriods.filter((p) => p && reqPeriods.includes(p)).length;
   return matched < rows.length;
 }
@@ -190,10 +200,19 @@ export type NoticeDisplaySlot = {
   dayOfWeek: number;
 };
 
+function orderedNoticeRowsByPeriod(rows: NoticeRow[]): NoticeRow[] {
+  return [...rows].sort(
+    (a, b) =>
+      (Number(normalizeNoticePeriod(a.period)) || 0) -
+      (Number(normalizeNoticePeriod(b.period)) || 0)
+  );
+}
+
 /**
  * 列表顯示用班級／科目／節次：通知單曾改時優先用通知單列，
  * 否則回退 originalSession。
- * 比對以節次為主；對不到時依同號節次順序對應列（相容節次被手改偏掉）。
+ * 同號多節：列數＝節數且節次不重複時依列順序對應（含 3、4→2、3）；
+ * 單列／節次重複時班級科目仍可跟通知單，節次回退課表以免「第3節 · 共 2 節」。
  */
 export function resolveDisplayClassSubject(
   req: SubstituteRequest,
@@ -212,24 +231,30 @@ export function resolveDisplayClassSubject(
   const rows = resolveSharedNoticeRows(req, orderedReqs);
   if (!rows?.length) return fallback;
 
-  const periodKey = normalizeNoticePeriod(session.period);
-  const classKey = (session.className || '').trim();
-  const samePeriod = rows.filter((row) => normalizeNoticePeriod(row.period) === periodKey);
+  const multiDistinct =
+    orderedReqs.length > 1 &&
+    rows.length === orderedReqs.length &&
+    noticeRowPeriodsAreDistinct(rows);
 
   let match: NoticeRow | undefined;
-  if (samePeriod.length > 0) {
-    match = samePeriod.find((row) => (row.className || '').trim() === classKey) || samePeriod[0];
-  } else if (rows.length === 1) {
-    // 單列且節次已手改（如 5→3）：仍採用該列
-    match = rows[0];
-  } else {
+  if (multiDistinct) {
+    // 刻意改節次（3、4→2、3）：不可再用課表節次去對通知單列，改依順序對應
     const idx = orderedReqs.findIndex((r) => r.id === req.id);
-    const orderedRows = [...rows].sort(
-      (a, b) =>
-        (Number(normalizeNoticePeriod(a.period)) || 0) -
-        (Number(normalizeNoticePeriod(b.period)) || 0)
-    );
+    const orderedRows = orderedNoticeRowsByPeriod(rows);
     if (idx >= 0 && idx < orderedRows.length) match = orderedRows[idx];
+  } else {
+    const periodKey = normalizeNoticePeriod(session.period);
+    const classKey = (session.className || '').trim();
+    const samePeriod = rows.filter((row) => normalizeNoticePeriod(row.period) === periodKey);
+    if (samePeriod.length > 0) {
+      match = samePeriod.find((row) => (row.className || '').trim() === classKey) || samePeriod[0];
+    } else if (rows.length === 1) {
+      match = rows[0];
+    } else {
+      const idx = orderedReqs.findIndex((r) => r.id === req.id);
+      const orderedRows = orderedNoticeRowsByPeriod(rows);
+      if (idx >= 0 && idx < orderedRows.length) match = orderedRows[idx];
+    }
   }
 
   if (!match) return fallback;
@@ -237,9 +262,8 @@ export function resolveDisplayClassSubject(
   const className = (match.className || '').trim() || fallback.className;
   const subjectName = (match.subjectName || '').trim() || fallback.subjectName;
 
-  // 同號多節：列表節次一律用課表原節次，避免單列通知單或節次對不齊時
-  // 兩節都被對成「第3節 · 共 2 節」。單筆申請才跟通知單手改節次（如 5→3）。
-  if (orderedReqs.length > 1) {
+  // 同號多節但通知單列不足／節次重複：節次用課表，避免兩節都顯示成第3節
+  if (orderedReqs.length > 1 && !multiDistinct) {
     return {
       className,
       subjectName,
