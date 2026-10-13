@@ -316,6 +316,16 @@ export function isDeanGeneralAffairsStaff(s: AcademicStaff): boolean {
   return /總務主任|總務處主任/.test(t) || (/總務/.test(t) && /主任/.test(s.title || ''));
 }
 
+/**
+ * 職稱屬實習／總務會辦線，不應落入「教學組／教務」收件桶。
+ * （僅看 title，避免教學組組員 badge 含「實習」被誤判。）
+ */
+export function isNonAcademicOfficeStaff(s: AcademicStaff): boolean {
+  if (isDeanInternshipStaff(s) || isDeanGeneralAffairsStaff(s)) return true;
+  const title = s.title || '';
+  return /實習/.test(title) && !isDeanAcademicStaff(s);
+}
+
 function uniqRecipients(list: PatrolReviewRecipient[]): PatrolReviewRecipient[] {
   const seen = new Set<string>();
   const out: PatrolReviewRecipient[] = [];
@@ -367,6 +377,8 @@ export function resolvePatrolReviewRecipients(params: {
   if (roles.academic || roles.dean_academic) {
     for (const s of academicStaffList) {
       if ((s.group || 'academic') !== 'academic') continue;
+      // 實習／總務職稱另依 internship／dean_* 解析，勿當成教學組或教務主任
+      if (isNonAcademicOfficeStaff(s)) continue;
       if (isDeanAcademicStaff(s)) {
         if (roles.dean_academic) pushStaff('dean_academic', s);
       } else if (roles.academic) {
@@ -375,10 +387,10 @@ export function resolvePatrolReviewRecipients(params: {
     }
   }
 
-  // 若尚無學務主任／教務角色：把已列入的同人升級為主任角色（避免重複列）
+  // 若尚無學務主任／教務角色：僅升級「確屬該主任職稱」者（避免實習／總務主任被誤標教務）
   if (roles.dean_student && !out.some((r) => r.role === 'dean_student')) {
     const fallback = academicStaffList.find(
-      (s) => (s.group || 'academic') === 'student_affairs' && /主任/.test(s.title)
+      (s) => (s.group || 'academic') === 'student_affairs' && isDeanStudentStaff(s)
     );
     if (fallback) {
       const idx = out.findIndex((r) => r.personId === fallback.id);
@@ -388,7 +400,10 @@ export function resolvePatrolReviewRecipients(params: {
   }
   if (roles.dean_academic && !out.some((r) => r.role === 'dean_academic')) {
     const fallback = academicStaffList.find(
-      (s) => (s.group || 'academic') === 'academic' && (/教務主任/.test(s.title) || /主任/.test(s.title))
+      (s) =>
+        (s.group || 'academic') === 'academic' &&
+        isDeanAcademicStaff(s) &&
+        !isNonAcademicOfficeStaff(s)
     );
     if (fallback) {
       const idx = out.findIndex((r) => r.personId === fallback.id);
@@ -654,9 +669,15 @@ export function viewerReviewRoles(params: {
     }
   }
   if (group === 'academic') {
-    roles.push('academic');
-    if (viewer.staffTitle && isDeanAcademicStaff(stub(viewer.staffTitle, 'academic'))) {
-      roles.push('dean_academic');
+    const titled = viewer.staffTitle
+      ? stub(viewer.staffTitle, 'academic')
+      : null;
+    // 實習／總務主任或實習組長：不給教學組／教務核章權，改走下方專屬角色
+    if (!titled || !isNonAcademicOfficeStaff(titled)) {
+      roles.push('academic');
+      if (titled && isDeanAcademicStaff(titled)) {
+        roles.push('dean_academic');
+      }
     }
   }
   // 實習／總務：依職稱辨識，並需為此案收件人身分之一
