@@ -744,6 +744,8 @@ export function makeSignOff(params: {
   action: PatrolSignOffAction;
   instruction?: string;
   schoolName?: string;
+  /** 登入者職稱；寫入 stampCaption，避免重顯時組員被誤成組長 */
+  staffTitle?: string | null;
 }): PatrolSignOff {
   const stampedAt = new Date().toISOString();
   const roleLabel = PATROL_REVIEW_ROLE_LABELS[params.role];
@@ -755,6 +757,7 @@ export function makeSignOff(params: {
     instruction: params.instruction,
     stampedAt,
     stampLabel: `${params.schoolName || ''}${roleLabel}${params.action}`.trim(),
+    stampCaption: stampCaptionFromRole(params.role, params.staffTitle),
   };
 }
 

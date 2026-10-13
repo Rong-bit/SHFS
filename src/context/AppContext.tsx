@@ -562,6 +562,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetRole === currentRole && (samePerson || sameSubunitWithoutPerson)) {
       return;
     }
+
+    // 指定處室分層但名冊無人：不可切角色、不可沿用他組舊身分（密碼關閉時尤甚）
+    if (staffSubunit && !resolvedStaffId && isStaffSelectableRole(targetRole)) {
+      setLoginAuthTarget({
+        type: 'role',
+        targetRole,
+        academicStaffId: undefined,
+        staffSubunit,
+      });
+      setIsLoginAuthOpen(true);
+      return;
+    }
+
     const requirePass = systemConfig.authConfig?.requirePassword !== false;
     if (!requirePass) {
       setCurrentRole(targetRole);

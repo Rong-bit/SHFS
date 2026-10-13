@@ -503,6 +503,20 @@ assert.equal(principalStampLayout.stampCaption, '校長', '校長不加「教師
 const subjectTeacherStamp = stampOfficeAndTitle('subject_teacher', '閱畢');
 assert.equal(subjectTeacherStamp.stampCaption, '教師', '任課老師戳章為「教師」＋姓名');
 assert.equal(stampOfficeAndTitle('homeroom', '閱畢').stampCaption, '導師');
+// 核章當下寫入 stampCaption，避免重顯時組員被誤成組長
+const memberSignOff = makeSignOff({
+  role: 'academic',
+  personId: 'a1',
+  personName: '組員甲',
+  action: '閱畢',
+  staffTitle: '教學組組員',
+});
+assert.equal(memberSignOff.stampCaption, '教師兼教學組組員');
+assert.notEqual(
+  memberSignOff.stampCaption,
+  stampOfficeAndTitle('academic', '閱畢').stampCaption,
+  '有職稱時不可回退成教學組長預設'
+);
 // 其他主任／組長同「教師兼…」
 assert.equal(stampOfficeAndTitle('dean_student', '閱畢').stampCaption, '教師兼學務主任');
 assert.equal(stampOfficeAndTitle('dean_internship', '閱畢').stampCaption, '教師兼實習主任');

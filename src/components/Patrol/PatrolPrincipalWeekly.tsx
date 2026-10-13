@@ -72,6 +72,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
         action: '校長核章',
         instruction: instruction.trim() || undefined,
         schoolName: systemConfig.schoolName,
+        staffTitle: principalStaff.title || '校長',
       });
       saveCase(applySignOff(c, signOff, { archive: true, instruction: instruction.trim() || undefined }));
     }
