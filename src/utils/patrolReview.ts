@@ -246,15 +246,22 @@ export function stampTitleFromStaffTitle(staffTitle?: string | null): string | n
 }
 
 /**
- * 扁長戳章職銜列（例：教師兼教務主任）。
+ * 職名章左欄職銜（橫式由左而右；右欄另放姓名）。
+ * 依機關學校職名章慣例：教師兼任處室主任／組長刻本職＋兼任職稱，
+ * 例「教師兼教務主任」「教師兼教學組長」；校長僅刻「校長」（不加「教師兼」）。
  * 「會畢／閱畢／校長核章」屬動作，顯示於戳章下方，不進此字串。
  */
 export function stampCaptionFromRole(
   role: PatrolReviewRole,
   staffTitle?: string | null
 ): string {
+  const withTeacher = (title: string) =>
+    title.startsWith('教師兼') ? title : `教師兼${title}`;
+
   const t = (staffTitle || '').trim();
   if (t) {
+    // 校長：直接「校長」，不加教師兼
+    if (/校長/.test(t) && !/主任|組長/.test(t)) return '校長';
     if (/教務主任/.test(t)) return '教師兼教務主任';
     if (/學務主任/.test(t)) return '教師兼學務主任';
     if (/實習主任/.test(t)) return '教師兼實習主任';
@@ -263,13 +270,16 @@ export function stampCaptionFromRole(
     if (/生輔組長/.test(t)) return '教師兼生輔組長';
     if (/實習組長/.test(t)) return '教師兼實習組長';
     if (/出納組長/.test(t)) return '教師兼出納組長';
-    if (/校長/.test(t)) return '校長';
+    if (/教學組組員|教學組幹事|組員.*幹事/.test(t)) return '教師兼教學組組員';
+    if (/教學組助理/.test(t)) return '教師兼教學組助理';
+    if (/出納組組員/.test(t)) return '教師兼出納組組員';
     if (/導師/.test(t)) return '導師';
-    if (/教師|老師/.test(t) && !/兼/.test(t)) return '教師';
-    if (/組長/.test(t)) return t.startsWith('教師兼') ? t : `教師兼${t}`;
-    if (/主任/.test(t) && !/科主任/.test(t)) {
-      return t.startsWith('教師兼') ? t : `教師兼${t}`;
+    if (/科主任/.test(t)) return withTeacher(t.includes('科主任') ? t : '科主任');
+    // 其餘主任／組長：統一「教師兼＋職稱」
+    if (/主任/.test(t) || /組長/.test(t) || /組員|助理|幹事/.test(t)) {
+      return withTeacher(t.replace(/^教師兼/, ''));
     }
+    if (/教師|老師/.test(t) && !/兼/.test(t)) return '教師';
   }
 
   switch (role) {
@@ -299,8 +309,8 @@ export function stampCaptionFromRole(
 }
 
 /**
- * 扁長紅戳（約 0.75×2.8cm）：上職銜、下姓名。
- * 「會畢／閱畢／校長核章」屬動作，應顯示在戳章下方。
+ * 乙種職名章（約 0.75×2.8cm）：橫式左職銜、右姓名。
+ * 主任／組長→「教師兼…」；校長→「校長」。動作字不進戳章。
  * @param _action 保留相容舊呼叫；不進戳章
  * @param staffTitle 登入者職稱（如教務主任），用於組成「教師兼…」
  */

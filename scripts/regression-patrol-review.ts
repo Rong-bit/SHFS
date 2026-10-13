@@ -493,7 +493,12 @@ assert.equal(deanStampLayout.titleLabel, '主任');
 assert.equal(deanStampLayout.stampCaption, '教師兼教務主任');
 const principalStampLayout = stampOfficeAndTitle('principal', '校長核章');
 assert.equal(principalStampLayout.titleLabel, '校長');
-assert.equal(principalStampLayout.stampCaption, '校長');
+assert.equal(principalStampLayout.stampCaption, '校長', '校長不加「教師兼」');
+// 其他主任／組長同「教師兼…」
+assert.equal(stampOfficeAndTitle('dean_student', '閱畢').stampCaption, '教師兼學務主任');
+assert.equal(stampOfficeAndTitle('dean_internship', '閱畢').stampCaption, '教師兼實習主任');
+assert.equal(stampOfficeAndTitle('dean_general_affairs', '閱畢').stampCaption, '教師兼總務主任');
+assert.equal(stampOfficeAndTitle('student_affairs', '閱畢', '生輔組長').stampCaption, '教師兼生輔組長');
 // 教務主任即使誤帶 academic 角色，戳章仍應為教師兼教務主任
 const deanAsAcademic = stampOfficeAndTitle('academic', '閱畢', '教務主任');
 assert.equal(deanAsAcademic.officeLabel, '教務處');
