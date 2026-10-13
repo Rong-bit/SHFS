@@ -3251,9 +3251,9 @@ export const AdminSettings: React.FC = () => {
 
           {/* Staff Cards by Group */}
           {([
-            { grp: 'academic' as const, label: '教務處（教務主任／教學組）', dot: 'bg-indigo-500' },
+            { grp: 'academic' as const, label: '教務／實習／總務主任名冊', dot: 'bg-indigo-500' },
             { grp: 'accounting' as const, label: '總務處・出納組', dot: 'bg-teal-500' },
-            { grp: 'student_affairs' as const, label: '學務處', dot: 'bg-sky-500' },
+            { grp: 'student_affairs' as const, label: '學務處（學務主任／生輔組）', dot: 'bg-sky-500' },
             { grp: 'principal' as const, label: '校長室', dot: 'bg-slate-600' },
           ]).map(({ grp, label: groupLabel, dot }) => {
             const members = academicStaffList.filter((s) => (s.group || 'academic') === grp);
