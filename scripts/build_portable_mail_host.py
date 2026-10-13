@@ -106,7 +106,8 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 title SHFS Mail Host
 echo Starting SHFS mail host...
-echo Open http://localhost:3000
+echo After start, the real LAN URL will be printed
+echo   e.g. http://192.168.x.x:3000
 echo Keep this window open.
 echo.
 set PORT=3000
@@ -232,9 +233,11 @@ def main() -> int:
         "=========================\r\n"
         "1. Double-click start.bat  (or SHFSMailHost.exe if present)\r\n"
         "2. Keep the window open\r\n"
-        "3. Browser: http://localhost:3000\r\n"
-        "4. Do not use github.io for sending mail\r\n"
-        "5. server.cjs should be about 1.5MB+ (see PACKAGE.txt)\r\n",
+        "3. This PC: http://localhost:3000\r\n"
+        "4. Others: use the LAN URL printed after start\r\n"
+        "   (e.g. http://192.168.x.x:3000)\r\n"
+        "5. Do not use github.io for sending mail\r\n"
+        "6. server.cjs should be about 1.5MB+ (see PACKAGE.txt)\r\n",
         encoding="ascii",
         newline="\r\n",
     )

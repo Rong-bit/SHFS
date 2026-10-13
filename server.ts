@@ -1,4 +1,5 @@
 import dns from "dns";
+import os from "os";
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
@@ -16,6 +17,19 @@ try {
 const app = express();
 /** Render／雲端會注入 PORT；本機預設 3000 */
 const PORT = Number(process.env.PORT) || 3000;
+
+/** 本機區網 IPv4（供巡堂人員用 http://IP:PORT 連線） */
+function listLanIPv4(): string[] {
+  const nets = os.networkInterfaces();
+  const out: string[] = [];
+  for (const entries of Object.values(nets)) {
+    for (const e of entries || []) {
+      const v4 = e.family === "IPv4" || (e.family as unknown) === 4;
+      if (v4 && !e.internal) out.push(e.address);
+    }
+  }
+  return [...new Set(out)];
+}
 
 // GitHub Pages 前端若另填「寄信 API 根網址」打到此伺服器，需允許跨域
 app.use((req, res, next) => {
@@ -182,7 +196,20 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`教務系統 Server running on http://0.0.0.0:${PORT}`);
+    const lan = listLanIPv4();
+    console.log("");
+    console.log("SHFS Mail Host ready");
+    console.log(`  This PC:  http://localhost:${PORT}`);
+    if (lan.length > 0) {
+      for (const ip of lan) {
+        console.log(`  LAN:      http://${ip}:${PORT}`);
+      }
+      console.log("  (Same Wi-Fi/LAN devices can open the LAN URL above)");
+    } else {
+      console.log("  LAN:      (no IPv4 found — check Wi-Fi / Ethernet)");
+    }
+    console.log("  Keep this window open.");
+    console.log("");
   });
 }
 

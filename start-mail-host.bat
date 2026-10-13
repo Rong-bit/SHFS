@@ -8,8 +8,9 @@ echo   SHFS mail host (Node / npm)
 echo ========================================
 echo.
 echo Keep this window open.
-echo Open http://localhost:3000 after start.
-echo Other PCs: http://THIS-PC-LAN-IP:3000
+echo After start, Node prints the real URLs:
+echo   This PC:  http://localhost:3000
+echo   LAN:      http://192.168.x.x:3000  (actual IP shown)
 echo Do NOT use github.io for sending mail.
 echo Leave "notify API base URL" empty.
 echo.
