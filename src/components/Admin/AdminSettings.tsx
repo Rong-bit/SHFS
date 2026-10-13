@@ -136,6 +136,80 @@ const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
 const groupOfTab = (tab: AdminTab): AdminGroup =>
   ADMIN_GROUPS.find((g) => g.tabs.includes(tab))?.id ?? 'params';
 
+/** 成員名冊職稱預設（巡堂會辦依職稱／組別解析收件人） */
+const STAFF_TITLE_PRESETS: Record<string, { badge: string; responsibleScope: string }> = {
+  教務主任: {
+    badge: '教務會辦 · 閱畢核章',
+    responsibleScope: '巡堂異常教務會辦與閱畢',
+  },
+  教學組長: {
+    badge: '全權審核 · 決行簽結',
+    responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調',
+  },
+  實習主任: {
+    badge: '實習會辦 · 閱畢核章',
+    responsibleScope: '巡堂異常實習處會辦與閱畢',
+  },
+  實習組長: {
+    badge: '巡堂會辦 · 實習課務',
+    responsibleScope: '巡堂異常實習組會辦、實習工場與課務協調',
+  },
+  總務主任: {
+    badge: '總務會辦 · 閱畢核章',
+    responsibleScope: '巡堂異常總務會辦與閱畢',
+  },
+  教學組組員: {
+    badge: '經辦 · 專業實習與突發公差派代',
+    responsibleScope: '專業實習工場調代課經辦、突發病假與公假派代、實習檢定移課',
+  },
+  教學組助理: {
+    badge: '協辦 · 課表登錄與代課通知單印發',
+    responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合',
+  },
+  出納組長: {
+    badge: '鐘點費核銷 · 出納結算',
+    responsibleScope:
+      '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理',
+  },
+  出納組組員: {
+    badge: '經辦 · 鐘點費造冊與帳務',
+    responsibleScope:
+      '鐘點費清冊核對與造冊、代課費撥款簽收、零用金保管、各項收支傳票製作與帳務登錄',
+  },
+  學務主任: {
+    badge: '學務會辦 · 閱畢核章',
+    responsibleScope: '巡堂異常學務會辦與閱畢',
+  },
+  生輔組長: {
+    badge: '巡堂會辦 · 生活輔導',
+    responsibleScope: '巡堂異常會辦、生活輔導與秩序關懷',
+  },
+  校長: {
+    badge: '每周彙整 · 核章指示',
+    responsibleScope: '巡堂異常每周彙整核章與指示用語',
+  },
+};
+
+const STAFF_GROUP_TITLE_OPTIONS: Record<
+  'academic' | 'accounting' | 'student_affairs' | 'principal',
+  string[]
+> = {
+  academic: ['教務主任', '教學組長', '實習主任', '實習組長', '總務主任', '教學組組員', '教學組助理'],
+  accounting: ['出納組長', '出納組組員'],
+  student_affairs: ['學務主任', '生輔組長'],
+  principal: ['校長'],
+};
+
+const STAFF_GROUP_DEFAULT_TITLE: Record<
+  'academic' | 'accounting' | 'student_affairs' | 'principal',
+  string
+> = {
+  academic: '教學組長',
+  accounting: '出納組長',
+  student_affairs: '生輔組長',
+  principal: '校長',
+};
+
 /** 行事曆分頁立即存檔的欄位；其他分頁按儲存時一律沿用已存值 */
 const CALENDAR_KEYS: readonly (keyof SystemConfig)[] = [
   'nonTeachingDays',
@@ -714,14 +788,16 @@ export const AdminSettings: React.FC = () => {
 
   const handleOpenAddStaff = () => {
     setEditingStaff(null);
+    const title = STAFF_GROUP_DEFAULT_TITLE.academic;
+    const preset = STAFF_TITLE_PRESETS[title];
     setStaffFormData({
       name: '',
-      title: '教學組組員 (幹事)',
-      badge: '經辦 · 實習調代課與公差派代',
+      title,
+      badge: preset.badge,
       email: '',
-      phone: '分機 211',
-      avatarBg: 'from-amber-600 to-amber-800',
-      responsibleScope: '全校各科專業實習工場調代課經辦、突發病假與公假派代',
+      phone: '分機 210',
+      avatarBg: 'from-indigo-600 to-indigo-800',
+      responsibleScope: preset.responsibleScope,
       group: 'academic',
     });
     setIsStaffModalOpen(true);
@@ -3050,8 +3126,9 @@ export const AdminSettings: React.FC = () => {
                 <span>行政經辦人員名冊維護</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」；生輔組／學務主任／校長連動「巡堂異常會辦與核章」。
-                巡堂會辦收件人來自本名冊（非師資名冊）：教學組請建「教學組長／教務主任」、生輔組／學務請建「生輔組長／學務主任」，並務必填寫公務信箱，異常會辦才能寄出通知。
+                此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」；生輔組／學務／實習／總務／校長連動「巡堂異常會辦與核章」。
+                巡堂會辦收件人來自本名冊（非「全校教師師資名冊」）：新增成員時用職稱下拉選
+                教務主任、教學組長、實習主任、實習組長、生輔組長、學務主任、總務主任、校長等，並填公務信箱即可寄信會辦。
               </p>
             </div>
 
@@ -3151,7 +3228,7 @@ export const AdminSettings: React.FC = () => {
                 點選上方「修改組員姓名/資料」按鈕即可直接更換教學組或出納組組長、組員的姓名。修改後將即時同步於全校調代課經辦簽章與代課通知單中。
               </p>
               <p>
-                巡堂異常會辦：教務主任、教學組長請建於「教學組」；學務主任、生輔組長請建於「生輔組／學務」；校長請建於「校長室」。師資名冊即使有主任／組長職稱，也不會自動列入會辦收件。
+                巡堂異常會辦請用下方「新增成員」＋職稱下拉：教學組可選教務主任／教學組長／實習主任／實習組長／總務主任；生輔組／學務可選學務主任／生輔組長；校長室選校長。填好公務信箱後，異常會辦即可寄信給這些人。全校教師師資名冊不會作為會辦收件依據。
               </p>
             </div>
           </div>
@@ -3669,34 +3746,8 @@ export const AdminSettings: React.FC = () => {
                         | 'accounting'
                         | 'student_affairs'
                         | 'principal';
-                      const defaultTitle =
-                        group === 'academic'
-                          ? '教學組長'
-                          : group === 'accounting'
-                            ? '出納組長'
-                            : group === 'student_affairs'
-                              ? '生輔組長'
-                              : '校長';
-                      const defaults: Record<string, { badge: string; responsibleScope: string }> = {
-                        教學組長: {
-                          badge: '全權審核 · 決行簽結',
-                          responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調',
-                        },
-                        出納組長: {
-                          badge: '鐘點費核銷 · 出納結算',
-                          responsibleScope:
-                            '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理',
-                        },
-                        生輔組長: {
-                          badge: '巡堂會辦 · 生活輔導',
-                          responsibleScope: '巡堂異常會辦、生活輔導與秩序關懷',
-                        },
-                        校長: {
-                          badge: '每周彙整 · 核章指示',
-                          responsibleScope: '巡堂異常每周彙整核章與指示用語',
-                        },
-                      };
-                      const preset = defaults[defaultTitle];
+                      const defaultTitle = STAFF_GROUP_DEFAULT_TITLE[group];
+                      const preset = STAFF_TITLE_PRESETS[defaultTitle];
                       setStaffFormData({
                         ...staffFormData,
                         group,
@@ -3707,7 +3758,7 @@ export const AdminSettings: React.FC = () => {
                     }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
-                    <option value="academic">教學組</option>
+                    <option value="academic">教學組（含教務／實習／總務）</option>
                     <option value="accounting">出納組</option>
                     <option value="student_affairs">生輔組／學務</option>
                     <option value="principal">校長室</option>
@@ -3716,81 +3767,43 @@ export const AdminSettings: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">職稱</label>
-                  <select
-                    value={staffFormData.title}
-                    onChange={(e) => {
-                      const title = e.target.value;
-                      const presets: Record<string, { badge: string; responsibleScope: string }> = {
-                        教學組長: {
-                          badge: '全權審核 · 決行簽結',
-                          responsibleScope: '全校調代課審核、鐘點費核備、重大排課爭議協調',
-                        },
-                        教學組組員: {
-                          badge: '經辦 · 專業實習與突發公差派代',
-                          responsibleScope: '專業實習工場調代課經辦、突發病假與公假派代、實習檢定移課',
-                        },
-                        教學組助理: {
-                          badge: '協辦 · 課表登錄與代課通知單印發',
-                          responsibleScope: '課表變更登錄、調代課通知單批次列印、師資空堂媒合',
-                        },
-                        教務主任: {
-                          badge: '教務會辦 · 閱畢核章',
-                          responsibleScope: '巡堂異常教務會辦與閱畢',
-                        },
-                        出納組長: {
-                          badge: '鐘點費核銷 · 出納結算',
-                          responsibleScope:
-                            '每月教師超鐘點費、調代課鐘點費之出納撥付作業，教師薪資異動通知，各項代收代辦費收支管理',
-                        },
-                        出納組組員: {
-                          badge: '經辦 · 鐘點費造冊與帳務',
-                          responsibleScope:
-                            '鐘點費清冊核對與造冊、代課費撥款簽收、零用金保管、各項收支傳票製作與帳務登錄',
-                        },
-                        生輔組長: {
-                          badge: '巡堂會辦 · 生活輔導',
-                          responsibleScope: '巡堂異常會辦、生活輔導與秩序關懷',
-                        },
-                        學務主任: {
-                          badge: '學務會辦 · 閱畢核章',
-                          responsibleScope: '巡堂異常學務會辦與閱畢',
-                        },
-                        校長: {
-                          badge: '每周彙整 · 核章指示',
-                          responsibleScope: '巡堂異常每周彙整核章與指示用語',
-                        },
-                      };
-                      const preset = presets[title];
-                      setStaffFormData({
-                        ...staffFormData,
-                        title,
-                        ...(preset ? { badge: preset.badge, responsibleScope: preset.responsibleScope } : {}),
-                      });
-                    }}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                  >
-                    {(staffFormData.group || 'academic') === 'academic' ? (
+                  <label className="block font-semibold text-slate-700 mb-1">職稱（巡堂會辦下拉）</label>
+                  {(() => {
+                    const groupKey = (staffFormData.group ||
+                      'academic') as keyof typeof STAFF_GROUP_TITLE_OPTIONS;
+                    const baseOptions = STAFF_GROUP_TITLE_OPTIONS[groupKey];
+                    const titleOptions = baseOptions.includes(staffFormData.title)
+                      ? baseOptions
+                      : [staffFormData.title, ...baseOptions];
+                    return (
                       <>
-                        <option value="教學組長">教學組長</option>
-                        <option value="教學組組員">教學組組員</option>
-                        <option value="教學組助理">教學組助理</option>
-                        <option value="教務主任">教務主任</option>
+                        <select
+                          value={staffFormData.title}
+                          onChange={(e) => {
+                            const title = e.target.value;
+                            const preset = STAFF_TITLE_PRESETS[title];
+                            setStaffFormData({
+                              ...staffFormData,
+                              title,
+                              ...(preset
+                                ? { badge: preset.badge, responsibleScope: preset.responsibleScope }
+                                : {}),
+                            });
+                          }}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
+                        >
+                          {titleOptions.map((title) => (
+                            <option key={title} value={title}>
+                              {title}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-amber-700 mt-1 leading-relaxed">
+                          選教務主任、教學組長、實習主任、實習組長、學務主任、生輔組長、總務主任或校長後，填信箱即可列入巡堂會辦寄信對象。
+                        </p>
                       </>
-                    ) : (staffFormData.group || 'academic') === 'accounting' ? (
-                      <>
-                        <option value="出納組長">出納組長</option>
-                        <option value="出納組組員">出納組組員</option>
-                      </>
-                    ) : (staffFormData.group || 'academic') === 'student_affairs' ? (
-                      <>
-                        <option value="生輔組長">生輔組長</option>
-                        <option value="學務主任">學務主任</option>
-                      </>
-                    ) : (
-                      <option value="校長">校長</option>
-                    )}
-                  </select>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -3836,7 +3849,9 @@ export const AdminSettings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">公務電子郵件（選填）</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    公務電子郵件（巡堂會辦寄信請填）
+                  </label>
                   <input
                     type="email"
                     value={staffFormData.email}
@@ -3844,6 +3859,7 @@ export const AdminSettings: React.FC = () => {
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2"
                     placeholder={SCHOOL_EMAIL_EXAMPLE}
                   />
+                  <p className="text-[10px] text-slate-400 mt-0.5">未填信箱仍可建會辦案，但無法寄出通知信</p>
                 </div>
               </div>
 
