@@ -104,8 +104,8 @@ export function shouldAlignNoticeRowPeriods(
   if (reqSet === rowSet) return false; // 僅順序不同，保留手改
   // 各列節次有效且不重複 → 使用者刻意改節次，勿改回課表
   if (noticeRowPeriodsAreDistinct(rows)) return false;
-  const matched = rowPeriods.filter((p) => p && reqPeriods.includes(p)).length;
-  return matched < rows.length;
+  // 節次重複／無效 → 對回課表原節次
+  return true;
 }
 
 /**
