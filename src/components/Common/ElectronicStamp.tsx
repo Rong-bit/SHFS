@@ -16,7 +16,7 @@ const STAMP_ASPECT = STAMP_WIDTH_CM / STAMP_HEIGHT_CM; // ≈ 3.733
 type ElectronicStampProps = {
   /**
    * 職銜文案：主任／組長為「教師兼教務主任」等；校長為「校長」。
-   * 長職銜自動拆成二排；姓名固定一排。
+   * 長職銜自動拆成二排（兩排同寬對齊）；姓名固定一排。
    */
   stampCaption?: string;
   /** @deprecated 改以 stampCaption；仍相容舊的處室欄 */
@@ -61,8 +61,7 @@ function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, mi
 
 /**
  * 扁長紅框職名章（實物約 0.75×2.8cm）
- * 左：職銜二排（盡量大字）；右：姓名一排（盡量大字）
- * 例：教師兼／教務主任　｜　陳柏宇；校長　｜　○○○
+ * 左：職銜二排且兩排同寬對齊（例「教　師　兼」對齊「教務主任」）；右：姓名一排
  * 會畢／閱畢請顯示於戳章下方
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
@@ -87,8 +86,8 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const lines = splitStampCaptionLines(caption);
   const twoLine = lines.length === 2;
 
-  // viewBox 280×75；左欄約到 x=165，右欄姓名
-  const leftMaxW = twoLine ? 150 : 130;
+  // viewBox 280×75；左欄職銜、右欄姓名
+  const leftMaxW = twoLine ? 148 : 130;
   const longestTitle = Math.max(...lines.map((l) => [...l].length));
   const titleFont = maxFontForLine(
     longestTitle,
@@ -96,6 +95,9 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
     twoLine ? 28 : 32,
     twoLine ? 12 : 14
   );
+  // 兩排共用同一寬度：左緣對齊、右緣對齊（「教師兼」字距拉開對齊「教務主任」）
+  const titleBlockWidth = Math.min(leftMaxW, longestTitle * titleFont);
+  const titleLeftX = 14;
   const nameFont = maxFontForLine([...name].length, 100, 34, 14);
 
   const widthPx = size;
@@ -130,37 +132,39 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           rx="1"
         />
 
-        {/* 左：職銜（可二排） */}
+        {/* 左：職銜二排，同寬左右對齊 */}
         {twoLine ? (
           <>
             <text
-              x="82"
+              x={titleLeftX}
               y="26"
-              textAnchor="middle"
+              textAnchor="start"
               dominantBaseline="middle"
               fill={STAMP_RED}
               fontFamily={STAMP_KAI}
               fontSize={titleFont}
-              letterSpacing="0.06em"
+              textLength={titleBlockWidth}
+              lengthAdjust="spacing"
             >
               {lines[0]}
             </text>
             <text
-              x="82"
+              x={titleLeftX}
               y="52"
-              textAnchor="middle"
+              textAnchor="start"
               dominantBaseline="middle"
               fill={STAMP_RED}
               fontFamily={STAMP_KAI}
               fontSize={titleFont}
-              letterSpacing="0.06em"
+              textLength={titleBlockWidth}
+              lengthAdjust="spacing"
             >
               {lines[1]}
             </text>
           </>
         ) : (
           <text
-            x="82"
+            x={titleLeftX + titleBlockWidth / 2}
             y="40"
             textAnchor="middle"
             dominantBaseline="middle"
