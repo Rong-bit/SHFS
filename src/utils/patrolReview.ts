@@ -228,7 +228,7 @@ export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
   'principal',
 ];
 
-/** 自成員職稱字串萃取戳章用短職稱（左下欄） */
+/** 自成員職稱字串萃取戳章用短職稱（相容舊欄位） */
 export function stampTitleFromStaffTitle(staffTitle?: string | null): string | null {
   const t = (staffTitle || '').trim();
   if (!t) return null;
@@ -240,22 +240,75 @@ export function stampTitleFromStaffTitle(staffTitle?: string | null): string | n
   if (/組員|幹事/.test(t)) return '組員';
   if (/導師/.test(t)) return '導師';
   if (/教師|老師/.test(t)) return '教師';
-  // 過長職稱不硬塞進戳章
+  // 過長職稱不硬塞進短欄
   if ([...t].length <= 4) return t;
   return null;
 }
 
 /**
- * 長方紅戳：左上處室、左下職稱、右側姓名（仿實物原子章）。
- * 「會畢／閱畢／校長核章」屬動作，應顯示在戳章下方，不進戳章左下欄。
- * @param _action 保留相容舊呼叫；不再寫入 titleLabel
- * @param staffTitle 登入者職稱（如教學組長），可精準帶入左下職稱
+ * 扁長戳章職銜列（例：教師兼教務主任）。
+ * 「會畢／閱畢／校長核章」屬動作，顯示於戳章下方，不進此字串。
+ */
+export function stampCaptionFromRole(
+  role: PatrolReviewRole,
+  staffTitle?: string | null
+): string {
+  const t = (staffTitle || '').trim();
+  if (t) {
+    if (/教務主任/.test(t)) return '教師兼教務主任';
+    if (/學務主任/.test(t)) return '教師兼學務主任';
+    if (/實習主任/.test(t)) return '教師兼實習主任';
+    if (/總務主任/.test(t)) return '教師兼總務主任';
+    if (/教學組長/.test(t)) return '教師兼教學組長';
+    if (/生輔組長/.test(t)) return '教師兼生輔組長';
+    if (/實習組長/.test(t)) return '教師兼實習組長';
+    if (/出納組長/.test(t)) return '教師兼出納組長';
+    if (/校長/.test(t)) return '校長';
+    if (/導師/.test(t)) return '導師';
+    if (/教師|老師/.test(t) && !/兼/.test(t)) return '教師';
+    if (/組長/.test(t)) return t.startsWith('教師兼') ? t : `教師兼${t}`;
+    if (/主任/.test(t) && !/科主任/.test(t)) {
+      return t.startsWith('教師兼') ? t : `教師兼${t}`;
+    }
+  }
+
+  switch (role) {
+    case 'dean_academic':
+      return '教師兼教務主任';
+    case 'dean_student':
+      return '教師兼學務主任';
+    case 'dean_internship':
+      return '教師兼實習主任';
+    case 'dean_general_affairs':
+      return '教師兼總務主任';
+    case 'student_affairs':
+      return '教師兼生輔組長';
+    case 'academic':
+      return '教師兼教學組長';
+    case 'internship':
+      return '教師兼實習組長';
+    case 'principal':
+      return '校長';
+    case 'homeroom':
+      return '導師';
+    case 'subject_teacher':
+      return '任課教師';
+    default:
+      return PATROL_REVIEW_ROLE_LABELS[role] || '核章';
+  }
+}
+
+/**
+ * 扁長紅戳（約 0.75×2.8cm）：上職銜、下姓名。
+ * 「會畢／閱畢／校長核章」屬動作，應顯示在戳章下方。
+ * @param _action 保留相容舊呼叫；不進戳章
+ * @param staffTitle 登入者職稱（如教務主任），用於組成「教師兼…」
  */
 export function stampOfficeAndTitle(
   role: PatrolReviewRole,
   _action?: PatrolSignOffAction | string,
   staffTitle?: string | null
-): { officeLabel: string; titleLabel: string } {
+): { officeLabel: string; titleLabel: string; stampCaption: string } {
   const fromStaff = stampTitleFromStaffTitle(staffTitle);
   const titledStub = (staffTitle || '').trim()
     ? ({
@@ -270,41 +323,55 @@ export function stampOfficeAndTitle(
       } satisfies AcademicStaff)
     : null;
 
-  // 職稱已標示主任時，即使誤選教學組／生輔組，仍依處室主任戳章（避免「教學組／主任」）
+  // 職稱已標示主任時，即使誤選教學組／生輔組，仍依處室主任戳章
   if (titledStub && isDeanAcademicStaff(titledStub) && (role === 'academic' || role === 'dean_academic')) {
-    return { officeLabel: '教務處', titleLabel: fromStaff || '主任' };
+    return {
+      officeLabel: '教務處',
+      titleLabel: fromStaff || '主任',
+      stampCaption: stampCaptionFromRole('dean_academic', staffTitle),
+    };
   }
   if (
     titledStub &&
     isDeanStudentStaff({ ...titledStub, group: 'student_affairs' }) &&
     (role === 'student_affairs' || role === 'dean_student')
   ) {
-    return { officeLabel: '學務處', titleLabel: fromStaff || '主任' };
+    return {
+      officeLabel: '學務處',
+      titleLabel: fromStaff || '主任',
+      stampCaption: stampCaptionFromRole('dean_student', staffTitle),
+    };
   }
+
+  const stampCaption = stampCaptionFromRole(role, staffTitle);
 
   switch (role) {
     case 'dean_academic':
-      return { officeLabel: '教務處', titleLabel: fromStaff || '主任' };
+      return { officeLabel: '教務處', titleLabel: fromStaff || '主任', stampCaption };
     case 'dean_student':
-      return { officeLabel: '學務處', titleLabel: fromStaff || '主任' };
+      return { officeLabel: '學務處', titleLabel: fromStaff || '主任', stampCaption };
     case 'dean_internship':
-      return { officeLabel: '實習處', titleLabel: fromStaff || '主任' };
+      return { officeLabel: '實習處', titleLabel: fromStaff || '主任', stampCaption };
     case 'dean_general_affairs':
-      return { officeLabel: '總務處', titleLabel: fromStaff || '主任' };
+      return { officeLabel: '總務處', titleLabel: fromStaff || '主任', stampCaption };
     case 'student_affairs':
-      return { officeLabel: '生輔組', titleLabel: fromStaff || '組長' };
+      return { officeLabel: '生輔組', titleLabel: fromStaff || '組長', stampCaption };
     case 'academic':
-      return { officeLabel: '教學組', titleLabel: fromStaff || '組長' };
+      return { officeLabel: '教學組', titleLabel: fromStaff || '組長', stampCaption };
     case 'internship':
-      return { officeLabel: '實習組', titleLabel: fromStaff || '組長' };
+      return { officeLabel: '實習組', titleLabel: fromStaff || '組長', stampCaption };
     case 'principal':
-      return { officeLabel: '校長室', titleLabel: fromStaff || '校長' };
+      return { officeLabel: '校長室', titleLabel: fromStaff || '校長', stampCaption };
     case 'homeroom':
-      return { officeLabel: '導師', titleLabel: fromStaff || '導師' };
+      return { officeLabel: '導師', titleLabel: fromStaff || '導師', stampCaption };
     case 'subject_teacher':
-      return { officeLabel: '任課', titleLabel: fromStaff || '教師' };
+      return { officeLabel: '任課', titleLabel: fromStaff || '教師', stampCaption };
     default:
-      return { officeLabel: PATROL_REVIEW_ROLE_LABELS[role], titleLabel: fromStaff || '核章' };
+      return {
+        officeLabel: PATROL_REVIEW_ROLE_LABELS[role],
+        titleLabel: fromStaff || '核章',
+        stampCaption,
+      };
   }
 }
 

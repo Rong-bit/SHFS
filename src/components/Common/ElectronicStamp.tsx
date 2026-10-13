@@ -5,116 +5,122 @@ const STAMP_RED = '#c41e3a';
 const STAMP_KAI =
   '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", "Noto Serif TC", serif';
 
+/** 實物規格：高 0.75cm × 寬 2.8cm */
+export const STAMP_HEIGHT_CM = 0.75;
+export const STAMP_WIDTH_CM = 2.8;
+const STAMP_ASPECT = STAMP_WIDTH_CM / STAMP_HEIGHT_CM; // ≈ 3.733
+
 type ElectronicStampProps = {
-  /** 左上處室／單位，如 會計室、生輔組、教學組 */
-  officeLabel: string;
-  /** 左下職稱，如 主任、組長（勿放會畢／閱畢；動作應在戳章外顯示） */
-  titleLabel: string;
-  /** 右側姓名 */
+  /**
+   * 戳章職銜列，如「教師兼教務主任」。
+   * 若未提供則以 officeLabel + titleLabel 組成相容舊呼叫。
+   */
+  stampCaption?: string;
+  /** @deprecated 改以 stampCaption；仍相容舊的處室欄 */
+  officeLabel?: string;
+  /** 職稱短名或完整職銜（無 stampCaption 時使用） */
+  titleLabel?: string;
+  /** 姓名，如 陳柏宇 */
   personName: string;
-  /** 寬度（px）；高度依比例約 0.48 */
+  /**
+   * 螢幕預覽寬度（px）。列印時固定為 2.8cm × 0.75cm。
+   * @default 210
+   */
   size?: number;
   className?: string;
-  /** @deprecated 圓戳時代欄位；矩形戳章不再使用 */
+  /** @deprecated 圓戳時代欄位 */
   schoolName?: string;
-  /** @deprecated 改以 titleLabel 呈現 */
+  /** @deprecated 動作應顯示於戳章外 */
   actionLabel?: string;
   dateLabel?: string;
   stampedAt?: string;
 };
 
 /**
- * 長方紅框電子戳章（仿實物原子章）
- * 左上處室、左下職稱、右側姓名；會畢／閱畢請顯示於戳章下方
+ * 扁長紅框電子戳章（實物約 0.75×2.8cm）
+ * 上列職銜（教師兼教務主任）、下列姓名；會畢／閱畢請顯示於戳章下方
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
+  stampCaption,
   officeLabel,
   titleLabel,
   personName,
   actionLabel,
-  size = 160,
+  size = 210,
   className = '',
 }) => {
-  const office = (officeLabel || '').trim() || '—';
-  const title = (titleLabel || actionLabel || '').trim().replace(/^已/, '') || '—';
+  const caption = (
+    stampCaption ||
+    [officeLabel, titleLabel || actionLabel].filter(Boolean).join('').trim() ||
+    titleLabel ||
+    actionLabel ||
+    '—'
+  )
+    .trim()
+    .replace(/^已/, '');
   const name = (personName || '').trim() || '—';
 
-  // 依字數微調字級，長名用 textLength 壓進右側欄
+  const captionLen = [...caption].length;
   const nameLen = [...name].length;
-  const nameFont = nameLen <= 2 ? 36 : nameLen === 3 ? 32 : nameLen === 4 ? 26 : nameLen <= 6 ? 20 : 16;
-  const officeFont = [...office].length >= 4 ? 22 : 26;
-  const titleFont = 24;
-  const height = size * 0.48;
-  const nameTextLength = nameLen >= 4 ? 100 : undefined;
+  // viewBox 280×75 對應 2.8×0.75cm 比例
+  const captionFont =
+    captionLen <= 6 ? 18 : captionLen <= 8 ? 15 : captionLen <= 10 ? 13 : 11;
+  const nameFont = nameLen <= 2 ? 22 : nameLen === 3 ? 20 : nameLen === 4 ? 17 : 14;
+
+  const widthPx = size;
+  const heightPx = size / STAMP_ASPECT;
 
   return (
     <div
-      className={className}
-      style={{ width: size, height }}
+      className={`electronic-stamp-flat ${className}`.trim()}
+      style={{
+        width: widthPx,
+        height: heightPx,
+      }}
       aria-hidden
-      title={`${office} ${title} ${name}`}
+      title={`${caption} ${name}`}
     >
       <svg
-        viewBox="0 0 240 115"
+        viewBox="0 0 280 75"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
         width="100%"
         height="100%"
+        style={{ display: 'block' }}
       >
-        {/* 外框 */}
         <rect
-          x="4"
-          y="4"
-          width="232"
-          height="107"
+          x="2.5"
+          y="2.5"
+          width="275"
+          height="70"
           fill="none"
           stroke={STAMP_RED}
-          strokeWidth="3.2"
+          strokeWidth="2.4"
           rx="1"
         />
-        {/* 中央分隔線（虛線感可選；實物多半無線，改以留白分欄） */}
-
-        {/* 左上：處室 */}
+        {/* 上：教師兼教務主任 */}
         <text
-          x="72"
-          y="42"
+          x="140"
+          y="28"
           textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_RED}
           fontFamily={STAMP_KAI}
-          fontSize={officeFont}
-          letterSpacing="0.12em"
+          fontSize={captionFont}
+          letterSpacing="0.06em"
         >
-          {office}
+          {caption}
         </text>
-
-        {/* 左下：職稱／動作 */}
+        {/* 下：姓名 */}
         <text
-          x="72"
-          y="82"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={STAMP_RED}
-          fontFamily={STAMP_KAI}
-          fontSize={titleFont}
-          letterSpacing="0.2em"
-        >
-          {title}
-        </text>
-
-        {/* 右側：姓名（跨兩列高度置中） */}
-        <text
-          x="168"
-          y="58"
+          x="140"
+          y="52"
           textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_RED}
           fontFamily={STAMP_KAI}
           fontSize={nameFont}
-          letterSpacing="0.08em"
-          {...(nameTextLength
-            ? { textLength: nameTextLength, lengthAdjust: 'spacingAndGlyphs' as const }
-            : {})}
+          letterSpacing="0.2em"
         >
           {name}
         </text>
