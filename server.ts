@@ -7,7 +7,8 @@ import nodemailer from "nodemailer";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+/** Render／雲端會注入 PORT；本機預設 3000 */
+const PORT = Number(process.env.PORT) || 3000;
 
 // GitHub Pages 前端若另填「寄信 API 根網址」打到此伺服器，需允許跨域
 app.use((req, res, next) => {
