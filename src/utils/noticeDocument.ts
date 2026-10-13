@@ -187,12 +187,57 @@ function teacherLabel(name?: string, fallback = '代課'): string {
   return n ? `${n}老師` : `${fallback}老師`;
 }
 
-/** 與列印分張相同：同假單、同一代理人為一張 */
+/**
+ * 與列印分張相同：同假單、同一代理人為一張。
+ * 相容舊資料：有同號多節但未寫 batchGroupId 時，改以申請單號＋代課教師分張。
+ */
 export function noticeSheetKey(request: SubstituteRequest): string {
-  if (request.status === 'approved' && request.batchGroupId) {
-    return `${request.batchGroupId}::${request.substituteTeacherId || ''}`;
+  if (request.status === 'approved') {
+    if (request.batchGroupId) {
+      return `${request.batchGroupId}::${request.substituteTeacherId || ''}`;
+    }
+    const num = (request.requestNumber || '').trim();
+    if (num && request.substituteTeacherId) {
+      return `num:${num}::sub:${request.substituteTeacherId}`;
+    }
+    if (num) return `num:${num}`;
   }
   return request.id;
+}
+
+/** 同一張通知單應涵蓋的申請列（同 batch／同號＋同一代課教師） */
+export function resolveNoticePrintGroup(
+  liveRequest: SubstituteRequest,
+  requests: SubstituteRequest[]
+): SubstituteRequest[] {
+  if (liveRequest.status !== 'approved') return [liveRequest];
+
+  const sameSheet = (r: SubstituteRequest) => {
+    if (r.status !== 'approved') return false;
+    if (liveRequest.batchGroupId) {
+      return (
+        r.batchGroupId === liveRequest.batchGroupId &&
+        (!liveRequest.substituteTeacherId ||
+          r.substituteTeacherId === liveRequest.substituteTeacherId)
+      );
+    }
+    const num = (liveRequest.requestNumber || '').trim();
+    if (!num) return r.id === liveRequest.id;
+    if (r.requestNumber !== num) return false;
+    if (liveRequest.substituteTeacherId) {
+      return r.substituteTeacherId === liveRequest.substituteTeacherId;
+    }
+    return r.id === liveRequest.id;
+  };
+
+  const group = requests
+    .filter(sameSheet)
+    .sort(
+      (a, b) =>
+        (a.originalSession?.dayOfWeek || 0) - (b.originalSession?.dayOfWeek || 0) ||
+        (a.originalSession?.period || 0) - (b.originalSession?.period || 0)
+    );
+  return group.length > 0 ? group : [liveRequest];
 }
 
 export type NoticeDocument = {
@@ -214,24 +259,8 @@ export function buildNoticeDocument(
 ): NoticeDocument {
   const liveRequest = requests.find((r) => r.id === request.id) ?? request;
 
-  /** 同假單編號可有多位代理人；每一張通知單只含該代理人的節次 */
-  const printGroup =
-    liveRequest.status === 'approved' && liveRequest.batchGroupId
-      ? requests
-          .filter(
-            (r) =>
-              r.batchGroupId === liveRequest.batchGroupId &&
-              r.status === 'approved' &&
-              (liveRequest.substituteTeacherId
-                ? r.substituteTeacherId === liveRequest.substituteTeacherId
-                : true)
-          )
-          .sort(
-            (a, b) =>
-              a.originalSession.dayOfWeek - b.originalSession.dayOfWeek ||
-              a.originalSession.period - b.originalSession.period
-          )
-      : [liveRequest];
+  /** 同假單編號可有多位代理人；每一張通知單只含該代理人的節次（含無 batchGroupId 的同號多節） */
+  const printGroup = resolveNoticePrintGroup(liveRequest, requests);
 
   const groupedSessions = printGroup.map((r) => resolveOriginalSession(r, sessions));
   const originalSession = groupedSessions[0] || resolveOriginalSession(liveRequest, sessions);

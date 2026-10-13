@@ -202,10 +202,15 @@ export function resolveEffectiveNoticeRows(
   const own = customizedRows(request);
   if (own.length > 0) return own;
 
-  if (!request.batchGroupId) return null;
-
+  const num = (request.requestNumber || '').trim();
   for (const r of allRequests) {
-    if (r.batchGroupId !== request.batchGroupId) continue;
+    if (request.batchGroupId) {
+      if (r.batchGroupId !== request.batchGroupId) continue;
+    } else if (num) {
+      if (r.requestNumber !== num) continue;
+    } else {
+      break;
+    }
     if (
       request.substituteTeacherId &&
       r.substituteTeacherId &&
@@ -229,6 +234,17 @@ export function getRelatedSubstituteRequests(
         r.batchGroupId === request.batchGroupId &&
         r.status === 'approved' &&
         r.requestType === 'substitute'
+    );
+  }
+  const num = (request.requestNumber || '').trim();
+  if (num && request.status === 'approved' && request.requestType === 'substitute') {
+    return allRequests.filter(
+      (r) =>
+        r.requestNumber === num &&
+        r.status === 'approved' &&
+        r.requestType === 'substitute' &&
+        (!request.substituteTeacherId ||
+          r.substituteTeacherId === request.substituteTeacherId)
     );
   }
   return request.status === 'approved' && request.requestType === 'substitute'
