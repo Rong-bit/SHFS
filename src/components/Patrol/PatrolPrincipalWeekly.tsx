@@ -207,14 +207,14 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 placeholder="例：請相關單位持續關懷並回報改善情形"
               />
             </label>
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-1.5">
               <ElectronicStamp
                 officeLabel="校長室"
-                titleLabel="核章"
+                titleLabel="校長"
                 personName={principalStaff?.name || '校長'}
                 size={200}
               />
-              {/* 版面：左上處室、左下動作、右側姓名（仿實物紅框原子章） */}
+              <div className="text-sm font-extrabold text-slate-900 tracking-wide">校長核章</div>
             </div>
             <div className="flex justify-end gap-2">
               <button

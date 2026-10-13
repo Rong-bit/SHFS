@@ -473,7 +473,20 @@ assert.ok(
   '任課姓名應能模糊對上名冊'
 );
 
-const { applySignOff, makeSignOff, viewerReviewRoles } = await import('../src/utils/patrolReview');
+const { applySignOff, makeSignOff, viewerReviewRoles, stampOfficeAndTitle } = await import(
+  '../src/utils/patrolReview'
+);
+
+// 電子戳章：左下為職稱，不可把「閱畢／會畢」寫進戳章
+const academicStamp = stampOfficeAndTitle('academic', '閱畢', '教學組長');
+assert.equal(academicStamp.officeLabel, '教學組');
+assert.equal(academicStamp.titleLabel, '組長', '教學組長戳章左下應為職稱');
+assert.notEqual(academicStamp.titleLabel, '閱畢');
+const deanStamp = stampOfficeAndTitle('dean_academic', '會畢');
+assert.equal(deanStamp.officeLabel, '教務處');
+assert.equal(deanStamp.titleLabel, '主任');
+const principalStampLayout = stampOfficeAndTitle('principal', '校長核章');
+assert.equal(principalStampLayout.titleLabel, '校長');
 const stamp = makeSignOff({
   role: 'student_affairs',
   personId: 'sa1',
