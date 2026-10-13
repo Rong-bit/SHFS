@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CloudOff, Download, RefreshCw } from 'lucide-react';
+import { CloudOff, Download, RefreshCw, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PatrolKind, PatrolRecord } from '../../types';
 import { dateToIsoLocal } from '../../utils/holidays';
 import { resolvePatrolCheckItems, resolvePatrolObservationItems } from '../../utils/patrolConfig';
 import { exportPatrolRecords, patrolKindLabel } from '../../utils/patrolExcel';
 import { usePatrolRecords } from '../../utils/patrolSync';
-import { PATROL_REVIEW_STATUS_LABELS } from '../../utils/patrolReview';
-import { usePatrolReviews } from '../../utils/patrolReviewSync';
+import { PATROL_REVIEW_STATUS_LABELS, patrolReviewCaseId } from '../../utils/patrolReview';
+import { loadLocalPatrolReviews, usePatrolReviews } from '../../utils/patrolReviewSync';
 import { patrolRecordHasIssue } from './PatrolRoomSheet';
 
 const firstOfMonth = () => {
@@ -21,11 +21,12 @@ const topEntries = (counts: Map<string, number>, limit: number) =>
     .slice(0, limit);
 
 export const PatrolReport: React.FC = () => {
-  const { systemConfig } = useApp();
-  const { records, loading, error, cloudReady, refresh } = usePatrolRecords();
-  const { cases: reviewCases, refresh: refreshReviews } = usePatrolReviews();
+  const { systemConfig, currentRole } = useApp();
+  const { records, loading, error, cloudReady, deleteRecord, refresh } = usePatrolRecords();
+  const { cases: reviewCases, deleteCase, refresh: refreshReviews } = usePatrolReviews();
   const checkItems = resolvePatrolCheckItems(systemConfig);
   const observationItems = resolvePatrolObservationItems(systemConfig);
+  const canAdminDelete = currentRole === 'admin';
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
   const [dateTo, setDateTo] = useState(() => dateToIsoLocal(new Date()));
   const [kind, setKind] = useState<'all' | PatrolKind>('all');
@@ -33,6 +34,29 @@ export const PatrolReport: React.FC = () => {
   const [classQuery, setClassQuery] = useState('');
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [onlyArchived, setOnlyArchived] = useState(false);
+  /** 管理員刪除：需連按兩次確認 */
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleAdminDelete = (record: PatrolRecord) => {
+    if (!canAdminDelete) return;
+    if (confirmDeleteId !== record.id) {
+      setConfirmDeleteId(record.id);
+      return;
+    }
+    deleteRecord(record);
+    const existing =
+      loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
+      reviewCases.find((c) => c.recordId === record.id);
+    if (existing) deleteCase(existing);
+    else {
+      const ghostId = patrolReviewCaseId(record.id);
+      const ghost =
+        loadLocalPatrolReviews().find((c) => c.id === ghostId) ||
+        reviewCases.find((c) => c.id === ghostId);
+      if (ghost) deleteCase(ghost);
+    }
+    setConfirmDeleteId(null);
+  };
 
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom <= dateTo) {
@@ -355,7 +379,14 @@ export const PatrolReport: React.FC = () => {
       )}
 
       <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2">
-        <h3 className="font-bold text-slate-900 text-sm">明細（{filtered.length} 筆）</h3>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="font-bold text-slate-900 text-sm">明細（{filtered.length} 筆）</h3>
+          {canAdminDelete && (
+            <p className="text-[11px] text-slate-500">
+              系統管理員可刪除任一筆；連按兩次「刪除」確認。對應會辦案會一併移除。
+            </p>
+          )}
+        </div>
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400">此區間沒有符合條件的巡堂紀錄。</p>
         ) : (
@@ -372,6 +403,7 @@ export const PatrolReport: React.FC = () => {
                   <th className="text-left px-2">會辦</th>
                   <th className="text-left px-2">備註</th>
                   <th className="text-left pl-2">巡堂者</th>
+                  {canAdminDelete && <th className="text-right pl-2 pr-1">操作</th>}
                 </tr>
               </thead>
               <tbody>
@@ -381,6 +413,7 @@ export const PatrolReport: React.FC = () => {
                     .filter((s) => s.instruction)
                     .map((s) => s.instruction)
                     .join('；');
+                  const confirming = confirmDeleteId === r.id;
                   return (
                   <tr key={r.id} className="border-b border-slate-100 align-top">
                     <td className="py-1.5 pr-2 whitespace-nowrap">{r.date}</td>
@@ -404,6 +437,26 @@ export const PatrolReport: React.FC = () => {
                     </td>
                     <td className="px-2 text-slate-600">{r.note}</td>
                     <td className="pl-2 whitespace-nowrap">{r.patrollerName}</td>
+                    {canAdminDelete && (
+                      <td className="pl-2 pr-1 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleAdminDelete(r)}
+                          onBlur={() => {
+                            if (confirmDeleteId === r.id) setConfirmDeleteId(null);
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold ${
+                            confirming
+                              ? 'bg-rose-600 text-white hover:bg-rose-500'
+                              : 'border border-rose-200 text-rose-700 hover:bg-rose-50'
+                          }`}
+                          title={confirming ? '再按一次確定刪除' : '刪除此巡堂紀錄'}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {confirming ? '確定刪除？' : '刪除'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                   );
                 })}
