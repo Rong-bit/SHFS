@@ -443,11 +443,10 @@ const PatrolMailSettingsPanel: React.FC<{
           <p className="font-bold text-xs">建議：校內常開電腦寄信（免費，可用學校 SMTP）</p>
           <ol className="list-decimal pl-4 space-y-0.5 font-medium leading-relaxed">
             <li>
-              在校內電腦專案資料夾雙擊{' '}
-              <code className="font-mono bg-white/70 px-1 rounded">啟動寄信主機.py</code>
-              ／
-              <code className="font-mono bg-white/70 px-1 rounded">啟動寄信主機.bat</code>
-              （或 <code className="font-mono bg-white/70 px-1 rounded">npm run build && npm start</code>）
+              在校內電腦專案根目錄雙擊{' '}
+              <code className="font-mono bg-white/70 px-1 rounded">start-mail-host.bat</code>
+              （或 <code className="font-mono bg-white/70 px-1 rounded">啟動寄信主機.bat</code>
+              ；需已安裝 Node.js，<strong>不必</strong>安裝 Python）
             </li>
             <li>
               操作時請開 <code className="font-mono bg-white/70 px-1 rounded">http://那台IP:3000</code>
