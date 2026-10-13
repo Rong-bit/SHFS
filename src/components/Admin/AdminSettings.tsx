@@ -83,6 +83,12 @@ import {
   readSalaryCodeFile,
 } from '../../utils/salaryCodeImporter';
 import {
+  downloadTeacherEmailTemplate,
+  exportTeacherEmailsToExcel,
+  parseTeacherEmailWorkbook,
+  readTeacherEmailFile,
+} from '../../utils/teacherEmailImporter';
+import {
   downloadConcurrentFundingTemplate,
   exportConcurrentFundingToExcel,
   parseConcurrentFundingWorkbook,
@@ -281,6 +287,7 @@ export const AdminSettings: React.FC = () => {
     addTeacher,
     updateTeacher,
     deleteTeacher,
+    importTeacherEmails,
     updateTeacherPassword,
     academicStaffList,
     updateAcademicStaff,
@@ -451,9 +458,39 @@ export const AdminSettings: React.FC = () => {
   /** 輸入法組字中：勿套 maxLength／即時截斷，否則注音佔位會擋最後幾字 */
   const schoolNameComposingRef = useRef(false);
   const [salaryCodeNotice, setSalaryCodeNotice] = useState('');
+  const [teacherEmailNotice, setTeacherEmailNotice] = useState('');
+  const teacherEmailFileRef = useRef<HTMLInputElement>(null);
 
   const salaryCodesByName = systemConfig.teacherSalaryCodesByName || {};
   const salaryCodeCount = countSalaryCodes(systemConfig);
+  const teacherEmailFilledCount = teachers.filter((t) => (t.email || '').trim()).length;
+
+  const handleTeacherEmailImport = async (file: File) => {
+    try {
+      const workbook = await readTeacherEmailFile(file);
+      const parsed = parseTeacherEmailWorkbook(workbook);
+      if (parsed.imported === 0) {
+        setTeacherEmailNotice(
+          parsed.invalid.length > 0
+            ? `沒有可匯入的信箱（格式無效 ${parsed.invalid.length} 人）`
+            : '檔案沒有可匯入的姓名／信箱列'
+        );
+        return;
+      }
+      const result = importTeacherEmails(parsed.emailsByName);
+      const invalidNote =
+        parsed.invalid.length > 0 ? `；格式無效略過 ${parsed.invalid.length} 人` : '';
+      const unmatchedNote =
+        result.unmatched.length > 0
+          ? `；名冊尚無 ${result.unmatched.length} 人（未寫入）`
+          : '';
+      setTeacherEmailNotice(
+        `已更新 ${result.updated} 人信箱（名冊對上 ${result.matchedInRoster} 人／檔案 ${parsed.imported} 筆）${invalidNote}${unmatchedNote}`
+      );
+    } catch (err) {
+      setTeacherEmailNotice(err instanceof Error ? err.message : '師資信箱匯入失敗');
+    }
+  };
 
   useEffect(() => {
     if (salaryMigratedRef.current) return;
@@ -2759,6 +2796,64 @@ export const AdminSettings: React.FC = () => {
             </div>
             <p className="text-[11px] text-indigo-700">
               已保存 <strong>{salaryCodeCount}</strong> 筆；可在下方名冊「薪資編號」欄個別修改或刪除。
+            </p>
+          </div>
+
+          <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-sky-950 flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4 text-sky-600" />
+                  師資信箱批次匯入（巡堂會辦寄信用）
+                </h3>
+                <p className="text-[11px] text-sky-800 mt-1 leading-relaxed max-w-2xl">
+                  以<strong>教師姓名</strong>對上名冊後寫入信箱，供導師／任課老師收到巡堂異常會辦通知。
+                  必要欄：<strong>姓名、信箱</strong>（亦接受 email／電子郵件）。空白信箱列略過；對不到名冊者不寫入。
+                  教務主任等行政會辦對象請至「成員名冊」維護，不在此匯入。
+                </p>
+                {teacherEmailNotice && (
+                  <p className="text-[11px] text-sky-900 mt-2 font-medium">{teacherEmailNotice}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadTeacherEmailTemplate()}
+                  className="px-3 py-1.5 bg-white border border-sky-300 rounded-lg text-xs font-bold text-sky-800 hover:bg-sky-100"
+                >
+                  下載範本
+                </button>
+                <button
+                  type="button"
+                  onClick={() => teacherEmailFileRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  匯入信箱
+                </button>
+                <input
+                  ref={teacherEmailFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleTeacherEmailImport(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => exportTeacherEmailsToExcel(teachers)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-sky-300 rounded-lg text-xs font-bold text-sky-800 hover:bg-sky-100"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  匯出對照表
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-sky-700">
+              名冊已填信箱 <strong>{teacherEmailFilledCount}</strong>／{teachers.length} 人；亦可在下方名冊「聯絡資訊」個別修改。
             </p>
           </div>
 

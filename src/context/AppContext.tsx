@@ -115,6 +115,7 @@ import {
 } from '../utils/noticePayroll';
 import { holidaySetForOverloadPayroll, partialStopsForPayroll } from '../utils/salaryCodes';
 import { listCounselingHolidayDeducts, listCounselingPartialStopDeducts } from '../utils/counselingPayrollRegister';
+import { applyTeacherEmails } from '../utils/teacherEmailImporter';
 
 interface AppContextType {
   currentRole: UserRole;
@@ -216,6 +217,10 @@ interface AppContextType {
   addTeacher: (teacher: Omit<Teacher, 'id' | 'weeklyActualPeriods'>) => Teacher;
   updateTeacher: (id: string, data: Partial<Teacher>) => void;
   deleteTeacher: (id: string) => void;
+  /** 依姓名批次寫入師資信箱（巡堂會辦寄信用） */
+  importTeacherEmails: (
+    emailsByName: Record<string, string>
+  ) => { updated: number; matchedInRoster: number; unmatched: string[] };
   
   // Schedule Import & Batch Update
   importSchedule: (params: {
@@ -3127,6 +3132,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const importTeacherEmails = (emailsByName: Record<string, string>) => {
+    const result = applyTeacherEmails(teachers, emailsByName);
+    setTeachers(result.teachers);
+    return {
+      updated: result.updated,
+      matchedInRoster: result.matchedInRoster,
+      unmatched: result.unmatched,
+    };
+  };
+
   const deleteTeacher = (id: string) => {
     const relatedApproved = requests.filter(
       (r) =>
@@ -3660,6 +3675,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTeacher,
         updateTeacher,
         deleteTeacher,
+        importTeacherEmails,
         checkClashes,
         calculateMonthlySettlement,
         isImportModalOpen,
