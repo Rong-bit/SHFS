@@ -181,19 +181,30 @@ export function resolveSharedNoticeRows(
   );
 }
 
+export type NoticeDisplaySlot = {
+  className: string;
+  subjectName: string;
+  /** 列表顯示用節次（通知單有改則用通知單） */
+  period: number;
+  /** 列表顯示用星期 1–5（通知單有改則用通知單） */
+  dayOfWeek: number;
+};
+
 /**
- * 列表顯示用班級／科目：通知單曾改班級／科目（如改成「監考」）時優先用通知單列，
- * 否則回退 originalSession（課表原班級／科目）。
+ * 列表顯示用班級／科目／節次：通知單曾改時優先用通知單列，
+ * 否則回退 originalSession。
  * 比對以節次為主；對不到時依同號節次順序對應列（相容節次被手改偏掉）。
  */
 export function resolveDisplayClassSubject(
   req: SubstituteRequest,
   siblingRequests?: SubstituteRequest[]
-): { className: string; subjectName: string } {
+): NoticeDisplaySlot {
   const session = req.originalSession;
-  const fallback = {
+  const fallback: NoticeDisplaySlot = {
     className: session?.className || '',
     subjectName: session?.subjectName || '',
+    period: session?.period || 0,
+    dayOfWeek: session?.dayOfWeek || 0,
   };
   if (!session) return fallback;
 
@@ -209,6 +220,7 @@ export function resolveDisplayClassSubject(
   if (samePeriod.length > 0) {
     match = samePeriod.find((row) => (row.className || '').trim() === classKey) || samePeriod[0];
   } else if (rows.length === 1) {
+    // 單列且節次已手改（如 5→3）：仍採用該列
     match = rows[0];
   } else {
     const idx = orderedReqs.findIndex((r) => r.id === req.id);
@@ -221,9 +233,17 @@ export function resolveDisplayClassSubject(
   }
 
   if (!match) return fallback;
+  const noticePeriod = Number(normalizeNoticePeriod(match.period));
+  const noticeDay = Number(String(match.weekday || '').trim());
   return {
     className: (match.className || '').trim() || fallback.className,
     subjectName: (match.subjectName || '').trim() || fallback.subjectName,
+    period:
+      Number.isFinite(noticePeriod) && noticePeriod > 0 ? noticePeriod : fallback.period,
+    dayOfWeek:
+      Number.isFinite(noticeDay) && noticeDay >= 1 && noticeDay <= 5
+        ? noticeDay
+        : fallback.dayOfWeek,
   };
 }
 

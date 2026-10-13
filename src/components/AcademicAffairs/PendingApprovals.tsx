@@ -245,15 +245,19 @@ export const PendingApprovals: React.FC = () => {
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
                       原授課堂
                     </div>
-                    <div className="font-bold text-slate-900 text-sm">
-                      {(() => {
-                        const d = resolveDisplayClassSubject(req);
-                        return `${d.className} ｜ 《${d.subjectName}》`;
-                      })()}
-                    </div>
-                    <div className="text-slate-600 mt-1">
-                      {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)}
-                    </div>
+                    {(() => {
+                      const d = resolveDisplayClassSubject(req);
+                      return (
+                        <>
+                          <div className="font-bold text-slate-900 text-sm">
+                            {d.className} ｜ 《{d.subjectName}》
+                          </div>
+                          <div className="text-slate-600 mt-1">
+                            {dayNames[d.dayOfWeek]} {getPeriodLabel(d.period)}
+                          </div>
+                        </>
+                      );
+                    })()}
                     {req.requestType === 'substitute' && (
                       <div className="text-amber-800 font-semibold mt-1">
                         請假日期：{formatLeaveDateLabel(req.leaveDateStart, req.leaveDateEnd)}

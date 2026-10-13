@@ -224,11 +224,14 @@ export const TeacherRequestsList: React.FC = () => {
                   .filter(Boolean)
               ),
             ];
+            const primaryDisplay = resolveDisplayClassSubject(req, items);
             const periodSummary = formatDayPeriodSummary(
-              items.map((r) => r.originalSession).filter(Boolean),
+              items.map((r) => {
+                const d = resolveDisplayClassSubject(r, items);
+                return { dayOfWeek: d.dayOfWeek, period: d.period };
+              }),
               dayNames
             );
-            const primaryDisplay = resolveDisplayClassSubject(req, items);
             const subNames = [
               ...new Set(
                 items
@@ -316,7 +319,7 @@ export const TeacherRequestsList: React.FC = () => {
                         {primaryDisplay.className} · 《{primaryDisplay.subjectName}》
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
-                        {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)}
+                        {dayNames[primaryDisplay.dayOfWeek]} {getPeriodLabel(primaryDisplay.period)}
                       </div>
                     </>
                   ) : (
