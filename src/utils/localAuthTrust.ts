@@ -1,7 +1,5 @@
-/** 本機記住已驗證身分（僅存身分 key 與時間，不存密碼） */
+/** 本機記住已驗證身分（僅存身分 key 與時間，不存密碼；直到密碼更改被撤銷） */
 const STORAGE_KEY = 'voc_auth_trust_v1';
-/** 30 天內曾成功登入則視為本機已信任 */
-const TRUST_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** 全校教師預設密碼變更時撤銷所有 teacher:* 信任 */
 export const ALL_TEACHERS_TRUST_REVOCATION_KEY = 'teacher:*';
@@ -48,14 +46,6 @@ function readStore(): TrustStore {
 
 function writeStore(store: TrustStore) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-}
-
-function pruneStore(store: TrustStore, now = Date.now()): TrustStore {
-  const next: TrustStore = {};
-  for (const [key, verifiedAt] of Object.entries(store)) {
-    if (now - verifiedAt <= TRUST_TTL_MS) next[key] = verifiedAt;
-  }
-  return next;
 }
 
 export function roleAuthTrustKey(role: string, staffId?: string): string {
@@ -110,17 +100,16 @@ export function effectiveRevokedAt(
 
 export function isLocalAuthTrusted(key: string): boolean {
   if (!key) return false;
-  const store = pruneStore(readStore());
-  writeStore(store);
+  const store = readStore();
   const verifiedAt = store[key];
   if (verifiedAt == null) return false;
-  if (Date.now() - verifiedAt > TRUST_TTL_MS) return false;
+  // 無期限：直到密碼更改撤銷（verifiedAt 須晚於撤銷時間）
   return verifiedAt > effectiveRevokedAt(key);
 }
 
 export function markLocalAuthTrusted(key: string) {
   if (!key) return;
-  const store = pruneStore(readStore());
+  const store = readStore();
   // 須嚴格晚於撤銷時間，避免同毫秒改密碼後立刻重登仍被視為未信任
   store[key] = Math.max(Date.now(), effectiveRevokedAt(key) + 1);
   writeStore(store);
@@ -133,7 +122,7 @@ export function clearLocalAuthTrust() {
 /** 本機立刻忘掉某 key（改密碼當下）；雲端靠 revocations 同步到他台 */
 export function clearLocalAuthTrustKey(key: string) {
   if (!key) return;
-  const store = pruneStore(readStore());
+  const store = readStore();
   delete store[key];
   writeStore(store);
 }

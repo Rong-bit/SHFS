@@ -54,6 +54,8 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  /** 記住此電腦：免再輸入直到該身分密碼更改 */
+  const [rememberDevice, setRememberDevice] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const auth = systemConfig.authConfig || {
@@ -78,6 +80,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setIsSuccess(false);
       setIsVerifying(false);
       setShowPassword(false);
+      setRememberDevice(true);
       const roleGroup =
         target?.type === 'role' && target.targetRole === 'accounting'
           ? 'accounting'
@@ -297,17 +300,17 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       setIsSuccess(true);
       setTimeout(() => {
         if (target.type === 'teacher' && target.teacherId) {
-          markLocalAuthTrusted(teacherAuthTrustKey(target.teacherId));
+          if (rememberDevice) markLocalAuthTrusted(teacherAuthTrustKey(target.teacherId));
           completeAuthenticatedLogin({ role: 'teacher', teacherId: target.teacherId });
         } else if (target.type === 'teacher_action' && target.teacherId) {
-          markLocalAuthTrusted(teacherAuthTrustKey(target.teacherId));
+          if (rememberDevice) markLocalAuthTrusted(teacherAuthTrustKey(target.teacherId));
         } else if (target.type === 'role' && target.targetRole) {
           const staffRoles = ['academic', 'accounting', 'student_affairs', 'principal'] as const;
           const staffId =
             staffRoles.includes(target.targetRole as (typeof staffRoles)[number]) && selectedStaffId
               ? selectedStaffId
               : target.academicStaffId;
-          markLocalAuthTrusted(roleAuthTrustKey(target.targetRole, staffId));
+          if (rememberDevice) markLocalAuthTrusted(roleAuthTrustKey(target.targetRole, staffId));
           completeAuthenticatedLogin({
             role: target.targetRole,
             academicStaffId: staffId,
@@ -534,12 +537,24 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   <span>{errorMsg}</span>
                 </div>
               )}
+
+              <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(e) => setRememberDevice(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 bg-slate-950 text-amber-500 focus:ring-amber-500/40"
+                />
+                <span className="text-[11px] text-slate-300 leading-snug">
+                  記住此電腦（免再輸入密碼，直到該身分密碼更改）
+                </span>
+              </label>
             </div>
 
             {/* Action Buttons */}
             <div className="pt-2 flex items-center justify-between gap-3">
               <span className="text-[11px] text-slate-500 max-w-[12rem] leading-snug">
-                密碼以雜湊存放，不會上傳雲端
+                取消勾選則每次都要輸入密碼
               </span>
 
               <div className="flex items-center space-x-2">
@@ -581,7 +596,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
         {/* Footer Note */}
         <div className="bg-slate-950/60 px-6 py-2.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-          <span>🔒 本機曾登入過的身分 30 天內免再輸入密碼 · 可於【系統管理員 ➔ 系統維護 ➔ 登入密碼】自訂或關閉驗證</span>
+          <span>🔒 勾選「記住此電腦」後免再輸入，直到密碼更改 · 可於【系統管理員 ➔ 系統維護 ➔ 登入密碼】自訂或關閉驗證</span>
         </div>
     </ModalShell>
   );
