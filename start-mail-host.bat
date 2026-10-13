@@ -1,23 +1,23 @@
 @echo off
 setlocal EnableExtensions
-chcp 65001 >nul
 cd /d "%~dp0"
 
-title SHFS 巡堂寄信主機
+title SHFS Mail Host
 echo ========================================
-echo   SHFS 巡堂寄信主機（不需 Python）
+echo   SHFS mail host (Node / npm)
 echo ========================================
 echo.
-echo 請保持本視窗開啟。
-echo 啟動後請開：http://localhost:3000
-echo 其他電腦開：http://這台區網IP:3000
-echo （不要開 github.io；寄信 API 根網址請留空）
+echo Keep this window open.
+echo Open http://localhost:3000 after start.
+echo Other PCs: http://THIS-PC-LAN-IP:3000
+echo Do NOT use github.io for sending mail.
+echo Leave "notify API base URL" empty.
 echo.
 
 if not exist "%~dp0package.json" (
-  echo [錯誤] 找不到 package.json
-  echo 請確認此 bat 放在專案根目錄（與 package.json 同層），
-  echo 且已用 git clone / git pull 下載完整專案，不是只下載單一檔案。
+  echo [ERROR] package.json not found.
+  echo Put this bat in the project root (same folder as package.json).
+  echo Run: git pull
   echo.
   pause
   exit /b 1
@@ -25,9 +25,9 @@ if not exist "%~dp0package.json" (
 
 where node >nul 2>&1
 if errorlevel 1 (
-  echo [錯誤] 找不到 Node.js
-  echo 請先安裝：https://nodejs.org/  （選 LTS）
-  echo 安裝後重新開啟此視窗再試。
+  echo [ERROR] Node.js not found.
+  echo Install LTS from https://nodejs.org/
+  echo Then open a NEW command window and try again.
   echo.
   pause
   exit /b 1
@@ -35,49 +35,49 @@ if errorlevel 1 (
 
 where npm >nul 2>&1
 if errorlevel 1 (
-  echo [錯誤] 找不到 npm（通常隨 Node.js 安裝）
+  echo [ERROR] npm not found.
+  echo Reinstall Node.js LTS from https://nodejs.org/
   echo.
   pause
   exit /b 1
 )
 
-echo Node 版本：
+echo Node version:
 node -v
 npm -v
 echo.
 
 if not exist "%~dp0node_modules\" (
-  echo 首次執行：npm install ...
-  call npm install
+  echo First run: npm install ...
+  call npm.cmd install
   if errorlevel 1 (
-    echo [錯誤] npm install 失敗
+    echo [ERROR] npm install failed.
     pause
     exit /b 1
   )
   echo.
 )
 
-echo 正在建置 npm run build ...
-call npm run build
+echo Building: npm run build ...
+call npm.cmd run build
 if errorlevel 1 (
-  echo [錯誤] 建置失敗。請把上方紅色錯誤訊息截圖給管理員。
+  echo [ERROR] build failed. Copy the error text above.
   pause
   exit /b 1
 )
 
 echo.
-echo 建置完成，正在啟動...
-echo 瀏覽器將開啟 http://localhost:3000
-echo 若未自動開啟，請手動輸入網址。
+echo Build OK. Starting server...
+echo Browser: http://localhost:3000
 echo.
 start "" "http://localhost:3000"
-call npm start
+call npm.cmd start
 set EXITCODE=%errorlevel%
 echo.
 if not "%EXITCODE%"=="0" (
-  echo [錯誤] 服務異常結束（代碼 %EXITCODE%）
+  echo [ERROR] server exited with code %EXITCODE%
 ) else (
-  echo 服務已結束。
+  echo Server stopped.
 )
 pause
 endlocal & exit /b %EXITCODE%
