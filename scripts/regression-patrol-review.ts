@@ -481,6 +481,12 @@ const {
   preferredStampRole,
 } = await import('../src/utils/patrolReview');
 
+// 職銜二排拆字：教師兼／教務主任
+const { splitStampCaptionLines } = await import('../src/components/Common/ElectronicStamp');
+assert.deepEqual(splitStampCaptionLines('教師兼教務主任'), ['教師兼', '教務主任']);
+assert.deepEqual(splitStampCaptionLines('教師兼教學組長'), ['教師兼', '教學組長']);
+assert.deepEqual(splitStampCaptionLines('校長'), ['校長']);
+
 // 電子戳章：職銜列為「教師兼…」，不可把「閱畢／會畢」寫進戳章
 const academicStamp = stampOfficeAndTitle('academic', '閱畢', '教學組長');
 assert.equal(academicStamp.officeLabel, '教學組');

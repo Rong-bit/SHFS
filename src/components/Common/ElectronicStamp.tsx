@@ -7,7 +7,7 @@ const STAMP_KAI =
 
 /**
  * 乙種職名章規格（臺北市版／學校處室主管常用）：
- * 長 2.8cm、寬 0.75cm；橫式由左而右，正楷／隸書。
+ * 長 2.8cm、寬 0.75cm。
  */
 export const STAMP_HEIGHT_CM = 0.75;
 export const STAMP_WIDTH_CM = 2.8;
@@ -15,19 +15,19 @@ const STAMP_ASPECT = STAMP_WIDTH_CM / STAMP_HEIGHT_CM; // ≈ 3.733
 
 type ElectronicStampProps = {
   /**
-   * 職銜文案（左）：主任／組長為「教師兼教務主任」等；校長為「校長」。
-   * 若未提供則以 officeLabel + titleLabel 組成相容舊呼叫。
+   * 職銜文案：主任／組長為「教師兼教務主任」等；校長為「校長」。
+   * 長職銜自動拆成二排；姓名固定一排。
    */
   stampCaption?: string;
   /** @deprecated 改以 stampCaption；仍相容舊的處室欄 */
   officeLabel?: string;
   /** 職稱短名或完整職銜（無 stampCaption 時使用） */
   titleLabel?: string;
-  /** 姓名（右），如 陳柏宇 */
+  /** 姓名（右一排），如 陳柏宇 */
   personName: string;
   /**
    * 螢幕預覽寬度（px）。列印時固定為 2.8cm × 0.75cm。
-   * @default 220
+   * @default 240
    */
   size?: number;
   className?: string;
@@ -39,10 +39,30 @@ type ElectronicStampProps = {
   stampedAt?: string;
 };
 
+/** 職銜拆成至多二排：教師兼／教務主任 */
+export function splitStampCaptionLines(caption: string): [string] | [string, string] {
+  const t = caption.trim();
+  const chars = [...t];
+  if (chars.length <= 3) return [t];
+  if (t.startsWith('教師兼') && chars.length > 3) {
+    return ['教師兼', chars.slice(3).join('')];
+  }
+  // 其餘長職銜對半切
+  const mid = Math.ceil(chars.length / 2);
+  return [chars.slice(0, mid).join(''), chars.slice(mid).join('')];
+}
+
+/** 在可用寬度內盡量放大字級（約略依全形字寬 ≈ fontSize） */
+function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, minFont = 10): number {
+  if (charCount <= 0) return maxFont;
+  const byWidth = Math.floor(maxWidth / charCount);
+  return Math.max(minFont, Math.min(maxFont, byWidth));
+}
+
 /**
  * 扁長紅框職名章（實物約 0.75×2.8cm）
- * 排版依機關學校職名章慣例：橫式由左而右——左職銜、右姓名。
- * 例：教師兼教務主任　陳柏宇；校長　○○○
+ * 左：職銜二排（盡量大字）；右：姓名一排（盡量大字）
+ * 例：教師兼／教務主任　｜　陳柏宇；校長　｜　○○○
  * 會畢／閱畢請顯示於戳章下方
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
@@ -51,7 +71,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   titleLabel,
   personName,
   actionLabel,
-  size = 220,
+  size = 240,
   className = '',
 }) => {
   const caption = (
@@ -64,13 +84,19 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
     .trim()
     .replace(/^已/, '');
   const name = (personName || '').trim() || '—';
+  const lines = splitStampCaptionLines(caption);
+  const twoLine = lines.length === 2;
 
-  const captionLen = [...caption].length;
-  const nameLen = [...name].length;
-  // viewBox 280×75 對應 2.8×0.75cm；單列橫排，職銜略小於姓名以求平衡
-  const captionFont =
-    captionLen <= 4 ? 16 : captionLen <= 6 ? 14 : captionLen <= 8 ? 12 : captionLen <= 10 ? 11 : 9.5;
-  const nameFont = nameLen <= 2 ? 18 : nameLen === 3 ? 16 : nameLen === 4 ? 14 : 12;
+  // viewBox 280×75；左欄約到 x=165，右欄姓名
+  const leftMaxW = twoLine ? 150 : 130;
+  const longestTitle = Math.max(...lines.map((l) => [...l].length));
+  const titleFont = maxFontForLine(
+    longestTitle,
+    leftMaxW,
+    twoLine ? 28 : 32,
+    twoLine ? 12 : 14
+  );
+  const nameFont = maxFontForLine([...name].length, 100, 34, 14);
 
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
@@ -103,29 +129,60 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           strokeWidth="2.4"
           rx="1"
         />
-        {/* 左：職銜（教師兼教務主任／校長） */}
+
+        {/* 左：職銜（可二排） */}
+        {twoLine ? (
+          <>
+            <text
+              x="82"
+              y="26"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill={STAMP_RED}
+              fontFamily={STAMP_KAI}
+              fontSize={titleFont}
+              letterSpacing="0.06em"
+            >
+              {lines[0]}
+            </text>
+            <text
+              x="82"
+              y="52"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill={STAMP_RED}
+              fontFamily={STAMP_KAI}
+              fontSize={titleFont}
+              letterSpacing="0.06em"
+            >
+              {lines[1]}
+            </text>
+          </>
+        ) : (
+          <text
+            x="82"
+            y="40"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={STAMP_RED}
+            fontFamily={STAMP_KAI}
+            fontSize={titleFont}
+            letterSpacing="0.12em"
+          >
+            {lines[0]}
+          </text>
+        )}
+
+        {/* 右：姓名一排 */}
         <text
-          x="14"
+          x="215"
           y="40"
-          textAnchor="start"
-          dominantBaseline="middle"
-          fill={STAMP_RED}
-          fontFamily={STAMP_KAI}
-          fontSize={captionFont}
-          letterSpacing="0.04em"
-        >
-          {caption}
-        </text>
-        {/* 右：姓名 */}
-        <text
-          x="266"
-          y="40"
-          textAnchor="end"
+          textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_RED}
           fontFamily={STAMP_KAI}
           fontSize={nameFont}
-          letterSpacing="0.18em"
+          letterSpacing="0.16em"
         >
           {name}
         </text>
