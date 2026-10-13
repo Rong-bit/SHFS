@@ -47,6 +47,11 @@ import {
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from '../utils/patrolSync';
+import {
+  officeMembers,
+  resolveStaffSubunit,
+  type StaffSubunit,
+} from '../utils/academicOfficeStaff';
 
 /** 與 dataBackup.POST_BACKUP_IMPORT_FLAG 相同；避免 AppContext ↔ dataBackup 循環依賴 */
 const POST_BACKUP_IMPORT_FLAG = 'voc_post_backup_import_v1';
@@ -287,7 +292,11 @@ interface AppContextType {
   setIsLoginAuthOpen: (open: boolean) => void;
   loginAuthTarget: any;
   setLoginAuthTarget: (target: any) => void;
-  requestRoleSwitchWithAuth: (role: UserRole, academicStaffId?: string) => void;
+  requestRoleSwitchWithAuth: (
+    role: UserRole,
+    academicStaffId?: string,
+    options?: { staffSubunit?: StaffSubunit }
+  ) => void;
   requestTeacherSwitchWithAuth: (teacherId: string) => void;
   requestTeacherActionAuth: (teacherId: string, actionCallback: () => void, actionName?: string) => void;
   updateTeacherPassword: (teacherId: string, newPassword: string) => void;
@@ -501,11 +510,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role === 'student_affairs' ||
     role === 'principal';
 
-  const requestRoleSwitchWithAuth = (targetRole: UserRole, academicStaffId?: string) => {
+  const requestRoleSwitchWithAuth = (
+    targetRole: UserRole,
+    academicStaffId?: string,
+    options?: { staffSubunit?: StaffSubunit }
+  ) => {
     if (targetRole === 'teacher') {
       setCurrentRole('teacher');
       return;
     }
+
+    const staffSubunit = options?.staffSubunit;
 
     const groupForRole =
       targetRole === 'academic'
@@ -520,17 +535,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let resolvedStaffId = academicStaffId;
     if (!resolvedStaffId && groupForRole) {
-      const currentInGroup =
-        (academicStaffListRef.current.find((s) => s.id === currentAcademicStaffId)?.group ||
-          'academic') === groupForRole
-          ? currentAcademicStaffId
-          : undefined;
-      resolvedStaffId =
-        currentInGroup ||
-        academicStaffListRef.current.find((s) => (s.group || 'academic') === groupForRole)?.id;
+      if (staffSubunit) {
+        // 有指定處室分層時，只在該分層找人；不可回落到其他組（例如點實習主任卻落到教務主任）
+        resolvedStaffId = officeMembers(academicStaffListRef.current, staffSubunit)[0]?.id;
+      } else {
+        const currentInGroup =
+          (academicStaffListRef.current.find((s) => s.id === currentAcademicStaffId)?.group ||
+            'academic') === groupForRole
+            ? currentAcademicStaffId
+            : undefined;
+        resolvedStaffId =
+          currentInGroup ||
+          academicStaffListRef.current.find((s) => (s.group || 'academic') === groupForRole)?.id;
+      }
     }
 
-    if (targetRole === currentRole && (!academicStaffId || academicStaffId === currentAcademicStaffId)) {
+    const currentStaff = academicStaffListRef.current.find((s) => s.id === currentAcademicStaffId);
+    const currentSubunit = resolveStaffSubunit(currentStaff, currentRole);
+    const samePerson =
+      Boolean(academicStaffId) && academicStaffId === currentAcademicStaffId;
+    const sameSubunitWithoutPerson =
+      !academicStaffId &&
+      (!staffSubunit || staffSubunit === currentSubunit) &&
+      targetRole === currentRole;
+
+    if (targetRole === currentRole && (samePerson || sameSubunitWithoutPerson)) {
       return;
     }
     const requirePass = systemConfig.authConfig?.requirePassword !== false;
@@ -543,7 +572,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const trustKey = roleAuthTrustKey(targetRole, resolvedStaffId);
-    if (trustKey && isLocalAuthTrusted(trustKey)) {
+    if (trustKey && resolvedStaffId && isLocalAuthTrusted(trustKey)) {
       completeAuthenticatedLogin({
         role: targetRole,
         academicStaffId: isStaffSelectableRole(targetRole) ? resolvedStaffId : undefined,
@@ -555,6 +584,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'role',
       targetRole,
       academicStaffId: resolvedStaffId,
+      staffSubunit,
     });
     setIsLoginAuthOpen(true);
   };
