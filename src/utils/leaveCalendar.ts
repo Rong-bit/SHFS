@@ -11,6 +11,7 @@ import { dateToDayOfWeek, resolveLeaveDateEnd } from './leaveDates';
 import { leaveTypeRemarkShort, normalizeLeaveTypeForForm } from './leaveTypes';
 import { buildPeriodDefinitions } from './periodConfig';
 import { resolveDisplayClassSubject } from './noticeDocument';
+import { getRelatedSubstituteRequests } from './noticePayroll';
 import { isPlaceholderSession } from './resolveOriginalSession';
 
 export type LeaveCalendarPeriodDetail = {
@@ -230,7 +231,7 @@ export function buildLeaveCalendarEvents(requests: SubstituteRequest[]): LeaveCa
 
       if (placeholder || orig?.period == null) continue;
 
-      const display = resolveDisplayClassSubject(r);
+      const display = resolveDisplayClassSubject(r, getRelatedSubstituteRequests(r, requests));
       const existing = bucket.details.find((d) => d.period === orig.period);
       const detail: LeaveCalendarPeriodDetail = {
         period: orig.period,

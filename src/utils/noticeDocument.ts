@@ -60,6 +60,54 @@ export function normalizeNoticePeriod(period: string | number | null | undefined
 }
 
 /**
+ * 同號多節可能各存一份 noticeRows（舊資料／分次儲存）。
+ * 依節次合併，若同一節有多個版本，優先採用「已相對課表原科目／班級改過」的那一列。
+ */
+export function resolveSharedNoticeRows(
+  req: SubstituteRequest,
+  siblingRequests?: SubstituteRequest[]
+): NoticeRow[] | null {
+  const pool = [req, ...(siblingRequests || [])];
+  const byPeriod = new Map<string, NoticeRow[]>();
+
+  for (const r of pool) {
+    if (!r.noticeRowsCustomized || !r.noticeRows?.length) continue;
+    for (const row of r.noticeRows) {
+      const key = normalizeNoticePeriod(row.period);
+      if (!key) continue;
+      const list = byPeriod.get(key) || [];
+      list.push(row);
+      byPeriod.set(key, list);
+    }
+  }
+  if (byPeriod.size === 0) return null;
+
+  const merged: NoticeRow[] = [];
+  for (const [periodKey, rows] of byPeriod) {
+    const owner =
+      pool.find((r) => normalizeNoticePeriod(r.originalSession?.period) === periodKey) || req;
+    const origSubject = (owner.originalSession?.subjectName || '').trim();
+    const origClass = (owner.originalSession?.className || '').trim();
+    // 科目有改者優先（避免僅班級不同的舊列把「監考」蓋回「英文閱讀」）
+    const subjectChanged = rows.filter((row) => {
+      const sub = (row.subjectName || '').trim();
+      return Boolean(sub && sub !== origSubject);
+    });
+    const classChanged = rows.filter((row) => {
+      const cls = (row.className || '').trim();
+      return Boolean(cls && cls !== origClass);
+    });
+    const pick = subjectChanged.length
+      ? subjectChanged[subjectChanged.length - 1]
+      : classChanged.length
+        ? classChanged[classChanged.length - 1]
+        : rows[rows.length - 1];
+    merged.push(pick);
+  }
+  return merged;
+}
+
+/**
  * 列表顯示用班級／科目：通知單曾改班級／科目（如改成「監考」）時優先用通知單列，
  * 否則回退 originalSession（課表原班級／科目）。
  * 比對以節次為主，不要求班級仍與課表相同（否則改班後會對不到）。
@@ -75,9 +123,7 @@ export function resolveDisplayClassSubject(
   };
   if (!session) return fallback;
 
-  const pool = [req, ...(siblingRequests || [])];
-  const customized = pool.find((r) => r.noticeRowsCustomized && r.noticeRows?.length);
-  const rows = customized?.noticeRows;
+  const rows = resolveSharedNoticeRows(req, siblingRequests);
   if (!rows?.length) return fallback;
 
   const periodKey = normalizeNoticePeriod(session.period);
@@ -317,13 +363,13 @@ export function buildNoticeDocument(
     defaultRows = buildLeaveRangeNoticeRows(groupedSessions, leaveStart, leaveEnd);
   }
 
-  let savedNoticeRows: NoticeRow[] | null = null;
-  if (liveRequest.noticeRowsCustomized && liveRequest.noticeRows?.length) {
-    savedNoticeRows = liveRequest.noticeRows;
-  } else {
-    const batchSaved = printGroup.find((r) => r.noticeRowsCustomized && r.noticeRows?.length);
-    savedNoticeRows = batchSaved?.noticeRows ?? null;
-  }
+  // 同號多節合併各節已存表格，避免其中一節仍留舊科目（如英文閱讀）
+  const savedNoticeRows =
+    resolveSharedNoticeRows(liveRequest, printGroup) ||
+    (liveRequest.noticeRowsCustomized && liveRequest.noticeRows?.length
+      ? liveRequest.noticeRows
+      : printGroup.find((r) => r.noticeRowsCustomized && r.noticeRows?.length)?.noticeRows ??
+        null);
 
   const requestNumberLabel =
     printGroup.length > 1
