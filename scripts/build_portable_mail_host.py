@@ -39,14 +39,32 @@ def run(cmd: list[str]) -> None:
 
 
 def ensure_dist() -> None:
+    """
+    Frontend via vite; server.cjs MUST bundle express/nodemailer/dotenv
+    (no node_modules in the portable zip).
+    """
+    print("Installing deps / building portable dist ...")
+    if (ROOT / "package-lock.json").is_file():
+        run(["npm", "ci"])
+    else:
+        run(["npm", "install"])
+    # vite assets + fully-bundled server (not --packages=external)
+    run(["npm", "run", "build:portable"])
     server = ROOT / "dist" / "server.cjs"
     index = ROOT / "dist" / "index.html"
-    if server.is_file() and index.is_file():
-        print("dist/ already present")
-        return
-    print("Building dist/ ...")
-    run(["npm", "ci"] if (ROOT / "package-lock.json").is_file() else ["npm", "install"])
-    run(["npm", "run", "build"])
+    if not server.is_file() or not index.is_file():
+        raise RuntimeError("portable build missing dist/server.cjs or index.html")
+    # sanity: bundled file should mention express code, not only require('express')
+    text = server.read_text(encoding="utf-8", errors="ignore")
+    if "Cannot find module" in text:
+        pass
+    if "require(\"express\")" in text or "require('express')" in text:
+        # still ok if also bundled; warn only when tiny
+        if server.stat().st_size < 50_000:
+            raise RuntimeError(
+                "dist/server.cjs looks too small; express may still be external"
+            )
+    print("dist/server.cjs size:", server.stat().st_size)
 
 
 def download_node(dest_dir: Path) -> Path:

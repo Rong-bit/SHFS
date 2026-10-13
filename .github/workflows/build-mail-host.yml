@@ -32,7 +32,7 @@ jobs:
       - name: Install and build app
         run: |
           npm ci
-          npm run build
+          npm run build:portable
 
       - name: Setup Python
         uses: actions/setup-python@v5

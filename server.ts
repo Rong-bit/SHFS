@@ -1,7 +1,6 @@
 import dns from "dns";
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
@@ -167,6 +166,8 @@ app.post("/api/patrol/notify", async (req, res) => {
 // Vite & Static file handling
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    // 動態載入，避免可攜包把整包 vite 打進去
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

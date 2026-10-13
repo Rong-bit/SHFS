@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build:server:portable": "esbuild server.ts --bundle --platform=node --format=cjs --external:vite --outfile=dist/server.cjs",
+    "build:portable": "vite build && npm run build:server:portable",
     "build:pages": "vite build && node scripts/prepare-pages.mjs",
     "start": "node dist/server.cjs",
     "start:mail": "npm run build && npm start",
