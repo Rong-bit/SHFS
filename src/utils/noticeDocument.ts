@@ -233,11 +233,26 @@ export function resolveDisplayClassSubject(
   }
 
   if (!match) return fallback;
+
+  const className = (match.className || '').trim() || fallback.className;
+  const subjectName = (match.subjectName || '').trim() || fallback.subjectName;
+
+  // 同號多節：列表節次一律用課表原節次，避免單列通知單或節次對不齊時
+  // 兩節都被對成「第3節 · 共 2 節」。單筆申請才跟通知單手改節次（如 5→3）。
+  if (orderedReqs.length > 1) {
+    return {
+      className,
+      subjectName,
+      period: fallback.period,
+      dayOfWeek: fallback.dayOfWeek,
+    };
+  }
+
   const noticePeriod = Number(normalizeNoticePeriod(match.period));
   const noticeDay = Number(String(match.weekday || '').trim());
   return {
-    className: (match.className || '').trim() || fallback.className,
-    subjectName: (match.subjectName || '').trim() || fallback.subjectName,
+    className,
+    subjectName,
     period:
       Number.isFinite(noticePeriod) && noticePeriod > 0 ? noticePeriod : fallback.period,
     dayOfWeek:

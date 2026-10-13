@@ -269,4 +269,25 @@ assert.equal(periodDisplay.dayOfWeek, 5);
 assert.equal(periodDisplay.subjectName, '監考');
 assert.equal(periodDisplay.className, '金工二忠');
 
+// 同號 2 節：即使通知單只有一列或節次重複，列表仍應分別顯示第3、4節
+const dualOneRow = [
+  {
+    date: '2026/10/16',
+    weekday: '5',
+    period: '3',
+    className: '電機二忠',
+    subjectName: '監考',
+    hours: '',
+  },
+];
+const p3OneRow = { ...period3, noticeRowsCustomized: true as const, noticeRows: dualOneRow };
+const p4OneRow = { ...period4, noticeRowsCustomized: true as const, noticeRows: dualOneRow };
+const d3 = resolveDisplayClassSubject(p3OneRow, [p3OneRow, p4OneRow]);
+const d4 = resolveDisplayClassSubject(p4OneRow, [p3OneRow, p4OneRow]);
+assert.equal(d3.subjectName, '監考');
+assert.equal(d4.subjectName, '監考');
+assert.equal(d3.period, 3, '同號多節第3節不可被通知單壓成同一節');
+assert.equal(d4.period, 4, '同號多節第4節應仍顯示第4節');
+assert.notEqual(d3.period, d4.period, '兩節列表不可都變成第3節');
+
 console.log('regression-notice-display-subject: OK');
