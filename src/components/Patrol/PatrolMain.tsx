@@ -194,6 +194,7 @@ export const PatrolMain: React.FC = () => {
           ]
         : undefined;
       saveCase(reviewCase);
+      setNotifyMsg('已儲存巡堂紀錄，正在寄送會辦通知…');
       try {
         const result = await sendPatrolReviewNotify({
           mailConfig: mailCfg!,
@@ -204,7 +205,10 @@ export const PatrolMain: React.FC = () => {
         if (notifyGenRef.current.get(record.id) !== gen) return;
         const latest = loadLocalPatrolReviews().find((c) => c.recordId === record.id);
         // 寄信期間若已刪除會辦案，勿再寫回
-        if (!latest) return;
+        if (!latest) {
+          setNotifyMsg('會辦案已取消或不存在，未寄出通知');
+          return;
+        }
         const attempted = new Set(
           (retryOnly && retryOnly.length > 0
             ? retryOnly
@@ -275,6 +279,8 @@ export const PatrolMain: React.FC = () => {
         setNotifyMsg('會辦案已建立（尚未設定 SMTP，信未寄出）');
       } else if (reviewCase.notifiedAt) {
         setNotifyMsg('會辦案已更新（先前已寄過通知）');
+      } else {
+        setNotifyMsg('會辦案已建立（本次未寄出新通知）');
       }
     }
   };
@@ -326,9 +332,11 @@ export const PatrolMain: React.FC = () => {
         });
         if (fullyMapped && mappedIds.length > 0) {
           setOpenRoomId(null);
+          setNotifyMsg('已儲存巡堂紀錄，正在處理會辦通知…');
           void syncReviewForRecord(record, mappedIds);
           return;
         }
+        setNotifyMsg('已儲存巡堂紀錄，請選擇會辦通知群組');
         setGroupPick({
           record,
           selectedIds:
@@ -337,6 +345,8 @@ export const PatrolMain: React.FC = () => {
         setOpenRoomId(null);
         return;
       }
+    } else {
+      setNotifyMsg('已儲存巡堂紀錄（正常／無缺失）');
     }
     void syncReviewForRecord(record);
     setOpenRoomId(null);
@@ -350,6 +360,7 @@ export const PatrolMain: React.FC = () => {
     }
     const { record, selectedIds } = groupPick;
     setGroupPick(null);
+    setNotifyMsg('正在建立會辦並寄送通知…');
     void syncReviewForRecord(record, selectedIds);
   };
 
@@ -481,12 +492,19 @@ export const PatrolMain: React.FC = () => {
         <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{error}</p>
       )}
       {notifyMsg && (
-        <p className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 flex justify-between gap-2">
-          <span>{notifyMsg}</span>
-          <button type="button" className="font-bold underline" onClick={() => setNotifyMsg('')}>
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 z-[80] w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 shadow-lg flex items-start justify-between gap-3"
+        >
+          <span className="font-semibold leading-snug whitespace-pre-wrap">{notifyMsg}</span>
+          <button
+            type="button"
+            className="shrink-0 text-xs font-bold underline text-indigo-800"
+            onClick={() => setNotifyMsg('')}
+          >
             關閉
           </button>
-        </p>
+        </div>
       )}
 
       {grouped.length > 1 && (
