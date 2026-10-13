@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   UserRole 
 } from '../types';
@@ -29,6 +30,62 @@ import {
   type UiFontScale,
 } from '../utils/uiFontScale';
 
+type OfficeMenuPos = { top: number; left: number; minWidth: number };
+
+/** 處室下拉：用 fixed + portal，避免導覽列 overflow 把選單裁掉 */
+const OfficeRoleMenu: React.FC<{
+  open: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  menuRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+}> = ({ open, anchorRef, menuRef, children }) => {
+  const [pos, setPos] = useState<OfficeMenuPos | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const update = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPos({
+        top: r.bottom + 4,
+        left: Math.max(8, r.left),
+        minWidth: Math.max(r.width, 152),
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open, anchorRef]);
+
+  if (!open || !pos || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      className="rounded-lg border border-slate-600 bg-slate-900 text-white shadow-2xl py-1"
+      style={{
+        position: 'fixed',
+        top: pos.top,
+        left: pos.left,
+        minWidth: pos.minWidth,
+        zIndex: 9999,
+      }}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+};
+
 export const Header: React.FC = () => {
   const {
     currentRole,
@@ -50,8 +107,10 @@ export const Header: React.FC = () => {
   const [uiFontScale, setUiFontScale] = useState<UiFontScale>(() => readUiFontScale());
   const [academicOfficeOpen, setAcademicOfficeOpen] = useState(false);
   const [generalAffairsOpen, setGeneralAffairsOpen] = useState(false);
-  const academicOfficeRef = useRef<HTMLDivElement>(null);
-  const generalAffairsRef = useRef<HTMLDivElement>(null);
+  const academicOfficeBtnRef = useRef<HTMLButtonElement>(null);
+  const generalAffairsBtnRef = useRef<HTMLButtonElement>(null);
+  const academicMenuRef = useRef<HTMLDivElement>(null);
+  const generalAffairsMenuRef = useRef<HTMLDivElement>(null);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
@@ -59,12 +118,12 @@ export const Header: React.FC = () => {
     if (!academicOfficeOpen && !generalAffairsOpen) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (academicOfficeOpen && !academicOfficeRef.current?.contains(t)) {
-        setAcademicOfficeOpen(false);
-      }
-      if (generalAffairsOpen && !generalAffairsRef.current?.contains(t)) {
-        setGeneralAffairsOpen(false);
-      }
+      const inAcademic =
+        academicOfficeBtnRef.current?.contains(t) || academicMenuRef.current?.contains(t);
+      const inGeneral =
+        generalAffairsBtnRef.current?.contains(t) || generalAffairsMenuRef.current?.contains(t);
+      if (academicOfficeOpen && !inAcademic) setAcademicOfficeOpen(false);
+      if (generalAffairsOpen && !inGeneral) setGeneralAffairsOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -192,9 +251,9 @@ export const Header: React.FC = () => {
         <CloudSyncJoinModal isOpen={isSyncJoinOpen} onClose={() => setIsSyncJoinOpen(false)} />
 
         {/* Sub-header Navigation / Role Switcher */}
-        <div className="flex flex-wrap items-center justify-between border-t border-slate-800/80 py-2 gap-2">
-          {/* Role Navigation Pills */}
-          <div className="flex items-center space-x-1 sm:space-x-2 overflow-x-auto scrollbar-none">
+        <div className="flex flex-wrap items-center justify-between border-t border-slate-800/80 py-2 gap-2 overflow-visible">
+          {/* Role Navigation Pills（勿加 overflow-x，否則會裁掉處室下拉選單） */}
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
             {/* 教師端 */}
             <button
               id="nav-role-teacher"
@@ -210,100 +269,108 @@ export const Header: React.FC = () => {
             </button>
 
             {/* 教務處 → 教學組 */}
-            <div className="relative" ref={academicOfficeRef}>
+            <button
+              type="button"
+              ref={academicOfficeBtnRef}
+              id="nav-role-academic-office"
+              aria-haspopup="menu"
+              aria-expanded={academicOfficeOpen}
+              onClick={() => {
+                setAcademicOfficeOpen((o) => !o);
+                setGeneralAffairsOpen(false);
+              }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                currentRole === 'academic'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+              }`}
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              <span>教務處</span>
+              {pendingCount > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full animate-bounce">
+                  {pendingCount}
+                </span>
+              )}
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition ${academicOfficeOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <OfficeRoleMenu
+              open={academicOfficeOpen}
+              anchorRef={academicOfficeBtnRef}
+              menuRef={academicMenuRef}
+            >
               <button
                 type="button"
-                id="nav-role-academic-office"
+                role="menuitem"
+                id="nav-role-academic"
                 onClick={() => {
-                  setAcademicOfficeOpen((o) => !o);
-                  setGeneralAffairsOpen(false);
+                  setAcademicOfficeOpen(false);
+                  requestRoleSwitchWithAuth('academic');
                 }}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
                   currentRole === 'academic'
-                    ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                <ClipboardCheck className="w-4 h-4" />
-                <span>教務處</span>
+                <ClipboardCheck className="w-3.5 h-3.5" />
+                教學組
                 {pendingCount > 0 && (
-                  <span className="ml-0.5 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full animate-bounce">
+                  <span className="ml-auto px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full">
                     {pendingCount}
                   </span>
                 )}
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition ${academicOfficeOpen ? 'rotate-180' : ''}`}
-                />
               </button>
-              {academicOfficeOpen && (
-                <div className="absolute left-0 top-full mt-1 z-50 min-w-[9.5rem] rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1">
-                  <button
-                    type="button"
-                    id="nav-role-academic"
-                    onClick={() => {
-                      setAcademicOfficeOpen(false);
-                      requestRoleSwitchWithAuth('academic');
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
-                      currentRole === 'academic'
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'text-slate-200 hover:bg-slate-800'
-                    }`}
-                  >
-                    <ClipboardCheck className="w-3.5 h-3.5" />
-                    教學組
-                    {pendingCount > 0 && (
-                      <span className="ml-auto px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full">
-                        {pendingCount}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
+            </OfficeRoleMenu>
 
             {/* 總務處 → 出納組 */}
-            <div className="relative" ref={generalAffairsRef}>
+            <button
+              type="button"
+              ref={generalAffairsBtnRef}
+              id="nav-role-general-affairs"
+              aria-haspopup="menu"
+              aria-expanded={generalAffairsOpen}
+              onClick={() => {
+                setGeneralAffairsOpen((o) => !o);
+                setAcademicOfficeOpen(false);
+              }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                currentRole === 'accounting'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>總務處</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition ${generalAffairsOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <OfficeRoleMenu
+              open={generalAffairsOpen}
+              anchorRef={generalAffairsBtnRef}
+              menuRef={generalAffairsMenuRef}
+            >
               <button
                 type="button"
-                id="nav-role-general-affairs"
+                role="menuitem"
+                id="nav-role-accounting"
                 onClick={() => {
-                  setGeneralAffairsOpen((o) => !o);
-                  setAcademicOfficeOpen(false);
+                  setGeneralAffairsOpen(false);
+                  requestRoleSwitchWithAuth('accounting');
                 }}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
                   currentRole === 'accounting'
-                    ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                <Building2 className="w-4 h-4" />
-                <span>總務處</span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition ${generalAffairsOpen ? 'rotate-180' : ''}`}
-                />
+                <Calculator className="w-3.5 h-3.5" />
+                出納組
               </button>
-              {generalAffairsOpen && (
-                <div className="absolute left-0 top-full mt-1 z-50 min-w-[9.5rem] rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1">
-                  <button
-                    type="button"
-                    id="nav-role-accounting"
-                    onClick={() => {
-                      setGeneralAffairsOpen(false);
-                      requestRoleSwitchWithAuth('accounting');
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
-                      currentRole === 'accounting'
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'text-slate-200 hover:bg-slate-800'
-                    }`}
-                  >
-                    <Calculator className="w-3.5 h-3.5" />
-                    出納組
-                  </button>
-                </div>
-              )}
-            </div>
+            </OfficeRoleMenu>
 
             {flatRoles.map((r) => {
               const isActive = currentRole === r.key;
