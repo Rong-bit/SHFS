@@ -72,6 +72,7 @@ def main() -> int:
     print("Node:", node)
     print("Server:", server_js)
     print("URL:  http://localhost:%s" % port)
+    print("LAN IP will be printed by Node after start.")
     print("Keep this window open.")
     print("")
 
