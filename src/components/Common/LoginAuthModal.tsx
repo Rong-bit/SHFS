@@ -142,11 +142,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   } else if (target.type === 'role') {
     switch (target.targetRole) {
       case 'academic':
-        targetTitle = targetStaff ? targetStaff.name : '教務處教學組';
+        targetTitle = targetStaff ? targetStaff.name : '教務處';
         targetSubtitle = targetStaff
           ? `${targetStaff.title} · ${targetStaff.responsibleScope}`
-          : '請先選擇組長或組員身分';
-        targetBadge = targetStaff?.title || '教學組行政權限';
+          : '請先選擇教務處組長或組員身分';
+        targetBadge = targetStaff?.title || '教務處行政權限';
         expectedPassword =
           targetStaff?.password || auth.academicPassword || '1234';
         hint = targetStaff?.password
@@ -155,11 +155,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         break;
       case 'accounting': {
         const accStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'accounting');
-        targetTitle = accStaff ? accStaff.name : '出納組';
+        targetTitle = accStaff ? accStaff.name : '總務處・出納組';
         targetSubtitle = accStaff
           ? `${accStaff.title} · ${accStaff.responsibleScope}`
           : '請先選擇出納組組長或組員身分';
-        targetBadge = accStaff?.title || '財務結算權限';
+        targetBadge = accStaff?.title || '出納結算權限';
         expectedPassword = accStaff?.password || auth.accountingPassword || '1234';
         hint = accStaff?.password
           ? '已設定個人密碼'
@@ -170,11 +170,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         const saStaff = academicStaffList.find(
           (s) => s.id === selectedStaffId && s.group === 'student_affairs'
         );
-        targetTitle = saStaff ? saStaff.name : '生輔組';
+        targetTitle = saStaff ? saStaff.name : '學務處';
         targetSubtitle = saStaff
           ? `${saStaff.title} · ${saStaff.responsibleScope}`
-          : '請先選擇生輔組／學務身分';
-        targetBadge = saStaff?.title || '生輔會辦權限';
+          : '請先選擇學務處／生輔身分';
+        targetBadge = saStaff?.title || '學務會辦權限';
         expectedPassword =
           saStaff?.password || auth.studentAffairsPassword || auth.academicPassword || '1234';
         hint = saStaff?.password
@@ -224,14 +224,14 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     if (target.type === 'role' && target.targetRole === 'accounting') {
       const hasAccStaff = academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'accounting');
       if (!hasAccStaff) {
-        setErrorMsg('請先選擇出納組組長或組員身分');
+        setErrorMsg('請先選擇總務處出納組組長或組員身分');
         return;
       }
     }
     if (target.type === 'role' && target.targetRole === 'student_affairs') {
       const has = academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'student_affairs');
       if (!has) {
-        setErrorMsg('請先於成員名冊新增生輔組／學務人員後再登入');
+        setErrorMsg('請先於成員名冊新增學務處人員後再登入');
         return;
       }
     }
@@ -282,10 +282,10 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         );
       } else if (target.type === 'role' && target.targetRole === 'accounting') {
         setErrorMsg(
-          '出納組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若有改過請向管理員確認。'
+          '總務處出納組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若有改過請向管理員確認。'
         );
       } else if (target.type === 'role' && target.targetRole === 'student_affairs') {
-        setErrorMsg('生輔組登入密碼錯誤。預設多為 1234；請向管理員確認。');
+        setErrorMsg('學務處登入密碼錯誤。預設多為 1234；請向管理員確認。');
       } else if (target.type === 'role' && target.targetRole === 'principal') {
         setErrorMsg('校長室登入密碼錯誤。預設多為 1234；請向管理員確認。');
       } else if (target.type === 'role' && target.targetRole === 'admin') {
@@ -367,12 +367,12 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                     : 'academic';
             const groupLabel =
               group === 'accounting'
-                ? '出納組'
+                ? '總務處・出納組'
                 : group === 'student_affairs'
-                  ? '生輔組'
+                  ? '學務處'
                   : group === 'principal'
                     ? '校長室'
-                    : '教學組';
+                    : '教務處';
             const groupMembers = academicStaffList.filter((s) => (s.group || 'academic') === group);
             if (groupMembers.length === 0) {
               return (

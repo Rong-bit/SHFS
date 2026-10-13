@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   UserRole 
 } from '../types';
@@ -16,6 +16,8 @@ import {
   Type,
   Shield,
   Landmark,
+  ChevronDown,
+  Building2,
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
@@ -46,10 +48,23 @@ export const Header: React.FC = () => {
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
   const [isStaffPasswordOpen, setIsStaffPasswordOpen] = useState(false);
   const [uiFontScale, setUiFontScale] = useState<UiFontScale>(() => readUiFontScale());
+  const [generalAffairsOpen, setGeneralAffairsOpen] = useState(false);
+  const generalAffairsRef = useRef<HTMLDivElement>(null);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
-  // 順序：教師 → 教學組 → 出納組 → 生輔組 → 校長 → 系統管理員
+  useEffect(() => {
+    if (!generalAffairsOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!generalAffairsRef.current?.contains(e.target as Node)) {
+        setGeneralAffairsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [generalAffairsOpen]);
+
+  // 順序：教師 → 教務處 → 總務處（出納組）→ 學務處 → 校長 → 系統管理員
   const roles: { key: UserRole; label: string; icon: React.ReactNode; badge?: number }[] = [
     {
       key: 'teacher',
@@ -58,18 +73,13 @@ export const Header: React.FC = () => {
     },
     {
       key: 'academic',
-      label: '教務處教學組',
+      label: '教務處',
       icon: <ClipboardCheck className="w-4 h-4" />,
       badge: pendingCount > 0 ? pendingCount : undefined,
     },
     {
-      key: 'accounting',
-      label: '出納組',
-      icon: <Calculator className="w-4 h-4" />,
-    },
-    {
       key: 'student_affairs',
-      label: '生輔組',
+      label: '學務處',
       icon: <Shield className="w-4 h-4" />,
     },
     {
@@ -192,7 +202,7 @@ export const Header: React.FC = () => {
           <div className="flex items-center space-x-1 sm:space-x-2 overflow-x-auto scrollbar-none">
             {roles.map((r) => {
               const isActive = currentRole === r.key;
-              return (
+              const node = (
                 <button
                   key={r.key}
                   id={`nav-role-${r.key}`}
@@ -218,6 +228,54 @@ export const Header: React.FC = () => {
                   )}
                 </button>
               );
+              // 教務處後方插入「總務處 → 出納組」
+              if (r.key === 'academic') {
+                const gaActive = currentRole === 'accounting';
+                return (
+                  <React.Fragment key={`${r.key}-with-ga`}>
+                    {node}
+                    <div className="relative" ref={generalAffairsRef}>
+                      <button
+                        type="button"
+                        id="nav-role-general-affairs"
+                        onClick={() => setGeneralAffairsOpen((o) => !o)}
+                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                          gaActive
+                            ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                            : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+                        }`}
+                      >
+                        <Building2 className="w-4 h-4" />
+                        <span>總務處</span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition ${generalAffairsOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                      {generalAffairsOpen && (
+                        <div className="absolute left-0 top-full mt-1 z-50 min-w-[9.5rem] rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1">
+                          <button
+                            type="button"
+                            id="nav-role-accounting"
+                            onClick={() => {
+                              setGeneralAffairsOpen(false);
+                              requestRoleSwitchWithAuth('accounting');
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
+                              gaActive
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            <Calculator className="w-3.5 h-3.5" />
+                            出納組
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </React.Fragment>
+                );
+              }
+              return node;
             })}
           </div>
 
@@ -246,11 +304,11 @@ export const Header: React.FC = () => {
               const group = staffRoleGroup(currentRole);
               const label =
                 currentRole === 'academic'
-                  ? '教學組經辦登入'
+                  ? '教務處經辦登入'
                   : currentRole === 'accounting'
-                    ? '出納組登入'
+                    ? '總務處・出納組登入'
                     : currentRole === 'student_affairs'
-                      ? '生輔組登入'
+                      ? '學務處登入'
                       : '校長室登入';
               const members = academicStaffList.filter((s) => (s.group || 'academic') === group);
               return (
@@ -317,12 +375,12 @@ export const Header: React.FC = () => {
           staff={currentAcademicStaff}
           groupLabel={
             currentRole === 'accounting'
-              ? '出納組'
+              ? '總務處（出納組）'
               : currentRole === 'student_affairs'
-                ? '生輔組'
+                ? '學務處'
                 : currentRole === 'principal'
                   ? '校長室'
-                  : '教學組'
+                  : '教務處'
           }
           onSave={(pw) => updateAcademicStaffPassword(currentAcademicStaff.id, pw)}
           onClose={() => setIsStaffPasswordOpen(false)}

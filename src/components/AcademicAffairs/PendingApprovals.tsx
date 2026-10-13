@@ -113,7 +113,7 @@ export const PendingApprovals: React.FC = () => {
         <div>
           <div className="flex items-center space-x-2">
             <ClipboardCheck className="w-6 h-6 text-amber-500" />
-            <h2 className="text-lg font-bold text-slate-900">教務處教學組 · 調代課線上審核作業</h2>
+            <h2 className="text-lg font-bold text-slate-900">教務處 · 調代課線上審核作業</h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
             即時檢核全校各科專業科目、實習工場設備無衝突與法規兼代課上限
