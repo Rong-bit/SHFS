@@ -148,6 +148,11 @@ assert.ok(classRecipients.some((r) => r.role === 'student_affairs'));
 assert.ok(classRecipients.some((r) => r.role === 'dean_student'));
 assert.ok(classRecipients.some((r) => r.role === 'academic'));
 assert.ok(classRecipients.some((r) => r.role === 'dean_academic' && r.personName === '吳教務'));
+assert.equal(
+  classRecipients.some((r) => r.personName === '黃實習主' || r.personName === '蔡總務' || r.personName === '林實習'),
+  false,
+  '預設身分未勾實習／總務時，實習／總務人員不應被當成教學組收件'
+);
 
 const { buildPatrolNotifyEmail, patrolNotifyAudienceLine } = await import('../src/utils/patrolMail');
 const mail = buildPatrolNotifyEmail({
@@ -378,6 +383,42 @@ const extraRecipients = resolvePatrolReviewRecipients({
 assert.ok(extraRecipients.some((r) => r.role === 'internship' && r.personName === '林實習'));
 assert.ok(extraRecipients.some((r) => r.role === 'dean_internship' && r.personName === '黃實習主'));
 assert.ok(extraRecipients.some((r) => r.role === 'dean_general_affairs' && r.personName === '蔡總務'));
+assert.equal(
+  extraRecipients.some((r) => r.role === 'academic' || r.role === 'dean_academic'),
+  false,
+  '僅開實習／總務身分時不應夾帶教學組／教務主任'
+);
+
+// 無教務主任時：不可把實習主任／總務主任升級成教務主任
+const staffWithoutAcademicDean = staff.filter((s) => s.id !== 'ac2');
+const noDeanFallback = resolvePatrolReviewRecipients({
+  record: base,
+  teachers,
+  academicStaffList: staffWithoutAcademicDean,
+  notifyRoles: {
+    student_affairs: false,
+    dean_student: false,
+    academic: true,
+    dean_academic: true,
+    homeroom: false,
+    subject_teacher: false,
+    internship: true,
+    dean_internship: true,
+    dean_general_affairs: true,
+  },
+});
+assert.equal(
+  noDeanFallback.some((r) => r.role === 'dean_academic'),
+  false,
+  '名冊無教務主任時不應把其他主任升級為教務主任'
+);
+assert.ok(noDeanFallback.some((r) => r.role === 'dean_internship' && r.personName === '黃實習主'));
+assert.ok(noDeanFallback.some((r) => r.role === 'dean_general_affairs' && r.personName === '蔡總務'));
+assert.equal(
+  noDeanFallback.some((r) => r.role === 'academic' && (r.personName === '黃實習主' || r.personName === '蔡總務')),
+  false,
+  '實習／總務主任不可列入教學組收件'
+);
 
 const okRecord: PatrolRecord = { ...base, observations: [] };
 assert.equal(patrolRecordHasIssue(okRecord), false);
@@ -477,5 +518,33 @@ const principalAsAcademic = viewerReviewRoles({
   },
 });
 assert.ok(principalAsAcademic.includes('principal'));
+
+const internshipDeanRoles = viewerReviewRoles({
+  reviewCase: {
+    ...review,
+    recipients: [
+      { role: 'dean_internship', personId: 'in2', personName: '黃實習主', email: 'dean-i@school.edu' },
+      { role: 'academic', personId: 'in2', personName: '黃實習主', email: 'dean-i@school.edu' },
+    ],
+  },
+  viewer: {
+    kind: 'staff',
+    id: 'in2',
+    name: '黃實習主',
+    staffGroup: 'academic',
+    staffTitle: '實習主任',
+  },
+});
+assert.ok(internshipDeanRoles.includes('dean_internship'));
+assert.equal(
+  internshipDeanRoles.includes('academic'),
+  false,
+  '實習主任登入不應取得教學組核章角色'
+);
+assert.equal(
+  internshipDeanRoles.includes('dean_academic'),
+  false,
+  '實習主任登入不應取得教務主任核章角色'
+);
 
 console.log('regression-patrol-review: ok');
