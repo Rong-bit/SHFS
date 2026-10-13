@@ -141,39 +141,15 @@ const buildEndpoint = async (settings: CloudSyncSettings) => {
 };
 
 /**
- * 上傳前剝除僅應留本機的密文：
- * - 各教師／組員「個人」登入密碼
- * - SMTP 寄信密碼
- * 管理員／處室角色密碼與預設教師密碼會進雲端（同同步密碼的電腦共用）。
+ * 上傳前處理：同學校同步密碼的電腦共用全部登入／SMTP 密文。
+ * （整包仍以同步密碼 AES 加密後上傳；此函式保留給呼叫端相容。）
  */
 export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchoolData => {
-  const mail = data.systemConfig?.patrolMailConfig;
-  return {
-    ...data,
-    teachers: (data.teachers || []).map((t) => {
-      const { password: _pw, ...rest } = t;
-      return rest;
-    }),
-    academicStaffList: (data.academicStaffList || []).map((s) => {
-      const { password: _pw, ...rest } = s;
-      return rest;
-    }),
-    systemConfig: {
-      ...data.systemConfig,
-      // authConfig（含 adminPassword 等角色密碼）原樣上傳，供全校同步
-      patrolMailConfig: mail
-        ? {
-            ...mail,
-            pass: '',
-          }
-        : mail,
-    },
-  };
+  return data;
 };
 
 /**
- * 拉取後併回本機專用密文（個人密碼、SMTP），避免雲端空值覆寫。
- * 角色登入密碼：雲端有值則採雲端（同同步密碼＝相同管理員／處室密碼）。
+ * 拉取後合併：雲端有值則採雲端（雙向同步）；雲端空值才保留本機（相容舊資料）。
  */
 export const mergeLocalSecretsIntoRemote = (
   remote: SharedSchoolData,
@@ -190,7 +166,7 @@ export const mergeLocalSecretsIntoRemote = (
   );
   const remoteAuth = remote.systemConfig?.authConfig;
   const remoteMail = remote.systemConfig?.patrolMailConfig;
-  const pickRolePwd = (remoteVal?: string, localVal?: string, fallback = '') =>
+  const pickSynced = (remoteVal?: string, localVal?: string, fallback = '') =>
     (remoteVal && String(remoteVal).trim()) ||
     (localVal && String(localVal).trim()) ||
     fallback;
@@ -198,38 +174,38 @@ export const mergeLocalSecretsIntoRemote = (
     ...remote,
     teachers: (remote.teachers || []).map((t) => ({
       ...t,
-      password: localPwd.get(t.id) || t.password,
+      password: pickSynced(t.password, localPwd.get(t.id), ''),
     })),
     academicStaffList: (remote.academicStaffList || []).map((s) => ({
       ...s,
-      password: localStaffPwd.get(s.id) || s.password,
+      password: pickSynced(s.password, localStaffPwd.get(s.id), ''),
     })),
     systemConfig: {
       ...remote.systemConfig,
       authConfig: {
         requirePassword: remoteAuth?.requirePassword ?? localAuth?.requirePassword ?? true,
-        defaultTeacherPassword: pickRolePwd(
+        defaultTeacherPassword: pickSynced(
           remoteAuth?.defaultTeacherPassword,
           localAuth?.defaultTeacherPassword,
           '1234'
         ),
-        adminPassword: pickRolePwd(remoteAuth?.adminPassword, localAuth?.adminPassword, ''),
-        academicPassword: pickRolePwd(
+        adminPassword: pickSynced(remoteAuth?.adminPassword, localAuth?.adminPassword, ''),
+        academicPassword: pickSynced(
           remoteAuth?.academicPassword,
           localAuth?.academicPassword,
           '1234'
         ),
-        accountingPassword: pickRolePwd(
+        accountingPassword: pickSynced(
           remoteAuth?.accountingPassword,
           localAuth?.accountingPassword,
           '1234'
         ),
-        studentAffairsPassword: pickRolePwd(
+        studentAffairsPassword: pickSynced(
           remoteAuth?.studentAffairsPassword,
           localAuth?.studentAffairsPassword,
           ''
         ),
-        principalPassword: pickRolePwd(
+        principalPassword: pickSynced(
           remoteAuth?.principalPassword,
           localAuth?.principalPassword,
           ''
@@ -238,7 +214,7 @@ export const mergeLocalSecretsIntoRemote = (
       patrolMailConfig: remoteMail
         ? {
             ...remoteMail,
-            pass: localPatrolMailPass || remoteMail.pass || '',
+            pass: pickSynced(remoteMail.pass, localPatrolMailPass, ''),
           }
         : remoteMail,
     },
