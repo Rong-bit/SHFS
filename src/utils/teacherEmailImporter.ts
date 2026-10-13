@@ -105,10 +105,11 @@ export function lookupTeacherEmail(
 }
 
 /**
- * 成員名冊表單改名時的信箱處理：
- * - 目前空白 → 帶入新姓名對應師資信箱（打字中未對上者不填）
- * - 目前等於「舊姓名」自師資帶入的信箱 → 改為新姓名對應（無則清空），避免寄錯人
- * - 手動改過的信箱（與舊姓名師資信箱不同）→ 保留
+ * 成員名冊表單改名時的信箱處理（改名＝換人，優先對師資名冊）：
+ * - 新姓名在師資名冊有信箱 → 一律帶入（即使先前為手動信箱，避免教務主任改名仍寄給舊信箱）
+ * - 新姓名對不到、目前空白 → 保持空白
+ * - 新姓名對不到、目前等於舊姓名師資信箱 → 清空（避免寄錯人）
+ * - 新姓名對不到、目前為手動信箱 → 保留
  */
 export function resolveStaffEmailForNameChange(params: {
   teachers: Teacher[];
@@ -121,8 +122,9 @@ export function resolveStaffEmailForNameChange(params: {
   const prevLookup = lookupTeacherEmail(teachers, previousName);
   const nextLookup = lookupTeacherEmail(teachers, nextName);
 
-  if (!current) return nextLookup;
-  if (prevLookup && current === prevLookup) return nextLookup;
+  if (nextLookup) return nextLookup;
+  if (!current) return '';
+  if (prevLookup && current === prevLookup) return '';
   return current;
 }
 

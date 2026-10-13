@@ -902,8 +902,17 @@ export const AdminSettings: React.FC = () => {
     if (!staffFormData.name.trim()) return;
 
     const name = staffFormData.name.trim();
+    const formEmail = normalizeSchoolEmail(staffFormData.email);
+    // 有改姓名才依師資名冊重查（改名＝換人）；僅改電話等則保留表單信箱
     const email =
-      normalizeSchoolEmail(staffFormData.email) || lookupTeacherEmail(teachers, name) || '';
+      editingStaff && editingStaff.name.trim() !== name
+        ? resolveStaffEmailForNameChange({
+            teachers,
+            previousName: editingStaff.name,
+            nextName: name,
+            currentEmail: staffFormData.email,
+          })
+        : formEmail || lookupTeacherEmail(teachers, name) || '';
 
     if (editingStaff) {
       updateAcademicStaff(editingStaff.id, {

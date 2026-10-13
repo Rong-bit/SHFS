@@ -127,8 +127,29 @@ assert.equal(
     nextName: '李小華',
     currentEmail: 'manual@mail2.ccvs.kh.edu.tw',
   }),
+  'lee@mail2.ccvs.kh.edu.tw',
+  '新姓名在師資名冊有信箱時應帶入（改名＝換人，即使先前為手動信箱）'
+);
+assert.equal(
+  resolveStaffEmailForNameChange({
+    teachers: applied.teachers,
+    previousName: '王小明',
+    nextName: '尚無此人',
+    currentEmail: 'manual@mail2.ccvs.kh.edu.tw',
+  }),
   'manual@mail2.ccvs.kh.edu.tw',
-  '手動信箱不因改名被覆寫'
+  '新姓名對不到師資時才保留手動信箱'
+);
+// 舊姓名不在師資名冊、信箱為舊人手動值，改成名冊有信箱的新人 → 仍應帶入
+assert.equal(
+  resolveStaffEmailForNameChange({
+    teachers: applied.teachers,
+    previousName: '前任主任',
+    nextName: '李小華',
+    currentEmail: 'old-dean@mail2.ccvs.kh.edu.tw',
+  }),
+  'lee@mail2.ccvs.kh.edu.tw',
+  '教務主任改名後應依新姓名查師資名冊信箱'
 );
 
 console.log('regression-teacher-email-import: ok');
