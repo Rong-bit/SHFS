@@ -274,7 +274,7 @@ export interface SystemConfig {
     principalPassword?: string;
   };
   /**
-   * 改密碼後撤銷各台「30 天免密」信任（trustKey → 撤銷時間戳）。
+   * 改密碼後撤銷各台「記住此電腦」免密信任（trustKey → 撤銷時間戳）。
    * 隨雲端同步；驗證時間早於撤銷時間則需重新輸入密碼。
    */
   authTrustRevocations?: Record<string, number>;
