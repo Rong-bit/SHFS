@@ -273,6 +273,11 @@ export interface SystemConfig {
     /** 校長預設密碼；未設則沿用 academicPassword */
     principalPassword?: string;
   };
+  /**
+   * 改密碼後撤銷各台「30 天免密」信任（trustKey → 撤銷時間戳）。
+   * 隨雲端同步；驗證時間早於撤銷時間則需重新輸入密碼。
+   */
+  authTrustRevocations?: Record<string, number>;
   /** 巡堂異常會辦寄信（SMTP；密碼存於本機設定，部署時請妥善保管） */
   patrolMailConfig?: PatrolMailConfig;
 }
