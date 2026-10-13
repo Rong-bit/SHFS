@@ -2456,7 +2456,7 @@ export const AdminSettings: React.FC = () => {
                     身分登入密碼驗證安全設定
                   </h3>
                   <p className="text-xs text-slate-500">
-                    啟用身分切換密碼保護，防止教師與行政人員端未授權切換或代為送出簽核。本機曾成功登入過的身分，30 天內可免再輸入密碼。
+                    啟用身分切換密碼保護，防止教師與行政人員端未授權切換或代為送出簽核。本機曾成功登入過的身分，30 天內可免再輸入密碼；若該身分密碼被更改（含他台同步），免密信任會失效，需重新輸入。
                   </p>
                 </div>
               </div>
@@ -2588,7 +2588,7 @@ export const AdminSettings: React.FC = () => {
                   </span>
                 </label>
                 <p className="text-[10px] text-slate-500 mb-1.5 leading-relaxed">
-                  已開雲端同步時，此密碼會隨「學校同步密碼」同步到其他電腦（處室角色、教師個人密碼、SMTP 亦同）。
+                  已開雲端同步時，此密碼會隨「學校同步密碼」同步到其他電腦（處室角色、教師個人密碼、SMTP 亦同）。更改後會清除各台該身分的 30 天免密信任。
                 </p>
                 <div className="relative">
                   <input

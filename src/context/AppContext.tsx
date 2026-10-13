@@ -85,8 +85,14 @@ import {
   resolveAuthConfigForSave,
 } from '../utils/passwordCrypto';
 import {
+  ALL_TEACHERS_TRUST_REVOCATION_KEY,
+  clearLocalAuthTrustKey,
   isLocalAuthTrusted,
+  mergeAuthTrustRevocations,
   roleAuthTrustKey,
+  rolePasswordRevocationKey,
+  setAuthTrustRevocations,
+  staffAuthTrustRevocationKey,
   teacherAuthTrustKey,
 } from '../utils/localAuthTrust';
 import {
@@ -453,6 +459,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           parsed.standardBasePeriods || parsed.basePeriodsStandard
         ),
         authConfig: withMigratedAuthConfig(parsed.authConfig || INITIAL_SYSTEM_CONFIG.authConfig),
+        authTrustRevocations:
+          parsed.authTrustRevocations && typeof parsed.authTrustRevocations === 'object'
+            ? (parsed.authTrustRevocations as Record<string, number>)
+            : undefined,
         semester: normalizeSystemConfigSemester(
           parsed.semester,
           typeof parsed.currentMonth === 'number' ? parsed.currentMonth : new Date().getMonth() + 1
@@ -462,6 +472,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return INITIAL_SYSTEM_CONFIG;
     }
   });
+
+  // 本機信任檢查需讀取隨同步而來的撤銷表
+  useEffect(() => {
+    setAuthTrustRevocations(systemConfig.authTrustRevocations);
+  }, [systemConfig.authTrustRevocations]);
 
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [printModalRequest, setPrintModalRequest] = useState<SubstituteRequest | null>(null);
@@ -645,33 +660,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLoginAuthOpen(true);
   };
 
+  const revokeAuthTrustKeys = (keys: string[]) => {
+    const now = Date.now();
+    const unique = [...new Set(keys.filter(Boolean))];
+    if (unique.length === 0) return;
+    for (const key of unique) clearLocalAuthTrustKey(key);
+    setSystemConfig((prev) => {
+      const nextRev = { ...(prev.authTrustRevocations || {}) };
+      for (const key of unique) nextRev[key] = Math.max(nextRev[key] || 0, now);
+      setAuthTrustRevocations(nextRev);
+      return { ...prev, authTrustRevocations: nextRev };
+    });
+  };
+
   const updateTeacherPassword = (teacherId: string, newPassword: string) => {
     const next = newPassword.trim();
+    const trustKey = teacherAuthTrustKey(teacherId);
     if (!next) {
       setTeachers((prev) =>
         prev.map((t) => (t.id === teacherId ? { ...t, password: undefined } : t))
       );
+      revokeAuthTrustKeys([trustKey]);
       return;
     }
     void hashPassword(next).then((hashed) => {
       setTeachers((prev) =>
         prev.map((t) => (t.id === teacherId ? { ...t, password: hashed } : t))
       );
+      revokeAuthTrustKeys([trustKey]);
     });
   };
 
   const updateAcademicStaffPassword = (staffId: string, newPassword: string) => {
     const next = newPassword.trim();
+    const trustKey = staffAuthTrustRevocationKey(staffId);
     if (!next) {
       setAcademicStaffList((prev) =>
         prev.map((s) => (s.id === staffId ? { ...s, password: undefined } : s))
       );
+      revokeAuthTrustKeys([trustKey]);
       return;
     }
     void hashPassword(next).then((hashed) => {
       setAcademicStaffList((prev) =>
         prev.map((s) => (s.id === staffId ? { ...s, password: hashed } : s))
       );
+      revokeAuthTrustKeys([trustKey]);
     });
   };
 
@@ -852,7 +886,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teachersRef.current,
       systemConfigRef.current.authConfig,
       academicStaffListRef.current,
-      systemConfigRef.current.patrolMailConfig?.pass
+      systemConfigRef.current.patrolMailConfig?.pass,
+      systemConfigRef.current.authTrustRevocations
     );
     const remoteTeachers = normalizePeopleEmails(merged.teachers || []);
     const remoteSessions = (merged.sessions || []).map((s) => ({
@@ -916,7 +951,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...INITIAL_SYSTEM_CONFIG.authConfig,
         ...(merged.systemConfig?.authConfig || {}),
       }),
+      authTrustRevocations: mergeAuthTrustRevocations(
+        systemConfigRef.current.authTrustRevocations,
+        merged.systemConfig?.authTrustRevocations
+      ),
     });
+    setAuthTrustRevocations(
+      mergeAuthTrustRevocations(
+        systemConfigRef.current.authTrustRevocations,
+        merged.systemConfig?.authTrustRevocations
+      )
+    );
     if (merged.academicStaffList?.length) {
       setAcademicStaffList(normalizePeopleEmails(merged.academicStaffList));
     }
@@ -2796,16 +2841,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         homeroomDayOfWeek: nextSlot.dayOfWeek,
         homeroomPeriod: nextSlot.period,
       };
-      setSystemConfig((prev) => ({
-        ...prev,
-        ...newConfig,
-        ...homeroomSlot,
-        ...(typeof newConfig.schoolName === 'string'
-          ? { schoolName: normalizeSchoolName(newConfig.schoolName) }
-          : {}),
-        standardBasePeriods: nextBase,
-        ...(authConfig ? { authConfig: withMigratedAuthConfig(authConfig) } : {}),
-      }));
+      const prevAuth = systemConfigRef.current.authConfig;
+      const revocationKeys: string[] = [];
+      if (authConfig && prevAuth) {
+        if (authConfig.adminPassword !== prevAuth.adminPassword) {
+          revocationKeys.push(rolePasswordRevocationKey('admin'));
+        }
+        if (authConfig.academicPassword !== prevAuth.academicPassword) {
+          revocationKeys.push(rolePasswordRevocationKey('academic'));
+        }
+        if (authConfig.accountingPassword !== prevAuth.accountingPassword) {
+          revocationKeys.push(rolePasswordRevocationKey('accounting'));
+        }
+        if (
+          (authConfig.studentAffairsPassword || '') !== (prevAuth.studentAffairsPassword || '')
+        ) {
+          revocationKeys.push(rolePasswordRevocationKey('student_affairs'));
+        }
+        if ((authConfig.principalPassword || '') !== (prevAuth.principalPassword || '')) {
+          revocationKeys.push(rolePasswordRevocationKey('principal'));
+        }
+        if (authConfig.defaultTeacherPassword !== prevAuth.defaultTeacherPassword) {
+          revocationKeys.push(ALL_TEACHERS_TRUST_REVOCATION_KEY);
+        }
+      }
+      const now = Date.now();
+      for (const key of revocationKeys) clearLocalAuthTrustKey(key);
+      setSystemConfig((prev) => {
+        let authTrustRevocations = prev.authTrustRevocations;
+        if (revocationKeys.length > 0) {
+          authTrustRevocations = { ...(prev.authTrustRevocations || {}) };
+          for (const key of revocationKeys) {
+            authTrustRevocations[key] = Math.max(authTrustRevocations[key] || 0, now);
+          }
+          setAuthTrustRevocations(authTrustRevocations);
+        }
+        return {
+          ...prev,
+          ...newConfig,
+          ...homeroomSlot,
+          ...(typeof newConfig.schoolName === 'string'
+            ? { schoolName: normalizeSchoolName(newConfig.schoolName) }
+            : {}),
+          standardBasePeriods: nextBase,
+          ...(authConfig ? { authConfig: withMigratedAuthConfig(authConfig) } : {}),
+          ...(authTrustRevocations ? { authTrustRevocations } : {}),
+        };
+      });
       setTeachers((prev) => {
         if (homeroomSlotChanged) {
           return enrichTeachersFromSessions(

@@ -1,4 +1,5 @@
 import { AcademicStaff, CourseSession, SubstituteRequest, SystemConfig, Teacher, WorkshopVenue } from '../types';
+import { mergeAuthTrustRevocations } from './localAuthTrust';
 
 export const CLOUD_SYNC_STORAGE_KEY = 'voc_cloud_sync_v1';
 export const CLOUD_SYNC_UPDATED_AT_KEY = 'voc_cloud_sync_updated_at';
@@ -156,7 +157,8 @@ export const mergeLocalSecretsIntoRemote = (
   localTeachers: Teacher[],
   localAuth?: SystemConfig['authConfig'],
   localStaff?: AcademicStaff[],
-  localPatrolMailPass?: string
+  localPatrolMailPass?: string,
+  localAuthTrustRevocations?: Record<string, number>
 ): SharedSchoolData => {
   const localPwd = new Map(
     localTeachers.filter((t) => t.password).map((t) => [t.id, t.password as string])
@@ -211,6 +213,11 @@ export const mergeLocalSecretsIntoRemote = (
           ''
         ),
       },
+      // 撤銷時間取較新者，避免他台改密碼後本機舊信任仍有效
+      authTrustRevocations: mergeAuthTrustRevocations(
+        remote.systemConfig?.authTrustRevocations,
+        localAuthTrustRevocations
+      ),
       patrolMailConfig: remoteMail
         ? {
             ...remoteMail,
