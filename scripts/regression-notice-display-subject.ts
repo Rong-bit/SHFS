@@ -7,6 +7,7 @@ import {
   resolveDisplayClassSubject,
   resolveNoticePrintGroup,
   resolveSharedNoticeRows,
+  shouldAlignNoticeRowPeriods,
 } from '../src/utils/noticeDocument';
 import type { SubstituteRequest } from '../src/types';
 
@@ -223,10 +224,38 @@ assert.equal(
   '監考',
   '節次寫成 2、3 時第4節不可回退英文閱讀'
 );
+assert.equal(shouldAlignNoticeRowPeriods(misnumbered, [period3, period4]), true);
 const aligned = alignNoticeRowsToRequests(misnumbered, [period3, period4]);
 assert.equal(aligned[0].period, '3');
 assert.equal(aligned[1].period, '4');
 assert.equal(aligned[0].subjectName, '監考');
 assert.equal(aligned[1].subjectName, '監考');
+
+// 單列手改節次 5→3：不可被強制改回，否則使用者會覺得「無法儲存」
+const singleReq: SubstituteRequest = {
+  ...base,
+  id: 'r-single',
+  originalSession: {
+    ...base.originalSession,
+    id: 's5',
+    period: 5,
+    className: '金工二忠',
+    subjectName: '某科',
+  },
+};
+const handEdited = [
+  {
+    date: '2026/10/16',
+    weekday: '5',
+    period: '3',
+    className: '金工二忠',
+    subjectName: '監考',
+    hours: '',
+  },
+];
+assert.equal(shouldAlignNoticeRowPeriods(handEdited, [singleReq]), false);
+const kept = alignNoticeRowsToRequests(handEdited, [singleReq]);
+assert.equal(kept[0].period, '3', '單列手改節次應原樣保留');
+assert.equal(kept[0].subjectName, '監考');
 
 console.log('regression-notice-display-subject: OK');

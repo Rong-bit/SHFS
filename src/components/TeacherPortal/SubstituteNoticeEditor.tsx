@@ -81,7 +81,7 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
   }, [defaultRows, savedNoticeRows]);
 
   const persistNoticeRows = () => {
-    // 列數與同張通知單節次數相同時，把節次對回實際課堂（避免 3～4 節被改成 2、3）
+    // 僅在整表節次明顯錯位時才對齊；單列手改節次（如 5→3）必須能儲存
     const aligned = alignNoticeRowsToRequests(editableRows, printGroup);
     if (rowsEqual(aligned, defaultRows)) {
       saveNoticeRows(liveRequest.id, null);
