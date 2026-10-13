@@ -257,6 +257,30 @@ export function stampOfficeAndTitle(
   staffTitle?: string | null
 ): { officeLabel: string; titleLabel: string } {
   const fromStaff = stampTitleFromStaffTitle(staffTitle);
+  const titledStub = (staffTitle || '').trim()
+    ? ({
+        id: '',
+        name: '',
+        title: staffTitle || '',
+        badge: '',
+        email: '',
+        phone: '',
+        responsibleScope: '',
+        group: 'academic' as const,
+      } satisfies AcademicStaff)
+    : null;
+
+  // 職稱已標示主任時，即使誤選教學組／生輔組，仍依處室主任戳章（避免「教學組／主任」）
+  if (titledStub && isDeanAcademicStaff(titledStub) && (role === 'academic' || role === 'dean_academic')) {
+    return { officeLabel: '教務處', titleLabel: fromStaff || '主任' };
+  }
+  if (
+    titledStub &&
+    isDeanStudentStaff({ ...titledStub, group: 'student_affairs' }) &&
+    (role === 'student_affairs' || role === 'dean_student')
+  ) {
+    return { officeLabel: '學務處', titleLabel: fromStaff || '主任' };
+  }
 
   switch (role) {
     case 'dean_academic':
@@ -282,6 +306,25 @@ export function stampOfficeAndTitle(
     default:
       return { officeLabel: PATROL_REVIEW_ROLE_LABELS[role], titleLabel: fromStaff || '核章' };
   }
+}
+
+/** 會辦核章預選角色：主任身分優先於組別 */
+export function preferredStampRole(
+  roles: PatrolReviewRole[],
+  opts?: { preferPrincipal?: boolean }
+): PatrolReviewRole | null {
+  if (!roles.length) return null;
+  if (opts?.preferPrincipal && roles.includes('principal')) return 'principal';
+  const deanOrder: PatrolReviewRole[] = [
+    'dean_academic',
+    'dean_student',
+    'dean_internship',
+    'dean_general_affairs',
+  ];
+  for (const r of deanOrder) {
+    if (roles.includes(r)) return r;
+  }
+  return roles[0];
 }
 
 export const isObservationPatrolKind = (kind: PatrolKind) => kind === 'class' || kind === 'exam';
@@ -679,20 +722,24 @@ export function viewerReviewRoles(params: {
   const group = viewer.staffGroup || 'academic';
   if (group === 'principal') roles.push('principal');
   if (group === 'student_affairs') {
-    roles.push('student_affairs');
+    // 學務主任只走學務主任角色，勿同時當生輔組（戳章會變生輔組／主任）
     if (viewer.staffTitle && isDeanStudentStaff(stub(viewer.staffTitle, 'student_affairs'))) {
       roles.push('dean_student');
+    } else {
+      roles.push('student_affairs');
     }
   }
   if (group === 'academic') {
     const titled = viewer.staffTitle
       ? stub(viewer.staffTitle, 'academic')
       : null;
-    // 實習／總務主任或實習組長：不給教學組／教務核章權，改走下方專屬角色
+    // 實習／總務：不給教學組／教務核章權，改走下方專屬角色
     if (!titled || !isNonAcademicOfficeStaff(titled)) {
-      roles.push('academic');
+      // 教務主任只走教務主任角色，勿同時當教學組（戳章會變教學組／主任）
       if (titled && isDeanAcademicStaff(titled)) {
         roles.push('dean_academic');
+      } else {
+        roles.push('academic');
       }
     }
   }

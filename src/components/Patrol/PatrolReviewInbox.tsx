@@ -13,6 +13,7 @@ import {
   makeSignOff,
   PATROL_REVIEW_ROLE_LABELS,
   PATROL_REVIEW_STATUS_LABELS,
+  preferredStampRole,
   stampOfficeAndTitle,
   viewerReviewRoles,
   weekRangeContaining,
@@ -135,9 +136,10 @@ export const PatrolReviewInbox: React.FC<{
     if (!viewer) return;
     const roles = viewerReviewRoles({ reviewCase: c, viewer });
     if (roles.length === 0) return;
-    const preferred =
-      (showPrincipalTools && roles.includes('principal') ? 'principal' : null) ||
-      roles[0];
+    const preferred = preferredStampRole(roles, {
+      preferPrincipal: Boolean(showPrincipalTools),
+    });
+    if (!preferred) return;
     setStampingId(c.id);
     setStampRole(preferred);
     setStampAction(preferred === 'principal' ? '校長核章' : '閱畢');
