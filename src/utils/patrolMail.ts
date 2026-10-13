@@ -356,6 +356,9 @@ export async function sendPatrolMailTest(params: {
     return { ...json, skippedNoEmail: 0 };
   } catch (err) {
     const msg = err instanceof Error ? err.message : '寄信失敗';
-    return { ok: false, sent: 0, failed: [{ email, error: msg }], skippedNoEmail: 0, error: msg };
+    const hint = /Failed to fetch|NetworkError|Load failed/i.test(msg)
+      ? `${msg}（若「測試寄信 API」正常但寄信失敗：多半是 Render 免費方案封鎖 SMTP 埠，連線逾時被中斷。請升級 Render 付費方案，或改架可寄信的主機）`
+      : msg;
+    return { ok: false, sent: 0, failed: [{ email, error: hint }], skippedNoEmail: 0, error: hint };
   }
 }

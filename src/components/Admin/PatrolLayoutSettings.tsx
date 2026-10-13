@@ -450,6 +450,7 @@ const PatrolMailSettingsPanel: React.FC<{
           <span className="mt-1 block text-[11px] font-normal text-slate-500">
             純靜態站（GitHub Pages）沒有寄信 API。請另用 <code className="font-mono">npm start</code>{' '}
             架 Node，並把該伺服器網址填在此（留空＝打目前網站同源）。
+            若使用 Render：免費方案會封鎖 SMTP（587／465），「測試 API 正常」但仍寄不出；需升級付費方案或改架其他主機。
           </span>
         </label>
         <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">

@@ -120,6 +120,10 @@ app.post("/api/patrol/notify", async (req, res) => {
     secure: Boolean(smtp.secure),
     // 強制 IPv4，避免雲端 ENETUNREACH 2607:f8b0:…（Gmail IPv6）
     family: 4,
+    // 避免 Render Free 封鎖 SMTP 時請求一直掛起，前端只看到 Failed to fetch
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: smtp.user
       ? {
           user: smtp.user,
@@ -146,9 +150,14 @@ app.post("/api/patrol/notify", async (req, res) => {
       sent += 1;
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
-      const error = /ENETUNREACH|EHOSTUNREACH/i.test(raw)
-        ? `${raw}（雲端無法連到該 SMTP；請確認主機／埠，或改用 smtp.gmail.com:587 與應用程式密碼）`
-        : raw;
+      let error = raw;
+      if (/ENETUNREACH|EHOSTUNREACH/i.test(raw)) {
+        error = `${raw}（雲端無法連到該 SMTP；請確認主機／埠）`;
+      } else if (/ETIMEDOUT|Timeout|timeout|ESOCKET/i.test(raw)) {
+        error =
+          `${raw}（連線 SMTP 逾時。若 API 架在 Render 免費方案，對外 25/465/587 埠會被封鎖；` +
+          `請升級為付費方案，或改把寄信 API 架在可寄 SMTP 的主機）`;
+      }
       failed.push({ email, error });
     }
   }
