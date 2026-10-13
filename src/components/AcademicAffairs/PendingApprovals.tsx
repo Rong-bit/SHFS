@@ -6,6 +6,7 @@ import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodCo
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/actingHomeroomPayrollRegister';
 import { ModalShell } from '../Common/ModalShell';
+import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
 import { 
   ClipboardCheck, 
   CheckCircle, 
@@ -41,15 +42,14 @@ export const PendingApprovals: React.FC = () => {
   const [isClearAllConfirmOpen, setIsClearAllConfirmOpen] = useState(false);
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
 
+  const teachingStaff = academicStaffList.filter((s) => isTeachingAffairsWorkbenchStaff(s));
   const activeStaff =
-    (currentAcademicStaff && (currentAcademicStaff.group || 'academic') === 'academic'
+    (currentAcademicStaff && isTeachingAffairsWorkbenchStaff(currentAcademicStaff)
       ? currentAcademicStaff
       : undefined) ||
-    academicStaffList.find((s) => (s.group || 'academic') === 'academic') ||
-    academicStaffList[0];
+    teachingStaff[0];
   const reviewerSignature = (() => {
     if (!activeStaff) return '教學組長';
-    if ((activeStaff.group || 'academic') !== 'academic') return '教學組長';
     const t = activeStaff.title;
     const m = t.match(/^(.+?組).*?\((.+?)\)$/);
     const stamp = m ? `${m[1]}${m[2]}` : t;

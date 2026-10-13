@@ -103,6 +103,14 @@ export function roleForSubunit(subunit: StaffSubunit): UserRole {
   }
 }
 
+/** 派代工作台／審核簽章可用身分：僅教務主任與教學組（不含實習／總務） */
+export function isTeachingAffairsWorkbenchStaff(
+  staff: Pick<AcademicStaff, 'title' | 'group'>
+): boolean {
+  const sub = resolveStaffSubunit(staff, 'academic');
+  return sub === 'academic_dean' || sub === 'teaching';
+}
+
 export function officeMembers(list: AcademicStaff[], subunit: StaffSubunit): AcademicStaff[] {
   switch (subunit) {
     case 'academic_dean':

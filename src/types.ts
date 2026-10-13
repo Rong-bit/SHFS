@@ -443,6 +443,11 @@ export interface PatrolSignOff {
   instruction?: string;
   stampedAt: string;
   stampLabel: string;
+  /**
+   * 職名章左欄職銜（核章當下依職稱寫入）。
+   * 舊資料可能缺此欄，重顯時回退 stampOfficeAndTitle(role)。
+   */
+  stampCaption?: string;
 }
 
 /** 巡堂異常會辦案（與 PatrolRecord 分開同步） */

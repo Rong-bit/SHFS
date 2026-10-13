@@ -162,6 +162,7 @@ export const PatrolReviewInbox: React.FC<{
       action: stampAction,
       instruction: remark,
       schoolName: systemConfig.schoolName,
+      staffTitle: viewer.kind === 'staff' ? viewer.staffTitle : undefined,
     });
     const next = applySignOff(c, signOff, {
       archive: stampAction === '校長核章',
@@ -300,7 +301,13 @@ export const PatrolReviewInbox: React.FC<{
                         className="flex flex-col items-center gap-1"
                       >
                         <ElectronicStamp
-                          {...stampOfficeAndTitle(s.role, s.action)}
+                          {...(() => {
+                            const layout = stampOfficeAndTitle(s.role, s.action);
+                            return {
+                              ...layout,
+                              stampCaption: s.stampCaption || layout.stampCaption,
+                            };
+                          })()}
                           personName={s.personName}
                           size={168}
                         />

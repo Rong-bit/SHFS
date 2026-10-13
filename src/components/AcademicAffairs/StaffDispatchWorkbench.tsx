@@ -54,6 +54,7 @@ import { ModalShell } from '../Common/ModalShell';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
+import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
 import {
   MAX_NOTICE_TABLE_ROWS,
   NoticeTableEditor,
@@ -1450,10 +1451,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const handleBatchApprove = () => {
     if (selectedRequestIds.length === 0) return;
     const academicStaff =
-      (currentAcademicStaff && (currentAcademicStaff.group || 'academic') === 'academic'
+      (currentAcademicStaff && isTeachingAffairsWorkbenchStaff(currentAcademicStaff)
         ? currentAcademicStaff
         : undefined) ||
-      academicStaffList.find((s) => (s.group || 'academic') === 'academic');
+      academicStaffList.find((s) => isTeachingAffairsWorkbenchStaff(s));
     const reviewer = `${academicStaff?.name || '陳雅筑'} (${academicStaff?.title || '教學組'})`;
     const count = batchApproveRequests(selectedRequestIds, reviewer);
     setSelectedRequestIds([]);
@@ -1605,12 +1606,18 @@ export const StaffDispatchWorkbench: React.FC = () => {
             </span>
             <select
               id="select-academic-staff-identity"
-              value={currentAcademicStaffId}
+              value={
+                academicStaffList.some(
+                  (s) => s.id === currentAcademicStaffId && isTeachingAffairsWorkbenchStaff(s)
+                )
+                  ? currentAcademicStaffId
+                  : academicStaffList.find((s) => isTeachingAffairsWorkbenchStaff(s))?.id || ''
+              }
               onChange={(e) => setCurrentAcademicStaffId(e.target.value)}
               className="bg-white text-slate-800 font-bold px-3 py-1 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             >
               {academicStaffList
-                .filter((staff) => (staff.group || 'academic') === 'academic')
+                .filter((staff) => isTeachingAffairsWorkbenchStaff(staff))
                 .map((staff) => (
                   <option key={staff.id} value={staff.id}>
                     {staff.name} ({staff.title} · {staff.phone})
@@ -3260,12 +3267,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               {isPending && (
                                 <button
                                   onClick={() => {
-                                    const academicOnly = academicStaffList.filter(
-                                      (s) => (s.group || 'academic') === 'academic'
+                                    const academicOnly = academicStaffList.filter((s) =>
+                                      isTeachingAffairsWorkbenchStaff(s)
                                     );
                                     const staff =
                                       (currentAcademicStaff &&
-                                      (currentAcademicStaff.group || 'academic') === 'academic'
+                                      isTeachingAffairsWorkbenchStaff(currentAcademicStaff)
                                         ? currentAcademicStaff
                                         : undefined) || academicOnly[0];
                                     const title = staff?.title || '教學組';

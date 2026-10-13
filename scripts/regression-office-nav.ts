@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  isTeachingAffairsWorkbenchStaff,
   officeMembers,
   officeNavActive,
   resolveStaffSubunit,
@@ -81,5 +82,12 @@ assert.equal(
 
 assert.equal(subunitLoginLabel('internship_dean'), '實習處・實習主任');
 assert.equal(subunitLoginLabel('student_section'), '學務處・生輔組');
+
+// 派代工作台不可把實習／總務主任當成教學組經辦
+assert.equal(isTeachingAffairsWorkbenchStaff({ title: '教學組長', group: 'academic' }), true);
+assert.equal(isTeachingAffairsWorkbenchStaff({ title: '教務主任', group: 'academic' }), true);
+assert.equal(isTeachingAffairsWorkbenchStaff({ title: '實習主任', group: 'academic' }), false);
+assert.equal(isTeachingAffairsWorkbenchStaff({ title: '總務主任', group: 'academic' }), false);
+assert.equal(isTeachingAffairsWorkbenchStaff({ title: '出納組長', group: 'accounting' }), false);
 
 console.log('regression-office-nav: OK');

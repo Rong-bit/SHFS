@@ -321,8 +321,16 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       }, 300);
     } else {
       if (target.type === 'role' && target.targetRole === 'academic') {
+        const sub =
+          target.staffSubunit ||
+          resolveStaffSubunit(
+            academicStaffList.find((s) => s.id === selectedStaffId),
+            'academic'
+          ) ||
+          'teaching';
+        const subLabel = subunitLoginLabel(sub);
         setErrorMsg(
-          '教務處教學組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若管理員有改過，請向管理員詢問教學組登入密碼。組員名單也須由管理員在系統參數新增後才會出現。'
+          `${subLabel}「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若管理員有改過，請向管理員詢問。組員名單也須由管理員在成員名冊新增後才會出現。`
         );
       } else if (target.type === 'role' && target.targetRole === 'accounting') {
         setErrorMsg(
