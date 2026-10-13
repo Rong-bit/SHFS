@@ -154,7 +154,7 @@ def write_package_info(out: Path, server_size: int) -> None:
         "server.cjs must be ~1.5MB+ (express bundled).\r\n"
         "server.cjs bytes: %s\r\n"
         "If start fails with Cannot find module express,\r\n"
-        "you have an OLD zip — delete it and re-download.\r\n"
+        "you have an OLD zip - delete it and re-download.\r\n"
         % server_size,
         encoding="ascii",
         newline="\r\n",
