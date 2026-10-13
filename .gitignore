@@ -1,7 +1,9 @@
 node_modules/
 build/
 dist/
+release/
 coverage/
+start-mail-host.log
 .DS_Store
 *.log
 .env*

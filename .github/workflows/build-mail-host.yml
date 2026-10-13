@@ -1,0 +1,60 @@
+name: Build portable mail host (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'server.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/mail_host_runtime.py'
+      - 'scripts/build_portable_mail_host.py'
+      - '.github/workflows/build-mail-host.yml'
+      - 'src/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install and build app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build portable package
+        run: python scripts/build_portable_mail_host.py
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHFS-MailHost-Windows
+          path: release/SHFS-MailHost-Windows.zip
+          if-no-files-found: error
+
+      - name: Upload folder (exe + start.bat)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHFS-MailHost-Folder
+          path: release/SHFS-MailHost/**
+          if-no-files-found: error
