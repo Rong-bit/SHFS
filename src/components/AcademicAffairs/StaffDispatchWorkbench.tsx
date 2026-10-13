@@ -3037,11 +3037,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             .filter(Boolean)
                         ),
                       ];
+                      const primaryDisplay = resolveDisplayClassSubject(req, items);
                       const periodSummary = formatDayPeriodSummary(
-                        items.map((r) => r.originalSession).filter(Boolean),
+                        items.map((r) => {
+                          const d = resolveDisplayClassSubject(r, items);
+                          return { dayOfWeek: d.dayOfWeek, period: d.period };
+                        }),
                         dayNames
                       );
-                      const primaryDisplay = resolveDisplayClassSubject(req, items);
                       const subNames = [
                         ...new Set(
                           items
@@ -3132,7 +3135,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   {primaryDisplay.className} 《{primaryDisplay.subjectName}》
                                 </div>
                                 <div className="text-[11px] text-slate-500 mt-0.5">
-                                  {dayNames[req.originalSession.dayOfWeek]} 第{req.originalSession.period}節
+                                  {dayNames[primaryDisplay.dayOfWeek]} 第{primaryDisplay.period}節
                                 </div>
                               </>
                             ) : (

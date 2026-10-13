@@ -258,4 +258,15 @@ const kept = alignNoticeRowsToRequests(handEdited, [singleReq]);
 assert.equal(kept[0].period, '3', '單列手改節次應原樣保留');
 assert.equal(kept[0].subjectName, '監考');
 
+// 列表節次應跟通知單手改後的節次（課表仍是第5節）
+const periodDisplay = resolveDisplayClassSubject({
+  ...singleReq,
+  noticeRowsCustomized: true,
+  noticeRows: handEdited,
+});
+assert.equal(periodDisplay.period, 3, '列表應顯示通知單第3節而非課表第5節');
+assert.equal(periodDisplay.dayOfWeek, 5);
+assert.equal(periodDisplay.subjectName, '監考');
+assert.equal(periodDisplay.className, '金工二忠');
+
 console.log('regression-notice-display-subject: OK');
