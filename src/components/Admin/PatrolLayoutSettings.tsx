@@ -45,6 +45,10 @@ import {
   readPatrolWorkbook,
 } from '../../utils/patrolExcel';
 import { scheduleClassNames } from '../../utils/patrolSchedule';
+import {
+  probePatrolNotifyApi,
+  sendPatrolMailTest,
+} from '../../utils/patrolMail';
 import { ModalShell } from '../Common/ModalShell';
 
 type ConfirmState = { title: string; message: string; onConfirm: () => void } | null;
@@ -158,7 +162,8 @@ const PatrolMailSettingsPanel: React.FC<{
   onSave: (cfg: PatrolMailConfig) => void;
   observationItems: PatrolCheckItem[];
   checkItems: PatrolCheckItem[];
-}> = ({ value, onSave, observationItems, checkItems }) => {
+  schoolName: string;
+}> = ({ value, onSave, observationItems, checkItems, schoolName }) => {
   const [draft, setDraft] = useState<PatrolMailConfig>(() => ({
     ...emptyMailConfig(),
     ...(value || {}),
@@ -166,6 +171,9 @@ const PatrolMailSettingsPanel: React.FC<{
     itemNotifyGroupIds: value?.itemNotifyGroupIds || {},
   }));
   const [savedHint, setSavedHint] = useState('');
+  const [testTo, setTestTo] = useState('');
+  const [apiHint, setApiHint] = useState('');
+  const [apiBusy, setApiBusy] = useState(false);
 
   React.useEffect(() => {
     setDraft({
@@ -431,6 +439,19 @@ const PatrolMailSettingsPanel: React.FC<{
             className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
           />
         </label>
+        <label className="font-semibold text-slate-600 sm:col-span-2">
+          寄信 API 根網址（GitHub Pages 必填）
+          <input
+            value={draft.notifyApiBaseUrl || ''}
+            onChange={(e) => setDraft({ ...draft, notifyApiBaseUrl: e.target.value })}
+            placeholder="https://your-node-server.example.com"
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+          <span className="mt-1 block text-[11px] font-normal text-slate-500">
+            純靜態站（GitHub Pages）沒有寄信 API。請另用 <code className="font-mono">npm start</code>{' '}
+            架 Node，並把該伺服器網址填在此（留空＝打目前網站同源）。
+          </span>
+        </label>
         <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
           <input
             type="checkbox"
@@ -439,8 +460,18 @@ const PatrolMailSettingsPanel: React.FC<{
           />
           使用 TLS／SSL（通常 Port 465 勾選；587 可不勾）
         </label>
+        <label className="font-semibold text-slate-600 sm:col-span-2">
+          測試收件信箱
+          <input
+            type="email"
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="例：hcj@mail2.ccvs.kh.edu.tw"
+            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+          />
+        </label>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => {
@@ -464,8 +495,60 @@ const PatrolMailSettingsPanel: React.FC<{
         >
           儲存寄信設定
         </button>
+        <button
+          type="button"
+          disabled={apiBusy}
+          onClick={() => {
+            setApiBusy(true);
+            void probePatrolNotifyApi(draft).then((r) => {
+              setApiHint(r.message);
+              setApiBusy(false);
+            });
+          }}
+          className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 disabled:opacity-50"
+        >
+          測試寄信 API
+        </button>
+        <button
+          type="button"
+          disabled={apiBusy}
+          onClick={() => {
+            setApiBusy(true);
+            const cfg: PatrolMailConfig = {
+              ...draft,
+              enabled: true,
+              pass: draft.pass.trim() || value?.pass || '',
+            };
+            void sendPatrolMailTest({
+              mailConfig: cfg,
+              to: testTo,
+              schoolName: schoolName || '學校',
+            }).then((r) => {
+              setApiHint(
+                r.ok
+                  ? `測試信已寄出（${r.sent} 封）→ ${testTo.trim()}`
+                  : `測試寄信失敗：${r.error || '未知錯誤'}`
+              );
+              setApiBusy(false);
+            });
+          }}
+          className="px-4 py-2 rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-900 text-xs font-bold hover:bg-indigo-100 disabled:opacity-50"
+        >
+          寄一封測試信
+        </button>
         {savedHint && <span className="text-xs text-emerald-700 font-semibold">{savedHint}</span>}
       </div>
+      {apiHint && (
+        <p
+          className={`text-xs font-semibold rounded-xl border px-3 py-2 ${
+            apiHint.includes('失敗') || apiHint.includes('未啟動') || apiHint.includes('異常')
+              ? 'text-rose-900 bg-rose-50 border-rose-200'
+              : 'text-emerald-900 bg-emerald-50 border-emerald-200'
+          }`}
+        >
+          {apiHint}
+        </p>
+      )}
     </div>
   );
 };
@@ -871,6 +954,7 @@ export const PatrolLayoutSettings: React.FC = () => {
         value={systemConfig.patrolMailConfig}
         observationItems={observationItems}
         checkItems={checkItems}
+        schoolName={systemConfig.schoolName || '學校'}
         onSave={(patrolMailConfig) => save({ patrolMailConfig })}
       />
 

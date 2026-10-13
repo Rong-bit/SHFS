@@ -12,9 +12,73 @@ import {
 } from './patrolReview';
 import { patrolKindLabel } from './patrolExcel';
 
+export type PatrolNotifyResult = {
+  ok: boolean;
+  sent: number;
+  failed: { email: string; error: string }[];
+  skippedNoEmail: number;
+  error?: string;
+};
+
 export function isPatrolMailConfigured(cfg?: PatrolMailConfig | null): boolean {
   if (!cfg?.enabled) return false;
   return Boolean(cfg.host && cfg.fromEmail && (cfg.user || cfg.fromEmail));
+}
+
+/** 解析巡堂寄信 API 完整 URL */
+export function resolvePatrolNotifyApiUrl(
+  mailConfig?: Pick<PatrolMailConfig, 'notifyApiBaseUrl'> | null
+): string {
+  const custom = (mailConfig?.notifyApiBaseUrl || '').trim().replace(/\/$/, '');
+  if (custom) return `${custom}/api/patrol/notify`;
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/api/patrol/notify`;
+  }
+  return '/api/patrol/notify';
+}
+
+export function resolvePatrolHealthApiUrl(
+  mailConfig?: Pick<PatrolMailConfig, 'notifyApiBaseUrl'> | null
+): string {
+  const custom = (mailConfig?.notifyApiBaseUrl || '').trim().replace(/\/$/, '');
+  if (custom) return `${custom}/api/health`;
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/api/health`;
+  }
+  return '/api/health';
+}
+
+function explainNonJsonApiResponse(status: number, raw: string): string {
+  const trimmed = raw.trim();
+  const looksHtml = /^<!DOCTYPE/i.test(trimmed) || /^<html/i.test(trimmed);
+  if (looksHtml || (trimmed.startsWith('<') && trimmed.includes('<head'))) {
+    return (
+      '寄信 API 未啟動或目前為純靜態網站（如 GitHub Pages），收到網頁而非 JSON。' +
+      '請用「npm run build && npm start」部署 Node 伺服器，或於寄信設定填寫「寄信 API 根網址」。'
+    );
+  }
+  if (!trimmed) return `寄信 API 無回應（HTTP ${status}）`;
+  return `寄信 API 回應無法解析（HTTP ${status}）`;
+}
+
+async function readPatrolNotifyResponse(
+  res: Response
+): Promise<{ json: PatrolNotifyResult & { message?: string }; parseError?: string }> {
+  const raw = await res.text();
+  try {
+    return { json: JSON.parse(raw) as PatrolNotifyResult & { message?: string } };
+  } catch {
+    return {
+      json: {
+        ok: false,
+        sent: 0,
+        failed: [],
+        skippedNoEmail: 0,
+        error: explainNonJsonApiResponse(res.status, raw),
+      },
+      parseError: explainNonJsonApiResponse(res.status, raw),
+    };
+  }
 }
 
 /** 依巡堂類型與選項勾選說明應通知哪些身分 */
@@ -141,14 +205,6 @@ export function buildPatrolNotifyEmail(params: {
   return { subject, text, html };
 }
 
-export type PatrolNotifyResult = {
-  ok: boolean;
-  sent: number;
-  failed: { email: string; error: string }[];
-  skippedNoEmail: number;
-  error?: string;
-};
-
 /** 呼叫本機 server 以 SMTP 寄出會辦通知 */
 export async function sendPatrolReviewNotify(params: {
   mailConfig: PatrolMailConfig;
@@ -177,7 +233,7 @@ export async function sendPatrolReviewNotify(params: {
     notifyRoles: mailConfig.notifyRoles,
   });
   try {
-    const res = await fetch('/api/patrol/notify', {
+    const res = await fetch(resolvePatrolNotifyApiUrl(mailConfig), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -196,7 +252,16 @@ export async function sendPatrolReviewNotify(params: {
         html: body.html,
       }),
     });
-    const json = (await res.json()) as PatrolNotifyResult & { message?: string };
+    const { json, parseError } = await readPatrolNotifyResponse(res);
+    if (parseError) {
+      return {
+        ok: false,
+        sent: 0,
+        failed: unique.map((email) => ({ email, error: parseError })),
+        skippedNoEmail,
+        error: parseError,
+      };
+    }
     if (!res.ok) {
       return {
         ok: false,
@@ -209,12 +274,88 @@ export async function sendPatrolReviewNotify(params: {
     return { ...json, skippedNoEmail: json.skippedNoEmail ?? skippedNoEmail };
   } catch (err) {
     const msg = err instanceof Error ? err.message : '寄信失敗';
+    const hint =
+      /Failed to fetch|NetworkError|Load failed/i.test(msg)
+        ? `${msg}（請確認寄信 API 根網址可連線，且伺服器已允許跨域）`
+        : msg;
     return {
       ok: false,
       sent: 0,
-      failed: unique.map((email) => ({ email, error: msg })),
+      failed: unique.map((email) => ({ email, error: hint })),
       skippedNoEmail,
-      error: msg,
+      error: hint,
     };
+  }
+}
+
+/** 探測寄信 API 是否可用（/api/health） */
+export async function probePatrolNotifyApi(
+  mailConfig?: Pick<PatrolMailConfig, 'notifyApiBaseUrl'> | null
+): Promise<{ ok: boolean; message: string }> {
+  const url = resolvePatrolHealthApiUrl(mailConfig);
+  try {
+    const res = await fetch(url, { method: 'GET' });
+    const raw = await res.text();
+    try {
+      const json = JSON.parse(raw) as { status?: string };
+      if (res.ok && json.status === 'ok') {
+        return { ok: true, message: `寄信 API 正常（${url}）` };
+      }
+      return { ok: false, message: `寄信 API 異常（HTTP ${res.status}）` };
+    } catch {
+      return { ok: false, message: explainNonJsonApiResponse(res.status, raw) };
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '連線失敗';
+    return { ok: false, message: `${msg}（${url}）` };
+  }
+}
+
+/** 以目前 SMTP 設定寄一封測試信 */
+export async function sendPatrolMailTest(params: {
+  mailConfig: PatrolMailConfig;
+  to: string;
+  schoolName: string;
+}): Promise<PatrolNotifyResult> {
+  const { mailConfig, to, schoolName } = params;
+  if (!isPatrolMailConfigured(mailConfig)) {
+    return { ok: false, sent: 0, failed: [], skippedNoEmail: 0, error: '尚未啟用或設定 SMTP' };
+  }
+  const email = to.trim();
+  if (!email.includes('@')) {
+    return { ok: false, sent: 0, failed: [], skippedNoEmail: 0, error: '請填有效測試收件信箱' };
+  }
+  try {
+    const res = await fetch(resolvePatrolNotifyApiUrl(mailConfig), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        smtp: {
+          host: mailConfig.host,
+          port: mailConfig.port,
+          secure: mailConfig.secure,
+          user: mailConfig.user,
+          pass: mailConfig.pass,
+          fromName: mailConfig.fromName || schoolName,
+          fromEmail: mailConfig.fromEmail,
+        },
+        to: [email],
+        subject: `【巡堂寄信測試】${schoolName}`,
+        text: `${schoolName} 巡堂 SMTP 測試信\n時間：${new Date().toLocaleString('zh-TW')}\n若收到此信，表示寄信 API 與 SMTP 設定正常。`,
+        html: `<p>${schoolName} 巡堂 SMTP 測試信</p><p>時間：${new Date().toLocaleString('zh-TW')}</p><p>若收到此信，表示寄信 API 與 SMTP 設定正常。</p>`,
+      }),
+    });
+    const { json, parseError } = await readPatrolNotifyResponse(res);
+    if (parseError) {
+      return { ok: false, sent: 0, failed: [{ email, error: parseError }], skippedNoEmail: 0, error: parseError };
+    }
+    if (!res.ok) {
+      const err = json.error || json.message || `HTTP ${res.status}`;
+      return { ok: false, sent: 0, failed: [{ email, error: err }], skippedNoEmail: 0, error: err };
+    }
+    return { ...json, skippedNoEmail: 0 };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '寄信失敗';
+    return { ok: false, sent: 0, failed: [{ email, error: msg }], skippedNoEmail: 0, error: msg };
   }
 }
