@@ -56,6 +56,7 @@ import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
 import { resolveDisplayClassSubject } from '../../utils/noticeDocument';
+import { resolveStaffEmailForNameChange } from '../../utils/teacherEmailImporter';
 import {
   MAX_NOTICE_TABLE_ROWS,
   NoticeTableEditor,
@@ -243,12 +244,20 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const handleSaveQuickEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (currentAcademicStaff && editName.trim()) {
+      const name = editName.trim();
+      const email = resolveStaffEmailForNameChange({
+        teachers,
+        previousName: currentAcademicStaff.name,
+        nextName: name,
+        currentEmail: currentAcademicStaff.email || '',
+      });
       updateAcademicStaff(currentAcademicStaff.id, {
-        name: editName.trim(),
+        name,
         title: editTitle.trim() || currentAcademicStaff.title,
         phone: editPhone.trim() || currentAcademicStaff.phone,
         badge: editBadge.trim() || currentAcademicStaff.badge,
         responsibleScope: editScope.trim() || currentAcademicStaff.responsibleScope,
+        ...(name !== currentAcademicStaff.name.trim() ? { email } : {}),
       });
       setIsQuickEditOpen(false);
     }
