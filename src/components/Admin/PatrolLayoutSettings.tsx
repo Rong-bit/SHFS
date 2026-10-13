@@ -453,11 +453,10 @@ const PatrolMailSettingsPanel: React.FC<{
               操作時請開 <code className="font-mono bg-white/70 px-1 rounded">http://那台IP:3000</code>
               （不要開 github.io，否則無法寄信）
             </li>
-            <li>下方「寄信 API 根網址」<strong>留空</strong>；SMTP 填 smtp.gmail.com／587</li>
+            <li>SMTP 填 smtp.gmail.com／587；<strong>不必填</strong>寄信 API 根網址</li>
           </ol>
           <p className="text-amber-900/80">
-            GitHub Pages 可繼續當平常瀏覽用；要寄會辦信當天改走校內 :3000。Render 免費方案已封鎖 SMTP，請清空若曾填
-            onrender.com。
+            GitHub Pages 可繼續平常瀏覽；要寄信請改開校內 :3000。若仍留著 https://shfs.onrender.com 請點下方進階設定清空。
           </p>
         </div>
         {typeof window !== 'undefined' &&
@@ -466,19 +465,37 @@ const PatrolMailSettingsPanel: React.FC<{
               目前正從 GitHub Pages 開啟，此處無法寄出會辦信。請改在校內主機開 http://IP:3000 再測試寄信。
             </p>
           )}
-        <label className="font-semibold text-slate-600 sm:col-span-2">
-          寄信 API 根網址（校內同機請留空）
-          <input
-            value={draft.notifyApiBaseUrl || ''}
-            onChange={(e) => setDraft({ ...draft, notifyApiBaseUrl: e.target.value })}
-            placeholder="校內 npm start 同機操作時請留空"
-            className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
-          />
-          <span className="mt-1 block text-[11px] font-normal text-slate-500">
-            從校內 <code className="font-mono">http://IP:3000</code> 進系統時請留空（打同源 API）。
-            僅當網頁與 API 不同網址且皆為 https 時才填。勿填 github.io；勿填 Render 免費站。
-          </span>
-        </label>
+        <details className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-bold text-slate-700 select-none">
+            進階：寄信 API 根網址（校內同機通常不用，請保持空白）
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+              從 <code className="font-mono">http://IP:3000</code> 進系統時請空白（打同源 API）。
+              僅在網頁與 API 不同站且皆為 https 時才需要填。不要填 github.io，也不要填 Render 免費站。
+            </p>
+            <input
+              value={draft.notifyApiBaseUrl || ''}
+              onChange={(e) => setDraft({ ...draft, notifyApiBaseUrl: e.target.value })}
+              placeholder="（空白）"
+              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+            />
+            {(draft.notifyApiBaseUrl || '').toLowerCase().includes('onrender.com') && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2">
+                <span className="text-[11px] font-bold text-rose-800">
+                  偵測到 Render 網址：免費方案無法寄 SMTP，校內主機請清空此欄。
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDraft({ ...draft, notifyApiBaseUrl: '' })}
+                  className="px-2.5 py-1 rounded-lg bg-rose-700 text-white text-[11px] font-bold hover:bg-rose-600"
+                >
+                  清空
+                </button>
+              </div>
+            )}
+          </div>
+        </details>
         <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
           <input
             type="checkbox"
@@ -507,15 +524,24 @@ const PatrolMailSettingsPanel: React.FC<{
               name: g.name.trim() || '未命名群組',
               roles: resolvePatrolNotifyRoles(g.roles),
             }));
+            const rawApi = (draft.notifyApiBaseUrl || '').trim();
+            const clearedRender = /onrender\.com/i.test(rawApi);
+            const notifyApiBaseUrl = clearedRender ? '' : rawApi;
             const next: PatrolMailConfig = {
               ...draft,
+              notifyApiBaseUrl,
               pass: draft.pass.trim() || value?.pass || '',
               notifyGroups: groups,
               itemNotifyGroupIds: sanitizeItemNotifyGroupIds(draft.itemNotifyGroupIds, groups),
               notifyRoles: undefined,
             };
+            if (clearedRender) setDraft({ ...draft, notifyApiBaseUrl: '' });
             onSave(next);
-            setSavedHint('已儲存寄信設定');
+            setSavedHint(
+              clearedRender
+                ? '已儲存（已自動清空 Render 寄信 API 網址）'
+                : '已儲存寄信設定'
+            );
             window.setTimeout(() => setSavedHint(''), 2500);
           }}
           className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500"
