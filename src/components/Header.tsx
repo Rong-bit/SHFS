@@ -48,35 +48,30 @@ export const Header: React.FC = () => {
   const [isSyncJoinOpen, setIsSyncJoinOpen] = useState(false);
   const [isStaffPasswordOpen, setIsStaffPasswordOpen] = useState(false);
   const [uiFontScale, setUiFontScale] = useState<UiFontScale>(() => readUiFontScale());
+  const [academicOfficeOpen, setAcademicOfficeOpen] = useState(false);
   const [generalAffairsOpen, setGeneralAffairsOpen] = useState(false);
+  const academicOfficeRef = useRef<HTMLDivElement>(null);
   const generalAffairsRef = useRef<HTMLDivElement>(null);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
   useEffect(() => {
-    if (!generalAffairsOpen) return;
+    if (!academicOfficeOpen && !generalAffairsOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (!generalAffairsRef.current?.contains(e.target as Node)) {
+      const t = e.target as Node;
+      if (academicOfficeOpen && !academicOfficeRef.current?.contains(t)) {
+        setAcademicOfficeOpen(false);
+      }
+      if (generalAffairsOpen && !generalAffairsRef.current?.contains(t)) {
         setGeneralAffairsOpen(false);
       }
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [generalAffairsOpen]);
+  }, [academicOfficeOpen, generalAffairsOpen]);
 
-  // 順序：教師 → 教務處 → 總務處（出納組）→ 學務處 → 校長 → 系統管理員
-  const roles: { key: UserRole; label: string; icon: React.ReactNode; badge?: number }[] = [
-    {
-      key: 'teacher',
-      label: '教師端',
-      icon: <User className="w-4 h-4" />,
-    },
-    {
-      key: 'academic',
-      label: '教務處',
-      icon: <ClipboardCheck className="w-4 h-4" />,
-      badge: pendingCount > 0 ? pendingCount : undefined,
-    },
+  // 學務處／校長／系統管理員（教師、教務處、總務處另以處室下拉呈現）
+  const flatRoles: { key: UserRole; label: string; icon: React.ReactNode }[] = [
     {
       key: 'student_affairs',
       label: '學務處',
@@ -200,19 +195,123 @@ export const Header: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between border-t border-slate-800/80 py-2 gap-2">
           {/* Role Navigation Pills */}
           <div className="flex items-center space-x-1 sm:space-x-2 overflow-x-auto scrollbar-none">
-            {roles.map((r) => {
+            {/* 教師端 */}
+            <button
+              id="nav-role-teacher"
+              onClick={() => requestRoleSwitchWithAuth('teacher')}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                currentRole === 'teacher'
+                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              <span>教師端</span>
+            </button>
+
+            {/* 教務處 → 教學組 */}
+            <div className="relative" ref={academicOfficeRef}>
+              <button
+                type="button"
+                id="nav-role-academic-office"
+                onClick={() => {
+                  setAcademicOfficeOpen((o) => !o);
+                  setGeneralAffairsOpen(false);
+                }}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                  currentRole === 'academic'
+                    ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+                }`}
+              >
+                <ClipboardCheck className="w-4 h-4" />
+                <span>教務處</span>
+                {pendingCount > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full animate-bounce">
+                    {pendingCount}
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition ${academicOfficeOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {academicOfficeOpen && (
+                <div className="absolute left-0 top-full mt-1 z-50 min-w-[9.5rem] rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1">
+                  <button
+                    type="button"
+                    id="nav-role-academic"
+                    onClick={() => {
+                      setAcademicOfficeOpen(false);
+                      requestRoleSwitchWithAuth('academic');
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
+                      currentRole === 'academic'
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'text-slate-200 hover:bg-slate-800'
+                    }`}
+                  >
+                    <ClipboardCheck className="w-3.5 h-3.5" />
+                    教學組
+                    {pendingCount > 0 && (
+                      <span className="ml-auto px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 總務處 → 出納組 */}
+            <div className="relative" ref={generalAffairsRef}>
+              <button
+                type="button"
+                id="nav-role-general-affairs"
+                onClick={() => {
+                  setGeneralAffairsOpen((o) => !o);
+                  setAcademicOfficeOpen(false);
+                }}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                  currentRole === 'accounting'
+                    ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                <span>總務處</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition ${generalAffairsOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {generalAffairsOpen && (
+                <div className="absolute left-0 top-full mt-1 z-50 min-w-[9.5rem] rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1">
+                  <button
+                    type="button"
+                    id="nav-role-accounting"
+                    onClick={() => {
+                      setGeneralAffairsOpen(false);
+                      requestRoleSwitchWithAuth('accounting');
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
+                      currentRole === 'accounting'
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'text-slate-200 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Calculator className="w-3.5 h-3.5" />
+                    出納組
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {flatRoles.map((r) => {
               const isActive = currentRole === r.key;
-              const node = (
+              return (
                 <button
                   key={r.key}
                   id={`nav-role-${r.key}`}
-                  onClick={() => {
-                    if (r.key === 'teacher') {
-                      requestRoleSwitchWithAuth('teacher');
-                    } else {
-                      requestRoleSwitchWithAuth(r.key);
-                    }
-                  }}
+                  onClick={() => requestRoleSwitchWithAuth(r.key)}
                   className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
                     isActive
                       ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
@@ -221,61 +320,8 @@ export const Header: React.FC = () => {
                 >
                   {r.icon}
                   <span>{r.label}</span>
-                  {r.badge !== undefined && (
-                    <span className="ml-1.5 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full animate-bounce">
-                      {r.badge}
-                    </span>
-                  )}
                 </button>
               );
-              // 教務處後方插入「總務處 → 出納組」
-              if (r.key === 'academic') {
-                const gaActive = currentRole === 'accounting';
-                return (
-                  <React.Fragment key={`${r.key}-with-ga`}>
-                    {node}
-                    <div className="relative" ref={generalAffairsRef}>
-                      <button
-                        type="button"
-                        id="nav-role-general-affairs"
-                        onClick={() => setGeneralAffairsOpen((o) => !o)}
-                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                          gaActive
-                            ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                            : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
-                        }`}
-                      >
-                        <Building2 className="w-4 h-4" />
-                        <span>總務處</span>
-                        <ChevronDown
-                          className={`w-3.5 h-3.5 transition ${generalAffairsOpen ? 'rotate-180' : ''}`}
-                        />
-                      </button>
-                      {generalAffairsOpen && (
-                        <div className="absolute left-0 top-full mt-1 z-50 min-w-[9.5rem] rounded-lg border border-slate-700 bg-slate-900 shadow-xl py-1">
-                          <button
-                            type="button"
-                            id="nav-role-accounting"
-                            onClick={() => {
-                              setGeneralAffairsOpen(false);
-                              requestRoleSwitchWithAuth('accounting');
-                            }}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
-                              gaActive
-                                ? 'bg-amber-500/20 text-amber-300'
-                                : 'text-slate-200 hover:bg-slate-800'
-                            }`}
-                          >
-                            <Calculator className="w-3.5 h-3.5" />
-                            出納組
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </React.Fragment>
-                );
-              }
-              return node;
             })}
           </div>
 
@@ -304,7 +350,7 @@ export const Header: React.FC = () => {
               const group = staffRoleGroup(currentRole);
               const label =
                 currentRole === 'academic'
-                  ? '教務處經辦登入'
+                  ? '教務處・教學組登入'
                   : currentRole === 'accounting'
                     ? '總務處・出納組登入'
                     : currentRole === 'student_affairs'
@@ -380,7 +426,7 @@ export const Header: React.FC = () => {
                 ? '學務處'
                 : currentRole === 'principal'
                   ? '校長室'
-                  : '教務處'
+                  : '教務處（教學組）'
           }
           onSave={(pw) => updateAcademicStaffPassword(currentAcademicStaff.id, pw)}
           onClose={() => setIsStaffPasswordOpen(false)}

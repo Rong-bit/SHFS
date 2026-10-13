@@ -142,11 +142,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
   } else if (target.type === 'role') {
     switch (target.targetRole) {
       case 'academic':
-        targetTitle = targetStaff ? targetStaff.name : '教務處';
+        targetTitle = targetStaff ? targetStaff.name : '教務處・教學組';
         targetSubtitle = targetStaff
           ? `${targetStaff.title} · ${targetStaff.responsibleScope}`
-          : '請先選擇教務處組長或組員身分';
-        targetBadge = targetStaff?.title || '教務處行政權限';
+          : '請先選擇教學組組長或組員身分';
+        targetBadge = targetStaff?.title || '教學組行政權限';
         expectedPassword =
           targetStaff?.password || auth.academicPassword || '1234';
         hint = targetStaff?.password
@@ -218,7 +218,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
   const handleVerify = async (inputPassToTest?: string) => {
     if (target.type === 'role' && target.targetRole === 'academic' && !selectedStaffId) {
-      setErrorMsg('請先選擇教務處組長或組員身分');
+      setErrorMsg('請先選擇教務處教學組組長或組員身分');
       return;
     }
     if (target.type === 'role' && target.targetRole === 'accounting') {
@@ -278,7 +278,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     } else {
       if (target.type === 'role' && target.targetRole === 'academic') {
         setErrorMsg(
-          '教學組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若管理員有改過，請向管理員詢問教學組登入密碼。組員名單也須由管理員在系統參數新增後才會出現。'
+          '教務處教學組「登入密碼」錯誤（不是學校同步密碼）。預設多為 1234；若管理員有改過，請向管理員詢問教學組登入密碼。組員名單也須由管理員在系統參數新增後才會出現。'
         );
       } else if (target.type === 'role' && target.targetRole === 'accounting') {
         setErrorMsg(
@@ -372,7 +372,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   ? '學務處'
                   : group === 'principal'
                     ? '校長室'
-                    : '教務處';
+                    : '教務處・教學組';
             const groupMembers = academicStaffList.filter((s) => (s.group || 'academic') === group);
             if (groupMembers.length === 0) {
               return (

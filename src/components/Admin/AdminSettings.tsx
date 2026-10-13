@@ -2501,7 +2501,7 @@ export const AdminSettings: React.FC = () => {
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 font-mono font-bold text-slate-900 text-sm"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  切換至【教務處】時的組別預設密碼；組員登入後可自行設定個人密碼（未設個人密碼時才用此預設）。
+                  切換至【教務處・教學組】時的組別預設密碼；組員登入後可自行設定個人密碼（未設個人密碼時才用此預設）。
                 </p>
               </div>
 
