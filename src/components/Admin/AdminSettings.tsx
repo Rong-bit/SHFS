@@ -2588,7 +2588,7 @@ export const AdminSettings: React.FC = () => {
                   </span>
                 </label>
                 <p className="text-[10px] text-slate-500 mb-1.5 leading-relaxed">
-                  已開雲端同步時，此密碼會隨「學校同步密碼」同步到其他電腦（處室角色密碼亦同）。各教師個人密碼不會上傳。
+                  已開雲端同步時，此密碼會隨「學校同步密碼」同步到其他電腦（處室角色、教師個人密碼、SMTP 亦同）。
                 </p>
                 <div className="relative">
                   <input
