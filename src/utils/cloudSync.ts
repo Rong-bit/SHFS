@@ -140,9 +140,13 @@ const buildEndpoint = async (settings: CloudSyncSettings) => {
   return `${base}/shfs/${id}.json`;
 };
 
-/** 上傳前剝除登入密文：教師／組員密碼、角色密碼與 SMTP 密碼不進雲端 */
+/**
+ * 上傳前剝除僅應留本機的密文：
+ * - 各教師／組員「個人」登入密碼
+ * - SMTP 寄信密碼
+ * 管理員／處室角色密碼與預設教師密碼會進雲端（同同步密碼的電腦共用）。
+ */
 export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchoolData => {
-  const auth = data.systemConfig?.authConfig;
   const mail = data.systemConfig?.patrolMailConfig;
   return {
     ...data,
@@ -156,17 +160,7 @@ export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchool
     }),
     systemConfig: {
       ...data.systemConfig,
-      authConfig: auth
-        ? {
-            requirePassword: auth.requirePassword !== false,
-            defaultTeacherPassword: '',
-            adminPassword: '',
-            academicPassword: '',
-            accountingPassword: '',
-            studentAffairsPassword: '',
-            principalPassword: '',
-          }
-        : undefined,
+      // authConfig（含 adminPassword 等角色密碼）原樣上傳，供全校同步
       patrolMailConfig: mail
         ? {
             ...mail,
@@ -178,8 +172,8 @@ export const stripSecretsFromSharedData = (data: SharedSchoolData): SharedSchool
 };
 
 /**
- * 拉取後併回本機密文，避免雲端空密碼覆寫本機設定。
- * requirePassword 仍採雲端（全校政策可同步）。
+ * 拉取後併回本機專用密文（個人密碼、SMTP），避免雲端空值覆寫。
+ * 角色登入密碼：雲端有值則採雲端（同同步密碼＝相同管理員／處室密碼）。
  */
 export const mergeLocalSecretsIntoRemote = (
   remote: SharedSchoolData,
@@ -196,6 +190,10 @@ export const mergeLocalSecretsIntoRemote = (
   );
   const remoteAuth = remote.systemConfig?.authConfig;
   const remoteMail = remote.systemConfig?.patrolMailConfig;
+  const pickRolePwd = (remoteVal?: string, localVal?: string, fallback = '') =>
+    (remoteVal && String(remoteVal).trim()) ||
+    (localVal && String(localVal).trim()) ||
+    fallback;
   return {
     ...remote,
     teachers: (remote.teachers || []).map((t) => ({
@@ -210,19 +208,32 @@ export const mergeLocalSecretsIntoRemote = (
       ...remote.systemConfig,
       authConfig: {
         requirePassword: remoteAuth?.requirePassword ?? localAuth?.requirePassword ?? true,
-        defaultTeacherPassword:
-          localAuth?.defaultTeacherPassword ||
-          remoteAuth?.defaultTeacherPassword ||
-          '1234',
-        adminPassword: localAuth?.adminPassword || remoteAuth?.adminPassword || '',
-        academicPassword:
-          localAuth?.academicPassword || remoteAuth?.academicPassword || '1234',
-        accountingPassword:
-          localAuth?.accountingPassword || remoteAuth?.accountingPassword || '1234',
-        studentAffairsPassword:
-          localAuth?.studentAffairsPassword || remoteAuth?.studentAffairsPassword || '',
-        principalPassword:
-          localAuth?.principalPassword || remoteAuth?.principalPassword || '',
+        defaultTeacherPassword: pickRolePwd(
+          remoteAuth?.defaultTeacherPassword,
+          localAuth?.defaultTeacherPassword,
+          '1234'
+        ),
+        adminPassword: pickRolePwd(remoteAuth?.adminPassword, localAuth?.adminPassword, ''),
+        academicPassword: pickRolePwd(
+          remoteAuth?.academicPassword,
+          localAuth?.academicPassword,
+          '1234'
+        ),
+        accountingPassword: pickRolePwd(
+          remoteAuth?.accountingPassword,
+          localAuth?.accountingPassword,
+          '1234'
+        ),
+        studentAffairsPassword: pickRolePwd(
+          remoteAuth?.studentAffairsPassword,
+          localAuth?.studentAffairsPassword,
+          ''
+        ),
+        principalPassword: pickRolePwd(
+          remoteAuth?.principalPassword,
+          localAuth?.principalPassword,
+          ''
+        ),
       },
       patrolMailConfig: remoteMail
         ? {
