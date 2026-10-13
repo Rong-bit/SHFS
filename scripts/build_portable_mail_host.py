@@ -35,14 +35,37 @@ NODE_ZIP_URL = (
 
 def run(cmd: list[str]) -> None:
     print(">>", " ".join(cmd), flush=True)
-    subprocess.run(cmd, cwd=str(ROOT), check=True)
+    # Windows: npm is npm.cmd — CreateProcess needs shell=True
+    use_shell = sys.platform.startswith("win")
+    subprocess.run(cmd, cwd=str(ROOT), check=True, shell=use_shell)
+
+
+def _assert_portable_server(server: Path, index: Path) -> None:
+    if not server.is_file() or not index.is_file():
+        raise RuntimeError("portable build missing dist/server.cjs or index.html")
+    size = server.stat().st_size
+    print("dist/server.cjs size:", size)
+    # Bundled express/nodemailer is ~1MB+; external-only builds are tiny
+    if size < 50_000:
+        raise RuntimeError(
+            "dist/server.cjs looks too small; express may still be external "
+            "(use npm run build:portable)"
+        )
 
 
 def ensure_dist() -> None:
     """
-    Frontend via vite; server.cjs MUST bundle express/nodemailer/dotenv
+    Prefer dist/ from a prior `npm run build:portable` (Actions does this).
+    Otherwise install + build. server.cjs MUST bundle express/nodemailer
     (no node_modules in the portable zip).
     """
+    server = ROOT / "dist" / "server.cjs"
+    index = ROOT / "dist" / "index.html"
+    if server.is_file() and index.is_file():
+        print("dist/ already present")
+        _assert_portable_server(server, index)
+        return
+
     print("Installing deps / building portable dist ...")
     if (ROOT / "package-lock.json").is_file():
         run(["npm", "ci"])
@@ -50,21 +73,7 @@ def ensure_dist() -> None:
         run(["npm", "install"])
     # vite assets + fully-bundled server (not --packages=external)
     run(["npm", "run", "build:portable"])
-    server = ROOT / "dist" / "server.cjs"
-    index = ROOT / "dist" / "index.html"
-    if not server.is_file() or not index.is_file():
-        raise RuntimeError("portable build missing dist/server.cjs or index.html")
-    # sanity: bundled file should mention express code, not only require('express')
-    text = server.read_text(encoding="utf-8", errors="ignore")
-    if "Cannot find module" in text:
-        pass
-    if "require(\"express\")" in text or "require('express')" in text:
-        # still ok if also bundled; warn only when tiny
-        if server.stat().st_size < 50_000:
-            raise RuntimeError(
-                "dist/server.cjs looks too small; express may still be external"
-            )
-    print("dist/server.cjs size:", server.stat().st_size)
+    _assert_portable_server(server, index)
 
 
 def download_node(dest_dir: Path) -> Path:
