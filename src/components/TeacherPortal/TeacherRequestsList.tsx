@@ -7,6 +7,7 @@ import { formatDayPeriodSummary } from '../../utils/periodLabels';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { exportNoticesToExcel } from '../../utils/noticeExcel';
+import { resolveDisplayClassSubject } from '../../utils/noticeDocument';
 import { 
   Printer, 
   Trash2, 
@@ -215,8 +216,10 @@ export const TeacherRequestsList: React.FC = () => {
               ...new Set(
                 items
                   .map((r) => {
-                    const s = r.originalSession;
-                    return s ? `${s.className} 《${s.subjectName}》` : '';
+                    const d = resolveDisplayClassSubject(r, items);
+                    return d.className || d.subjectName
+                      ? `${d.className} 《${d.subjectName}》`
+                      : '';
                   })
                   .filter(Boolean)
               ),
@@ -225,6 +228,7 @@ export const TeacherRequestsList: React.FC = () => {
               items.map((r) => r.originalSession).filter(Boolean),
               dayNames
             );
+            const primaryDisplay = resolveDisplayClassSubject(req, items);
             const subNames = [
               ...new Set(
                 items
@@ -309,7 +313,7 @@ export const TeacherRequestsList: React.FC = () => {
                   {items.length === 1 ? (
                     <>
                       <div className="font-bold text-slate-800 text-sm">
-                        {req.originalSession.className} · 《{req.originalSession.subjectName}》
+                        {primaryDisplay.className} · 《{primaryDisplay.subjectName}》
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
                         {dayNames[req.originalSession.dayOfWeek]} {getPeriodLabel(req.originalSession.period)}
