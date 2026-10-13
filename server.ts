@@ -1,3 +1,4 @@
+import dns from "dns";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -5,6 +6,13 @@ import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
 dotenv.config();
+
+// Render 等雲端常無可用 IPv6，連 Gmail:587 會 ENETUNREACH；優先走 IPv4
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {
+  // Node 舊版無此 API 時略過
+}
 
 const app = express();
 /** Render／雲端會注入 PORT；本機預設 3000 */
@@ -110,6 +118,8 @@ app.post("/api/patrol/notify", async (req, res) => {
     host: smtp.host,
     port,
     secure: Boolean(smtp.secure),
+    // 強制 IPv4，避免雲端 ENETUNREACH 2607:f8b0:…（Gmail IPv6）
+    family: 4,
     auth: smtp.user
       ? {
           user: smtp.user,
@@ -135,10 +145,11 @@ app.post("/api/patrol/notify", async (req, res) => {
       });
       sent += 1;
     } catch (err) {
-      failed.push({
-        email,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const raw = err instanceof Error ? err.message : String(err);
+      const error = /ENETUNREACH|EHOSTUNREACH/i.test(raw)
+        ? `${raw}（雲端無法連到該 SMTP；請確認主機／埠，或改用 smtp.gmail.com:587 與應用程式密碼）`
+        : raw;
+      failed.push({ email, error });
     }
   }
 
