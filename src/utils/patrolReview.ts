@@ -54,10 +54,16 @@ export const EMPTY_PATROL_NOTIFY_ROLES: PatrolNotifyRoles = {
   dean_general_affairs: false,
 };
 
+/**
+ * 解析通知身分勾選。
+ * - 未傳入（null/undefined）→ 舊預設六項全開（相容舊呼叫）
+ * - 有傳入（含群組 roles）→ 缺欄視為未勾選，避免殘缺物件被 DEFAULT 放大收件
+ */
 export function resolvePatrolNotifyRoles(
   partial?: Partial<PatrolNotifyRoles> | null
 ): PatrolNotifyRoles {
-  return { ...DEFAULT_PATROL_NOTIFY_ROLES, ...(partial || {}) };
+  if (partial == null) return { ...DEFAULT_PATROL_NOTIFY_ROLES };
+  return { ...EMPTY_PATROL_NOTIFY_ROLES, ...partial };
 }
 
 export function newPatrolNotifyGroupId(): string {
@@ -478,7 +484,8 @@ function uniqRecipients(list: PatrolReviewRecipient[]): PatrolReviewRecipient[] 
 /**
  * 解析異常會辦收件名單。
  * 段考不含任課老師；其餘類型有任課老師時一併通知。
- * 可依 notifyRoles（選項勾選）過濾身分；未傳入視為全開。
+ * 可依 notifyRoles（選項勾選）過濾身分；未傳入（null/undefined）視為舊預設全開。
+ * 若有傳入物件，缺欄＝未勾選（勿只傳 { dean_academic: true } 卻期待其餘仍開）。
  */
 export function resolvePatrolReviewRecipients(params: {
   record: PatrolRecord;

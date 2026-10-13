@@ -329,6 +329,17 @@ export const STORAGE_KEYS = {
   STAFF_LIST: 'voc_academic_staff_v1',
 };
 
+/** localStorage JSON；損毀時回傳 fallback，避免白屏 */
+function safeLocalJson<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    if (!saved) return fallback;
+    return JSON.parse(saved) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentRole, setCurrentRole] = useState<UserRole>(() => {
     // 重整不還原教務／出納／管理員，避免略過密碼門檻；僅教師可持久化
@@ -343,9 +354,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [academicStaffList, setAcademicStaffList] = useState<AcademicStaff[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.STAFF_LIST);
-    const list: AcademicStaff[] = saved ? JSON.parse(saved) : INITIAL_ACADEMIC_STAFF;
-    return normalizePeopleEmails(list);
+    const list = safeLocalJson<AcademicStaff[]>(STORAGE_KEYS.STAFF_LIST, INITIAL_ACADEMIC_STAFF);
+    return normalizePeopleEmails(Array.isArray(list) ? list : INITIAL_ACADEMIC_STAFF);
   });
 
   const [currentAcademicStaffId, setCurrentAcademicStaffId] = useState<string>(() => {
@@ -354,11 +364,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.TEACHERS);
-    const list: Teacher[] = saved ? JSON.parse(saved) : INITIAL_TEACHERS;
+    const rawTeachers = safeLocalJson<Teacher[]>(STORAGE_KEYS.TEACHERS, INITIAL_TEACHERS);
+    const list = Array.isArray(rawTeachers) ? rawTeachers : INITIAL_TEACHERS;
     const withEmail = normalizePeopleEmails(list);
-    const savedSessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-    const sessionList: CourseSession[] = savedSessions ? JSON.parse(savedSessions) : INITIAL_SESSIONS;
+    const rawSessions = safeLocalJson<CourseSession[]>(STORAGE_KEYS.SESSIONS, INITIAL_SESSIONS);
+    const sessionList = Array.isArray(rawSessions) ? rawSessions : INITIAL_SESSIONS;
     let basePeriods = normalizeStandardBasePeriods(INITIAL_SYSTEM_CONFIG.standardBasePeriods);
     let homeroomSlot = resolveHomeroomSlot(INITIAL_SYSTEM_CONFIG);
     try {
@@ -386,13 +396,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [venues, setVenues] = useState<WorkshopVenue[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.VENUES);
-    return saved ? JSON.parse(saved) : INITIAL_VENUES;
+    const list = safeLocalJson<WorkshopVenue[]>(STORAGE_KEYS.VENUES, INITIAL_VENUES);
+    return Array.isArray(list) ? list : INITIAL_VENUES;
   });
 
   const [sessions, setSessions] = useState<CourseSession[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-    const list: CourseSession[] = saved ? JSON.parse(saved) : INITIAL_SESSIONS;
+    const raw = safeLocalJson<CourseSession[]>(STORAGE_KEYS.SESSIONS, INITIAL_SESSIONS);
+    const list = Array.isArray(raw) ? raw : INITIAL_SESSIONS;
     return list.map((s) => ({
       ...s,
       isPractical:
@@ -403,8 +413,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [requests, setRequests] = useState<SubstituteRequest[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.REQUESTS);
-    const list: SubstituteRequest[] = saved ? JSON.parse(saved) : INITIAL_REQUESTS;
+    const raw = safeLocalJson<SubstituteRequest[]>(STORAGE_KEYS.REQUESTS, INITIAL_REQUESTS);
+    const list = Array.isArray(raw) ? raw : INITIAL_REQUESTS;
     return list.map((r) =>
       sanitizeActingHomeroomOnlyClashStatus({
         ...r,
