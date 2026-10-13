@@ -500,6 +500,9 @@ assert.equal(deanStampLayout.stampCaption, '教師兼教務主任');
 const principalStampLayout = stampOfficeAndTitle('principal', '校長核章');
 assert.equal(principalStampLayout.titleLabel, '校長');
 assert.equal(principalStampLayout.stampCaption, '校長', '校長不加「教師兼」');
+const subjectTeacherStamp = stampOfficeAndTitle('subject_teacher', '閱畢');
+assert.equal(subjectTeacherStamp.stampCaption, '教師', '任課老師戳章為「教師」＋姓名');
+assert.equal(stampOfficeAndTitle('homeroom', '閱畢').stampCaption, '導師');
 // 其他主任／組長同「教師兼…」
 assert.equal(stampOfficeAndTitle('dean_student', '閱畢').stampCaption, '教師兼學務主任');
 assert.equal(stampOfficeAndTitle('dean_internship', '閱畢').stampCaption, '教師兼實習主任');

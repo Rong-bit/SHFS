@@ -302,7 +302,7 @@ export function stampCaptionFromRole(
     case 'homeroom':
       return '導師';
     case 'subject_teacher':
-      return '任課教師';
+      return '教師';
     default:
       return PATROL_REVIEW_ROLE_LABELS[role] || '核章';
   }
