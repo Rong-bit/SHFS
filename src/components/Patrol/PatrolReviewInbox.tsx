@@ -286,19 +286,25 @@ export const PatrolReviewInbox: React.FC<{
                 </div>
 
                 {c.signOffs.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-3 border-t border-slate-100 pt-3">
+                  <div className="mt-3 flex flex-wrap gap-4 border-t border-slate-100 pt-3">
                     {c.signOffs.map((s) => (
-                      <div key={`${s.role}-${s.personId}-${s.stampedAt}`} className="flex items-center gap-2">
+                      <div
+                        key={`${s.role}-${s.personId}-${s.stampedAt}`}
+                        className="flex flex-col items-center gap-1"
+                      >
                         <ElectronicStamp
                           {...stampOfficeAndTitle(s.role, s.action)}
                           personName={s.personName}
                           size={140}
                         />
-                        <div className="text-[11px] text-slate-600">
-                          <div className="font-bold text-slate-800">{s.personName}</div>
-                          <div>{s.action}</div>
-                          {s.instruction && <div className="text-amber-800">指示：{s.instruction}</div>}
+                        <div className="text-[11px] text-center text-slate-700 font-bold">
+                          {s.action}
                         </div>
+                        {s.instruction && (
+                          <div className="text-[10px] text-amber-800 text-center max-w-[10rem]">
+                            指示：{s.instruction}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -364,12 +370,20 @@ export const PatrolReviewInbox: React.FC<{
                 />
               </label>
             )}
-            <div className="flex justify-center py-2">
+            <div className="flex flex-col items-center gap-1.5 py-2">
               <ElectronicStamp
-                {...stampOfficeAndTitle(stampRole, stampRole === 'principal' ? '核章' : stampAction)}
+                {...stampOfficeAndTitle(
+                  stampRole,
+                  stampAction,
+                  viewer.kind === 'staff' ? viewer.staffTitle : undefined
+                )}
                 personName={viewer.name}
                 size={200}
               />
+              <div className="text-sm font-extrabold text-slate-900 tracking-wide">
+                {stampAction}
+              </div>
+              <div className="text-[11px] text-slate-500">{viewer.name}</div>
             </div>
             <div className="flex justify-end gap-2">
               <button

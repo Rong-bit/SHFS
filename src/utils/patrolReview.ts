@@ -228,43 +228,59 @@ export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
   'principal',
 ];
 
-/** 長方紅戳：左上處室、左下職稱／動作（仿實物原子章） */
+/** 自成員職稱字串萃取戳章用短職稱（左下欄） */
+export function stampTitleFromStaffTitle(staffTitle?: string | null): string | null {
+  const t = (staffTitle || '').trim();
+  if (!t) return null;
+  if (/校長/.test(t)) return '校長';
+  if (/主任/.test(t) && !/科主任/.test(t)) return '主任';
+  if (/科主任/.test(t)) return '科主任';
+  if (/組長/.test(t)) return '組長';
+  if (/助理/.test(t)) return '助理';
+  if (/組員|幹事/.test(t)) return '組員';
+  if (/導師/.test(t)) return '導師';
+  if (/教師|老師/.test(t)) return '教師';
+  // 過長職稱不硬塞進戳章
+  if ([...t].length <= 4) return t;
+  return null;
+}
+
+/**
+ * 長方紅戳：左上處室、左下職稱、右側姓名（仿實物原子章）。
+ * 「會畢／閱畢／校長核章」屬動作，應顯示在戳章下方，不進戳章左下欄。
+ * @param _action 保留相容舊呼叫；不再寫入 titleLabel
+ * @param staffTitle 登入者職稱（如教學組長），可精準帶入左下職稱
+ */
 export function stampOfficeAndTitle(
   role: PatrolReviewRole,
-  action?: PatrolSignOffAction | string
+  _action?: PatrolSignOffAction | string,
+  staffTitle?: string | null
 ): { officeLabel: string; titleLabel: string } {
-  const actionTitle =
-    action === '校長核章' || action === '核章'
-      ? '核章'
-      : action === '會畢' || action === '已會畢'
-        ? '會畢'
-        : action === '閱畢' || action === '已閱畢'
-          ? '閱畢'
-          : (action || '').replace(/^已/, '') || '核章';
+  const fromStaff = stampTitleFromStaffTitle(staffTitle);
 
   switch (role) {
     case 'dean_academic':
-      return { officeLabel: '教務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+      return { officeLabel: '教務處', titleLabel: fromStaff || '主任' };
     case 'dean_student':
-      return { officeLabel: '學務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+      return { officeLabel: '學務處', titleLabel: fromStaff || '主任' };
     case 'dean_internship':
-      return { officeLabel: '實習處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+      return { officeLabel: '實習處', titleLabel: fromStaff || '主任' };
     case 'dean_general_affairs':
-      return { officeLabel: '總務處', titleLabel: actionTitle === '核章' ? '主任' : actionTitle };
+      return { officeLabel: '總務處', titleLabel: fromStaff || '主任' };
     case 'student_affairs':
-      return { officeLabel: '生輔組', titleLabel: actionTitle };
+      return { officeLabel: '生輔組', titleLabel: fromStaff || '組長' };
     case 'academic':
-      return { officeLabel: '教學組', titleLabel: actionTitle };
+      return { officeLabel: '教學組', titleLabel: fromStaff || '組長' };
     case 'internship':
-      return { officeLabel: '實習組', titleLabel: actionTitle };
+      return { officeLabel: '實習組', titleLabel: fromStaff || '組長' };
     case 'principal':
-      return { officeLabel: '校長室', titleLabel: actionTitle === '閱畢' || actionTitle === '會畢' ? actionTitle : '核章' };
+      return { officeLabel: '校長室', titleLabel: fromStaff || '校長' };
     case 'homeroom':
-      return { officeLabel: '導師', titleLabel: actionTitle };
+      return { officeLabel: '導師', titleLabel: fromStaff || '導師' };
     case 'subject_teacher':
-      return { officeLabel: '任課', titleLabel: actionTitle };
+      return { officeLabel: '任課', titleLabel: fromStaff || '教師' };
     default:
-      return { officeLabel: PATROL_REVIEW_ROLE_LABELS[role], titleLabel: actionTitle };
+      return { officeLabel: PATROL_REVIEW_ROLE_LABELS[role], titleLabel: fromStaff || '核章' };
   }
 }
 

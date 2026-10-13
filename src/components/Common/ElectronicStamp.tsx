@@ -6,9 +6,9 @@ const STAMP_KAI =
   '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", "Noto Serif TC", serif';
 
 type ElectronicStampProps = {
-  /** 左上處室／單位，如 會計室、生輔組 */
+  /** 左上處室／單位，如 會計室、生輔組、教學組 */
   officeLabel: string;
-  /** 左下職稱或動作，如 主任、會畢、閱畢 */
+  /** 左下職稱，如 主任、組長（勿放會畢／閱畢；動作應在戳章外顯示） */
   titleLabel: string;
   /** 右側姓名 */
   personName: string;
@@ -25,7 +25,7 @@ type ElectronicStampProps = {
 
 /**
  * 長方紅框電子戳章（仿實物原子章）
- * 左上處室、左下職稱／動作、右側姓名
+ * 左上處室、左下職稱、右側姓名；會畢／閱畢請顯示於戳章下方
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   officeLabel,
