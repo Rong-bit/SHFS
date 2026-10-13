@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, NonTeachingDay, TemporaryScheduleMove, PartialNonTeachingDay } from '../../types';
+import { SystemConfig, WorkshopVenue, Teacher, DepartmentType, TeacherTitle, AcademicStaff, AcademicStaffGroup, NonTeachingDay, TemporaryScheduleMove, PartialNonTeachingDay } from '../../types';
 import {
   countNonTeachingDaysOutsideAcademicYear,
   fetchNationalHolidaysForAcademicYear,
@@ -198,25 +198,60 @@ const STAFF_TITLE_PRESETS: Record<string, { badge: string; responsibleScope: str
   },
 };
 
-const STAFF_GROUP_TITLE_OPTIONS: Record<
-  'academic' | 'accounting' | 'student_affairs' | 'principal',
-  string[]
-> = {
-  academic: ['教務主任', '教學組長', '實習主任', '實習組長', '總務主任', '教學組組員', '教學組助理'],
+/**
+ * 新增成員「所屬組別」採處室視角（與頂欄導覽一致）；
+ * 實習處／總務主任仍存 group=academic，靠職稱分流。
+ */
+type StaffFormOffice =
+  | 'academic'
+  | 'internship'
+  | 'general'
+  | 'accounting'
+  | 'student_affairs'
+  | 'principal';
+
+const STAFF_OFFICE_TITLE_OPTIONS: Record<StaffFormOffice, string[]> = {
+  academic: ['教務主任', '教學組長', '教學組組員', '教學組助理'],
+  internship: ['實習主任', '實習組長'],
+  general: ['總務主任'],
   accounting: ['出納組長', '出納組組員'],
   student_affairs: ['學務主任', '生輔組長'],
   principal: ['校長'],
 };
 
-const STAFF_GROUP_DEFAULT_TITLE: Record<
-  'academic' | 'accounting' | 'student_affairs' | 'principal',
-  string
-> = {
+const STAFF_OFFICE_STORAGE_GROUP: Record<StaffFormOffice, AcademicStaffGroup> = {
+  academic: 'academic',
+  internship: 'academic',
+  general: 'academic',
+  accounting: 'accounting',
+  student_affairs: 'student_affairs',
+  principal: 'principal',
+};
+
+const STAFF_OFFICE_DEFAULT_TITLE: Record<StaffFormOffice, string> = {
   academic: '教學組長',
+  internship: '實習主任',
+  general: '總務主任',
   accounting: '出納組長',
   student_affairs: '生輔組長',
   principal: '校長',
 };
+
+/** 依職稱／儲存組別回推表單處室（編輯舊資料用） */
+function resolveStaffFormOffice(staff: {
+  group?: AcademicStaffGroup | string | null;
+  title?: string | null;
+}): StaffFormOffice {
+  const t = (staff.title || '').trim();
+  if (/實習主任|實習組長|實習組/.test(t)) return 'internship';
+  if (/總務主任/.test(t)) return 'general';
+  if ((staff.group || '') === 'accounting' || /出納/.test(t)) return 'accounting';
+  if ((staff.group || '') === 'student_affairs' || /學務主任|生輔/.test(t)) return 'student_affairs';
+  if ((staff.group || '') === 'principal' || (/校長/.test(t) && !/主任|組長/.test(t))) {
+    return 'principal';
+  }
+  return 'academic';
+}
 
 /** 行事曆分頁立即存檔的欄位；其他分頁按儲存時一律沿用已存值 */
 const CALENDAR_KEYS: readonly (keyof SystemConfig)[] = [
@@ -831,7 +866,7 @@ export const AdminSettings: React.FC = () => {
 
   const handleOpenAddStaff = () => {
     setEditingStaff(null);
-    const title = STAFF_GROUP_DEFAULT_TITLE.academic;
+    const title = STAFF_OFFICE_DEFAULT_TITLE.academic;
     const preset = STAFF_TITLE_PRESETS[title];
     setStaffFormData({
       name: '',
@@ -3233,8 +3268,7 @@ export const AdminSettings: React.FC = () => {
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 此處設定之人員姓名與職稱，將即時同步連動至各組對應的作業畫面：教學組連動「經辦切換選單、派代工作台、調代課簽章審核、代課通知單」；出納組連動「鐘點費結算清冊」；生輔組／學務／實習／總務／校長連動「巡堂異常會辦與核章」。
-                巡堂會辦收件人來自本名冊（非「全校教師師資名冊」）：新增成員時用職稱下拉選
-                教務主任、教學組長、實習主任、實習組長、生輔組長、學務主任、總務主任、校長等。
+                巡堂會辦收件人來自本名冊（非「全校教師師資名冊」）：新增時先選處室（教務處／實習處／總務處／學務處／出納組／校長室），再選職稱。
                 若該人已在師資名冊有信箱（或已批次匯入），姓名對上後會自動帶入，不必重複輸入。
               </p>
             </div>
@@ -3335,7 +3369,7 @@ export const AdminSettings: React.FC = () => {
                 點選上方「修改組員姓名/資料」按鈕即可直接更換教學組或出納組組長、組員的姓名。修改後將即時同步於全校調代課經辦簽章與代課通知單中。
               </p>
               <p>
-                巡堂異常會辦請用下方「新增成員」＋職稱下拉：教學組可選教務主任／教學組長／實習主任／實習組長／總務主任；生輔組／學務可選學務主任／生輔組長；校長室選校長。填好公務信箱後，異常會辦即可寄信給這些人。全校教師師資名冊不會作為會辦收件依據。
+                巡堂異常會辦請用下方「新增成員」：所屬處室選「實習處」即可選實習主任／實習組長；「總務處」選總務主任；「教務處」選教務主任／教學組長等。填好公務信箱後，異常會辦即可寄信（實習／總務另需於巡堂寄信設定勾選）。全校教師師資名冊不會作為會辦收件依據。
               </p>
             </div>
           </div>
@@ -3856,16 +3890,13 @@ export const AdminSettings: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">所屬組別</label>
+                  <label className="block font-semibold text-slate-700 mb-1">所屬處室／組別</label>
                   <select
-                    value={staffFormData.group || 'academic'}
+                    value={resolveStaffFormOffice(staffFormData)}
                     onChange={(e) => {
-                      const group = e.target.value as
-                        | 'academic'
-                        | 'accounting'
-                        | 'student_affairs'
-                        | 'principal';
-                      const defaultTitle = STAFF_GROUP_DEFAULT_TITLE[group];
+                      const office = e.target.value as StaffFormOffice;
+                      const group = STAFF_OFFICE_STORAGE_GROUP[office];
+                      const defaultTitle = STAFF_OFFICE_DEFAULT_TITLE[office];
                       const preset = STAFF_TITLE_PRESETS[defaultTitle];
                       setStaffFormData({
                         ...staffFormData,
@@ -3877,9 +3908,11 @@ export const AdminSettings: React.FC = () => {
                     }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
-                    <option value="academic">教務處（教務主任／教學組；亦可建實習／總務會辦）</option>
+                    <option value="academic">教務處（教務主任／教學組）</option>
+                    <option value="internship">實習處（實習主任／實習組）</option>
+                    <option value="general">總務處（總務主任）</option>
                     <option value="accounting">出納組</option>
-                    <option value="student_affairs">生輔組／學務</option>
+                    <option value="student_affairs">學務處（學務主任／生輔組）</option>
                     <option value="principal">校長室</option>
                   </select>
                 </div>
@@ -3888,9 +3921,8 @@ export const AdminSettings: React.FC = () => {
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">職稱（巡堂會辦下拉）</label>
                   {(() => {
-                    const groupKey = (staffFormData.group ||
-                      'academic') as keyof typeof STAFF_GROUP_TITLE_OPTIONS;
-                    const baseOptions = STAFF_GROUP_TITLE_OPTIONS[groupKey];
+                    const office = resolveStaffFormOffice(staffFormData);
+                    const baseOptions = STAFF_OFFICE_TITLE_OPTIONS[office];
                     const titleOptions = baseOptions.includes(staffFormData.title)
                       ? baseOptions
                       : [staffFormData.title, ...baseOptions];
@@ -3904,6 +3936,10 @@ export const AdminSettings: React.FC = () => {
                             setStaffFormData({
                               ...staffFormData,
                               title,
+                              group: STAFF_OFFICE_STORAGE_GROUP[resolveStaffFormOffice({
+                                ...staffFormData,
+                                title,
+                              })],
                               ...(preset
                                 ? { badge: preset.badge, responsibleScope: preset.responsibleScope }
                                 : {}),
@@ -3918,7 +3954,7 @@ export const AdminSettings: React.FC = () => {
                           ))}
                         </select>
                         <p className="text-[10px] text-amber-700 mt-1 leading-relaxed">
-                          選教務主任、教學組長、學務主任、生輔組長或校長並填信箱，即可列入預設會辦寄信；實習主任／實習組長／總務主任另需於「巡堂寄信設定」勾選對應身分後才會通知。
+                          新增實習主任：所屬處室選「實習處」，職稱即可選「實習主任」。教務／學務／校長填信箱後列入預設會辦；實習／總務另需於「巡堂寄信設定」勾選對應身分後才會通知。
                         </p>
                       </>
                     );
