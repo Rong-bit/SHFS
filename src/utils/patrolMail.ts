@@ -20,6 +20,16 @@ export type PatrolNotifyResult = {
   error?: string;
 };
 
+/** 會辦信 HTML 跳脫，避免異常摘要／姓名含 <script> 等被郵件客戶端執行 */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function isPatrolMailConfigured(cfg?: PatrolMailConfig | null): boolean {
   if (!cfg?.enabled) return false;
   return Boolean(cfg.host && cfg.fromEmail && (cfg.user || cfg.fromEmail));
@@ -179,24 +189,24 @@ export function buildPatrolNotifyEmail(params: {
   const recipientHtml =
     recipientLines.length > 0
       ? `<ul style="margin:8px 0 0;padding-left:1.2em">${recipientLines
-          .map((line) => `<li>${line.replace(/^・/, '')}</li>`)
+          .map((line) => `<li>${escapeHtml(line.replace(/^・/, ''))}</li>`)
           .join('')}</ul>`
       : `<p style="margin:8px 0 0;color:#64748b">名冊尚無對應人員或未填信箱，請管理員於成員名冊補齊<strong>生輔組、學務主任、教學組、教務主任</strong>等。</p>`;
 
   const html = `
     <div style="font-family:'Noto Sans TC',Arial,sans-serif;line-height:1.6;color:#0f172a">
-      <h2 style="margin:0 0 12px">${schoolName} 巡堂異常會辦通知</h2>
-      <p style="margin:0 0 8px"><strong>日期</strong> ${c.date}${period ? ` ${period}` : ''}</p>
-      <p style="margin:0 0 8px"><strong>類型</strong> ${patrolKindLabel(c.kind)}</p>
-      <p style="margin:0 0 8px"><strong>地點</strong> ${c.building} ${c.floor} ${c.roomName}</p>
-      <p style="margin:0 0 8px"><strong>班級</strong> ${c.className || '—'}</p>
-      ${c.subjectName ? `<p style="margin:0 0 8px"><strong>科目</strong> ${c.subjectName}</p>` : ''}
-      ${c.teacherName ? `<p style="margin:0 0 8px"><strong>任課</strong> ${c.teacherName}</p>` : ''}
-      <p style="margin:0 0 8px"><strong>巡堂</strong> ${c.patrollerName}</p>
-      <p style="margin:0 0 16px;padding:10px 12px;background:#fff1f2;border-radius:8px"><strong>異常</strong> ${c.issueSummary}</p>
+      <h2 style="margin:0 0 12px">${escapeHtml(schoolName)} 巡堂異常會辦通知</h2>
+      <p style="margin:0 0 8px"><strong>日期</strong> ${escapeHtml(c.date)}${period ? ` ${escapeHtml(period)}` : ''}</p>
+      <p style="margin:0 0 8px"><strong>類型</strong> ${escapeHtml(patrolKindLabel(c.kind))}</p>
+      <p style="margin:0 0 8px"><strong>地點</strong> ${escapeHtml(c.building)} ${escapeHtml(c.floor)} ${escapeHtml(c.roomName)}</p>
+      <p style="margin:0 0 8px"><strong>班級</strong> ${escapeHtml(c.className || '—')}</p>
+      ${c.subjectName ? `<p style="margin:0 0 8px"><strong>科目</strong> ${escapeHtml(c.subjectName)}</p>` : ''}
+      ${c.teacherName ? `<p style="margin:0 0 8px"><strong>任課</strong> ${escapeHtml(c.teacherName)}</p>` : ''}
+      <p style="margin:0 0 8px"><strong>巡堂</strong> ${escapeHtml(c.patrollerName)}</p>
+      <p style="margin:0 0 16px;padding:10px 12px;background:#fff1f2;border-radius:8px"><strong>異常</strong> ${escapeHtml(c.issueSummary)}</p>
       <p>請登入系統於「巡堂會辦」以電子戳章勾選<strong>已會畢</strong>或<strong>已閱畢</strong>。</p>
-      ${link ? `<p><a href="${link}">開啟會辦案</a></p>` : ''}
-      <p style="margin:16px 0 0"><strong>應通知身分</strong> ${audience}</p>
+      ${link ? `<p><a href="${escapeHtml(link)}">開啟會辦案</a></p>` : ''}
+      <p style="margin:16px 0 0"><strong>應通知身分</strong> ${escapeHtml(audience)}</p>
       <p style="margin:8px 0 0"><strong>通知對象</strong></p>
       ${recipientHtml}
     </div>

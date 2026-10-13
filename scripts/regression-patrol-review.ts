@@ -2,7 +2,7 @@
  * 回歸：巡堂異常會辦收件規則（段考不含任課老師）
  */
 import assert from 'node:assert/strict';
-import { PatrolRecord, AcademicStaff, Teacher } from '../src/types';
+import { PatrolRecord, AcademicStaff, Teacher, PatrolNotifyRoles } from '../src/types';
 import {
   resolvePatrolReviewRecipients,
   buildPatrolReviewCase,
@@ -670,6 +670,42 @@ assert.equal(
   deanRow?.email,
   'dean-from-roster@school.edu',
   '成員名冊信箱空白時應從師資名冊帶入'
+);
+
+// 殘缺 notifyGroups roles 不得被 DEFAULT 放大成全開
+const sparseGroups = resolvePatrolNotifyGroups({
+  notifyGroups: [
+    {
+      id: 'g-sparse',
+      name: '學務線',
+      roles: { student_affairs: true } as PatrolNotifyRoles,
+    },
+  ],
+});
+assert.equal(sparseGroups[0].roles.student_affairs, true);
+assert.equal(
+  sparseGroups[0].roles.academic,
+  false,
+  '殘缺群組不得自動打開教學組'
+);
+assert.equal(sparseGroups[0].roles.subject_teacher, false);
+const sparseMerged = mergeNotifyRolesFromGroups(sparseGroups, ['g-sparse']);
+assert.equal(sparseMerged.academic, false);
+assert.equal(sparseMerged.dean_academic, false);
+assert.equal(sparseMerged.student_affairs, true);
+
+// 有傳入 partial notifyRoles 時缺欄＝未勾選（僅教務主任）
+const onlyDean = resolvePatrolReviewRecipients({
+  record: base,
+  teachers,
+  academicStaffList: staff,
+  notifyRoles: { dean_academic: true },
+});
+assert.ok(onlyDean.some((r) => r.role === 'dean_academic'));
+assert.equal(
+  onlyDean.some((r) => r.role === 'student_affairs'),
+  false,
+  '只勾教務主任時不應帶出生輔組'
 );
 
 console.log('regression-patrol-review: ok');
