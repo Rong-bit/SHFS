@@ -193,8 +193,8 @@ assert.equal(
 const shared = resolveSharedNoticeRows(p4Stale, [p3Fresh, p4Stale]);
 assert.ok(shared?.some((r) => r.period === '4' && r.subjectName === '監考'));
 
-// 通知單節次被改成 2、3，申請卻是 3、4：應依列順序對到監考，且 align 後寫回 3、4
-const misnumbered = [
+// 通知單節次刻意改成 2、3（課表仍是 3、4）：應可儲存，列表顯示第2、3節
+const remapped = [
   {
     date: '2026/10/16',
     weekday: '5',
@@ -212,24 +212,34 @@ const misnumbered = [
     hours: '',
   },
 ];
-const p3Mis = { ...period3, noticeRowsCustomized: true as const, noticeRows: misnumbered };
-const p4Mis = { ...period4, noticeRowsCustomized: true as const, noticeRows: misnumbered };
+const p3Mis = { ...period3, noticeRowsCustomized: true as const, noticeRows: remapped };
+const p4Mis = { ...period4, noticeRowsCustomized: true as const, noticeRows: remapped };
 assert.equal(
   resolveDisplayClassSubject(p3Mis, [p3Mis, p4Mis]).subjectName,
   '監考',
-  '節次寫成 2、3 時第3節仍應對到監考'
+  '節次改成 2、3 時仍應對到監考'
 );
 assert.equal(
   resolveDisplayClassSubject(p4Mis, [p3Mis, p4Mis]).subjectName,
   '監考',
-  '節次寫成 2、3 時第4節不可回退英文閱讀'
+  '節次改成 2、3 時不可回退英文閱讀'
 );
-assert.equal(shouldAlignNoticeRowPeriods(misnumbered, [period3, period4]), true);
-const aligned = alignNoticeRowsToRequests(misnumbered, [period3, period4]);
-assert.equal(aligned[0].period, '3');
-assert.equal(aligned[1].period, '4');
-assert.equal(aligned[0].subjectName, '監考');
-assert.equal(aligned[1].subjectName, '監考');
+assert.equal(shouldAlignNoticeRowPeriods(remapped, [period3, period4]), false);
+const keptRemap = alignNoticeRowsToRequests(remapped, [period3, period4]);
+assert.equal(keptRemap[0].period, '2', '刻意改節次應可儲存第2節');
+assert.equal(keptRemap[1].period, '3', '刻意改節次應可儲存第3節');
+assert.equal(resolveDisplayClassSubject(p3Mis, [p3Mis, p4Mis]).period, 2);
+assert.equal(resolveDisplayClassSubject(p4Mis, [p3Mis, p4Mis]).period, 3);
+
+// 多列但節次重複（兩列都寫第3節）才強制對回課表
+const duplicatedPeriods = [
+  { ...remapped[0], period: '3' },
+  { ...remapped[1], period: '3' },
+];
+assert.equal(shouldAlignNoticeRowPeriods(duplicatedPeriods, [period3, period4]), true);
+const alignedDup = alignNoticeRowsToRequests(duplicatedPeriods, [period3, period4]);
+assert.equal(alignedDup[0].period, '3');
+assert.equal(alignedDup[1].period, '4');
 
 // 單列手改節次 5→3：不可被強制改回，否則使用者會覺得「無法儲存」
 const singleReq: SubstituteRequest = {
@@ -268,5 +278,26 @@ assert.equal(periodDisplay.period, 3, '列表應顯示通知單第3節而非課�
 assert.equal(periodDisplay.dayOfWeek, 5);
 assert.equal(periodDisplay.subjectName, '監考');
 assert.equal(periodDisplay.className, '金工二忠');
+
+// 同號 2 節：即使通知單只有一列或節次重複，列表仍應分別顯示第3、4節
+const dualOneRow = [
+  {
+    date: '2026/10/16',
+    weekday: '5',
+    period: '3',
+    className: '電機二忠',
+    subjectName: '監考',
+    hours: '',
+  },
+];
+const p3OneRow = { ...period3, noticeRowsCustomized: true as const, noticeRows: dualOneRow };
+const p4OneRow = { ...period4, noticeRowsCustomized: true as const, noticeRows: dualOneRow };
+const d3 = resolveDisplayClassSubject(p3OneRow, [p3OneRow, p4OneRow]);
+const d4 = resolveDisplayClassSubject(p4OneRow, [p3OneRow, p4OneRow]);
+assert.equal(d3.subjectName, '監考');
+assert.equal(d4.subjectName, '監考');
+assert.equal(d3.period, 3, '同號多節第3節不可被通知單壓成同一節');
+assert.equal(d4.period, 4, '同號多節第4節應仍顯示第4節');
+assert.notEqual(d3.period, d4.period, '兩節列表不可都變成第3節');
 
 console.log('regression-notice-display-subject: OK');
