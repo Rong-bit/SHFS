@@ -473,9 +473,13 @@ assert.ok(
   '任課姓名應能模糊對上名冊'
 );
 
-const { applySignOff, makeSignOff, viewerReviewRoles, stampOfficeAndTitle } = await import(
-  '../src/utils/patrolReview'
-);
+const {
+  applySignOff,
+  makeSignOff,
+  viewerReviewRoles,
+  stampOfficeAndTitle,
+  preferredStampRole,
+} = await import('../src/utils/patrolReview');
 
 // 電子戳章：左下為職稱，不可把「閱畢／會畢」寫進戳章
 const academicStamp = stampOfficeAndTitle('academic', '閱畢', '教學組長');
@@ -487,6 +491,10 @@ assert.equal(deanStamp.officeLabel, '教務處');
 assert.equal(deanStamp.titleLabel, '主任');
 const principalStampLayout = stampOfficeAndTitle('principal', '校長核章');
 assert.equal(principalStampLayout.titleLabel, '校長');
+// 教務主任即使誤帶 academic 角色，戳章仍應為教務處／主任
+const deanAsAcademic = stampOfficeAndTitle('academic', '閱畢', '教務主任');
+assert.equal(deanAsAcademic.officeLabel, '教務處');
+assert.equal(deanAsAcademic.titleLabel, '主任');
 const stamp = makeSignOff({
   role: 'student_affairs',
   personId: 'sa1',
@@ -558,6 +566,25 @@ assert.equal(
   internshipDeanRoles.includes('dean_academic'),
   false,
   '實習主任登入不應取得教務主任核章角色'
+);
+
+// 教務主任：只給教務主任角色，預選亦應為教務主任（勿預設教學組）
+const deanAcademicRoles = viewerReviewRoles({
+  reviewCase: review,
+  viewer: {
+    kind: 'staff',
+    id: 'ac-dean',
+    name: '陳柏宇',
+    staffGroup: 'academic',
+    staffTitle: '教務主任',
+  },
+});
+assert.deepEqual(deanAcademicRoles, ['dean_academic']);
+assert.equal(preferredStampRole(deanAcademicRoles), 'dean_academic');
+assert.equal(
+  preferredStampRole(['academic', 'dean_academic']),
+  'dean_academic',
+  '同時有教學組與教務主任時應預選教務主任'
 );
 
 console.log('regression-patrol-review: ok');
