@@ -439,17 +439,41 @@ const PatrolMailSettingsPanel: React.FC<{
             className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
           />
         </label>
+        <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-950 space-y-1.5">
+          <p className="font-bold text-xs">建議：校內常開電腦寄信（免費，可用學校 SMTP）</p>
+          <ol className="list-decimal pl-4 space-y-0.5 font-medium leading-relaxed">
+            <li>
+              在校內電腦專案資料夾執行 <code className="font-mono bg-white/70 px-1 rounded">啟動寄信API.bat</code>
+              （或 <code className="font-mono bg-white/70 px-1 rounded">npm run build && npm start</code>）
+            </li>
+            <li>
+              操作時請開 <code className="font-mono bg-white/70 px-1 rounded">http://那台IP:3000</code>
+              （不要開 github.io，否則無法寄信）
+            </li>
+            <li>下方「寄信 API 根網址」<strong>留空</strong>；SMTP 填 smtp.gmail.com／587</li>
+          </ol>
+          <p className="text-amber-900/80">
+            GitHub Pages 可繼續當平常瀏覽用；要寄會辦信當天改走校內 :3000。Render 免費方案已封鎖 SMTP，請清空若曾填
+            onrender.com。
+          </p>
+        </div>
+        {typeof window !== 'undefined' &&
+          /github\.io$/i.test(window.location.hostname) && (
+            <p className="sm:col-span-2 text-xs font-bold text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+              目前正從 GitHub Pages 開啟，此處無法寄出會辦信。請改在校內主機開 http://IP:3000 再測試寄信。
+            </p>
+          )}
         <label className="font-semibold text-slate-600 sm:col-span-2">
-          寄信 API 根網址（GitHub Pages 必填）
+          寄信 API 根網址（校內同機請留空）
           <input
             value={draft.notifyApiBaseUrl || ''}
             onChange={(e) => setDraft({ ...draft, notifyApiBaseUrl: e.target.value })}
-            placeholder="https://your-node-server.example.com"
+            placeholder="校內 npm start 同機操作時請留空"
             className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
           />
           <span className="mt-1 block text-[11px] font-normal text-slate-500">
-            純靜態站（GitHub Pages）沒有寄信 API。請另用 <code className="font-mono">npm start</code>{' '}
-            架 Node，並把該伺服器網址填在此（留空＝打目前網站同源）。
+            從校內 <code className="font-mono">http://IP:3000</code> 進系統時請留空（打同源 API）。
+            僅當網頁與 API 不同網址且皆為 https 時才填。勿填 github.io；勿填 Render 免費站。
           </span>
         </label>
         <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
