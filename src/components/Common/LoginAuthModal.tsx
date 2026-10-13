@@ -218,7 +218,7 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
 
   const handleVerify = async (inputPassToTest?: string) => {
     if (target.type === 'role' && target.targetRole === 'academic' && !selectedStaffId) {
-      setErrorMsg('請先選擇教學組組長或組員身分');
+      setErrorMsg('請先選擇教務處組長或組員身分');
       return;
     }
     if (target.type === 'role' && target.targetRole === 'accounting') {
