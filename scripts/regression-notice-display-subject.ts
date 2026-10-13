@@ -5,36 +5,37 @@ import assert from 'node:assert/strict';
 import { resolveDisplayClassSubject } from '../src/utils/noticeDocument';
 import type { SubstituteRequest } from '../src/types';
 
-const base = {
+const base: SubstituteRequest = {
   id: 'r1',
   requestNumber: '115-1-0055',
-  requestType: 'substitute' as const,
+  requestType: 'substitute',
   applicantTeacherId: 't1',
   applicantTeacherName: '陳星同',
   applicantDepartment: '汽車科',
   reason: '公假',
-  paymentType: 'official' as const,
-  leaveType: 'official' as const,
+  paymentType: 'public',
+  leaveType: 'official',
   leaveDateStart: '2026-10-16',
   leaveDateEnd: '2026-10-16',
   substituteTeacherId: 't2',
   substituteTeacherName: '郭耀輝',
-  status: 'approved' as const,
+  status: 'approved',
   createdAt: '2026-10-01T00:00:00.000Z',
-  clashStatus: { hasClash: false, severity: 'none' as const, messages: [] as string[] },
+  clashStatus: { hasClash: false, severity: 'none', messages: [] },
   originalSession: {
     id: 's1',
-    dayOfWeek: 5 as const,
+    dayOfWeek: 5,
     period: 5,
     className: '汽車二孝',
     subjectName: '電工電子實習',
     teacherId: 't1',
     teacherName: '陳星同',
+    venueId: 'v1',
     venueName: '',
     isPractical: true,
     isConcurrent: false,
   },
-} satisfies SubstituteRequest;
+};
 
 const unchanged = resolveDisplayClassSubject(base);
 assert.equal(unchanged.subjectName, '電工電子實習');
