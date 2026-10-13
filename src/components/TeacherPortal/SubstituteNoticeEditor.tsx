@@ -5,6 +5,7 @@ import { SubstituteRequest } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { ModalShell } from '../Common/ModalShell';
 import {
+  alignNoticeRowsToRequests,
   buildNoticeDocument,
   EMPTY_NOTICE_ROW,
   formatNoticeHoursDisplay,
@@ -80,12 +81,16 @@ export function useSubstituteNoticeEditor(request: SubstituteRequest) {
   }, [defaultRows, savedNoticeRows]);
 
   const persistNoticeRows = () => {
-    if (rowsEqual(editableRows, defaultRows)) {
+    // 列數與同張通知單節次數相同時，把節次對回實際課堂（避免 3～4 節被改成 2、3）
+    const aligned = alignNoticeRowsToRequests(editableRows, printGroup);
+    if (rowsEqual(aligned, defaultRows)) {
       saveNoticeRows(liveRequest.id, null);
+      setEditableRows(defaultRows);
       setIsDirty(false);
       return;
     }
-    saveNoticeRows(liveRequest.id, editableRows);
+    saveNoticeRows(liveRequest.id, aligned);
+    setEditableRows(aligned);
     setIsDirty(false);
   };
 

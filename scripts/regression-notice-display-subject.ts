@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  alignNoticeRowsToRequests,
   resolveDisplayClassSubject,
   resolveNoticePrintGroup,
   resolveSharedNoticeRows,
@@ -190,5 +191,42 @@ assert.equal(
 );
 const shared = resolveSharedNoticeRows(p4Stale, [p3Fresh, p4Stale]);
 assert.ok(shared?.some((r) => r.period === '4' && r.subjectName === '監考'));
+
+// 通知單節次被改成 2、3，申請卻是 3、4：應依列順序對到監考，且 align 後寫回 3、4
+const misnumbered = [
+  {
+    date: '2026/10/16',
+    weekday: '5',
+    period: '2',
+    className: '電機二忠',
+    subjectName: '監考',
+    hours: '',
+  },
+  {
+    date: '2026/10/16',
+    weekday: '5',
+    period: '3',
+    className: '電機二忠',
+    subjectName: '監考',
+    hours: '',
+  },
+];
+const p3Mis = { ...period3, noticeRowsCustomized: true as const, noticeRows: misnumbered };
+const p4Mis = { ...period4, noticeRowsCustomized: true as const, noticeRows: misnumbered };
+assert.equal(
+  resolveDisplayClassSubject(p3Mis, [p3Mis, p4Mis]).subjectName,
+  '監考',
+  '節次寫成 2、3 時第3節仍應對到監考'
+);
+assert.equal(
+  resolveDisplayClassSubject(p4Mis, [p3Mis, p4Mis]).subjectName,
+  '監考',
+  '節次寫成 2、3 時第4節不可回退英文閱讀'
+);
+const aligned = alignNoticeRowsToRequests(misnumbered, [period3, period4]);
+assert.equal(aligned[0].period, '3');
+assert.equal(aligned[1].period, '4');
+assert.equal(aligned[0].subjectName, '監考');
+assert.equal(aligned[1].subjectName, '監考');
 
 console.log('regression-notice-display-subject: OK');
