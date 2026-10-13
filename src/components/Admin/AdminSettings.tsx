@@ -3251,9 +3251,9 @@ export const AdminSettings: React.FC = () => {
 
           {/* Staff Cards by Group */}
           {([
-            { grp: 'academic' as const, label: '教學組', dot: 'bg-indigo-500' },
-            { grp: 'accounting' as const, label: '出納組', dot: 'bg-teal-500' },
-            { grp: 'student_affairs' as const, label: '生輔組／學務', dot: 'bg-sky-500' },
+            { grp: 'academic' as const, label: '教務處（教務主任／教學組）', dot: 'bg-indigo-500' },
+            { grp: 'accounting' as const, label: '總務處・出納組', dot: 'bg-teal-500' },
+            { grp: 'student_affairs' as const, label: '學務處', dot: 'bg-sky-500' },
             { grp: 'principal' as const, label: '校長室', dot: 'bg-slate-600' },
           ]).map(({ grp, label: groupLabel, dot }) => {
             const members = academicStaffList.filter((s) => (s.group || 'academic') === grp);
@@ -3877,7 +3877,7 @@ export const AdminSettings: React.FC = () => {
                     }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
-                    <option value="academic">教學組（含教務／實習／總務）</option>
+                    <option value="academic">教務處（教務主任／教學組；亦可建實習／總務會辦）</option>
                     <option value="accounting">出納組</option>
                     <option value="student_affairs">生輔組／學務</option>
                     <option value="principal">校長室</option>

@@ -10,6 +10,10 @@ import {
   teacherAuthTrustKey,
 } from '../../utils/localAuthTrust';
 import { ModalShell } from './ModalShell';
+import {
+  academicOfficeMembers,
+  resolveAcademicSubunit,
+} from '../../utils/academicOfficeStaff';
 
 export interface LoginTarget {
   type: 'teacher' | 'role' | 'teacher_action';
@@ -141,18 +145,24 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
     hint = custom ? '已設定個人密碼' : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
   } else if (target.type === 'role') {
     switch (target.targetRole) {
-      case 'academic':
-        targetTitle = targetStaff ? targetStaff.name : '教務處・教學組';
+      case 'academic': {
+        const sub = resolveAcademicSubunit(targetStaff);
+        const subLabel = sub === 'dean' ? '教務處・教務主任' : '教務處・教學組';
+        targetTitle = targetStaff ? targetStaff.name : subLabel;
         targetSubtitle = targetStaff
           ? `${targetStaff.title} · ${targetStaff.responsibleScope}`
-          : '請先選擇教學組組長或組員身分';
-        targetBadge = targetStaff?.title || '教學組行政權限';
+          : sub === 'dean'
+            ? '請先選擇教務主任身分'
+            : '請先選擇教學組組長或組員身分';
+        targetBadge =
+          targetStaff?.title || (sub === 'dean' ? '教務主任權限' : '教學組行政權限');
         expectedPassword =
           targetStaff?.password || auth.academicPassword || '1234';
         hint = targetStaff?.password
           ? '已設定個人密碼'
           : `預設密碼為 ${FACTORY_DEFAULT_PLAIN}`;
         break;
+      }
       case 'accounting': {
         const accStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'accounting');
         targetTitle = accStaff ? accStaff.name : '總務處・出納組';
@@ -365,6 +375,13 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   : target.targetRole === 'principal'
                     ? 'principal'
                     : 'academic';
+            const academicSub =
+              group === 'academic'
+                ? resolveAcademicSubunit(
+                    academicStaffList.find((s) => s.id === selectedStaffId) ||
+                      academicStaffList.find((s) => s.id === target.academicStaffId)
+                  )
+                : null;
             const groupLabel =
               group === 'accounting'
                 ? '總務處・出納組'
@@ -372,8 +389,13 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                   ? '學務處'
                   : group === 'principal'
                     ? '校長室'
-                    : '教務處・教學組';
-            const groupMembers = academicStaffList.filter((s) => (s.group || 'academic') === group);
+                    : academicSub === 'dean'
+                      ? '教務處・教務主任'
+                      : '教務處・教學組';
+            const groupMembers =
+              group === 'academic' && academicSub
+                ? academicOfficeMembers(academicStaffList, academicSub)
+                : academicStaffList.filter((s) => (s.group || 'academic') === group);
             if (groupMembers.length === 0) {
               return (
                 <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">

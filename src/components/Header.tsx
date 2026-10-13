@@ -29,6 +29,11 @@ import {
   UI_FONT_SCALE_OPTIONS,
   type UiFontScale,
 } from '../utils/uiFontScale';
+import {
+  academicOfficeMembers,
+  isAcademicDeanStaff,
+  resolveAcademicSubunit,
+} from '../utils/academicOfficeStaff';
 
 type OfficeMenuPos = { top: number; left: number; minWidth: number };
 
@@ -268,7 +273,7 @@ export const Header: React.FC = () => {
               <span>教師端</span>
             </button>
 
-            {/* 教務處 → 教學組 */}
+            {/* 教務處 → 教務主任（上層）／教學組 */}
             <button
               type="button"
               ref={academicOfficeBtnRef}
@@ -301,28 +306,56 @@ export const Header: React.FC = () => {
               anchorRef={academicOfficeBtnRef}
               menuRef={academicMenuRef}
             >
-              <button
-                type="button"
-                role="menuitem"
-                id="nav-role-academic"
-                onClick={() => {
-                  setAcademicOfficeOpen(false);
-                  requestRoleSwitchWithAuth('academic');
-                }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
-                  currentRole === 'academic'
-                    ? 'bg-amber-500/20 text-amber-300'
-                    : 'text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <ClipboardCheck className="w-3.5 h-3.5" />
-                教學組
-                {pendingCount > 0 && (
-                  <span className="ml-auto px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
+              {(() => {
+                const deanMembers = academicOfficeMembers(academicStaffList, 'dean');
+                const teachingMembers = academicOfficeMembers(academicStaffList, 'teaching');
+                const onDean =
+                  currentRole === 'academic' && isAcademicDeanStaff(currentAcademicStaff || { title: '' });
+                const onTeaching = currentRole === 'academic' && !onDean;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      id="nav-role-academic-dean"
+                      onClick={() => {
+                        setAcademicOfficeOpen(false);
+                        requestRoleSwitchWithAuth('academic', deanMembers[0]?.id);
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
+                        onDean
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'text-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Landmark className="w-3.5 h-3.5" />
+                      教務主任
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      id="nav-role-academic"
+                      onClick={() => {
+                        setAcademicOfficeOpen(false);
+                        requestRoleSwitchWithAuth('academic', teachingMembers[0]?.id);
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs sm:text-sm font-medium transition ${
+                        onTeaching
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'text-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      <ClipboardCheck className="w-3.5 h-3.5" />
+                      教學組
+                      {pendingCount > 0 && (
+                        <span className="ml-auto px-1.5 py-0.2 bg-rose-500 text-white text-[10px] font-bold rounded-full">
+                          {pendingCount}
+                        </span>
+                      )}
+                    </button>
+                  </>
+                );
+              })()}
             </OfficeRoleMenu>
 
             {/* 總務處 → 出納組 */}
@@ -415,15 +448,24 @@ export const Header: React.FC = () => {
             currentRole === 'principal') &&
             (() => {
               const group = staffRoleGroup(currentRole);
+              const academicSub =
+                currentRole === 'academic'
+                  ? resolveAcademicSubunit(currentAcademicStaff)
+                  : null;
               const label =
                 currentRole === 'academic'
-                  ? '教務處・教學組登入'
+                  ? academicSub === 'dean'
+                    ? '教務處・教務主任登入'
+                    : '教務處・教學組登入'
                   : currentRole === 'accounting'
                     ? '總務處・出納組登入'
                     : currentRole === 'student_affairs'
                       ? '學務處登入'
                       : '校長室登入';
-              const members = academicStaffList.filter((s) => (s.group || 'academic') === group);
+              const members =
+                currentRole === 'academic' && academicSub
+                  ? academicOfficeMembers(academicStaffList, academicSub)
+                  : academicStaffList.filter((s) => (s.group || 'academic') === group);
               return (
                 <div className="flex items-center space-x-2 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-xs">
                   <span className="text-slate-400 flex items-center gap-1">
@@ -493,7 +535,9 @@ export const Header: React.FC = () => {
                 ? '學務處'
                 : currentRole === 'principal'
                   ? '校長室'
-                  : '教務處（教學組）'
+                  : resolveAcademicSubunit(currentAcademicStaff) === 'dean'
+                    ? '教務處（教務主任）'
+                    : '教務處（教學組）'
           }
           onSave={(pw) => updateAcademicStaffPassword(currentAcademicStaff.id, pw)}
           onClose={() => setIsStaffPasswordOpen(false)}
