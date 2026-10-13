@@ -344,21 +344,26 @@ export const PatrolReviewInbox: React.FC<{
               </select>
             </label>
             {stampRole !== 'principal' ? (
-              <div className="flex gap-2">
-                {(['會畢', '閱畢'] as PatrolSignOffAction[]).map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => setStampAction(a)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${
-                      stampAction === a
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-white text-slate-700 border-slate-300'
-                    }`}
-                  >
-                    已{a}
-                  </button>
-                ))}
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  {(['會畢', '閱畢'] as PatrolSignOffAction[]).map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => setStampAction(a)}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${
+                        stampAction === a
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-300'
+                      }`}
+                    >
+                      已{a}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  主任、組長可點選「已會畢」完成會辦核章；僅需閱覽確認者可選「已閱畢」。
+                </p>
               </div>
             ) : (
               <label className="block text-[11px] font-semibold text-slate-600">
@@ -386,6 +391,11 @@ export const PatrolReviewInbox: React.FC<{
                 {stampAction}
               </div>
               <div className="text-[11px] text-slate-500">{viewer.name}</div>
+              {stampRole !== 'principal' && (
+                <p className="text-[11px] text-slate-500 text-center leading-relaxed px-2">
+                  戳章為處室＋職稱＋姓名；下方文字為會辦結果（會畢／閱畢）。
+                </p>
+              )}
             </div>
             <div className="flex justify-end gap-2">
               <button
