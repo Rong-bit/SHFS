@@ -313,6 +313,12 @@ export interface PatrolMailConfig {
   /** 信內深層連結用的系統網址（例 https://school.example.com） */
   appBaseUrl?: string;
   /**
+   * 寄信 API 根網址（例 https://school.example.com）。
+   * GitHub Pages 等純靜態站沒有 /api/patrol/notify，需另架 Node（npm start）並填此欄。
+   * 留空＝打目前網站同源的 /api/patrol/notify。
+   */
+  notifyApiBaseUrl?: string;
+  /**
    * 會辦通知群組（可多組；異常時勾選要通知哪些）。
    * 未設定時由 notifyRoles 或預設兩組推導。
    */

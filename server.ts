@@ -9,6 +9,20 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+// GitHub Pages 前端若另填「寄信 API 根網址」打到此伺服器，需允許跨域
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, x-patrol-notify-token"
+  );
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(express.json({ limit: "5mb" }));
 
 // Health check endpoint

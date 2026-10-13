@@ -20,15 +20,22 @@
 2. 將 **Build and deployment** ➔ **Source** 選擇為 **GitHub Actions**。
 3. 系統將自動編譯並部署至 `https://<您的帳號>.github.io/SHFS/`。
 
+> **巡堂 SMTP 寄信**：GitHub Pages 是純靜態站，**沒有** `/api/patrol/notify`。  
+> 若要寄會辦信，請另架 Node（`npm run build && npm start`），並在「巡堂寄信設定」填寫 **寄信 API 根網址**。  
+> 若出現 `Unexpected token '<'`／收到 HTML，即表示打到靜態網頁而非寄信 API。
+
 ## 💻 本地端開發 (Local Development)
 
 ```bash
 # 安裝相依套件
 npm install
 
-# 啟動開發伺服器
+# 啟動開發伺服器（含寄信 API）
 npm run dev
 
 # 專案打包編譯
 npm run build
+
+# 正式環境（靜態頁 + 寄信 API 同站）
+npm start
 ```
