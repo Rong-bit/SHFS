@@ -443,9 +443,10 @@ const PatrolMailSettingsPanel: React.FC<{
           <p className="font-bold text-xs">建議：校內常開電腦寄信（免費，可用學校 SMTP）</p>
           <ol className="list-decimal pl-4 space-y-0.5 font-medium leading-relaxed">
             <li>
-              在校內電腦專案根目錄雙擊{' '}
-              <code className="font-mono bg-white/70 px-1 rounded">start-mail-host.bat</code>
-              （英文檔名；需已安裝 Node.js，不必 Python）
+              最簡單：到 GitHub → Actions →「Build portable mail host」下載{' '}
+              <code className="font-mono bg-white/70 px-1 rounded">SHFS-MailHost-Windows.zip</code>
+              ，解壓後雙擊 <code className="font-mono bg-white/70 px-1 rounded">start.bat</code>
+              （內含 Node，家用／校內皆可，不必再裝 npm）
             </li>
             <li>
               操作時請開 <code className="font-mono bg-white/70 px-1 rounded">http://那台IP:3000</code>
