@@ -209,6 +209,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
             </label>
             <div className="flex flex-col items-center gap-1.5">
               <ElectronicStamp
+                stampCaption="校長"
                 officeLabel="校長室"
                 titleLabel="校長"
                 personName={principalStaff?.name || '校長'}

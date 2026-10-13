@@ -481,20 +481,29 @@ const {
   preferredStampRole,
 } = await import('../src/utils/patrolReview');
 
-// 電子戳章：左下為職稱，不可把「閱畢／會畢」寫進戳章
+// 電子戳章：職銜列為「教師兼…」，不可把「閱畢／會畢」寫進戳章
 const academicStamp = stampOfficeAndTitle('academic', '閱畢', '教學組長');
 assert.equal(academicStamp.officeLabel, '教學組');
-assert.equal(academicStamp.titleLabel, '組長', '教學組長戳章左下應為職稱');
-assert.notEqual(academicStamp.titleLabel, '閱畢');
+assert.equal(academicStamp.titleLabel, '組長', '教學組長短職稱仍保留');
+assert.equal(academicStamp.stampCaption, '教師兼教學組長');
+assert.notEqual(academicStamp.stampCaption, '閱畢');
 const deanStampLayout = stampOfficeAndTitle('dean_academic', '會畢');
 assert.equal(deanStampLayout.officeLabel, '教務處');
 assert.equal(deanStampLayout.titleLabel, '主任');
+assert.equal(deanStampLayout.stampCaption, '教師兼教務主任');
 const principalStampLayout = stampOfficeAndTitle('principal', '校長核章');
 assert.equal(principalStampLayout.titleLabel, '校長');
-// 教務主任即使誤帶 academic 角色，戳章仍應為教務處／主任
+assert.equal(principalStampLayout.stampCaption, '校長', '校長不加「教師兼」');
+// 其他主任／組長同「教師兼…」
+assert.equal(stampOfficeAndTitle('dean_student', '閱畢').stampCaption, '教師兼學務主任');
+assert.equal(stampOfficeAndTitle('dean_internship', '閱畢').stampCaption, '教師兼實習主任');
+assert.equal(stampOfficeAndTitle('dean_general_affairs', '閱畢').stampCaption, '教師兼總務主任');
+assert.equal(stampOfficeAndTitle('student_affairs', '閱畢', '生輔組長').stampCaption, '教師兼生輔組長');
+// 教務主任即使誤帶 academic 角色，戳章仍應為教師兼教務主任
 const deanAsAcademic = stampOfficeAndTitle('academic', '閱畢', '教務主任');
 assert.equal(deanAsAcademic.officeLabel, '教務處');
 assert.equal(deanAsAcademic.titleLabel, '主任');
+assert.equal(deanAsAcademic.stampCaption, '教師兼教務主任');
 const stamp = makeSignOff({
   role: 'student_affairs',
   personId: 'sa1',

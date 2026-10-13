@@ -302,7 +302,7 @@ export const PatrolReviewInbox: React.FC<{
                         <ElectronicStamp
                           {...stampOfficeAndTitle(s.role, s.action)}
                           personName={s.personName}
-                          size={140}
+                          size={168}
                         />
                         <div className="text-[11px] text-center text-slate-700 font-bold">
                           {s.action}
