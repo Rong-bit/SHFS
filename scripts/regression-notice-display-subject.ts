@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   resolveDisplayClassSubject,
   resolveNoticePrintGroup,
+  resolveSharedNoticeRows,
 } from '../src/utils/noticeDocument';
 import type { SubstituteRequest } from '../src/types';
 
@@ -104,7 +105,13 @@ const period3: SubstituteRequest = {
   ...base,
   id: 'r-p3',
   requestNumber: '115-1-0049',
-  originalSession: { ...base.originalSession, id: 's3', period: 3, subjectName: '監考課表原名' },
+  originalSession: {
+    ...base.originalSession,
+    id: 's3',
+    period: 3,
+    className: '電機二忠',
+    subjectName: '監考課表原名',
+  },
 };
 const period4: SubstituteRequest = {
   ...base,
@@ -114,6 +121,7 @@ const period4: SubstituteRequest = {
     ...base.originalSession,
     id: 's4',
     period: 4,
+    className: '電機二忠',
     subjectName: '英文閱讀',
   },
 };
@@ -146,5 +154,41 @@ assert.equal(
   '監考',
   '第4節改監考後不可仍顯示英文閱讀'
 );
+
+// 第4節自己還留舊 noticeRows（英文閱讀），但同號另一筆已存兩節皆監考 → 應合併採監考
+const p3Fresh = {
+  ...period3,
+  noticeRowsCustomized: true as const,
+  noticeRows: dualRows,
+};
+const p4Stale = {
+  ...period4,
+  noticeRowsCustomized: true as const,
+  noticeRows: [
+    {
+      date: '2026/10/16',
+      weekday: '5',
+      period: '3',
+      className: '電機二忠',
+      subjectName: '監考',
+      hours: '',
+    },
+    {
+      date: '2026/10/16',
+      weekday: '5',
+      period: '4',
+      className: '電機二忠',
+      subjectName: '英文閱讀',
+      hours: '',
+    },
+  ],
+};
+assert.equal(
+  resolveDisplayClassSubject(p4Stale, [p3Fresh, p4Stale]).subjectName,
+  '監考',
+  '同號合併時不可被舊的英文閱讀蓋掉'
+);
+const shared = resolveSharedNoticeRows(p4Stale, [p3Fresh, p4Stale]);
+assert.ok(shared?.some((r) => r.period === '4' && r.subjectName === '監考'));
 
 console.log('regression-notice-display-subject: OK');
