@@ -45,16 +45,11 @@ jobs:
       - name: Build portable package
         run: python scripts/build_portable_mail_host.py
 
-      - name: Upload portable zip
+      # One artifact only: unzip once → start.bat next to dist/ and node/
+      # (Do not upload the nested .zip; Actions already wraps the folder.)
+      - name: Upload portable package
         uses: actions/upload-artifact@v4
         with:
           name: SHFS-MailHost-Windows
-          path: release/SHFS-MailHost-Windows.zip
-          if-no-files-found: error
-
-      - name: Upload folder (exe + start.bat)
-        uses: actions/upload-artifact@v4
-        with:
-          name: SHFS-MailHost-Folder
-          path: release/SHFS-MailHost/**
+          path: release/SHFS-MailHost/
           if-no-files-found: error

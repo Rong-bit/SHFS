@@ -23,9 +23,9 @@
 > **巡堂 SMTP 寄信（建議校內常開電腦）**  
 > GitHub Pages 只適合平常瀏覽，**不能寄信**。請在校內電腦：
 >
-> **最簡單（建議）**：GitHub → **Actions** → **Build portable mail host (Windows)** → 下載 Artifact  
-> `SHFS-MailHost-Windows.zip` → 解壓 → 雙擊 **`start.bat`**（或 `SHFSMailHost.exe`）→ 開 `http://localhost:3000`  
-> （免裝 Node／Python／不必 git pull；內含執行所需檔案）
+> **最簡單（建議）**：GitHub → **Actions** → 最新成功的 **Build portable mail host (Windows)** →  
+> 下載 Artifact **`SHFS-MailHost-Windows`** → 解壓一次 → 資料夾內應有 **`start.bat`**、`PACKAGE.txt`、`dist\\server.cjs`（約 1.5MB 以上）→ 雙擊 **`start.bat`** → 開 `http://localhost:3000`  
+> （免裝 Node；若出現 `Cannot find module 'express'` 代表仍是舊包，請刪除後改下最新成功的那次）
 >
 > 開發用備援：專案根目錄 `start-mail-host.bat`（需本機 Node）。  
 > 寄信時不要開 github.io；API 根網址留空；SMTP：`smtp.gmail.com:587`。

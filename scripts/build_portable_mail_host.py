@@ -102,7 +102,7 @@ def download_node(dest_dir: Path) -> Path:
 def write_start_bat(out: Path) -> None:
     # ASCII only for Windows cmd
     content = """@echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 title SHFS Mail Host
 echo Starting SHFS mail host...
@@ -121,6 +121,20 @@ if not exist "dist\\server.cjs" (
   pause
   exit /b 1
 )
+for %%A in ("dist\\server.cjs") do set "SERVER_SIZE=%%~zA"
+if not defined SERVER_SIZE set "SERVER_SIZE=0"
+rem Bundled express/nodemailer is ~1.5MB+; old external builds are tiny
+if %SERVER_SIZE% LSS 500000 (
+  echo [ERROR] dist\\server.cjs is too small ^(%SERVER_SIZE% bytes^).
+  echo This package is OLD and missing express.
+  echo Delete this folder, then re-download Artifact
+  echo "SHFS-MailHost-Windows" from the latest successful
+  echo Actions run: Build portable mail host ^(Windows^).
+  echo Expected server.cjs size is about 1.5 MB or larger.
+  pause
+  exit /b 1
+)
+echo server.cjs size: %SERVER_SIZE% bytes
 start "" "http://localhost:3000"
 "node\\node.exe" "dist\\server.cjs"
 echo.
@@ -128,6 +142,23 @@ pause
 """
     data = content.replace("\n", "\r\n").encode("ascii")
     (out / "start.bat").write_bytes(data)
+
+
+def write_package_info(out: Path, server_size: int) -> None:
+    (out / "PACKAGE.txt").write_text(
+        "SHFS Mail Host (portable)\r\n"
+        "=========================\r\n"
+        "start.bat / SHFSMailHost.exe\r\n"
+        "Open http://localhost:3000\r\n"
+        "\r\n"
+        "server.cjs must be ~1.5MB+ (express bundled).\r\n"
+        "server.cjs bytes: %s\r\n"
+        "If start fails with Cannot find module express,\r\n"
+        "you have an OLD zip — delete it and re-download.\r\n"
+        % server_size,
+        encoding="ascii",
+        newline="\r\n",
+    )
 
 
 def copy_dist(out: Path) -> None:
@@ -193,6 +224,8 @@ def main() -> int:
     download_node(OUT / "node")
     copy_dist(OUT)
     write_start_bat(OUT)
+    server_size = (OUT / "dist" / "server.cjs").stat().st_size
+    write_package_info(OUT, server_size)
     readme = OUT / "README.txt"
     readme.write_text(
         "SHFS Mail Host (portable)\r\n"
@@ -200,7 +233,8 @@ def main() -> int:
         "1. Double-click start.bat  (or SHFSMailHost.exe if present)\r\n"
         "2. Keep the window open\r\n"
         "3. Browser: http://localhost:3000\r\n"
-        "4. Do not use github.io for sending mail\r\n",
+        "4. Do not use github.io for sending mail\r\n"
+        "5. server.cjs should be about 1.5MB+ (see PACKAGE.txt)\r\n",
         encoding="ascii",
         newline="\r\n",
     )
