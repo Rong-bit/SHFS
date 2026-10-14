@@ -28,6 +28,31 @@ import { ElectronicStamp } from '../Common/ElectronicStamp';
 
 type ViewerMode = 'teacher' | 'staff' | 'admin';
 
+type Viewer =
+  | { kind: 'teacher'; id: string; name: string }
+  | {
+      kind: 'staff';
+      id: string;
+      name: string;
+      staffGroup?: string;
+      staffTitle?: string;
+      isAdmin?: boolean;
+    };
+
+function caseStampRoles(
+  c: PatrolReviewCase,
+  viewer: Viewer | null
+): PatrolReviewRole[] {
+  if (!viewer) return [];
+  if (c.status === 'archived' || c.status === 'closed') return [];
+  return viewerReviewRoles({ reviewCase: c, viewer });
+}
+
+function intersectRoles(lists: PatrolReviewRole[][]): PatrolReviewRole[] {
+  if (lists.length === 0) return [];
+  return lists[0].filter((r) => lists.every((list) => list.includes(r)));
+}
+
 export const PatrolReviewInbox: React.FC<{
   mode: ViewerMode;
   /** 深層連結指定的會辦案 id */
@@ -46,7 +71,8 @@ export const PatrolReviewInbox: React.FC<{
   const [dateFrom, setDateFrom] = useState(week.from);
   const [dateTo, setDateTo] = useState(week.to);
   const [onlyPending, setOnlyPending] = useState(true);
-  const [stampingId, setStampingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [stampingIds, setStampingIds] = useState<string[] | null>(null);
   const [stampAction, setStampAction] = useState<PatrolSignOffAction>('閱畢');
   const [stampRole, setStampRole] = useState<PatrolReviewRole | null>(null);
   const [instruction, setInstruction] = useState('');
@@ -79,16 +105,16 @@ export const PatrolReviewInbox: React.FC<{
     if (dateFrom && dateTo && dateFrom <= dateTo) void refresh(dateFrom, dateTo);
   }, [dateFrom, dateTo, refresh]);
 
-  const viewer =
+  const viewer: Viewer | null =
     mode === 'teacher' && currentTeacher
       ? {
-          kind: 'teacher' as const,
+          kind: 'teacher',
           id: currentTeacher.id,
           name: currentTeacher.name,
         }
       : mode === 'admin'
         ? {
-            kind: 'staff' as const,
+            kind: 'staff',
             id: currentAcademicStaff?.id || 'admin',
             name: currentAcademicStaff?.name || '管理員',
             staffGroup: currentAcademicStaff?.group,
@@ -97,7 +123,7 @@ export const PatrolReviewInbox: React.FC<{
           }
         : currentAcademicStaff
           ? {
-              kind: 'staff' as const,
+              kind: 'staff',
               id: currentAcademicStaff.id,
               name: currentAcademicStaff.name,
               // 頂部角色優先：避免仍選著教學組人員時誤判無法校長／生輔核章
@@ -136,47 +162,148 @@ export const PatrolReviewInbox: React.FC<{
     });
   }, [cases, dateFrom, dateTo, onlyPending, viewer, focusCaseId]);
 
+  const stampableIds = useMemo(
+    () =>
+      new Set(
+        filtered.filter((c) => caseStampRoles(c, viewer).length > 0).map((c) => c.id)
+      ),
+    [filtered, viewer]
+  );
+
+  // 篩選變更時清掉已不存在／不可核的勾選
+  useEffect(() => {
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => stampableIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [stampableIds]);
+
+  const selectedStampable = useMemo(
+    () => filtered.filter((c) => selected.has(c.id) && stampableIds.has(c.id)),
+    [filtered, selected, stampableIds]
+  );
+
+  const batchRoleOptions = useMemo(() => {
+    if (selectedStampable.length === 0) return [] as PatrolReviewRole[];
+    const lists = selectedStampable.map((c) => caseStampRoles(c, viewer));
+    const common = intersectRoles(lists);
+    if (common.length > 0) return common;
+    // 無交集時改用各案偏好角色的聯集，確認時逐案套用可用角色
+    const preferred = new Set<PatrolReviewRole>();
+    for (const roles of lists) {
+      const p = preferredStampRole(roles, {
+        preferPrincipal: Boolean(showPrincipalTools),
+      });
+      if (p) preferred.add(p);
+    }
+    return [...preferred];
+  }, [selectedStampable, viewer, showPrincipalTools]);
+
   const openStamp = (c: PatrolReviewCase) => {
     if (!viewer) return;
-    const roles = viewerReviewRoles({ reviewCase: c, viewer });
+    const roles = caseStampRoles(c, viewer);
     if (roles.length === 0) return;
     const preferred = preferredStampRole(roles, {
       preferPrincipal: Boolean(showPrincipalTools),
     });
     if (!preferred) return;
-    setStampingId(c.id);
+    setStampingIds([c.id]);
+    setStampRole(preferred);
+    setStampAction(preferred === 'principal' ? '校長核章' : '閱畢');
+    setInstruction('');
+  };
+
+  const openBatchStamp = () => {
+    if (!viewer || selectedStampable.length === 0) return;
+    const roles = batchRoleOptions;
+    if (roles.length === 0) {
+      alert('所選案件目前沒有可核章的身分。');
+      return;
+    }
+    const preferred = preferredStampRole(roles, {
+      preferPrincipal: Boolean(showPrincipalTools),
+    });
+    if (!preferred) return;
+    setStampingIds(selectedStampable.map((c) => c.id));
     setStampRole(preferred);
     setStampAction(preferred === 'principal' ? '校長核章' : '閱畢');
     setInstruction('');
   };
 
   const confirmStamp = () => {
-    if (!viewer || !stampingId || !stampRole) return;
-    const c = cases.find((x) => x.id === stampingId);
-    if (!c) return;
+    if (!viewer || !stampingIds?.length || !stampRole) return;
     const remark =
       signOffAllowsRemark(stampRole) || stampAction === '校長核章'
         ? instruction.trim() || undefined
         : undefined;
-    const signOff = makeSignOff({
-      role: stampRole,
-      personId: viewer.id,
-      personName: viewer.name,
-      action: stampAction,
-      instruction: remark,
-      schoolName: systemConfig.schoolName,
-      staffTitle: viewer.kind === 'staff' ? viewer.staffTitle : undefined,
-    });
-    const next = applySignOff(c, signOff, {
-      archive: stampAction === '校長核章',
-      instruction: remark,
-    });
-    saveCase(next);
-    setStampingId(null);
-    if (focusCaseId && next.id === focusCaseId) dismissPatrolReviewFocus();
+    let stamped = 0;
+    for (const id of stampingIds) {
+      const c = cases.find((x) => x.id === id);
+      if (!c) continue;
+      const roles = caseStampRoles(c, viewer);
+      const roleForCase = roles.includes(stampRole)
+        ? stampRole
+        : preferredStampRole(roles, { preferPrincipal: Boolean(showPrincipalTools) });
+      if (!roleForCase) continue;
+      const action: PatrolSignOffAction =
+        roleForCase === 'principal'
+          ? '校長核章'
+          : stampAction === '校長核章'
+            ? '閱畢'
+            : stampAction;
+      const caseRemark =
+        signOffAllowsRemark(roleForCase) || action === '校長核章' ? remark : undefined;
+      const signOff = makeSignOff({
+        role: roleForCase,
+        personId: viewer.id,
+        personName: viewer.name,
+        action,
+        instruction: caseRemark,
+        schoolName: systemConfig.schoolName,
+        staffTitle: viewer.kind === 'staff' ? viewer.staffTitle : undefined,
+      });
+      const next = applySignOff(c, signOff, {
+        archive: action === '校長核章',
+        instruction: caseRemark,
+      });
+      saveCase(next);
+      stamped += 1;
+      if (focusCaseId && next.id === focusCaseId) dismissPatrolReviewFocus();
+    }
+    setStampingIds(null);
+    setSelected(new Set());
+    if (stamped === 0) alert('沒有案件完成核章（可能已結案或不具權限）。');
   };
 
-  const stampingCase = cases.find((c) => c.id === stampingId);
+  const toggleSelected = (id: string) => {
+    if (!stampableIds.has(id)) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllStampable = () => {
+    if (selectedStampable.length === stampableIds.size && stampableIds.size > 0) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(stampableIds));
+    }
+  };
+
+  const stampingCases = stampingIds
+    ? stampingIds
+        .map((id) => cases.find((c) => c.id === id))
+        .filter((c): c is PatrolReviewCase => Boolean(c))
+    : [];
+  const isBatchStamp = stampingCases.length > 1;
+  const stampModalRoles = useMemo(() => {
+    if (stampingCases.length === 0 || !viewer) return [] as PatrolReviewRole[];
+    if (stampingCases.length === 1) return caseStampRoles(stampingCases[0], viewer);
+    return batchRoleOptions;
+  }, [stampingCases, viewer, batchRoleOptions]);
 
   return (
     <div className="space-y-4">
@@ -218,6 +345,29 @@ export const PatrolReviewInbox: React.FC<{
         >
           本週
         </button>
+        {stampableIds.size > 0 && (
+          <>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700 pb-2">
+              <input
+                type="checkbox"
+                checked={
+                  stampableIds.size > 0 && selectedStampable.length === stampableIds.size
+                }
+                onChange={toggleSelectAllStampable}
+              />
+              全選可核（{stampableIds.size}）
+            </label>
+            <button
+              type="button"
+              disabled={selectedStampable.length === 0}
+              onClick={openBatchStamp}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 disabled:opacity-40"
+            >
+              <Stamp className="w-3.5 h-3.5" />
+              批次電子核章（{selectedStampable.length}）
+            </button>
+          </>
+        )}
         {cloudReady && (
           <button
             type="button"
@@ -243,8 +393,8 @@ export const PatrolReviewInbox: React.FC<{
       ) : (
         <div className="space-y-3">
           {filtered.map((c) => {
-            const roles = viewer ? viewerReviewRoles({ reviewCase: c, viewer }) : [];
-            const canStamp = roles.length > 0 && c.status !== 'archived' && c.status !== 'closed';
+            const roles = caseStampRoles(c, viewer);
+            const canStamp = roles.length > 0;
             return (
               <div
                 key={c.id}
@@ -253,8 +403,17 @@ export const PatrolReviewInbox: React.FC<{
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
+                  <div className="min-w-0 space-y-1 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
+                      {canStamp && (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(c.id)}
+                          onChange={() => toggleSelected(c.id)}
+                          className="rounded border-slate-300"
+                          title="勾選以批次核章"
+                        />
+                      )}
                       <span className="text-sm font-extrabold text-slate-900">
                         {c.date}
                         {c.period ? `・第${c.period}節` : ''}
@@ -333,14 +492,32 @@ export const PatrolReviewInbox: React.FC<{
         </div>
       )}
 
-      {stampingCase && stampRole && viewer && (
+      {stampingCases.length > 0 && stampRole && viewer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
-            <h3 className="text-lg font-extrabold text-slate-900">電子戳章核章</h3>
+            <h3 className="text-lg font-extrabold text-slate-900">
+              {isBatchStamp ? '批次電子戳章核章' : '電子戳章核章'}
+            </h3>
             <p className="text-sm text-slate-600">
-              {stampingCase.date} {stampingCase.className || stampingCase.roomName}・
-              {stampingCase.issueSummary}
+              {isBatchStamp ? (
+                <>將對 <strong>{stampingCases.length}</strong> 案蓋章（可核章者才會套用）。</>
+              ) : (
+                <>
+                  {stampingCases[0].date}{' '}
+                  {stampingCases[0].className || stampingCases[0].roomName}・
+                  {stampingCases[0].issueSummary}
+                </>
+              )}
             </p>
+            {isBatchStamp && (
+              <ul className="max-h-28 overflow-y-auto text-xs text-slate-600 space-y-1 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                {stampingCases.map((c) => (
+                  <li key={c.id}>
+                    {c.date} {c.className || c.roomName}・{c.issueSummary}
+                  </li>
+                ))}
+              </ul>
+            )}
             <label className="block text-[11px] font-semibold text-slate-600">
               身分角色
               <select
@@ -348,11 +525,17 @@ export const PatrolReviewInbox: React.FC<{
                 onChange={(e) => {
                   const role = e.target.value as PatrolReviewRole;
                   setStampRole(role);
-                  setStampAction(role === 'principal' ? '校長核章' : stampAction === '校長核章' ? '閱畢' : stampAction);
+                  setStampAction(
+                    role === 'principal'
+                      ? '校長核章'
+                      : stampAction === '校長核章'
+                        ? '閱畢'
+                        : stampAction
+                  );
                 }}
                 className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
               >
-                {viewerReviewRoles({ reviewCase: stampingCase, viewer }).map((r) => (
+                {stampModalRoles.map((r) => (
                   <option key={r} value={r}>
                     {PATROL_REVIEW_ROLE_LABELS[r]}
                   </option>
@@ -379,7 +562,7 @@ export const PatrolReviewInbox: React.FC<{
                 </div>
                 {signOffAllowsRemark(stampRole) && (
                   <label className="block text-[11px] font-semibold text-slate-600">
-                    簽文說明（選填）
+                    簽文說明（選填{isBatchStamp ? '，套用到各案' : ''}）
                     <textarea
                       value={instruction}
                       onChange={(e) => setInstruction(e.target.value)}
@@ -392,7 +575,7 @@ export const PatrolReviewInbox: React.FC<{
               </div>
             ) : (
               <label className="block text-[11px] font-semibold text-slate-600">
-                指示用語（選填）
+                指示用語（選填{isBatchStamp ? '，套用到各案' : ''}）
                 <textarea
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
@@ -425,7 +608,7 @@ export const PatrolReviewInbox: React.FC<{
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setStampingId(null)}
+                onClick={() => setStampingIds(null)}
                 className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-bold text-slate-700"
               >
                 取消
@@ -435,7 +618,7 @@ export const PatrolReviewInbox: React.FC<{
                 onClick={confirmStamp}
                 className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500"
               >
-                確認蓋章
+                {isBatchStamp ? `確認蓋章（${stampingCases.length} 案）` : '確認蓋章'}
               </button>
             </div>
           </div>
