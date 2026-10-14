@@ -164,17 +164,8 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
     longestTitle * titleFontPx * 0.98
   );
 
-  const nameChars = Math.max(1, [...name].length);
-  const nameAvailW =
-    widthPx -
-    borderPx * 2 -
-    innerPadX * 2 -
-    titleBlockW -
-    colGap;
-  // 字級先貼齊高度；寬度不足時僅輕微水平壓縮（對齊實物觀感）
+  const nameChars = [...name];
   const nameFontPx = innerH * NAME_FONT_RATIO;
-  const nameNaturalW = nameChars * nameFontPx * 0.96;
-  const nameScaleX = Math.min(1, nameAvailW / Math.max(nameNaturalW, 1));
 
   return (
     <div
@@ -218,7 +209,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
         ))}
       </div>
 
-      {/* 右：姓名上下置中、填滿高度 */}
+      {/* 右：姓名字元均分於剩餘寬度，上下置中、字級貼齊高度 */}
       <div
         style={{
           flex: '1 1 auto',
@@ -226,25 +217,28 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           height: '100%',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: nameChars.length <= 1 ? 'center' : 'space-between',
           overflow: 'hidden',
           fontFamily: STAMP_KAI_FONT,
+          paddingLeft: Math.max(1, widthPx * 0.01),
         }}
       >
-        <div
-          style={{
-            fontSize: nameFontPx,
-            lineHeight: 1,
-            fontFamily: STAMP_KAI_FONT,
-            color: STAMP_RED,
-            whiteSpace: 'nowrap',
-            letterSpacing: nameChars >= 3 ? '0.02em' : '0.08em',
-            transform: nameScaleX < 0.995 ? `scaleX(${nameScaleX})` : undefined,
-            transformOrigin: 'center center',
-          }}
-        >
-          {name}
-        </div>
+        {nameChars.map((ch, i) => (
+          <span
+            key={`${ch}-${i}`}
+            style={{
+              flex: nameChars.length <= 1 ? '0 0 auto' : '1 1 0',
+              minWidth: 0,
+              textAlign: 'center',
+              fontSize: nameFontPx,
+              lineHeight: 1,
+              fontFamily: STAMP_KAI_FONT,
+              color: STAMP_RED,
+            }}
+          >
+            {ch}
+          </span>
+        ))}
       </div>
     </div>
   );
