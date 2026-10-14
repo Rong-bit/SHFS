@@ -2,8 +2,28 @@ import React from 'react';
 
 /** 官章紅（接近實物原子印章） */
 const STAMP_RED = '#c41e3a';
+/** 優先標楷體（Windows DFKai-SB／macOS BiauKai 等） */
 const STAMP_KAI =
-  '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", "Noto Serif TC", serif';
+  '"標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "KaiTi", "STKaiti", "Noto Serif TC", serif';
+
+/** 內容區左右內緣（viewBox 225×75） */
+const STAMP_INNER_LEFT = 6;
+const STAMP_INNER_RIGHT = 221;
+const STAMP_INNER_W = STAMP_INNER_RIGHT - STAMP_INNER_LEFT;
+/** 職稱：姓名 = 4：6（姓名佔六等分） */
+const TITLE_SHARE = 4;
+const NAME_SHARE = 6;
+const TITLE_ZONE_W = (STAMP_INNER_W * TITLE_SHARE) / (TITLE_SHARE + NAME_SHARE);
+const NAME_ZONE_W = (STAMP_INNER_W * NAME_SHARE) / (TITLE_SHARE + NAME_SHARE);
+const NAME_ZONE_LEFT = STAMP_INNER_LEFT + TITLE_ZONE_W;
+const NAME_CENTER_X = NAME_ZONE_LEFT + NAME_ZONE_W / 2;
+/** 戳章內高約 70；姓名字級盡量貼齊上下內緣 */
+const NAME_FILL_FONT = 62;
+/** 職稱字級上限（與改欄寬前相同，不因左欄壓縮而變小） */
+const TITLE_FONT_MAX_TWO = 26;
+const TITLE_FONT_MAX_ONE = 30;
+const TITLE_MEASURE_W_TWO = 119;
+const TITLE_MEASURE_W_ONE = 104;
 
 /**
  * 職名章螢幕／列印規格：
@@ -71,7 +91,7 @@ function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, mi
 
 /**
  * 扁長紅框職名章（實物約 0.75×2.25cm）
- * 左：職銜二排且兩排同寬對齊（例「教　師　兼」對齊「教務主任」）；右：姓名一排
+ * 左職稱（四等分、字級不變、左側壓縮）／右姓名（六等分、標楷體、盡量填滿高度）
  * 會畢／閱畢顯示於戳章下方；簽文／指示顯示於戳章上方（簽文欄可寬於戳章，戳章置中）
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
@@ -96,23 +116,24 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const lines = splitStampCaptionLines(caption);
   const twoLine = lines.length === 2;
 
-  // viewBox 225×75（對應 2.25×0.75cm）；左欄職銜、右欄姓名
-  const leftMaxW = twoLine ? 119 : 104;
+  // 職稱：字級依舊（以舊測寬計算）；畫入左四等分時只壓 textLength
+  const titlePad = 2;
+  const titleZoneInnerW = TITLE_ZONE_W - titlePad * 2;
   const longestTitle = Math.max(...lines.map((l) => [...l].length));
   const titleFont = maxFontForLine(
     longestTitle,
-    leftMaxW,
-    twoLine ? 26 : 30,
+    twoLine ? TITLE_MEASURE_W_TWO : TITLE_MEASURE_W_ONE,
+    twoLine ? TITLE_FONT_MAX_TWO : TITLE_FONT_MAX_ONE,
     twoLine ? 11 : 13
   );
-  // 兩排共用同一寬度：左緣對齊、右緣對齊（「教師兼」字距拉開對齊「教務主任」）
-  const titleBlockWidth = Math.min(leftMaxW, longestTitle * titleFont);
-  const titleLeftX = 11;
-  // 姓名盡量填滿戳章內高；寬度不足時以 textLength 微壓，職稱字級不變
-  const nameChars = [...name].length;
-  const nameFont = 56;
-  const nameMaxW = 98;
-  const nameTextLength = Math.min(nameMaxW, Math.max(nameChars * nameFont * 0.92, nameFont * 0.85));
+  // 兩排同寬對齊；寬度不超過左四等分
+  const titleBlockWidth = Math.min(titleZoneInnerW, longestTitle * titleFont);
+  const titleLeftX = STAMP_INNER_LEFT + titlePad;
+  // 姓名：六等分寬、字級貼齊內高；過寬時以 textLength 微壓字距／字形
+  const nameChars = Math.max(1, [...name].length);
+  const nameMaxW = NAME_ZONE_W - 4;
+  const nameNaturalW = nameChars * NAME_FILL_FONT;
+  const nameTextLength = Math.min(nameMaxW, Math.max(nameNaturalW * 0.88, NAME_FILL_FONT * 0.85));
 
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
@@ -146,7 +167,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           rx="1"
         />
 
-        {/* 左：職銜二排，同寬左右對齊 */}
+        {/* 左四等分：職銜（字級不變） */}
         {twoLine ? (
           <>
             <text
@@ -185,21 +206,21 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
             fill={STAMP_RED}
             fontFamily={STAMP_KAI}
             fontSize={titleFont}
-            letterSpacing="0.12em"
+            letterSpacing="0.08em"
           >
             {lines[0]}
           </text>
         )}
 
-        {/* 右：姓名一排（高向填滿；寬向以 textLength 收斂） */}
+        {/* 右六等分：姓名（標楷體、填滿高度） */}
         <text
-          x="173"
+          x={NAME_CENTER_X}
           y="39"
           textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_RED}
           fontFamily={STAMP_KAI}
-          fontSize={nameFont}
+          fontSize={NAME_FILL_FONT}
           textLength={nameTextLength}
           lengthAdjust="spacingAndGlyphs"
         >
