@@ -6,24 +6,15 @@ const STAMP_RED = '#c41e3a';
  * 標楷體優先（Windows DFKai-SB／macOS BiauKai）；
  * 系統沒有時用已載入的霞鶩文楷 LXGW WenKai。
  */
-const STAMP_KAI =
+export const STAMP_KAI_FONT =
   '"標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "LXGW WenKai", "KaiTi", "STKaiti", serif';
 
-/** 內容區左右內緣（viewBox 225×75）；垂直中線 */
-const STAMP_INNER_LEFT = 6;
-const STAMP_INNER_RIGHT = 221;
-const STAMP_INNER_W = STAMP_INNER_RIGHT - STAMP_INNER_LEFT;
-const STAMP_CENTER_Y = 37.5;
 /** 職稱：姓名 = 4：6（姓名佔六等分） */
 const TITLE_SHARE = 4;
 const NAME_SHARE = 6;
-const TITLE_ZONE_W = (STAMP_INNER_W * TITLE_SHARE) / (TITLE_SHARE + NAME_SHARE);
-const NAME_ZONE_W = (STAMP_INNER_W * NAME_SHARE) / (TITLE_SHARE + NAME_SHARE);
-const NAME_ZONE_LEFT = STAMP_INNER_LEFT + TITLE_ZONE_W;
-const NAME_CENTER_X = NAME_ZONE_LEFT + NAME_ZONE_W / 2;
-/** 戳章內高約 70；姓名字級盡量貼齊上下內緣且垂直置中 */
-const NAME_FILL_FONT = 64;
-/** 職稱字級上限（與改欄寬前相同，不因左欄壓縮而變小） */
+/** 姓名字級相對戳章高度的比例（盡量填滿並上下置中） */
+const NAME_FONT_RATIO = 0.88;
+/** 職稱字級上限（與改欄寬前相同） */
 const TITLE_FONT_MAX_TWO = 26;
 const TITLE_FONT_MAX_ONE = 30;
 const TITLE_MEASURE_W_TWO = 119;
@@ -96,7 +87,6 @@ function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, mi
 /**
  * 扁長紅框職名章（實物約 0.75×2.25cm）
  * 左職稱（四等分、字級不變、左側壓縮）／右姓名（六等分、標楷體、上下置中填滿高度）
- * 會畢／閱畢顯示於戳章下方；簽文／指示顯示於戳章上方（簽文欄可寬於戳章，戳章置中）
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   stampCaption,
@@ -120,32 +110,21 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const lines = splitStampCaptionLines(caption);
   const twoLine = lines.length === 2;
 
-  // 職稱：字級依舊（以舊測寬計算）；畫入左四等分時只壓 textLength
-  const titlePad = 2;
-  const titleZoneInnerW = TITLE_ZONE_W - titlePad * 2;
-  const longestTitle = Math.max(...lines.map((l) => [...l].length));
-  const titleFont = maxFontForLine(
-    longestTitle,
-    twoLine ? TITLE_MEASURE_W_TWO : TITLE_MEASURE_W_ONE,
-    twoLine ? TITLE_FONT_MAX_TWO : TITLE_FONT_MAX_ONE,
-    twoLine ? 11 : 13
-  );
-  // 兩排同寬對齊；寬度不超過左四等分
-  const titleBlockWidth = Math.min(titleZoneInnerW, longestTitle * titleFont);
-  const titleLeftX = STAMP_INNER_LEFT + titlePad;
-  // 兩排相對戳章垂直中線對稱
-  const titleLineGap = titleFont + 4;
-  const titleY1 = STAMP_CENTER_Y - titleLineGap / 2;
-  const titleY2 = STAMP_CENTER_Y + titleLineGap / 2;
-
-  // 姓名：六等分寬、字級貼齊內高且上下置中；僅壓字距、不縮字形（避免高度被壓扁）
-  const nameChars = Math.max(1, [...name].length);
-  const nameMaxW = NAME_ZONE_W - 4;
-  const nameNaturalW = nameChars * NAME_FILL_FONT * 0.96;
-  const nameTextLength = Math.min(nameMaxW, Math.max(nameNaturalW, NAME_FILL_FONT * 0.9));
-
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
+  // viewBox 比例換算：舊 SVG 225 寬上的字級 → 螢幕 px
+  const scale = widthPx / 225;
+  const titleMeasureW = (twoLine ? TITLE_MEASURE_W_TWO : TITLE_MEASURE_W_ONE) * scale;
+  const longestTitle = Math.max(...lines.map((l) => [...l].length));
+  const titleFontPx = maxFontForLine(
+    longestTitle,
+    titleMeasureW,
+    (twoLine ? TITLE_FONT_MAX_TWO : TITLE_FONT_MAX_ONE) * scale,
+    (twoLine ? 11 : 13) * scale
+  );
+  const nameFontPx = heightPx * NAME_FONT_RATIO;
+  const titleFlex = TITLE_SHARE;
+  const nameFlex = NAME_SHARE;
 
   return (
     <div
@@ -153,90 +132,105 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
       style={{
         width: widthPx,
         height: heightPx,
-        fontFamily: STAMP_KAI,
+        boxSizing: 'border-box',
+        border: `${Math.max(1.5, 2.2 * scale)}px solid ${STAMP_RED}`,
+        borderRadius: 1,
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        overflow: 'hidden',
+        color: STAMP_RED,
+        fontFamily: STAMP_KAI_FONT,
+        background: 'transparent',
       }}
       aria-hidden
       title={`${caption} ${name}`}
     >
-      <svg
-        viewBox="0 0 225 75"
-        xmlns="http://www.w3.org/2000/svg"
-        role="img"
-        width="100%"
-        height="100%"
-        style={{ display: 'block' }}
+      {/* 左四等分：職稱，整塊上下置中 */}
+      <div
+        style={{
+          flex: `${titleFlex} 1 0`,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          justifyContent: 'center',
+          paddingLeft: Math.max(2, 4 * scale),
+          paddingRight: Math.max(1, 2 * scale),
+          fontFamily: STAMP_KAI_FONT,
+        }}
       >
-        <rect
-          x="2"
-          y="2.5"
-          width="221"
-          height="70"
-          fill="none"
-          stroke={STAMP_RED}
-          strokeWidth="2.2"
-          rx="1"
-        />
-
-        {/* 左四等分：職銜（標楷體、垂直置中） */}
         {twoLine ? (
-          <>
-            <text
-              x={titleLeftX}
-              y={titleY1}
-              textAnchor="start"
-              dominantBaseline="central"
-              fill={STAMP_RED}
-              fontFamily={STAMP_KAI}
-              fontSize={titleFont}
-              textLength={titleBlockWidth}
-              lengthAdjust="spacing"
-            >
-              {lines[0]}
-            </text>
-            <text
-              x={titleLeftX}
-              y={titleY2}
-              textAnchor="start"
-              dominantBaseline="central"
-              fill={STAMP_RED}
-              fontFamily={STAMP_KAI}
-              fontSize={titleFont}
-              textLength={titleBlockWidth}
-              lengthAdjust="spacing"
-            >
-              {lines[1]}
-            </text>
-          </>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              gap: Math.max(1, 2 * scale),
+              width: '100%',
+            }}
+          >
+            {lines.map((line) => (
+              <div
+                key={line}
+                style={{
+                  fontSize: titleFontPx,
+                  lineHeight: 1.05,
+                  fontFamily: STAMP_KAI_FONT,
+                  color: STAMP_RED,
+                  whiteSpace: 'nowrap',
+                  textAlign: 'justify',
+                  textAlignLast: 'justify',
+                  width: '100%',
+                }}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
         ) : (
-          <text
-            x={titleLeftX + titleBlockWidth / 2}
-            y={STAMP_CENTER_Y}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill={STAMP_RED}
-            fontFamily={STAMP_KAI}
-            fontSize={titleFont}
-            letterSpacing="0.08em"
+          <div
+            style={{
+              fontSize: titleFontPx,
+              lineHeight: 1,
+              fontFamily: STAMP_KAI_FONT,
+              color: STAMP_RED,
+              letterSpacing: '0.08em',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+            }}
           >
             {lines[0]}
-          </text>
+          </div>
         )}
+      </div>
 
-        {/* 右六等分：姓名（標楷體、上下置中、填滿高度） */}
-        <text
-          x={NAME_CENTER_X}
-          y={STAMP_CENTER_Y}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill={STAMP_RED}
-          fontFamily={STAMP_KAI}
-          fontSize={NAME_FILL_FONT}
-          textLength={nameTextLength}
-          lengthAdjust="spacing"
+      {/* 右六等分：姓名，上下左右置中、字級貼齊高度 */}
+      <div
+        style={{
+          flex: `${nameFlex} 1 0`,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingRight: Math.max(2, 3 * scale),
+          fontFamily: STAMP_KAI_FONT,
+        }}
+      >
+        <div
+          style={{
+            fontSize: nameFontPx,
+            lineHeight: 1,
+            fontFamily: STAMP_KAI_FONT,
+            color: STAMP_RED,
+            whiteSpace: 'nowrap',
+            letterSpacing: [...name].length >= 3 ? '-0.04em' : '0.04em',
+            transform: 'translateY(0)',
+          }}
         >
           {name}
-        </text>
-      </svg>
+        </div>
+      </div>
     </div>
   );
 };
