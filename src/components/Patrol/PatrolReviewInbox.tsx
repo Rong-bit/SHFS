@@ -457,7 +457,7 @@ export const PatrolReviewInbox: React.FC<{
                         className="flex flex-col items-center gap-1 w-[168px]"
                       >
                         {s.instruction && (
-                          <div className="text-sm text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                          <div className="text-sm text-amber-900 text-left font-semibold leading-snug w-full break-words">
                             {s.instruction}
                           </div>
                         )}
@@ -584,7 +584,7 @@ export const PatrolReviewInbox: React.FC<{
             )}
             <div className="flex flex-col items-center gap-1.5 py-2 w-[200px] mx-auto">
               {instruction.trim() && signOffAllowsRemark(stampRole) && (
-                <div className="text-base text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                <div className="text-base text-amber-900 text-left font-semibold leading-snug w-full break-words">
                   {instruction.trim()}
                 </div>
               )}

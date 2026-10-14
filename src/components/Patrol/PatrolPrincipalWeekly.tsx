@@ -219,7 +219,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
             </label>
             <div className="flex flex-col items-center gap-1.5 w-[200px] mx-auto">
               {instruction.trim() && (
-                <div className="text-base text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                <div className="text-base text-amber-900 text-left font-semibold leading-snug w-full break-words">
                   {instruction.trim()}
                 </div>
               )}
