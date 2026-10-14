@@ -19,7 +19,10 @@ import {
   viewerReviewRoles,
   weekRangeContaining,
 } from '../../utils/patrolReview';
-import { clearPatrolReviewQueryParam } from '../../utils/patrolDeepLink';
+import {
+  clearPatrolReviewQueryParam,
+  dismissPatrolReviewFocus,
+} from '../../utils/patrolDeepLink';
 import { usePatrolReviews } from '../../utils/patrolReviewSync';
 import { ElectronicStamp } from '../Common/ElectronicStamp';
 
@@ -170,6 +173,7 @@ export const PatrolReviewInbox: React.FC<{
     });
     saveCase(next);
     setStampingId(null);
+    if (focusCaseId && next.id === focusCaseId) dismissPatrolReviewFocus();
   };
 
   const stampingCase = cases.find((c) => c.id === stampingId);

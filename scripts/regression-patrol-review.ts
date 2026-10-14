@@ -13,6 +13,7 @@ import {
   resolveNotifyGroupIdsForRecord,
   resolveNotifyGroupsForRecord,
   sanitizeItemNotifyGroupIds,
+  pruneItemNotifyGroupIdsByItems,
 } from '../src/utils/patrolReview';
 import { patrolRecordHasIssue } from '../src/components/Patrol/PatrolRoomSheet';
 
@@ -339,6 +340,28 @@ const sanitized = sanitizeItemNotifyGroupIds(
   defaultGroups
 );
 assert.deepEqual(sanitized, { sleeping: ['png-affairs'] });
+
+const prunedItems = pruneItemNotifyGroupIdsByItems(
+  { sleeping: ['png-affairs'], phone: ['png-academic'], removed: ['png-affairs'] },
+  ['sleeping', 'phone']
+);
+assert.deepEqual(prunedItems, {
+  sleeping: ['png-affairs'],
+  phone: ['png-academic'],
+});
+// 後續增修異常：聯集對應群組（模擬已寄過後再勾新項目）
+const afterExtraIssue = resolveNotifyGroupsForRecord({
+  record: { ...base, observations: ['sleeping', 'phone'] },
+  mailConfig: {
+    notifyGroups: defaultGroups,
+    itemNotifyGroupIds: {
+      sleeping: ['png-affairs'],
+      phone: ['png-academic'],
+    },
+  },
+});
+assert.equal(afterExtraIssue.fullyMapped, true);
+assert.deepEqual(afterExtraIssue.groupIds, ['png-affairs', 'png-academic']);
 
 // 部分項目有對應、部分沒有 → 不可自動會辦（避免漏通知）
 const partialMap = resolveNotifyGroupsForRecord({
