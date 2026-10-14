@@ -138,10 +138,10 @@ type AdminGroup = 'params' | 'venues' | 'roster' | 'data' | 'ops';
 
 const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
   { id: 'params', label: '標準與參數', tabs: ['config', 'school', 'calendar'] },
-  { id: 'venues', label: '場地維護', tabs: ['venues', 'patrol', 'patrolReport'] },
+  { id: 'venues', label: '場地維護', tabs: ['venues', 'patrol'] },
   { id: 'roster', label: '名冊維護', tabs: ['teachers', 'staff'] },
   { id: 'data', label: '課表與同步', tabs: ['schedules', 'sync'] },
-  { id: 'ops', label: '系統維護', tabs: ['security', 'patrolMail', 'maintenance'] },
+  { id: 'ops', label: '系統維護', tabs: ['security', 'patrolMail', 'patrolReport', 'maintenance'] },
 ];
 
 const groupOfTab = (tab: AdminTab): AdminGroup =>
@@ -1184,15 +1184,6 @@ export const AdminSettings: React.FC = () => {
               <MapPin className="w-3.5 h-3.5 text-indigo-400" />
               <span>巡堂教室配置 ({(systemConfig.patrolRooms || []).length})</span>
             </button>
-            <button
-              id="tab-admin-patrol-report"
-              type="button"
-              onClick={() => setActiveTab('patrolReport')}
-              className={subTabClass(activeTab === 'patrolReport')}
-            >
-              <FileText className="w-3.5 h-3.5 text-emerald-400" />
-              <span>巡堂紀錄彙整</span>
-            </button>
           </div>
         )}
 
@@ -1261,6 +1252,15 @@ export const AdminSettings: React.FC = () => {
             >
               <Mail className="w-3.5 h-3.5 text-sky-500" />
               <span>巡堂會辦寄信</span>
+            </button>
+            <button
+              id="tab-admin-patrol-report"
+              type="button"
+              onClick={() => setActiveTab('patrolReport')}
+              className={subTabClass(activeTab === 'patrolReport')}
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <span>巡堂紀錄彙整</span>
             </button>
             <button
               id="tab-admin-maintenance"
