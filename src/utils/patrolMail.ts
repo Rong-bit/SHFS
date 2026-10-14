@@ -21,13 +21,20 @@ export type PatrolNotifyResult = {
 };
 
 /** 會辦信 HTML 跳脫，避免異常摘要／姓名含 <script> 等被郵件客戶端執行 */
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function notifyAuthHeaders(
+  mailConfig?: Pick<PatrolMailConfig, 'notifyApiToken'> | null
+): Record<string, string> {
+  const token = (mailConfig?.notifyApiToken || '').trim();
+  return token ? { 'x-patrol-notify-token': token } : {};
 }
 
 export function isPatrolMailConfigured(cfg?: PatrolMailConfig | null): boolean {
@@ -227,12 +234,12 @@ export async function sendPatrolReviewNotify(params: {
   if (!isPatrolMailConfigured(mailConfig)) {
     return { ok: false, sent: 0, failed: [], skippedNoEmail: 0, error: '尚未啟用或設定 SMTP' };
   }
-  const allEmails = reviewCase.recipients.map((r) => r.email.trim()).filter(Boolean);
+  const allEmails = reviewCase.recipients.map((r) => (r.email || '').trim()).filter(Boolean);
   const pool = onlyEmails?.length
-    ? onlyEmails.map((e) => e.trim()).filter(Boolean)
+    ? onlyEmails.map((e) => (e || '').trim()).filter(Boolean)
     : allEmails;
   const unique = [...new Set(pool)];
-  const skippedNoEmail = reviewCase.recipients.filter((r) => !r.email.trim()).length;
+  const skippedNoEmail = reviewCase.recipients.filter((r) => !(r.email || '').trim()).length;
   if (unique.length === 0) {
     return { ok: false, sent: 0, failed: [], skippedNoEmail, error: '收件人皆無信箱' };
   }
@@ -245,7 +252,7 @@ export async function sendPatrolReviewNotify(params: {
   try {
     const res = await fetch(resolvePatrolNotifyApiUrl(mailConfig), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...notifyAuthHeaders(mailConfig) },
       body: JSON.stringify({
         smtp: {
           host: mailConfig.host,
@@ -260,6 +267,7 @@ export async function sendPatrolReviewNotify(params: {
         subject: body.subject,
         text: body.text,
         html: body.html,
+        token: (mailConfig.notifyApiToken || '').trim() || undefined,
       }),
     });
     const { json, parseError } = await readPatrolNotifyResponse(res);
@@ -347,9 +355,11 @@ export async function sendPatrolMailTest(params: {
     return { ok: false, sent: 0, failed: [], skippedNoEmail: 0, error: '請填有效測試收件信箱' };
   }
   try {
+    const safeName = escapeHtml(schoolName);
+    const when = escapeHtml(new Date().toLocaleString('zh-TW'));
     const res = await fetch(resolvePatrolNotifyApiUrl(mailConfig), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...notifyAuthHeaders(mailConfig) },
       body: JSON.stringify({
         smtp: {
           host: mailConfig.host,
@@ -363,7 +373,8 @@ export async function sendPatrolMailTest(params: {
         to: [email],
         subject: `【巡堂寄信測試】${schoolName}`,
         text: `${schoolName} 巡堂 SMTP 測試信\n時間：${new Date().toLocaleString('zh-TW')}\n若收到此信，表示寄信 API 與 SMTP 設定正常。`,
-        html: `<p>${schoolName} 巡堂 SMTP 測試信</p><p>時間：${new Date().toLocaleString('zh-TW')}</p><p>若收到此信，表示寄信 API 與 SMTP 設定正常。</p>`,
+        html: `<p>${safeName} 巡堂 SMTP 測試信</p><p>時間：${when}</p><p>若收到此信，表示寄信 API 與 SMTP 設定正常。</p>`,
+        token: (mailConfig.notifyApiToken || '').trim() || undefined,
       }),
     });
     const { json, parseError } = await readPatrolNotifyResponse(res);

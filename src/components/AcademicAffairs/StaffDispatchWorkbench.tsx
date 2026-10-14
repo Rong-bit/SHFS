@@ -1003,9 +1003,24 @@ export const StaffDispatchWorkbench: React.FC = () => {
     };
   };
 
+  const dispatchSubmittingRef = useRef(false);
+  const [dispatchSubmitting, setDispatchSubmitting] = useState(false);
+
   // Handle direct dispatch submission
   const handleSubmitDispatch = (e: React.FormEvent) => {
     e.preventDefault();
+    if (dispatchSubmittingRef.current) return;
+    dispatchSubmittingRef.current = true;
+    setDispatchSubmitting(true);
+    try {
+      submitDispatchForm();
+    } finally {
+      dispatchSubmittingRef.current = false;
+      setDispatchSubmitting(false);
+    }
+  };
+
+  const submitDispatchForm = () => {
     const dispatchMonth = settlementMonthForEventIso(
       leaveDateStart || swapEffectiveDate,
       systemConfig.weeksInMonth ?? 4
@@ -2848,6 +2863,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                 <button
                   type="submit"
                   disabled={
+                    dispatchSubmitting ||
                     clashPreview.hasClash ||
                     wellnessHoursExceeded ||
                     dispatchSubstituteMissing ||
@@ -2856,6 +2872,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       !actingHomeroomTeacherId)
                   }
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center space-x-2 ${
+                    dispatchSubmitting ||
                     clashPreview.hasClash ||
                     wellnessHoursExceeded ||
                     dispatchSubstituteMissing ||

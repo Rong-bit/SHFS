@@ -602,6 +602,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const requirePass = systemConfig.authConfig?.requirePassword !== false;
     if (!requirePass) {
+      // 關閉密碼時仍不可在名冊無人時切校長／生輔等，否則會以殘留教學組身分誤獲核章權
+      if (isStaffSelectableRole(targetRole) && !resolvedStaffId) {
+        setLoginAuthTarget({
+          type: 'role',
+          targetRole,
+          academicStaffId: undefined,
+          staffSubunit,
+        });
+        setIsLoginAuthOpen(true);
+        return;
+      }
       setCurrentRole(targetRole);
       if (resolvedStaffId && isStaffSelectableRole(targetRole)) {
         setCurrentAcademicStaffId(resolvedStaffId);
@@ -610,7 +621,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const trustKey = roleAuthTrustKey(targetRole, resolvedStaffId);
-    if (trustKey && resolvedStaffId && isLocalAuthTrusted(trustKey)) {
+    // admin 信任鍵為 role:admin（無 staffId）；處室角色仍須綁定人員
+    const trustOk =
+      Boolean(trustKey) &&
+      isLocalAuthTrusted(trustKey) &&
+      (targetRole === 'admin' || Boolean(resolvedStaffId));
+    if (trustOk) {
       completeAuthenticatedLogin({
         role: targetRole,
         academicStaffId: isStaffSelectableRole(targetRole) ? resolvedStaffId : undefined,
@@ -962,7 +978,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         merged.systemConfig?.authTrustRevocations
       )
     );
-    if (merged.academicStaffList?.length) {
+    // 空陣列也要套用，否則雲端清空成員名冊後本機舊名單會殘留並被推回雲端
+    if (Array.isArray(merged.academicStaffList)) {
       setAcademicStaffList(normalizePeopleEmails(merged.academicStaffList));
     }
     lastCloudSyncAtRef.current = merged.updatedAt;
@@ -1255,6 +1272,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCloudSyncStatus('synced');
         setCloudSyncMessage('已同步到其他電腦');
       } catch (err: any) {
+        // 寫入前已清 dirty；失敗須標回 dirty，否則斷線恢復後不會再推，直到下次編輯
+        cloudDirtyRef.current = true;
         setCloudSyncStatus('error');
         setCloudSyncMessage(err?.message || '同步寫入失敗');
       } finally {
@@ -1796,7 +1815,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           collectSubstituteOccupancies(requestPool, {
             excludeRequestIds: params.excludeRequestIds,
           }),
-          { leaveDateStart, leaveDateEnd }
+          { leaveDateStart, leaveDateEnd },
+          // 舊無日期假單核准時，仍須與已有請假區間的佔用衝突
+          { undatedProbeBlocksDated: true }
         )
       ) {
         messages.push(

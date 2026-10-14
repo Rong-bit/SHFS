@@ -14,6 +14,7 @@ import {
   resolveNotifyGroupsForRecord,
   sanitizeItemNotifyGroupIds,
   pruneItemNotifyGroupIdsByItems,
+  patrolIssueSummary,
 } from '../src/utils/patrolReview';
 import { patrolRecordHasIssue } from '../src/components/Patrol/PatrolRoomSheet';
 
@@ -469,6 +470,50 @@ const reopened = buildPatrolReviewCase({
 });
 assert.equal(reopened.status, 'open');
 assert.equal(reopened.notifiedAt, undefined);
+
+// archived（校長留存）後摘要變更 → 應重開，避免新收件人收信卻看不到案
+const archivedThenChanged = buildPatrolReviewCase({
+  record: { ...base, observations: ['sleeping', 'phone'], itemLabels: { sleeping: '睡覺', phone: '玩手機' } },
+  teachers,
+  academicStaffList: staff,
+  existing: {
+    ...notified,
+    status: 'archived',
+    archivedAt: '2026-01-02T00:00:00.000Z',
+    issueSummary: '睡覺',
+    notifiedAt: '2026-01-01T00:00:00.000Z',
+    signOffs: [
+      {
+        role: 'principal',
+        personId: 'p1',
+        personName: '校長',
+        action: '校長核章',
+        stampedAt: '2026-01-02T00:00:00.000Z',
+        stampLabel: '校長核章',
+      },
+    ],
+  },
+});
+assert.equal(archivedThenChanged.status, 'open');
+assert.equal(archivedThenChanged.notifiedAt, undefined);
+assert.equal(archivedThenChanged.signOffs.length, 0);
+assert.match(archivedThenChanged.issueSummary, /玩手機/);
+
+// archived 且摘要未變 → 不降級、不重寄
+const archivedSame = buildPatrolReviewCase({
+  record: base,
+  teachers,
+  academicStaffList: staff,
+  existing: {
+    ...notified,
+    status: 'archived',
+    archivedAt: '2026-01-02T00:00:00.000Z',
+    issueSummary: patrolIssueSummary(base),
+    notifiedAt: '2026-01-01T00:00:00.000Z',
+  },
+});
+assert.equal(archivedSame.status, 'archived');
+assert.equal(archivedSame.notifiedAt, '2026-01-01T00:00:00.000Z');
 
 // 「已更正為正常」後再異常 → 亦應重開可重寄
 const fromCorrected = buildPatrolReviewCase({

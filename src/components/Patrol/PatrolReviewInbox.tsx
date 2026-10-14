@@ -126,9 +126,10 @@ export const PatrolReviewInbox: React.FC<{
               kind: 'staff',
               id: currentAcademicStaff.id,
               name: currentAcademicStaff.name,
-              // 頂部角色優先：避免仍選著教學組人員時誤判無法校長／生輔核章
+              // 僅在名冊人員確屬該組時才覆寫 staffGroup，避免「密碼關閉＋名冊無校長」仍獲校長核章權
               staffGroup:
-                currentRole === 'principal' || currentRole === 'student_affairs'
+                (currentRole === 'principal' || currentRole === 'student_affairs') &&
+                currentAcademicStaff.group === currentRole
                   ? currentRole
                   : currentAcademicStaff.group || 'academic',
               staffTitle: currentAcademicStaff.title,
@@ -186,18 +187,9 @@ export const PatrolReviewInbox: React.FC<{
   const batchRoleOptions = useMemo(() => {
     if (selectedStampable.length === 0) return [] as PatrolReviewRole[];
     const lists = selectedStampable.map((c) => caseStampRoles(c, viewer));
-    const common = intersectRoles(lists);
-    if (common.length > 0) return common;
-    // 無交集時改用各案偏好角色的聯集，確認時逐案套用可用角色
-    const preferred = new Set<PatrolReviewRole>();
-    for (const roles of lists) {
-      const p = preferredStampRole(roles, {
-        preferPrincipal: Boolean(showPrincipalTools),
-      });
-      if (p) preferred.add(p);
-    }
-    return [...preferred];
-  }, [selectedStampable, viewer, showPrincipalTools]);
+    // 僅允許各案皆可核的身分，避免預覽選「教學組」實際卻蓋成「導師」
+    return intersectRoles(lists);
+  }, [selectedStampable, viewer]);
 
   const openStamp = (c: PatrolReviewCase) => {
     if (!viewer) return;
@@ -217,7 +209,9 @@ export const PatrolReviewInbox: React.FC<{
     if (!viewer || selectedStampable.length === 0) return;
     const roles = batchRoleOptions;
     if (roles.length === 0) {
-      alert('所選案件目前沒有可核章的身分。');
+      alert(
+        '所選案件沒有共同可核章的身分（例如有的只能導師核、有的只能教學組核）。請分開勾選後再批次核章，或改逐案核章。'
+      );
       return;
     }
     const preferred = preferredStampRole(roles, {
@@ -241,10 +235,9 @@ export const PatrolReviewInbox: React.FC<{
       const c = cases.find((x) => x.id === id);
       if (!c) continue;
       const roles = caseStampRoles(c, viewer);
-      const roleForCase = roles.includes(stampRole)
-        ? stampRole
-        : preferredStampRole(roles, { preferPrincipal: Boolean(showPrincipalTools) });
-      if (!roleForCase) continue;
+      // 不靜默改蓋其他身分，避免預覽與實際不一致
+      if (!stampRole || !roles.includes(stampRole)) continue;
+      const roleForCase = stampRole;
       const action: PatrolSignOffAction =
         roleForCase === 'principal'
           ? '校長核章'
@@ -471,9 +464,13 @@ export const PatrolReviewInbox: React.FC<{
                         <ElectronicStamp
                           {...(() => {
                             const layout = stampOfficeAndTitle(s.role, s.action);
+                            // 舊資料無 stampCaption：用角色標籤，避免誤顯示預設「組長」
                             return {
                               ...layout,
-                              stampCaption: s.stampCaption || layout.stampCaption,
+                              stampCaption:
+                                s.stampCaption ||
+                                PATROL_REVIEW_ROLE_LABELS[s.role] ||
+                                layout.stampCaption,
                             };
                           })()}
                           personName={s.personName}

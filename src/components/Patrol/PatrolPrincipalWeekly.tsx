@@ -45,6 +45,15 @@ export const PatrolPrincipalWeekly: React.FC = () => {
     [cases, dateFrom, dateTo]
   );
 
+  // 日期篩選變更後剔除已不在清單的勾選，避免按鈕數字與實際核章數不符
+  useEffect(() => {
+    const visible = new Set(list.map((c) => c.id));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [list]);
+
   const toggle = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);

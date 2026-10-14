@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ClipboardList, Stamp } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
@@ -9,7 +9,8 @@ import { PatrolReviewInbox } from './PatrolReviewInbox';
 export const PatrolAffairsMain: React.FC = () => {
   const { currentRole } = useApp();
   const isPrincipal = currentRole === 'principal';
-  const focusCaseId = useMemo(() => readPatrolReviewFocusId(), []);
+  // 勿 useMemo([])：核章／關閉提示後 session 已清，若鎖住舊 id 會讓已留存案殘留在「只看未留存」
+  const focusCaseId = readPatrolReviewFocusId();
   const [tab, setTab] = useState<'inbox' | 'weekly'>(() =>
     focusCaseId || !isPrincipal ? 'inbox' : 'weekly'
   );

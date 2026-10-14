@@ -162,15 +162,23 @@ export const PatrolMain: React.FC = () => {
     }
     const mailCfg = systemConfig.patrolMailConfig;
     const groups = resolvePatrolNotifyGroups(mailCfg);
-    const notifyRoles =
-      selectedGroupIds && selectedGroupIds.length > 0
-        ? mergeNotifyRolesFromGroups(groups, selectedGroupIds)
-        : existing?.notifiedAt
-          ? notifyRolesFromExistingRecipients(existing.recipients)
-          : mergeNotifyRolesFromGroups(
-              groups,
-              groups.map((g) => g.id)
-            );
+    let notifyRoles: PatrolNotifyRoles;
+    if (selectedGroupIds && selectedGroupIds.length > 0) {
+      notifyRoles = mergeNotifyRolesFromGroups(groups, selectedGroupIds);
+    } else {
+      // 無手動勾選時一律依「異常項目 → 群組」重算，避免已寄過後增修仍沿用舊收件人身分
+      const mapped = resolveNotifyGroupsForRecord({ record, mailConfig: mailCfg });
+      if (mapped.groupIds.length > 0) {
+        notifyRoles = mergeNotifyRolesFromGroups(groups, mapped.groupIds);
+      } else if (existing?.notifiedAt) {
+        notifyRoles = notifyRolesFromExistingRecipients(existing.recipients);
+      } else {
+        notifyRoles = mergeNotifyRolesFromGroups(
+          groups,
+          groups.map((g) => g.id)
+        );
+      }
+    }
     const reviewCase = buildPatrolReviewCase({
       record,
       teachers,
@@ -216,23 +224,39 @@ export const PatrolMain: React.FC = () => {
           ).map((e) => e.toLowerCase())
         );
         const failedSet = new Set(result.failed.map((f) => f.email.toLowerCase()));
+        // 以本次會辦算出的收件人為準（避免寄信期間本機被舊雲端覆蓋後漏掉新增收件人）
+        const prevByKey = new Map(
+          latest.recipients.map((r) => [
+            `${r.role}:${r.personId || r.personName || ''}:${(r.email || '').trim().toLowerCase()}`,
+            r,
+          ])
+        );
         const withNotify = {
           ...latest,
           issueSummary: reviewCase.issueSummary,
           note: reviewCase.note,
-          recipients: latest.recipients.map((r) => {
+          recipients: reviewCase.recipients.map((r) => {
             const email = (r.email || '').trim();
-            if (!email) return { ...r, sentOk: false, sentError: '無信箱' };
+            const prev =
+              prevByKey.get(
+                `${r.role}:${r.personId || r.personName || ''}:${email.toLowerCase()}`
+              ) || latest.recipients.find(
+                (p) =>
+                  p.role === r.role &&
+                  (p.personId || p.personName) === (r.personId || r.personName)
+              );
+            const base = prev ? { ...r, sentOk: prev.sentOk, sentError: prev.sentError } : r;
+            if (!email) return { ...base, sentOk: false, sentError: '無信箱' };
             const key = email.toLowerCase();
             if (failedSet.has(key)) {
               const err = result.failed.find((f) => f.email.toLowerCase() === key)?.error;
-              return { ...r, sentOk: false, sentError: err };
+              return { ...base, sentOk: false, sentError: err };
             }
-            if (r.sentOk === true) return { ...r, sentOk: true, sentError: undefined };
-            if (attempted.has(key) && result.sent > 0) {
-              return { ...r, sentOk: true, sentError: undefined };
+            if (base.sentOk === true) return { ...base, sentOk: true, sentError: undefined };
+            if (attempted.has(key) && !failedSet.has(key) && result.sent > 0) {
+              return { ...base, sentOk: true, sentError: undefined };
             }
-            return r;
+            return base;
           }),
           notifiedAt:
             result.sent > 0 ? new Date().toISOString() : latest.notifiedAt || reviewCase.notifiedAt,
