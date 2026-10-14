@@ -457,7 +457,7 @@ export const PatrolReviewInbox: React.FC<{
                         className="flex flex-col items-center gap-1 w-[168px]"
                       >
                         {s.instruction && (
-                          <div className="text-xs text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                          <div className="text-sm text-amber-900 text-center font-semibold leading-snug w-full break-words">
                             {s.instruction}
                           </div>
                         )}
@@ -476,7 +476,7 @@ export const PatrolReviewInbox: React.FC<{
                           personName={s.personName}
                           size={168}
                         />
-                        <div className="text-[11px] text-center text-slate-700 font-bold">
+                        <div className="text-xs text-center text-slate-800 font-extrabold tracking-wide">
                           {s.action}
                         </div>
                       </div>
@@ -584,7 +584,7 @@ export const PatrolReviewInbox: React.FC<{
             )}
             <div className="flex flex-col items-center gap-1.5 py-2 w-[200px] mx-auto">
               {instruction.trim() && signOffAllowsRemark(stampRole) && (
-                <div className="text-sm text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                <div className="text-base text-amber-900 text-center font-semibold leading-snug w-full break-words">
                   {instruction.trim()}
                 </div>
               )}
@@ -597,7 +597,7 @@ export const PatrolReviewInbox: React.FC<{
                 personName={viewer.name}
                 size={200}
               />
-              <div className="text-sm font-extrabold text-slate-900 tracking-wide">
+              <div className="text-base font-extrabold text-slate-900 tracking-wide">
                 {stampAction}
               </div>
               <div className="text-[11px] text-slate-500">{viewer.name}</div>
