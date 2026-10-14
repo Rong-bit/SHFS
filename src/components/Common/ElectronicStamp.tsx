@@ -98,7 +98,8 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   // 兩排共用同一寬度：左緣對齊、右緣對齊（「教師兼」字距拉開對齊「教務主任」）
   const titleBlockWidth = Math.min(leftMaxW, longestTitle * titleFont);
   const titleLeftX = 14;
-  const nameFont = maxFontForLine([...name].length, 100, 34, 14);
+  // 姓名較職銜再大一級（上限 38；可用寬略增以免三字名被壓回）
+  const nameFont = maxFontForLine([...name].length, 110, 38, 15);
 
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
