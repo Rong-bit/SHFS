@@ -234,12 +234,12 @@ export async function sendPatrolReviewNotify(params: {
   if (!isPatrolMailConfigured(mailConfig)) {
     return { ok: false, sent: 0, failed: [], skippedNoEmail: 0, error: '尚未啟用或設定 SMTP' };
   }
-  const allEmails = reviewCase.recipients.map((r) => r.email.trim()).filter(Boolean);
+  const allEmails = reviewCase.recipients.map((r) => (r.email || '').trim()).filter(Boolean);
   const pool = onlyEmails?.length
-    ? onlyEmails.map((e) => e.trim()).filter(Boolean)
+    ? onlyEmails.map((e) => (e || '').trim()).filter(Boolean)
     : allEmails;
   const unique = [...new Set(pool)];
-  const skippedNoEmail = reviewCase.recipients.filter((r) => !r.email.trim()).length;
+  const skippedNoEmail = reviewCase.recipients.filter((r) => !(r.email || '').trim()).length;
   if (unique.length === 0) {
     return { ok: false, sent: 0, failed: [], skippedNoEmail, error: '收件人皆無信箱' };
   }

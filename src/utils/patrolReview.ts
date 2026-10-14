@@ -825,10 +825,9 @@ export function viewerReviewRoles(params: {
     for (const r of reviewCase.recipients) {
       if (r.role !== 'homeroom' && r.role !== 'subject_teacher') continue;
       const idMatch = Boolean(r.personId && r.personId === viewer.id);
+      // personId 錯置時仍允許姓名對上（名冊異動／模糊對應殘留）
       const nameMatch =
-        !r.personId &&
-        Boolean(r.personName) &&
-        teacherNameMatches(r.personName, viewer.name);
+        Boolean(r.personName) && teacherNameMatches(r.personName, viewer.name);
       if (idMatch || nameMatch) roles.push(r.role);
     }
     return [...new Set(roles)];

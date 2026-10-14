@@ -126,9 +126,10 @@ export const PatrolReviewInbox: React.FC<{
               kind: 'staff',
               id: currentAcademicStaff.id,
               name: currentAcademicStaff.name,
-              // 頂部角色優先：避免仍選著教學組人員時誤判無法校長／生輔核章
+              // 僅在名冊人員確屬該組時才覆寫 staffGroup，避免「密碼關閉＋名冊無校長」仍獲校長核章權
               staffGroup:
-                currentRole === 'principal' || currentRole === 'student_affairs'
+                (currentRole === 'principal' || currentRole === 'student_affairs') &&
+                currentAcademicStaff.group === currentRole
                   ? currentRole
                   : currentAcademicStaff.group || 'academic',
               staffTitle: currentAcademicStaff.title,
@@ -234,10 +235,9 @@ export const PatrolReviewInbox: React.FC<{
       const c = cases.find((x) => x.id === id);
       if (!c) continue;
       const roles = caseStampRoles(c, viewer);
-      const roleForCase = roles.includes(stampRole)
-        ? stampRole
-        : preferredStampRole(roles, { preferPrincipal: Boolean(showPrincipalTools) });
-      if (!roleForCase) continue;
+      // 不靜默改蓋其他身分，避免預覽與實際不一致
+      if (!stampRole || !roles.includes(stampRole)) continue;
+      const roleForCase = stampRole;
       const action: PatrolSignOffAction =
         roleForCase === 'principal'
           ? '校長核章'
@@ -462,9 +462,13 @@ export const PatrolReviewInbox: React.FC<{
                         <ElectronicStamp
                           {...(() => {
                             const layout = stampOfficeAndTitle(s.role, s.action);
+                            // 舊資料無 stampCaption：用角色標籤，避免誤顯示預設「組長」
                             return {
                               ...layout,
-                              stampCaption: s.stampCaption || layout.stampCaption,
+                              stampCaption:
+                                s.stampCaption ||
+                                PATROL_REVIEW_ROLE_LABELS[s.role] ||
+                                layout.stampCaption,
                             };
                           })()}
                           personName={s.personName}

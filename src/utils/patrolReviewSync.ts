@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { PatrolReviewCase } from '../types';
+import { PatrolReviewCase, PatrolReviewStatus, PatrolSignOff } from '../types';
 import {
   CloudSyncSettings,
   decryptJson,
@@ -49,6 +49,68 @@ const saveLocalPatrolReviews = (records: PatrolReviewCase[]) => {
 const loadPending = (): PendingOp[] => readJson<PendingOp[]>(PATROL_REVIEW_PENDING_KEY, []);
 const savePending = (ops: PendingOp[]) =>
   localStorage.setItem(PATROL_REVIEW_PENDING_KEY, JSON.stringify(ops));
+
+/** 以 raw 字串 CAS 寫入 pending，降低並發 saveCase 互蓋 */
+const mutatePending = (mutator: (ops: PendingOp[]) => PendingOp[]) => {
+  for (let i = 0; i < 8; i++) {
+    const before = localStorage.getItem(PATROL_REVIEW_PENDING_KEY);
+    let current: PendingOp[] = [];
+    if (before) {
+      try {
+        const parsed = JSON.parse(before);
+        current = Array.isArray(parsed) ? (parsed as PendingOp[]) : [];
+      } catch {
+        current = [];
+      }
+    }
+    const next = mutator(current);
+    if (localStorage.getItem(PATROL_REVIEW_PENDING_KEY) !== before) continue;
+    localStorage.setItem(PATROL_REVIEW_PENDING_KEY, JSON.stringify(next));
+    return;
+  }
+  savePending(mutator(loadPending()));
+};
+
+const STATUS_RANK: Record<PatrolReviewStatus, number> = {
+  closed: 0,
+  open: 1,
+  reviewed: 2,
+  principal_done: 3,
+  archived: 4,
+};
+
+/** 合併並行核章的 signOffs，避免後寫覆蓋先寫的其他身分 */
+export function mergePatrolReviewCases(
+  a: PatrolReviewCase,
+  b: PatrolReviewCase
+): PatrolReviewCase {
+  const byKey = new Map<string, PatrolSignOff>();
+  for (const s of a.signOffs || []) {
+    byKey.set(`${s.role}:${s.personId}`, s);
+  }
+  for (const s of b.signOffs || []) {
+    const k = `${s.role}:${s.personId}`;
+    const prev = byKey.get(k);
+    if (!prev || (s.stampedAt || '') >= (prev.stampedAt || '')) byKey.set(k, s);
+  }
+  const signOffs = [...byKey.values()].sort((x, y) =>
+    (x.stampedAt || '').localeCompare(y.stampedAt || '')
+  );
+  const newer = (a.updatedAt || '') >= (b.updatedAt || '') ? a : b;
+  const older = newer === a ? b : a;
+  const status =
+    STATUS_RANK[a.status] >= STATUS_RANK[b.status] ? a.status : b.status;
+  return {
+    ...older,
+    ...newer,
+    status,
+    signOffs,
+    archivedAt: a.archivedAt || b.archivedAt || newer.archivedAt,
+    notifiedAt: a.notifiedAt || b.notifiedAt || newer.notifiedAt,
+    updatedAt:
+      (a.updatedAt || '') >= (b.updatedAt || '') ? a.updatedAt : b.updatedAt,
+  };
+}
 
 /**
  * 會辦案掛在既有 shfs_patrol 路徑下，沿用學校已開放的巡堂規則，
@@ -111,10 +173,11 @@ export const pullPatrolReviews = async (
   return out;
 };
 
-const upsert = (records: PatrolReviewCase[], record: PatrolReviewCase) => [
-  ...records.filter((r) => r.id !== record.id),
-  record,
-];
+const upsertMerged = (records: PatrolReviewCase[], record: PatrolReviewCase) => {
+  const prev = records.find((r) => r.id === record.id);
+  const merged = prev ? mergePatrolReviewCases(prev, record) : record;
+  return [...records.filter((r) => r.id !== record.id), merged];
+};
 
 type RecentOp = { id: string; at: number; record?: PatrolReviewCase };
 
@@ -134,14 +197,22 @@ export function usePatrolReviews() {
     const settings = settingsRef.current;
     if (!isCloudSyncReady(settings) || flushingRef.current) return;
     flushingRef.current = true;
+    let drainedClean = false;
     try {
       for (;;) {
         const ops = loadPending();
-        if (ops.length === 0) break;
+        if (ops.length === 0) {
+          drainedClean = true;
+          break;
+        }
         const op = ops[0];
-        if (op.op === 'put') await pushReview(settings, op.record);
-        else await deleteReviewRemote(settings, op.date, op.id);
-        savePending(loadPending().filter((o) => o.opId !== op.opId));
+        if (op.op === 'put') {
+          // 上傳前再與本機合併一次，降低並行核章互相覆蓋
+          const local = loadLocalPatrolReviews().find((r) => r.id === op.record.id);
+          const toPush = local ? mergePatrolReviewCases(local, op.record) : op.record;
+          await pushReview(settings, toPush);
+        } else await deleteReviewRemote(settings, op.date, op.id);
+        mutatePending((cur) => cur.filter((o) => o.opId !== op.opId));
         setPendingCount(loadPending().length);
       }
       setError('');
@@ -150,6 +221,8 @@ export function usePatrolReviews() {
     } finally {
       flushingRef.current = false;
       setPendingCount(loadPending().length);
+      // flush 期間若另有 saveCase 入隊，排空後再排一次
+      if (drainedClean && loadPending().length > 0) void flush();
     }
   }, []);
 
@@ -166,7 +239,8 @@ export function usePatrolReviews() {
 
   const saveCase = useCallback(
     (record: PatrolReviewCase) => {
-      const nextDisk = upsert(loadLocalPatrolReviews(), record);
+      const nextDisk = upsertMerged(loadLocalPatrolReviews(), record);
+      const savedRecord = nextDisk.find((r) => r.id === record.id) || record;
       saveLocalPatrolReviews(nextDisk);
       setCases((prev) => {
         const saved = loadLocalPatrolReviews();
@@ -174,11 +248,22 @@ export function usePatrolReviews() {
         const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
         return [...olderInMemory, ...saved];
       });
-      recentOpsRef.current.set(record.id, { id: record.id, at: Date.now(), record });
-      savePending([
-        ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
-        { opId: newOpId(), op: 'put', record },
-      ]);
+      recentOpsRef.current.set(record.id, {
+        id: record.id,
+        at: Date.now(),
+        record: savedRecord,
+      });
+      mutatePending((ops) => {
+        const filtered = ops.filter(
+          (op) => (op.op === 'put' ? op.record.id : op.id) !== record.id
+        );
+        const priorPut = ops.find((op) => op.op === 'put' && op.record.id === record.id);
+        const mergedRecord =
+          priorPut && priorPut.op === 'put'
+            ? mergePatrolReviewCases(priorPut.record, savedRecord)
+            : savedRecord;
+        return [...filtered, { opId: newOpId(), op: 'put', record: mergedRecord }];
+      });
       setPendingCount(loadPending().length);
       void flush();
     },
@@ -196,8 +281,8 @@ export function usePatrolReviews() {
         return [...olderInMemory, ...saved];
       });
       recentOpsRef.current.set(record.id, { id: record.id, at: Date.now() });
-      savePending([
-        ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
+      mutatePending((ops) => [
+        ...ops.filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
         { opId: newOpId(), op: 'delete', id: record.id, date: record.date },
       ]);
       setPendingCount(loadPending().length);
@@ -222,15 +307,28 @@ export function usePatrolReviews() {
         });
         const puts = new Map<string, PatrolReviewCase>();
         for (const op of pending) if (op.op === 'put') puts.set(op.record.id, op.record);
-        for (const o of recent) if (o.record) puts.set(o.id, o.record);
+        for (const o of recent) {
+          if (!o.record) continue;
+          const prev = puts.get(o.id);
+          puts.set(o.id, prev ? mergePatrolReviewCases(prev, o.record) : o.record);
+        }
         const deletes = new Set<string>(pending.flatMap((op) => (op.op === 'delete' ? [op.id] : [])));
         for (const o of recent) if (!o.record) deletes.add(o.id);
         for (const id of deletes) puts.delete(id);
         const outside = loadLocalPatrolReviews().filter((r) => r.date < dateFrom || r.date > dateTo);
-        const inside = [
-          ...remote.filter((r) => !deletes.has(r.id) && !puts.has(r.id)),
-          ...Array.from(puts.values()).filter((r) => r.date >= dateFrom && r.date <= dateTo),
-        ];
+        const inside: PatrolReviewCase[] = [];
+        const seen = new Set<string>();
+        for (const r of remote) {
+          if (deletes.has(r.id)) continue;
+          const put = puts.get(r.id);
+          inside.push(put ? mergePatrolReviewCases(r, put) : r);
+          seen.add(r.id);
+        }
+        for (const r of puts.values()) {
+          if (seen.has(r.id) || deletes.has(r.id)) continue;
+          if (r.date < dateFrom || r.date > dateTo) continue;
+          inside.push(r);
+        }
         const next = [...outside, ...inside];
         saveLocalPatrolReviews(next);
         setCases(next);

@@ -602,6 +602,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const requirePass = systemConfig.authConfig?.requirePassword !== false;
     if (!requirePass) {
+      // 關閉密碼時仍不可在名冊無人時切校長／生輔等，否則會以殘留教學組身分誤獲核章權
+      if (isStaffSelectableRole(targetRole) && !resolvedStaffId) {
+        setLoginAuthTarget({
+          type: 'role',
+          targetRole,
+          academicStaffId: undefined,
+          staffSubunit,
+        });
+        setIsLoginAuthOpen(true);
+        return;
+      }
       setCurrentRole(targetRole);
       if (resolvedStaffId && isStaffSelectableRole(targetRole)) {
         setCurrentAcademicStaffId(resolvedStaffId);
