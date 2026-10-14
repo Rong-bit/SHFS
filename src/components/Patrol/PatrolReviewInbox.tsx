@@ -186,18 +186,9 @@ export const PatrolReviewInbox: React.FC<{
   const batchRoleOptions = useMemo(() => {
     if (selectedStampable.length === 0) return [] as PatrolReviewRole[];
     const lists = selectedStampable.map((c) => caseStampRoles(c, viewer));
-    const common = intersectRoles(lists);
-    if (common.length > 0) return common;
-    // 無交集時改用各案偏好角色的聯集，確認時逐案套用可用角色
-    const preferred = new Set<PatrolReviewRole>();
-    for (const roles of lists) {
-      const p = preferredStampRole(roles, {
-        preferPrincipal: Boolean(showPrincipalTools),
-      });
-      if (p) preferred.add(p);
-    }
-    return [...preferred];
-  }, [selectedStampable, viewer, showPrincipalTools]);
+    // 僅允許各案皆可核的身分，避免預覽選「教學組」實際卻蓋成「導師」
+    return intersectRoles(lists);
+  }, [selectedStampable, viewer]);
 
   const openStamp = (c: PatrolReviewCase) => {
     if (!viewer) return;
@@ -217,7 +208,9 @@ export const PatrolReviewInbox: React.FC<{
     if (!viewer || selectedStampable.length === 0) return;
     const roles = batchRoleOptions;
     if (roles.length === 0) {
-      alert('所選案件目前沒有可核章的身分。');
+      alert(
+        '所選案件沒有共同可核章的身分（例如有的只能導師核、有的只能教學組核）。請分開勾選後再批次核章，或改逐案核章。'
+      );
       return;
     }
     const preferred = preferredStampRole(roles, {

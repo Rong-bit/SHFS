@@ -643,10 +643,18 @@ export function buildPatrolReviewCase(params: {
     academicStaffList,
     notifyRoles: params.notifyRoles,
   });
-  /** closed 或「已更正為正常」後再異常 → 視為新一輪會辦，可重寄 */
+  const issueSummary = patrolIssueSummary(record);
+  /**
+   * 新一輪會辦（清 notifiedAt／signOffs，狀態回 open）：
+   * - closed 或「已更正為正常」後再異常
+   * - 校長已留存（archived）後巡堂摘要又變更（再增修異常）→ 否則新收件人收信卻在「只看未留存」看不到
+   */
   const reopened =
     existing?.status === 'closed' ||
-    Boolean(existing?.issueSummary?.startsWith('【已更正為正常】'));
+    Boolean(existing?.issueSummary?.startsWith('【已更正為正常】')) ||
+    (existing?.status === 'archived' &&
+      Boolean(existing.issueSummary) &&
+      existing.issueSummary !== issueSummary);
   return {
     id: existing?.id || patrolReviewCaseId(record.id),
     recordId: record.id,
@@ -660,11 +668,11 @@ export function buildPatrolReviewCase(params: {
     className: record.className,
     subjectName: record.subjectName,
     teacherName: record.teacherName,
-    issueSummary: patrolIssueSummary(record),
+    issueSummary,
     note: record.note,
     patrollerId: record.patrollerId,
     patrollerName: record.patrollerName,
-    // 重開 → open；其餘保留進行中狀態（含 archived 不再降級）
+    // 重開 → open；其餘保留進行中狀態（archived 僅在摘要未變時不降級）
     status: reopened
       ? 'open'
       : existing?.status && existing.status !== 'closed'
