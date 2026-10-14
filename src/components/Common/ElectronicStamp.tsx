@@ -62,7 +62,7 @@ function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, mi
 /**
  * 扁長紅框職名章（實物約 0.75×2.8cm）
  * 左：職銜二排且兩排同寬對齊（例「教　師　兼」對齊「教務主任」）；右：姓名一排
- * 會畢／閱畢請顯示於戳章上方
+ * 會畢／閱畢顯示於戳章下方；簽文／指示顯示於戳章上方（寬度不超過戳章）
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   stampCaption,

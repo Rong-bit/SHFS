@@ -271,7 +271,7 @@ export function stampTitleFromStaffTitle(staffTitle?: string | null): string | n
  * 職名章左欄職銜（橫式由左而右；右欄另放姓名）。
  * 依機關學校職名章慣例：教師兼任處室主任／組長刻本職＋兼任職稱，
  * 例「教師兼教務主任」「教師兼教學組長」；校長僅刻「校長」（不加「教師兼」）。
- * 「會畢／閱畢／校長核章」屬動作，顯示於戳章上方，不進此字串。
+ * 「會畢／閱畢／校長核章」屬動作，顯示於戳章下方；簽文另置戳章上方，皆不進此字串。
  */
 export function stampCaptionFromRole(
   role: PatrolReviewRole,
