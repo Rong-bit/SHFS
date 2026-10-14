@@ -609,7 +609,7 @@ export const PatrolMain: React.FC = () => {
             <div>
               <h3 className="text-base font-extrabold text-slate-900">選擇會辦通知群組</h3>
               <p className="text-xs text-slate-500 mt-1">
-                巡堂紀錄已儲存。部分或全部異常項目尚未對應通知群組，請勾選要通知的群組；亦可至「寄信設定」為各項目指定群組（例如睡覺 → 學務線）。
+                巡堂紀錄已儲存。部分或全部異常項目尚未對應通知群組，請勾選要通知的群組；亦可至「系統維護 → 巡堂會辦寄信」為各項目指定群組（例如睡覺 → 學務線）。
               </p>
             </div>
             <div className="space-y-2">
