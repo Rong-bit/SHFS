@@ -108,8 +108,11 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   // 兩排共用同一寬度：左緣對齊、右緣對齊（「教師兼」字距拉開對齊「教務主任」）
   const titleBlockWidth = Math.min(leftMaxW, longestTitle * titleFont);
   const titleLeftX = 11;
-  // 姓名較職銜再大一級（上限 34；可用寬配合 2.25cm）
-  const nameFont = maxFontForLine([...name].length, 88, 34, 14);
+  // 姓名盡量填滿戳章內高；寬度不足時以 textLength 微壓，職稱字級不變
+  const nameChars = [...name].length;
+  const nameFont = 56;
+  const nameMaxW = 98;
+  const nameTextLength = Math.min(nameMaxW, Math.max(nameChars * nameFont * 0.92, nameFont * 0.85));
 
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
@@ -188,16 +191,17 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           </text>
         )}
 
-        {/* 右：姓名一排 */}
+        {/* 右：姓名一排（高向填滿；寬向以 textLength 收斂） */}
         <text
           x="173"
-          y="40"
+          y="39"
           textAnchor="middle"
           dominantBaseline="middle"
           fill={STAMP_RED}
           fontFamily={STAMP_KAI}
           fontSize={nameFont}
-          letterSpacing="0.16em"
+          textLength={nameTextLength}
+          lengthAdjust="spacingAndGlyphs"
         >
           {name}
         </text>
