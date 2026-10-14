@@ -10,6 +10,7 @@ import {
 import {
   EMPTY_PATROL_NOTIFY_ROLES,
   newPatrolNotifyGroupId,
+  pruneItemNotifyGroupIdsByItems,
   resolvePatrolNotifyGroups,
   resolvePatrolNotifyRoles,
   sanitizeItemNotifyGroupIds,
@@ -23,6 +24,8 @@ import {
   probePatrolNotifyApi,
   sendPatrolMailTest,
 } from '../../utils/patrolMail';
+import { ModalShell } from '../Common/ModalShell';
+import { PatrolItemListEditor } from './PatrolItemListEditor';
 
 const emptyMailConfig = (): PatrolMailConfig => ({
   enabled: false,
@@ -498,17 +501,86 @@ const PatrolMailSettingsPanel: React.FC<{
   );
 };
 
+type ConfirmState = { title: string; message: string; onConfirm: () => void } | null;
+
 export const PatrolMailSettings: React.FC = () => {
   const { systemConfig, updateSystemConfig } = useApp();
   const observationItems = resolvePatrolObservationItems(systemConfig);
   const checkItems = resolvePatrolCheckItems(systemConfig);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
+
+  const ask = (title: string, message: string, onConfirm: () => void) =>
+    setConfirm({ title, message, onConfirm });
+
+  const saveObservationItems = (items: PatrolCheckItem[]) => {
+    const keepIds = new Set([...items.map((i) => i.id), ...checkItems.map((i) => i.id)]);
+    const mail = systemConfig.patrolMailConfig;
+    updateSystemConfig({
+      patrolObservationItems: items,
+      ...(mail
+        ? {
+            patrolMailConfig: {
+              ...mail,
+              itemNotifyGroupIds: pruneItemNotifyGroupIdsByItems(mail.itemNotifyGroupIds, keepIds),
+            },
+          }
+        : {}),
+    });
+  };
+
+  const saveCheckItems = (items: PatrolCheckItem[]) => {
+    const keepIds = new Set([
+      ...observationItems.map((i) => i.id),
+      ...items.map((i) => i.id),
+    ]);
+    const mail = systemConfig.patrolMailConfig;
+    updateSystemConfig({
+      patrolCheckItems: items,
+      ...(mail
+        ? {
+            patrolMailConfig: {
+              ...mail,
+              itemNotifyGroupIds: pruneItemNotifyGroupIdsByItems(mail.itemNotifyGroupIds, keepIds),
+            },
+          }
+        : {}),
+    });
+  };
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 leading-relaxed">
-        本頁設定巡堂異常會辦的 SMTP 與通知群組（含密碼，請妥善保管）。
-        觀察／檢查項目清單請在「場地維護 → 巡堂教室配置」維護；下方「異常項目 → 通知群組」會依該清單對應。
+        本頁維護巡堂觀察／檢查項目、會辦通知群組與 SMTP（含密碼，請妥善保管）。
+        大樓／樓層／教室與室外場地關鍵字請在「場地維護 → 巡堂教室配置」設定。
       </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <PatrolItemListEditor
+          title="課間／段考觀察項目"
+          hint="課間與段考巡堂可複選，只記有無；未勾任何項目即為「正常」。"
+          items={observationItems}
+          placeholder="例：學生睡覺"
+          onChange={saveObservationItems}
+          onAskRemove={(label, onConfirm) =>
+            ask(
+              '移除觀察項目？',
+              `將移除「${label}」，之後的巡堂不再出現此項；已登錄的紀錄不受影響。`,
+              onConfirm
+            )
+          }
+        />
+        <PatrolItemListEditor
+          title="放學／室外課檢查項目"
+          hint="巡查空教室時逐項勾選；任一項未合格即列為有缺失。"
+          items={checkItems}
+          placeholder="例：教室大屏已關"
+          onChange={saveCheckItems}
+          onAskRemove={(label, onConfirm) =>
+            ask('移除檢查項目？', `將移除「${label}」，之後的巡查不再出現此項。`, onConfirm)
+          }
+        />
+      </div>
+
       <PatrolMailSettingsPanel
         value={systemConfig.patrolMailConfig}
         observationItems={observationItems}
@@ -516,6 +588,34 @@ export const PatrolMailSettings: React.FC = () => {
         schoolName={systemConfig.schoolName || '學校'}
         onSave={(patrolMailConfig) => updateSystemConfig({ patrolMailConfig })}
       />
+
+      {confirm && (
+        <ModalShell panelClassName="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md">
+          <div className="p-5 space-y-3">
+            <h4 className="font-bold text-slate-900">{confirm.title}</h4>
+            <p className="text-sm text-slate-600 leading-relaxed">{confirm.message}</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirm(null)}
+                className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirm.onConfirm();
+                  setConfirm(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-bold hover:bg-rose-500"
+              >
+                確定
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 };
