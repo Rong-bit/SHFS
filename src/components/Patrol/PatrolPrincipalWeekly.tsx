@@ -209,7 +209,12 @@ export const PatrolPrincipalWeekly: React.FC = () => {
               />
             </label>
             <div className="flex flex-col items-center gap-1.5">
-              <div className="text-base font-extrabold text-slate-900 tracking-wide">校長核章</div>
+              <div className="text-lg font-extrabold text-slate-900 tracking-wide">校長核章</div>
+              {instruction.trim() && (
+                <div className="text-sm text-amber-900 text-center max-w-sm px-2 font-semibold leading-snug">
+                  指示：{instruction.trim()}
+                </div>
+              )}
               <ElectronicStamp
                 stampCaption="校長"
                 officeLabel="校長室"
