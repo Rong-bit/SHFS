@@ -52,6 +52,15 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
           setMsg('已取消。請向管理員核對學校同步密碼後再加入。');
           return;
         }
+      } else {
+        const ok = window.confirm(
+          '雲端已有學校資料。加入後這台電腦的課表、名冊與申請單會改成與雲端相同；本機尚未同步的變更可能遺失。\n\n確定要加入並採用雲端資料？'
+        );
+        if (!ok) {
+          setMsgTone('warn');
+          setMsg('已取消加入同步，本機資料未變更。');
+          return;
+        }
       }
       updateCloudSyncSettings(next);
       setMsgTone('ok');

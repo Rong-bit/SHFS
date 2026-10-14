@@ -162,15 +162,23 @@ export const PatrolMain: React.FC = () => {
     }
     const mailCfg = systemConfig.patrolMailConfig;
     const groups = resolvePatrolNotifyGroups(mailCfg);
-    const notifyRoles =
-      selectedGroupIds && selectedGroupIds.length > 0
-        ? mergeNotifyRolesFromGroups(groups, selectedGroupIds)
-        : existing?.notifiedAt
-          ? notifyRolesFromExistingRecipients(existing.recipients)
-          : mergeNotifyRolesFromGroups(
-              groups,
-              groups.map((g) => g.id)
-            );
+    let notifyRoles: PatrolNotifyRoles;
+    if (selectedGroupIds && selectedGroupIds.length > 0) {
+      notifyRoles = mergeNotifyRolesFromGroups(groups, selectedGroupIds);
+    } else {
+      // 無手動勾選時一律依「異常項目 → 群組」重算，避免已寄過後增修仍沿用舊收件人身分
+      const mapped = resolveNotifyGroupsForRecord({ record, mailConfig: mailCfg });
+      if (mapped.groupIds.length > 0) {
+        notifyRoles = mergeNotifyRolesFromGroups(groups, mapped.groupIds);
+      } else if (existing?.notifiedAt) {
+        notifyRoles = notifyRolesFromExistingRecipients(existing.recipients);
+      } else {
+        notifyRoles = mergeNotifyRolesFromGroups(
+          groups,
+          groups.map((g) => g.id)
+        );
+      }
+    }
     const reviewCase = buildPatrolReviewCase({
       record,
       teachers,

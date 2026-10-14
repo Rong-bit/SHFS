@@ -323,6 +323,11 @@ export interface PatrolMailConfig {
    */
   notifyApiBaseUrl?: string;
   /**
+   * 寄信 API 授權碼（對應伺服器環境變數 PATROL_NOTIFY_TOKEN）。
+   * 跨域呼叫寄信 API 時必填；校內同源可留空（伺服器未設 token 時）。
+   */
+  notifyApiToken?: string;
+  /**
    * 會辦通知群組（可多組；異常時勾選要通知哪些）。
    * 未設定時由 notifyRoles 或預設兩組推導。
    */

@@ -389,6 +389,21 @@ const PatrolMailSettingsPanel: React.FC<{
                 </button>
               </div>
             )}
+            <label className="block font-semibold text-slate-600">
+              寄信 API 授權碼（選填）
+              <input
+                type="password"
+                autoComplete="off"
+                value={draft.notifyApiToken || ''}
+                onChange={(e) => setDraft({ ...draft, notifyApiToken: e.target.value })}
+                placeholder="須與主機 PATROL_NOTIFY_TOKEN 相同；跨域必填"
+                className="mt-1 w-full bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-sm font-normal"
+              />
+            </label>
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+              跨域呼叫寄信 API 時，主機須設定環境變數 <code className="font-mono">PATROL_NOTIFY_TOKEN</code>
+              ，並在此填相同授權碼。校內同源且未設 token 時可留空。
+            </p>
           </div>
         </details>
         <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
@@ -425,6 +440,7 @@ const PatrolMailSettingsPanel: React.FC<{
             const next: PatrolMailConfig = {
               ...draft,
               notifyApiBaseUrl,
+              notifyApiToken: (draft.notifyApiToken || '').trim(),
               pass: draft.pass.trim() || value?.pass || '',
               notifyGroups: groups,
               itemNotifyGroupIds: sanitizeItemNotifyGroupIds(draft.itemNotifyGroupIds, groups),

@@ -76,21 +76,38 @@ app.post("/api/patrol/notify", async (req, res) => {
   const smtp = body?.smtp;
   const to = Array.isArray(body?.to) ? body.to.filter((e) => typeof e === "string" && e.includes("@")) : [];
   const notifyToken = process.env.PATROL_NOTIFY_TOKEN;
+  const provided =
+    (typeof req.headers["x-patrol-notify-token"] === "string"
+      ? req.headers["x-patrol-notify-token"]
+      : "") ||
+    (typeof (body as { token?: string })?.token === "string"
+      ? (body as { token?: string }).token!
+      : "");
   if (notifyToken) {
-    const provided =
-      (typeof req.headers["x-patrol-notify-token"] === "string"
-        ? req.headers["x-patrol-notify-token"]
-        : "") ||
-      (typeof (body as { token?: string })?.token === "string"
-        ? (body as { token?: string }).token
-        : "");
     if (provided !== notifyToken) {
       return res.status(401).json({
         ok: false,
         sent: 0,
         failed: [],
-        error: "未授權的寄信請求",
+        error: "未授權的寄信請求（請在系統「巡堂會辦寄信」填寫與伺服器 PATROL_NOTIFY_TOKEN 相同的授權碼）",
       });
+    }
+  } else if (req.headers.origin) {
+    // 未設 token：拒絕明確跨域，降低開放 SMTP 轉發風險；校內同源仍可寄
+    try {
+      const originHost = new URL(String(req.headers.origin)).host;
+      const reqHost = String(req.headers.host || "");
+      if (originHost && reqHost && originHost !== reqHost) {
+        return res.status(401).json({
+          ok: false,
+          sent: 0,
+          failed: [],
+          error:
+            "跨域寄信需在伺服器設定 PATROL_NOTIFY_TOKEN，並於系統寄信設定填寫相同授權碼",
+        });
+      }
+    } catch {
+      /* ignore bad Origin */
     }
   }
   if (!smtp?.host || !smtp?.fromEmail) {

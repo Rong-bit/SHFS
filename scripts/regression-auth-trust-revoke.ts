@@ -78,6 +78,16 @@ const merged = mergeAuthTrustRevocations(
 assert.equal(merged[teacherKey], 200);
 assert.equal(effectiveRevokedAt(teacherKey, merged), 200);
 
+// 管理員信任鍵不需 staffId（「記住此電腦」應可再進系統管理員）
+clearLocalAuthTrust();
+setAuthTrustRevocations({});
+const adminKey = roleAuthTrustKey('admin');
+assert.equal(adminKey, 'role:admin');
+markLocalAuthTrusted(adminKey);
+assert.equal(isLocalAuthTrusted(adminKey), true);
+setAuthTrustRevocations({ [rolePasswordRevocationKey('admin')]: Date.now() });
+assert.equal(isLocalAuthTrusted(adminKey), false);
+
 clearLocalAuthTrust();
 setAuthTrustRevocations({});
 console.log('regression-auth-trust-revoke: ok');
