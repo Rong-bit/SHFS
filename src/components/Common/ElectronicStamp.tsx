@@ -235,8 +235,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
             color: STAMP_RED,
             whiteSpace: 'nowrap',
             letterSpacing: nameChars >= 3 ? '-0.02em' : '0.06em',
-            /* 楷體視覺中心略偏下，微上移以求光學置中 */
-            transform: `translateY(-3%) scaleX(${nameScaleX})`,
+            transform: `scaleX(${nameScaleX})`,
             transformOrigin: 'center center',
           }}
         >
