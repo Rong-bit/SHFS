@@ -320,12 +320,9 @@ export const PatrolMain: React.FC = () => {
     };
     saveRecord(record);
     if (patrolRecordHasIssue(record)) {
-      const existingReview =
-        loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
-        cases.find((c) => c.recordId === record.id) ||
-        null;
-      // 首次建立／尚未寄出：全部異常項目都有對應才自動會辦；否則彈窗（預勾已對應群組）
-      if (!existingReview?.notifiedAt && notifyGroups.length > 0) {
+      // 首次與後續增修異常：皆依「異常項目 → 通知群組」對應。
+      // 已寄過信時若仍走舊收件人，新增異常會漏通知；故一律重算對應群組。
+      if (notifyGroups.length > 0) {
         const { groupIds: mappedIds, fullyMapped } = resolveNotifyGroupsForRecord({
           record,
           mailConfig: systemConfig.patrolMailConfig,

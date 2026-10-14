@@ -23,6 +23,7 @@ import {
   resolvePatrolCheckItems,
   resolvePatrolObservationItems,
 } from '../../utils/patrolConfig';
+import { pruneItemNotifyGroupIdsByItems } from '../../utils/patrolReview';
 import {
   downloadPatrolRoomTemplate,
   exportPatrolRooms,
@@ -484,7 +485,27 @@ export const PatrolLayoutSettings: React.FC = () => {
           hint="課間與段考巡堂可複選，只記有無；未勾任何項目即為「正常」。"
           items={observationItems}
           placeholder="例：學生睡覺"
-          onChange={(items) => save({ patrolObservationItems: items })}
+          onChange={(items) => {
+            const keepIds = new Set([
+              ...items.map((i) => i.id),
+              ...checkItems.map((i) => i.id),
+            ]);
+            const mail = systemConfig.patrolMailConfig;
+            save({
+              patrolObservationItems: items,
+              ...(mail
+                ? {
+                    patrolMailConfig: {
+                      ...mail,
+                      itemNotifyGroupIds: pruneItemNotifyGroupIdsByItems(
+                        mail.itemNotifyGroupIds,
+                        keepIds
+                      ),
+                    },
+                  }
+                : {}),
+            });
+          }}
           onAskRemove={(label, onConfirm) =>
             ask('移除觀察項目？', `將移除「${label}」，之後的巡堂不再出現此項；已登錄的紀錄不受影響。`, onConfirm)
           }
@@ -494,7 +515,27 @@ export const PatrolLayoutSettings: React.FC = () => {
           hint="巡查空教室時逐項勾選；任一項未合格即列為有缺失。"
           items={checkItems}
           placeholder="例：教室大屏已關"
-          onChange={(items) => save({ patrolCheckItems: items })}
+          onChange={(items) => {
+            const keepIds = new Set([
+              ...observationItems.map((i) => i.id),
+              ...items.map((i) => i.id),
+            ]);
+            const mail = systemConfig.patrolMailConfig;
+            save({
+              patrolCheckItems: items,
+              ...(mail
+                ? {
+                    patrolMailConfig: {
+                      ...mail,
+                      itemNotifyGroupIds: pruneItemNotifyGroupIdsByItems(
+                        mail.itemNotifyGroupIds,
+                        keepIds
+                      ),
+                    },
+                  }
+                : {}),
+            });
+          }}
           onAskRemove={(label, onConfirm) =>
             ask('移除檢查項目？', `將移除「${label}」，之後的巡查不再出現此項。`, onConfirm)
           }

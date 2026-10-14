@@ -11,9 +11,18 @@ import { ScheduleImportModal } from './components/ScheduleImport/ScheduleImportM
 import { LoginAuthModal } from './components/Common/LoginAuthModal';
 import { isActingHomeroomOnlyRequest } from './utils/actingHomeroomPayrollRegister';
 import {
+  dismissPatrolReviewFocus,
   PATROL_REVIEW_FOCUS_CLEARED_EVENT,
   readPatrolReviewFocusId,
+  suggestRoleForPatrolReviewFocus,
 } from './utils/patrolDeepLink';
+
+const PATROL_FOCUS_ROLE_LABEL: Record<string, string> = {
+  teacher: '教師',
+  academic: '教學組',
+  student_affairs: '生輔組',
+  principal: '校長',
+};
 
 const AppContent: React.FC = () => {
   const { 
@@ -27,6 +36,10 @@ const AppContent: React.FC = () => {
     loginAuthTarget
   } = useApp();
   const [patrolFocusId, setPatrolFocusId] = useState(() => readPatrolReviewFocusId());
+  const suggestedPatrolRole = suggestRoleForPatrolReviewFocus(patrolFocusId);
+  const suggestedPatrolRoleLabel = suggestedPatrolRole
+    ? PATROL_FOCUS_ROLE_LABEL[suggestedPatrolRole]
+    : null;
 
   useEffect(() => {
     const clear = () => setPatrolFocusId(null);
@@ -41,8 +54,23 @@ const AppContent: React.FC = () => {
       <Header />
 
       {patrolFocusId && (
-        <div className="print:hidden bg-amber-50 border-b border-amber-200 text-amber-950 text-sm px-4 py-2 text-center">
-          您正從會辦通知信開啟案件。請切換至對應身分（教師／教學組／生輔組／校長）並開啟「巡堂會辦」後核章。
+        <div className="print:hidden bg-amber-50 border-b border-amber-200 text-amber-950 text-sm px-4 py-2 text-center flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          <span>
+            您正從會辦通知信開啟案件。請切換至
+            {suggestedPatrolRoleLabel ? (
+              <>「{suggestedPatrolRoleLabel}」</>
+            ) : (
+              <>對應身分（教師／教學組／生輔組／校長）</>
+            )}
+            並開啟「巡堂會辦」後核章。
+          </span>
+          <button
+            type="button"
+            onClick={() => dismissPatrolReviewFocus()}
+            className="underline font-semibold hover:text-amber-800"
+          >
+            關閉提示
+          </button>
         </div>
       )}
 
