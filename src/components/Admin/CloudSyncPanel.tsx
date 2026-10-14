@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Cloud, CloudOff, Check, AlertCircle, Loader2, KeyRound, Link as LinkIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { CloudSyncSettings, DEFAULT_DATABASE_URL, testCloudSyncConnection } from '../../utils/cloudSync';
+import { isSecureCryptoContext } from '../../utils/secureCrypto';
 
 export const CloudSyncPanel: React.FC = () => {
   const {
@@ -264,6 +265,12 @@ export const CloudSyncPanel: React.FC = () => {
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
             啟用後請在 A 再匯入一次課表（或任意改一個設定），B 電腦保持網頁開著或重新整理即可看到。
           </div>
+          {!isSecureCryptoContext() && (
+            <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-sky-950">
+              目前為非安全網址（常見 <code className="font-mono">http://區網IP:3000</code>
+              ）。Chrome 此時沒有原生加密 API，系統已改用相容模式，同步密碼可照常使用。
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-slate-500">
             <CloudOff className="w-3.5 h-3.5" />
             未啟用時，可到系統管理員頁使用「匯出／匯入整份備份」手動搬資料。
