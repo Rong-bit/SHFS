@@ -9,16 +9,16 @@ const STAMP_RED = '#c41e3a';
 export const STAMP_KAI_FONT =
   '"標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "LXGW WenKai", "KaiTi", "STKaiti", serif';
 
-/** 左職稱／右姓名欄寬比（姓名維持主視覺） */
-const TITLE_SHARE = 3.6;
-const NAME_SHARE = 6.4;
+/** 左職稱／右姓名欄寬比（左欄略增以容納較大職稱） */
+const TITLE_SHARE = 4.2;
+const NAME_SHARE = 5.8;
 /** 姓名字級相對戳章內高 */
 const NAME_FONT_RATIO = 0.92;
 /** 職稱字級相對戳章內高（上限；會再依欄寬與字距下修） */
-const TITLE_FONT_RATIO_TWO = 0.4;
-const TITLE_FONT_RATIO_ONE = 0.48;
+const TITLE_FONT_RATIO_TWO = 0.42;
+const TITLE_FONT_RATIO_ONE = 0.5;
 /** 職稱字距相對字寬（拉開「教務主任」四字，避免過密） */
-const TITLE_CHAR_GAP_RATIO = 0.3;
+const TITLE_CHAR_GAP_RATIO = 0.26;
 
 /**
  * 職名章螢幕／列印規格：
