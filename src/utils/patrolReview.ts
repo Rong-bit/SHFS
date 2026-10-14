@@ -221,6 +221,21 @@ export function sanitizeItemNotifyGroupIds(
   return next;
 }
 
+/** 觀察／檢查項目刪除後，一併清掉對應的通知群組對應 */
+export function pruneItemNotifyGroupIdsByItems(
+  map: Record<string, string[]> | undefined,
+  itemIds: Iterable<string>
+): Record<string, string[]> {
+  const valid = new Set(itemIds);
+  const next: Record<string, string[]> = {};
+  for (const [itemId, ids] of Object.entries(map || {})) {
+    if (!valid.has(itemId)) continue;
+    const cleaned = [...new Set(ids || [])];
+    if (cleaned.length > 0) next[itemId] = cleaned;
+  }
+  return next;
+}
+
 /** 信內／畫面通知對象排序 */
 export const PATROL_REVIEW_ROLE_ORDER: PatrolReviewRole[] = [
   'student_affairs',
