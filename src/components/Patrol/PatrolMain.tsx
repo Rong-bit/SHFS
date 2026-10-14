@@ -264,9 +264,7 @@ export const PatrolMain: React.FC = () => {
             `已寄出 ${result.sent} 封，部分失敗可於下次更新時重試${noMailHint}${deanHint}`
           );
         } else {
-          setNotifyMsg(
-            `會辦案已建立，但寄信失敗：${result.error || '未知錯誤'}${noMailHint}${deanHint}`
-          );
+          setNotifyMsg('會辦案已建立，但寄信失敗');
         }
       } catch {
         if (notifyGenRef.current.get(record.id) === gen) {
