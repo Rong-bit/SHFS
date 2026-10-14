@@ -179,7 +179,10 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const nameChars = Math.max(1, [...name].length);
   const nameAvailW =
     widthPx - borderPx * 2 - innerPadX * 2 - titleBlockW - colGap;
-  const nameFontPx = Math.min(innerH * NAME_FONT_RATIO, nameAvailW / (nameChars * 0.92));
+  // 字級貼齊高度（對齊參考圖）；寬度不足時用 letter-spacing／輕微 scaleX，不先砍字級
+  const nameFontPx = innerH * NAME_FONT_RATIO;
+  const nameNaturalW = nameChars * nameFontPx * 0.98;
+  const nameScaleX = Math.min(1, nameAvailW / Math.max(nameNaturalW, 1));
 
   return (
     <div
@@ -229,7 +232,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
         ))}
       </div>
 
-      {/* 右：姓名整塊幾何上下置中 */}
+      {/* 右：姓名整塊幾何上下置中、字級貼齊高度 */}
       <div
         style={{
           flex: '1 1 auto',
@@ -249,7 +252,9 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
             fontFamily: STAMP_KAI_FONT,
             color: STAMP_RED,
             whiteSpace: 'nowrap',
-            letterSpacing: nameChars >= 3 ? '0.08em' : '0.12em',
+            letterSpacing: nameChars >= 3 ? '0.04em' : '0.1em',
+            transform: nameScaleX < 0.995 ? `scaleX(${nameScaleX})` : undefined,
+            transformOrigin: 'center center',
           }}
         >
           {name}
