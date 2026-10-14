@@ -9,16 +9,14 @@ const STAMP_RED = '#c41e3a';
 export const STAMP_KAI_FONT =
   '"標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "LXGW WenKai", "KaiTi", "STKaiti", serif';
 
-/** 職稱：姓名 = 4：6（姓名佔六等分） */
-const TITLE_SHARE = 4;
-const NAME_SHARE = 6;
-/** 姓名字級相對戳章高度的比例（盡量填滿並上下置中） */
-const NAME_FONT_RATIO = 0.88;
-/** 職稱字級上限（與改欄寬前相同） */
-const TITLE_FONT_MAX_TWO = 26;
-const TITLE_FONT_MAX_ONE = 30;
-const TITLE_MEASURE_W_TWO = 119;
-const TITLE_MEASURE_W_ONE = 104;
+/** 對照實物：左職稱約三成、右姓名約七成 */
+const TITLE_SHARE = 3;
+const NAME_SHARE = 7;
+/** 姓名字級相對戳章內高（接近實物填滿） */
+const NAME_FONT_RATIO = 0.92;
+/** 職稱字級相對戳章內高 */
+const TITLE_FONT_RATIO_TWO = 0.32;
+const TITLE_FONT_RATIO_ONE = 0.4;
 
 /**
  * 職名章螢幕／列印規格：
@@ -77,16 +75,57 @@ export function splitStampCaptionLines(caption: string): [string] | [string, str
   return [chars.slice(0, mid).join(''), chars.slice(mid).join('')];
 }
 
-/** 在可用寬度內盡量放大字級（約略依全形字寬 ≈ fontSize） */
-function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, minFont = 10): number {
-  if (charCount <= 0) return maxFont;
-  const byWidth = Math.floor(maxWidth / charCount);
-  return Math.max(minFont, Math.min(maxFont, byWidth));
+/** 單排職稱：字元等距拉開（「教師兼」對齊「教務主任」同寬） */
+function TitleLine({
+  text,
+  fontSize,
+  width,
+}: {
+  text: string;
+  fontSize: number;
+  width: number;
+}) {
+  const chars = [...text];
+  if (chars.length <= 1) {
+    return (
+      <div
+        style={{
+          width,
+          fontSize,
+          lineHeight: 1,
+          fontFamily: STAMP_KAI_FONT,
+          color: STAMP_RED,
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {text}
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width,
+        fontSize,
+        lineHeight: 1,
+        fontFamily: STAMP_KAI_FONT,
+        color: STAMP_RED,
+      }}
+    >
+      {chars.map((ch, i) => (
+        <span key={`${ch}-${i}`}>{ch}</span>
+      ))}
+    </div>
+  );
 }
 
 /**
  * 扁長紅框職名章（實物約 0.75×2.25cm）
- * 左職稱（四等分、字級不變、左側壓縮）／右姓名（六等分、標楷體、上下置中填滿高度）
+ * 版面依實物參考圖：左職稱二排同寬、右姓名大方填滿；標楷體、上下置中。
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   stampCaption,
@@ -112,25 +151,30 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
 
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
-  // viewBox 比例換算：舊 SVG 225 寬上的字級 → 螢幕 px
-  const scale = widthPx / 225;
-  const titleMeasureW = (twoLine ? TITLE_MEASURE_W_TWO : TITLE_MEASURE_W_ONE) * scale;
+  const borderPx = Math.max(1.5, widthPx * 0.013);
+  const innerH = Math.max(1, heightPx - borderPx * 2);
+  const innerPadX = Math.max(3, widthPx * 0.025);
+  const colGap = Math.max(4, widthPx * 0.035);
+
+  const titleFontPx = innerH * (twoLine ? TITLE_FONT_RATIO_TWO : TITLE_FONT_RATIO_ONE);
   const longestTitle = Math.max(...lines.map((l) => [...l].length));
-  const titleFontPx = maxFontForLine(
-    longestTitle,
-    titleMeasureW,
-    (twoLine ? TITLE_FONT_MAX_TWO : TITLE_FONT_MAX_ONE) * scale,
-    (twoLine ? 11 : 13) * scale
+  // 職稱塊寬 = 最長一排字寬（兩排同寬）；不撐滿左欄以免貼到姓名
+  const titleBlockW = Math.min(
+    widthPx * (TITLE_SHARE / (TITLE_SHARE + NAME_SHARE)) - innerPadX,
+    longestTitle * titleFontPx * 0.98
   );
-  const nameFontPx = heightPx * NAME_FONT_RATIO;
-  const titleFlex = TITLE_SHARE;
-  const nameFlex = NAME_SHARE;
+
   const nameChars = Math.max(1, [...name].length);
-  // 姓名區約六等分寬；字級維持填滿高度，過寬時只做水平壓縮，避免蓋住職稱
-  const nameZoneW =
-    widthPx * (NAME_SHARE / (TITLE_SHARE + NAME_SHARE)) - Math.max(4, 6 * scale);
-  const nameNaturalW = nameChars * nameFontPx * 0.98;
-  const nameScaleX = Math.min(1, nameZoneW / nameNaturalW);
+  const nameAvailW =
+    widthPx -
+    borderPx * 2 -
+    innerPadX * 2 -
+    titleBlockW -
+    colGap;
+  // 字級先貼齊高度；寬度不足時僅輕微水平壓縮（對齊實物觀感）
+  const nameFontPx = innerH * NAME_FONT_RATIO;
+  const nameNaturalW = nameChars * nameFontPx * 0.96;
+  const nameScaleX = Math.min(1, nameAvailW / Math.max(nameNaturalW, 1));
 
   return (
     <div
@@ -139,90 +183,50 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
         width: widthPx,
         height: heightPx,
         boxSizing: 'border-box',
-        border: `${Math.max(1.5, 2.2 * scale)}px solid ${STAMP_RED}`,
+        border: `${borderPx}px solid ${STAMP_RED}`,
         borderRadius: 1,
         display: 'flex',
         flexDirection: 'row',
-        alignItems: 'stretch',
+        alignItems: 'center',
         overflow: 'hidden',
         color: STAMP_RED,
         fontFamily: STAMP_KAI_FONT,
         background: 'transparent',
+        paddingLeft: innerPadX,
+        paddingRight: innerPadX,
+        gap: colGap,
       }}
       aria-hidden
       title={`${caption} ${name}`}
     >
-      {/* 左四等分：職稱，整塊上下置中 */}
+      {/* 左：職稱二排同寬、上下置中 */}
       <div
         style={{
-          flex: `${titleFlex} 1 0`,
-          minWidth: 0,
-          maxWidth: `${(TITLE_SHARE / (TITLE_SHARE + NAME_SHARE)) * 100}%`,
+          flex: '0 0 auto',
+          width: titleBlockW,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'stretch',
           justifyContent: 'center',
-          paddingLeft: Math.max(2, 4 * scale),
-          paddingRight: Math.max(1, 2 * scale),
+          gap: Math.max(2, innerH * 0.1),
           fontFamily: STAMP_KAI_FONT,
-          zIndex: 1,
         }}
       >
-        {twoLine ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              gap: Math.max(1, 2 * scale),
-              width: '100%',
-            }}
-          >
-            {lines.map((line) => (
-              <div
-                key={line}
-                style={{
-                  fontSize: titleFontPx,
-                  lineHeight: 1.05,
-                  fontFamily: STAMP_KAI_FONT,
-                  color: STAMP_RED,
-                  whiteSpace: 'nowrap',
-                  textAlign: 'justify',
-                  textAlignLast: 'justify',
-                  width: '100%',
-                }}
-              >
-                {line}
-              </div>
-            ))}
+        {lines.map((line) => (
+          <div key={line}>
+            <TitleLine text={line} fontSize={titleFontPx} width={titleBlockW} />
           </div>
-        ) : (
-          <div
-            style={{
-              fontSize: titleFontPx,
-              lineHeight: 1,
-              fontFamily: STAMP_KAI_FONT,
-              color: STAMP_RED,
-              letterSpacing: '0.08em',
-              textAlign: 'center',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {lines[0]}
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* 右六等分：姓名，上下置中、字級貼齊高度；水平壓縮以不溢出 */}
+      {/* 右：姓名上下置中、填滿高度 */}
       <div
         style={{
-          flex: `${nameFlex} 1 0`,
+          flex: '1 1 auto',
           minWidth: 0,
-          maxWidth: `${(NAME_SHARE / (TITLE_SHARE + NAME_SHARE)) * 100}%`,
+          height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          paddingRight: Math.max(2, 3 * scale),
           overflow: 'hidden',
           fontFamily: STAMP_KAI_FONT,
         }}
@@ -234,8 +238,8 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
             fontFamily: STAMP_KAI_FONT,
             color: STAMP_RED,
             whiteSpace: 'nowrap',
-            letterSpacing: nameChars >= 3 ? '-0.02em' : '0.06em',
-            transform: `scaleX(${nameScaleX})`,
+            letterSpacing: nameChars >= 3 ? '0.02em' : '0.08em',
+            transform: nameScaleX < 0.995 ? `scaleX(${nameScaleX})` : undefined,
             transformOrigin: 'center center',
           }}
         >
