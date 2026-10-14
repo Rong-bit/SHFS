@@ -463,6 +463,9 @@ export const PatrolReviewInbox: React.FC<{
                         key={`${s.role}-${s.personId}-${s.stampedAt}`}
                         className="flex flex-col items-center gap-1"
                       >
+                        <div className="text-sm text-center text-slate-800 font-extrabold tracking-wide">
+                          {s.action}
+                        </div>
                         <ElectronicStamp
                           {...(() => {
                             const layout = stampOfficeAndTitle(s.role, s.action);
@@ -474,9 +477,6 @@ export const PatrolReviewInbox: React.FC<{
                           personName={s.personName}
                           size={168}
                         />
-                        <div className="text-[11px] text-center text-slate-700 font-bold">
-                          {s.action}
-                        </div>
                         {s.instruction && (
                           <div className="text-[10px] text-amber-800 text-center max-w-[12rem]">
                             {s.role === 'principal' ? '指示' : '簽文'}：{s.instruction}
@@ -586,6 +586,9 @@ export const PatrolReviewInbox: React.FC<{
               </label>
             )}
             <div className="flex flex-col items-center gap-1.5 py-2">
+              <div className="text-base font-extrabold text-slate-900 tracking-wide">
+                {stampAction}
+              </div>
               <ElectronicStamp
                 {...stampOfficeAndTitle(
                   stampRole,
@@ -595,9 +598,6 @@ export const PatrolReviewInbox: React.FC<{
                 personName={viewer.name}
                 size={200}
               />
-              <div className="text-sm font-extrabold text-slate-900 tracking-wide">
-                {stampAction}
-              </div>
               <div className="text-[11px] text-slate-500">{viewer.name}</div>
               {instruction.trim() && signOffAllowsRemark(stampRole) && (
                 <div className="text-[11px] text-amber-800 text-center max-w-sm px-2">
