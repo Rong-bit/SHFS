@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Cloud, X, KeyRound, Check, Loader2, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DEFAULT_DATABASE_URL, probeCloudSync } from '../../utils/cloudSync';
+import { isSecureCryptoContext } from '../../utils/secureCrypto';
 import { ModalShell } from './ModalShell';
 
 interface CloudSyncJoinModalProps {
@@ -89,6 +90,12 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
           請輸入管理員在「課表與同步 → 跨電腦同步」設定的<strong className="text-amber-300">學校同步密碼</strong>
           （與教學組／管理員<strong className="text-rose-300">登入密碼不同</strong>）。密碼必須完全相同（含大小寫與符號），差一個字就連不到同一份資料。
         </p>
+        {!isSecureCryptoContext() && (
+          <p className="text-[11px] text-amber-200/90 leading-relaxed rounded-xl border border-amber-500/40 bg-amber-950/40 px-3 py-2">
+            目前以非安全網址開啟（常見於 <code className="font-mono">http://區網IP:3000</code>
+            ）。系統已改用相容加密，可繼續輸入同步密碼。
+          </p>
+        )}
 
         <div>
           <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1">

@@ -1,5 +1,12 @@
 import { AcademicStaff, CourseSession, SubstituteRequest, SystemConfig, Teacher, WorkshopVenue } from '../types';
 import { mergeAuthTrustRevocations } from './localAuthTrust';
+import {
+  aesGcmDecrypt,
+  aesGcmEncrypt,
+  deriveAesGcmRawKey,
+  digestSha256,
+  getRandomBytes,
+} from './secureCrypto';
 
 export const CLOUD_SYNC_STORAGE_KEY = 'voc_cloud_sync_v1';
 export const CLOUD_SYNC_UPDATED_AT_KEY = 'voc_cloud_sync_updated_at';
@@ -69,36 +76,22 @@ const base64ToBytes = (value: string) => {
   return bytes;
 };
 
-const aesKeyCache = new Map<string, Promise<CryptoKey>>();
+const aesKeyCache = new Map<string, Promise<Uint8Array>>();
+const CLOUD_KEY_SALT = encoder.encode('SHFS-cloud-sync-v1');
+const CLOUD_KEY_ITERATIONS = 100000;
 
-const deriveAesKey = (schoolKey: string): Promise<CryptoKey> => {
+const deriveAesKey = (schoolKey: string): Promise<Uint8Array> => {
   let cached = aesKeyCache.get(schoolKey);
   if (!cached) {
-    cached = deriveAesKeyUncached(schoolKey);
+    cached = deriveAesGcmRawKey(schoolKey, CLOUD_KEY_SALT, CLOUD_KEY_ITERATIONS);
     cached.catch(() => aesKeyCache.delete(schoolKey));
     aesKeyCache.set(schoolKey, cached);
   }
   return cached;
 };
 
-const deriveAesKeyUncached = async (schoolKey: string) => {
-  const material = await crypto.subtle.importKey('raw', encoder.encode(schoolKey), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: encoder.encode('SHFS-cloud-sync-v1'),
-      iterations: 100000,
-      hash: 'SHA-256',
-    },
-    material,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-};
-
 export const pathIdForSchool = async (schoolKey: string) => {
-  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(`shfs:${schoolKey}`));
+  const digest = await digestSha256(encoder.encode(`shfs:${schoolKey}`));
   return Array.from(new Uint8Array(digest))
     .slice(0, 16)
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -113,13 +106,9 @@ export const encryptJson = async (
   value: unknown
 ): Promise<{ v: 1; iv: string; ct: string }> => {
   const key = await deriveAesKey(schoolKey);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const cipherBuf = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoder.encode(JSON.stringify(value))
-  );
-  return { v: 1, iv: bytesToBase64(iv), ct: bytesToBase64(new Uint8Array(cipherBuf)) };
+  const iv = getRandomBytes(12);
+  const cipherBuf = await aesGcmEncrypt(key, iv, encoder.encode(JSON.stringify(value)));
+  return { v: 1, iv: bytesToBase64(iv), ct: bytesToBase64(cipherBuf) };
 };
 
 export const decryptJson = async <T>(
@@ -127,9 +116,9 @@ export const decryptJson = async <T>(
   envelope: { iv: string; ct: string }
 ): Promise<T> => {
   const key = await deriveAesKey(schoolKey);
-  const plainBuf = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: base64ToBytes(envelope.iv) },
+  const plainBuf = await aesGcmDecrypt(
     key,
+    base64ToBytes(envelope.iv),
     base64ToBytes(envelope.ct)
   );
   return JSON.parse(decoder.decode(plainBuf)) as T;
@@ -230,25 +219,21 @@ export const mergeLocalSecretsIntoRemote = (
 
 const encryptPayload = async (schoolKey: string, data: SharedSchoolData): Promise<EncryptedEnvelope> => {
   const key = await deriveAesKey(schoolKey);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const cipherBuf = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoder.encode(JSON.stringify(data))
-  );
+  const iv = getRandomBytes(12);
+  const cipherBuf = await aesGcmEncrypt(key, iv, encoder.encode(JSON.stringify(data)));
   return {
     v: 1,
     iv: bytesToBase64(iv),
-    ct: bytesToBase64(new Uint8Array(cipherBuf)),
+    ct: bytesToBase64(cipherBuf),
     updatedAt: data.updatedAt,
   };
 };
 
 const decryptPayload = async (schoolKey: string, envelope: EncryptedEnvelope): Promise<SharedSchoolData> => {
   const key = await deriveAesKey(schoolKey);
-  const plainBuf = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: base64ToBytes(envelope.iv) },
+  const plainBuf = await aesGcmDecrypt(
     key,
+    base64ToBytes(envelope.iv),
     base64ToBytes(envelope.ct)
   );
   return JSON.parse(decoder.decode(plainBuf)) as SharedSchoolData;

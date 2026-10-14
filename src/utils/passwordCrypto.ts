@@ -1,8 +1,9 @@
 /** 密碼雜湊：shfs1$iterations$saltB64$hashB64（PBKDF2-SHA-256） */
 
+import { getRandomBytes, pbkdf2Sha256Bits } from './secureCrypto';
+
 const PREFIX = 'shfs1';
 const ITERATIONS = 100000;
-const encoder = new TextEncoder();
 
 const bytesToBase64 = (bytes: Uint8Array) => {
   let binary = '';
@@ -26,25 +27,13 @@ export function isPasswordHash(value?: string | null): boolean {
 }
 
 async function deriveBits(plain: string, salt: Uint8Array, iterations: number): Promise<ArrayBuffer> {
-  const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(plain), 'PBKDF2', false, [
-    'deriveBits',
-  ]);
-  return crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations,
-      hash: 'SHA-256',
-    },
-    keyMaterial,
-    256
-  );
+  return pbkdf2Sha256Bits(plain, salt, iterations, 256);
 }
 
 export async function hashPassword(plain: string): Promise<string> {
   const trimmed = plain.trim();
   if (!trimmed) return '';
-  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const salt = getRandomBytes(16);
   const bits = await deriveBits(trimmed, salt, ITERATIONS);
   return `${PREFIX}$${ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(new Uint8Array(bits))}`;
 }
