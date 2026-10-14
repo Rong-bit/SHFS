@@ -42,11 +42,11 @@ const emptyMailConfig = (): PatrolMailConfig => ({
 });
 
 const NOTIFY_ROLE_OPTIONS: { key: keyof PatrolNotifyRoles; label: string }[] = [
-  { key: 'student_affairs', label: '生輔組' },
+  { key: 'student_affairs', label: '生輔組長' },
   { key: 'dean_student', label: '學務主任' },
-  { key: 'academic', label: '教學組' },
+  { key: 'academic', label: '教學組長' },
   { key: 'dean_academic', label: '教務主任' },
-  { key: 'internship', label: '實習組' },
+  { key: 'internship', label: '實習組長' },
   { key: 'dean_internship', label: '實習主任' },
   { key: 'dean_general_affairs', label: '總務主任' },
   { key: 'homeroom', label: '導師' },
