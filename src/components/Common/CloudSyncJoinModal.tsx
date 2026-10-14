@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Cloud, X, KeyRound, Check, Loader2, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DEFAULT_DATABASE_URL, probeCloudSync } from '../../utils/cloudSync';
-import { hasSubtleCrypto, isSecureCryptoContext } from '../../utils/secureCrypto';
+import { isSecureCryptoContext } from '../../utils/secureCrypto';
 import { ModalShell } from './ModalShell';
 
 interface CloudSyncJoinModalProps {
@@ -93,10 +93,7 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
         {!isSecureCryptoContext() && (
           <p className="text-[11px] text-amber-200/90 leading-relaxed rounded-xl border border-amber-500/40 bg-amber-950/40 px-3 py-2">
             目前以非安全網址開啟（常見於 <code className="font-mono">http://區網IP:3000</code>
-            ）。系統已改用相容加密，可繼續輸入同步密碼；若仍失敗請改開{' '}
-            <code className="font-mono">https://</code> 或本機{' '}
-            <code className="font-mono">http://localhost:3000</code>
-            {hasSubtleCrypto() ? '' : '。'}
+            ）。系統已改用相容加密，可繼續輸入同步密碼。
           </p>
         )}
 
