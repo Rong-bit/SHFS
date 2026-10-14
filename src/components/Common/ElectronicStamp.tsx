@@ -125,6 +125,12 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const nameFontPx = heightPx * NAME_FONT_RATIO;
   const titleFlex = TITLE_SHARE;
   const nameFlex = NAME_SHARE;
+  const nameChars = Math.max(1, [...name].length);
+  // 姓名區約六等分寬；字級維持填滿高度，過寬時只做水平壓縮，避免蓋住職稱
+  const nameZoneW =
+    widthPx * (NAME_SHARE / (TITLE_SHARE + NAME_SHARE)) - Math.max(4, 6 * scale);
+  const nameNaturalW = nameChars * nameFontPx * 0.98;
+  const nameScaleX = Math.min(1, nameZoneW / nameNaturalW);
 
   return (
     <div
@@ -151,6 +157,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
         style={{
           flex: `${titleFlex} 1 0`,
           minWidth: 0,
+          maxWidth: `${(TITLE_SHARE / (TITLE_SHARE + NAME_SHARE)) * 100}%`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'stretch',
@@ -158,6 +165,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           paddingLeft: Math.max(2, 4 * scale),
           paddingRight: Math.max(1, 2 * scale),
           fontFamily: STAMP_KAI_FONT,
+          zIndex: 1,
         }}
       >
         {twoLine ? (
@@ -205,15 +213,17 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
         )}
       </div>
 
-      {/* 右六等分：姓名，上下左右置中、字級貼齊高度 */}
+      {/* 右六等分：姓名，上下置中、字級貼齊高度；水平壓縮以不溢出 */}
       <div
         style={{
           flex: `${nameFlex} 1 0`,
           minWidth: 0,
+          maxWidth: `${(NAME_SHARE / (TITLE_SHARE + NAME_SHARE)) * 100}%`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           paddingRight: Math.max(2, 3 * scale),
+          overflow: 'hidden',
           fontFamily: STAMP_KAI_FONT,
         }}
       >
@@ -224,8 +234,10 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
             fontFamily: STAMP_KAI_FONT,
             color: STAMP_RED,
             whiteSpace: 'nowrap',
-            letterSpacing: [...name].length >= 3 ? '-0.04em' : '0.04em',
-            transform: 'translateY(0)',
+            letterSpacing: nameChars >= 3 ? '-0.02em' : '0.06em',
+            /* 楷體視覺中心略偏下，微上移以求光學置中 */
+            transform: `translateY(-3%) scaleX(${nameScaleX})`,
+            transformOrigin: 'center center',
           }}
         >
           {name}
