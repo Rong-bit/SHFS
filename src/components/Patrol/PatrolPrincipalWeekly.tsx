@@ -209,6 +209,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
               />
             </label>
             <div className="flex flex-col items-center gap-1.5">
+              <div className="text-base font-extrabold text-slate-900 tracking-wide">校長核章</div>
               <ElectronicStamp
                 stampCaption="校長"
                 officeLabel="校長室"
@@ -216,7 +217,6 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 personName={principalStaff?.name || '校長'}
                 size={200}
               />
-              <div className="text-sm font-extrabold text-slate-900 tracking-wide">校長核章</div>
             </div>
             <div className="flex justify-end gap-2">
               <button
