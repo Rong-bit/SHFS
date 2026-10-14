@@ -34,12 +34,15 @@ function leaveRangesOverlap(
   aStart?: string,
   aEnd?: string,
   bStart?: string,
-  bEnd?: string
+  bEnd?: string,
+  opts?: { undatedProbeBlocksDated?: boolean }
 ): boolean {
   // 雙方都無日期（舊案）：保守視為佔用
   if (!aStart && !bStart) return true;
-  // 探測端無日期（永久移課／對調）：僅與「也無日期」的舊佔用衝突，不擋有請假區間的代課
-  if (!aStart) return false;
+  // 探測端無日期：
+  // - 預設（移課／永久對調）：不擋「有請假區間」的代課佔用
+  // - 請假派代核准（undatedProbeBlocksDated）：舊無日期假單須擋已有區間的佔用，避免同槽雙派
+  if (!aStart) return Boolean(opts?.undatedProbeBlocksDated);
   // 佔用端無日期：對有日期的探測保守擋下
   if (!bStart) return true;
   const aE = resolveLeaveDateEnd(aStart, aEnd) || aStart;
@@ -137,7 +140,8 @@ export function teacherHasSubstituteOccupancy(
   dayOfWeek: DayOfWeek,
   period: number,
   occupancies: SubstituteOccupancy[],
-  probeLeave?: { leaveDateStart?: string; leaveDateEnd?: string }
+  probeLeave?: { leaveDateStart?: string; leaveDateEnd?: string },
+  opts?: { undatedProbeBlocksDated?: boolean }
 ): boolean {
   return occupancies.some((o) => {
     if (o.teacherId !== teacherId || o.dayOfWeek !== dayOfWeek || o.period !== period) {
@@ -147,7 +151,8 @@ export function teacherHasSubstituteOccupancy(
       probeLeave?.leaveDateStart,
       probeLeave?.leaveDateEnd,
       o.leaveDateStart,
-      o.leaveDateEnd
+      o.leaveDateEnd,
+      opts
     );
   });
 }
@@ -249,7 +254,10 @@ export function rankSubstituteCandidates(params: {
         )
       );
       const hasOccupancyClash = periods.some((p) =>
-        teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies, probeLeave)
+        teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies, probeLeave, {
+          // 智慧派代／請假探測：無日期舊單亦不可與有區間佔用同槽
+          undatedProbeBlocksDated: true,
+        })
       );
       const examClashWaived = examWaiver && hasRegularClash && !hasOccupancyClash;
       const hasClash = hasOccupancyClash || (hasRegularClash && !examWaiver);

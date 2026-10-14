@@ -1804,7 +1804,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           collectSubstituteOccupancies(requestPool, {
             excludeRequestIds: params.excludeRequestIds,
           }),
-          { leaveDateStart, leaveDateEnd }
+          { leaveDateStart, leaveDateEnd },
+          // 舊無日期假單核准時，仍須與已有請假區間的佔用衝突
+          { undatedProbeBlocksDated: true }
         )
       ) {
         messages.push(

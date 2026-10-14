@@ -49,14 +49,20 @@ function findRemainingLeaveCoverNote(
   return leaveCoverNote(siblings[0]);
 }
 
+/**
+ * 請假派代對現行課表的命中條件。
+ * 必須以申請時段（星期／節次）為準：僅 id 相同但課已永久移走時不可蓋章，
+ * 否則會把 [請假派代] 標到錯誤節次。
+ */
 function matchesOriginalSession(s: CourseSession, req: SubstituteRequest, orig: CourseSession): boolean {
-  if (!isPlaceholderSession(orig) && s.id === orig.id) return true;
-  return (
+  const atLeaveSlot =
     s.dayOfWeek === orig.dayOfWeek &&
     s.period === orig.period &&
-    s.teacherId === req.applicantTeacherId &&
-    (!orig.className || !s.className || orig.className === s.className)
-  );
+    (!orig.className || !s.className || orig.className === s.className);
+  if (!atLeaveSlot) return false;
+  if (s.teacherId === req.applicantTeacherId) return true;
+  // id 相同且仍在原時段（任課可能短暫不一致時的後援）
+  return !isPlaceholderSession(orig) && s.id === orig.id;
 }
 
 /** 核准時套用課表異動（移課／互調／代課任課） */
@@ -265,20 +271,21 @@ export function applyRequestToSessionsDetailed(
   }
 
   if (reqResolved.requestType === 'substitute' && reqResolved.substituteTeacherId) {
+    // 以申請快照時段為準（勿用已併入現行時段的 resolvedOrig，否則移課後會蓋錯節）
+    const leaveSnap = snapOrig;
     const targets = sessions.filter((s) =>
-      matchesOriginalSession(s, reqResolved, resolvedOrig)
+      matchesOriginalSession(s, reqResolved, leaveSnap)
     );
-    // 舊版曾把任課改成代課老師：改以「申請人原課堂 id／時段」找回
+    // 舊版曾把任課改成代課老師：改以「申請人原課堂時段」找回
     const legacyCovered =
       targets.length === 0
         ? sessions.filter(
             (s) =>
-              s.id === resolvedOrig.id ||
-              (s.dayOfWeek === resolvedOrig.dayOfWeek &&
-                s.period === resolvedOrig.period &&
-                s.teacherId === reqResolved.substituteTeacherId &&
-                isLeaveCoverNote(s.notes) &&
-                (!resolvedOrig.className || s.className === resolvedOrig.className))
+              s.dayOfWeek === leaveSnap.dayOfWeek &&
+              s.period === leaveSnap.period &&
+              s.teacherId === reqResolved.substituteTeacherId &&
+              isLeaveCoverNote(s.notes) &&
+              (!leaveSnap.className || s.className === leaveSnap.className)
           )
         : [];
     const toFix = targets.length > 0 ? targets : legacyCovered;
@@ -286,7 +293,7 @@ export function applyRequestToSessionsDetailed(
       return {
         sessions,
         applied: false,
-        reason: '找不到欲派代的課堂於現行課表',
+        reason: '找不到欲派代的課堂於現行課表（可能已移課／對調，請駁回後重提）',
       };
     }
 
