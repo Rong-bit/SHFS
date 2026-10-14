@@ -476,7 +476,7 @@ export const PatrolReviewInbox: React.FC<{
                           personName={s.personName}
                           size={168}
                         />
-                        <div className="text-xs text-center text-slate-800 font-extrabold tracking-wide">
+                        <div className="text-[11px] text-center text-slate-700 font-bold">
                           {s.action}
                         </div>
                       </div>
@@ -597,7 +597,7 @@ export const PatrolReviewInbox: React.FC<{
                 personName={viewer.name}
                 size={200}
               />
-              <div className="text-base font-extrabold text-slate-900 tracking-wide">
+              <div className="text-sm font-extrabold text-slate-900 tracking-wide">
                 {stampAction}
               </div>
               <div className="text-[11px] text-slate-500">{viewer.name}</div>

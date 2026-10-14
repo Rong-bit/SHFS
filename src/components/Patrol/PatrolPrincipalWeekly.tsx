@@ -230,7 +230,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 personName={principalStaff?.name || '校長'}
                 size={200}
               />
-              <div className="text-base font-extrabold text-slate-900 tracking-wide">校長核章</div>
+              <div className="text-sm font-extrabold text-slate-900 tracking-wide">校長核章</div>
             </div>
             <div className="flex justify-end gap-2">
               <button
