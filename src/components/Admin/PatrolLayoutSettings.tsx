@@ -11,19 +11,15 @@ import {
   Sparkles,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { PatrolCheckItem, PatrolRoom, SystemConfig } from '../../types';
+import { PatrolRoom, SystemConfig } from '../../types';
 import {
   buildDraftPatrolRooms,
   groupPatrolRooms,
   newPatrolRoomId,
   resolveOutdoorVenueKeywords,
-  resolvePatrolCheckItems,
-  resolvePatrolObservationItems,
 } from '../../utils/patrolConfig';
-import { pruneItemNotifyGroupIdsByItems } from '../../utils/patrolReview';
 import {
   downloadPatrolRoomTemplate,
   exportPatrolRooms,
@@ -32,92 +28,15 @@ import {
 } from '../../utils/patrolExcel';
 import { scheduleClassNames } from '../../utils/patrolSchedule';
 import { ModalShell } from '../Common/ModalShell';
+import { PatrolItemListEditor } from './PatrolItemListEditor';
 
 type ConfirmState = { title: string; message: string; onConfirm: () => void } | null;
 
 const emptyForm = { building: '', floor: '', name: '', homeroomClass: '' };
 
-const ItemListEditor: React.FC<{
-  title: string;
-  hint: string;
-  items: PatrolCheckItem[];
-  placeholder: string;
-  onChange: (items: PatrolCheckItem[]) => void;
-  onAskRemove: (label: string, onConfirm: () => void) => void;
-}> = ({ title, hint, items, placeholder, onChange, onAskRemove }) => {
-  const [draft, setDraft] = useState('');
-  const add = () => {
-    const label = draft.trim();
-    if (!label) return;
-    if (items.some((i) => i.label === label)) {
-      alert('已有相同項目');
-      return;
-    }
-    onChange([...items, { id: `item-${Date.now().toString(36)}`, label }]);
-    setDraft('');
-  };
-  return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-      <div>
-        <h4 className="font-bold text-slate-900 text-sm">{title}</h4>
-        <p className="text-[11px] text-slate-500 mt-0.5">{hint}</p>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {items.length === 0 ? (
-          <span className="text-xs text-slate-400">尚無項目</span>
-        ) : (
-          items.map((item) => (
-            <span
-              key={item.id}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-800"
-            >
-              {item.label}
-              <button
-                type="button"
-                title="移除"
-                onClick={() =>
-                  onAskRemove(item.label, () => onChange(items.filter((x) => x.id !== item.id)))
-                }
-                className="text-slate-400 hover:text-rose-600"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))
-        )}
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              add();
-            }
-          }}
-          placeholder={placeholder}
-          className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
-        />
-        <button
-          type="button"
-          onClick={add}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-700"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          新增
-        </button>
-      </div>
-    </div>
-  );
-};
-
 export const PatrolLayoutSettings: React.FC = () => {
   const { systemConfig, updateSystemConfig, sessions } = useApp();
   const rooms = systemConfig.patrolRooms || [];
-  const checkItems = resolvePatrolCheckItems(systemConfig);
-  const observationItems = resolvePatrolObservationItems(systemConfig);
   const outdoorKeywords = resolveOutdoorVenueKeywords(systemConfig);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -479,68 +398,8 @@ export const PatrolLayoutSettings: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ItemListEditor
-          title="課間／段考觀察項目"
-          hint="課間與段考巡堂可複選，只記有無；未勾任何項目即為「正常」。"
-          items={observationItems}
-          placeholder="例：學生睡覺"
-          onChange={(items) => {
-            const keepIds = new Set([
-              ...items.map((i) => i.id),
-              ...checkItems.map((i) => i.id),
-            ]);
-            const mail = systemConfig.patrolMailConfig;
-            save({
-              patrolObservationItems: items,
-              ...(mail
-                ? {
-                    patrolMailConfig: {
-                      ...mail,
-                      itemNotifyGroupIds: pruneItemNotifyGroupIdsByItems(
-                        mail.itemNotifyGroupIds,
-                        keepIds
-                      ),
-                    },
-                  }
-                : {}),
-            });
-          }}
-          onAskRemove={(label, onConfirm) =>
-            ask('移除觀察項目？', `將移除「${label}」，之後的巡堂不再出現此項；已登錄的紀錄不受影響。`, onConfirm)
-          }
-        />
-        <ItemListEditor
-          title="放學／室外課檢查項目"
-          hint="巡查空教室時逐項勾選；任一項未合格即列為有缺失。"
-          items={checkItems}
-          placeholder="例：教室大屏已關"
-          onChange={(items) => {
-            const keepIds = new Set([
-              ...observationItems.map((i) => i.id),
-              ...items.map((i) => i.id),
-            ]);
-            const mail = systemConfig.patrolMailConfig;
-            save({
-              patrolCheckItems: items,
-              ...(mail
-                ? {
-                    patrolMailConfig: {
-                      ...mail,
-                      itemNotifyGroupIds: pruneItemNotifyGroupIdsByItems(
-                        mail.itemNotifyGroupIds,
-                        keepIds
-                      ),
-                    },
-                  }
-                : {}),
-            });
-          }}
-          onAskRemove={(label, onConfirm) =>
-            ask('移除檢查項目？', `將移除「${label}」，之後的巡查不再出現此項。`, onConfirm)
-          }
-        />
-        <ItemListEditor
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <PatrolItemListEditor
           title="室外場地關鍵字"
           hint="課表場地名稱含這些字時，標示為室外課（如體育課在操場）。"
           items={outdoorKeywords.map((k) => ({ id: k, label: k }))}
@@ -551,7 +410,7 @@ export const PatrolLayoutSettings: React.FC = () => {
       </div>
 
       <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 leading-relaxed">
-        SMTP、會辦通知群組與異常項目對應，請至「系統維護 → 巡堂會辦寄信」設定。
+        課間／段考觀察項目、放學檢查項目，以及 SMTP／會辦通知群組，請至「系統維護 → 巡堂會辦寄信」設定。
       </p>
 
       {confirm && (
