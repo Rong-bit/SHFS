@@ -381,9 +381,13 @@ export const PatrolReport: React.FC = () => {
       <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="font-bold text-slate-900 text-sm">明細（{filtered.length} 筆）</h3>
-          {canAdminDelete && (
+          {canAdminDelete ? (
             <p className="text-[11px] text-slate-500">
-              系統管理員可刪除任一筆；連按兩次「刪除」確認。對應會辦案會一併移除。
+              系統管理員可刪除誤登紀錄；連按兩次「刪除」確認。對應會辦案會一併移除。
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              教學組可查詢與匯出；誤登需刪除時請洽系統管理員（系統維護 → 巡堂紀錄彙整）。
             </p>
           )}
         </div>
