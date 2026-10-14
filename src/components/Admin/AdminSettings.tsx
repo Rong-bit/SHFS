@@ -72,8 +72,10 @@ import {
   Eye,
   EyeOff,
   MapPin,
+  Mail,
 } from 'lucide-react';
 import { PatrolLayoutSettings } from './PatrolLayoutSettings';
+import { PatrolMailSettings } from './PatrolMailSettings';
 import { PatrolReport } from '../Patrol/PatrolReport';
 import { generateTemplateExcel, exportScheduleToExcel } from '../../utils/scheduleImporter';
 import {
@@ -129,6 +131,7 @@ type AdminTab =
   | 'staff'
   | 'schedules'
   | 'sync'
+  | 'patrolMail'
   | 'maintenance';
 
 type AdminGroup = 'params' | 'venues' | 'roster' | 'data' | 'ops';
@@ -138,7 +141,7 @@ const ADMIN_GROUPS: { id: AdminGroup; label: string; tabs: AdminTab[] }[] = [
   { id: 'venues', label: '場地維護', tabs: ['venues', 'patrol', 'patrolReport'] },
   { id: 'roster', label: '名冊維護', tabs: ['teachers', 'staff'] },
   { id: 'data', label: '課表與同步', tabs: ['schedules', 'sync'] },
-  { id: 'ops', label: '系統維護', tabs: ['security', 'maintenance'] },
+  { id: 'ops', label: '系統維護', tabs: ['security', 'patrolMail', 'maintenance'] },
 ];
 
 const groupOfTab = (tab: AdminTab): AdminGroup =>
@@ -1249,6 +1252,15 @@ export const AdminSettings: React.FC = () => {
             >
               <Lock className="w-3.5 h-3.5 text-amber-500" />
               <span>登入密碼</span>
+            </button>
+            <button
+              id="tab-admin-patrol-mail"
+              type="button"
+              onClick={() => setActiveTab('patrolMail')}
+              className={subTabClass(activeTab === 'patrolMail')}
+            >
+              <Mail className="w-3.5 h-3.5 text-sky-500" />
+              <span>巡堂會辦寄信</span>
             </button>
             <button
               id="tab-admin-maintenance"
@@ -2639,6 +2651,7 @@ export const AdminSettings: React.FC = () => {
 
       {activeTab === 'patrol' && <PatrolLayoutSettings />}
       {activeTab === 'patrolReport' && <PatrolReport />}
+      {activeTab === 'patrolMail' && <PatrolMailSettings />}
 
       {/* TAB 2: 實習工場與教室維護 */}
       {activeTab === 'venues' && (
@@ -3381,7 +3394,7 @@ export const AdminSettings: React.FC = () => {
                 點選上方「修改組員姓名/資料」按鈕即可直接更換教學組或出納組組長、組員的姓名。修改後將即時同步於全校調代課經辦簽章與代課通知單中。
               </p>
               <p>
-                巡堂異常會辦請用下方「新增成員」：所屬處室選「實習處」即可選實習主任／實習組長；「總務處」選總務主任；「教務處」選教務主任／教學組長等。填好公務信箱後，異常會辦即可寄信（實習／總務另需於巡堂寄信設定勾選）。全校教師師資名冊不會作為會辦收件依據。
+                巡堂異常會辦請用下方「新增成員」：所屬處室選「實習處」即可選實習主任／實習組長；「總務處」選總務主任；「教務處」選教務主任／教學組長等。填好公務信箱後，異常會辦即可寄信（實習／總務另需於「系統維護 → 巡堂會辦寄信」勾選）。全校教師師資名冊不會作為會辦收件依據。
               </p>
             </div>
           </div>
@@ -3966,7 +3979,7 @@ export const AdminSettings: React.FC = () => {
                           ))}
                         </select>
                         <p className="text-[10px] text-amber-700 mt-1 leading-relaxed">
-                          新增實習主任：所屬處室選「實習處」，職稱即可選「實習主任」。教務／學務／校長填信箱後列入預設會辦；實習／總務另需於「巡堂寄信設定」勾選對應身分後才會通知。
+                          新增實習主任：所屬處室選「實習處」，職稱即可選「實習主任」。教務／學務／校長填信箱後列入預設會辦；實習／總務另需於「系統維護 → 巡堂會辦寄信」勾選對應身分後才會通知。
                         </p>
                       </>
                     );
