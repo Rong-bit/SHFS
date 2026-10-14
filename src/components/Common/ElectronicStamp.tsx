@@ -2,14 +2,18 @@ import React from 'react';
 
 /** 官章紅（接近實物原子印章） */
 const STAMP_RED = '#c41e3a';
-/** 優先標楷體（Windows DFKai-SB／macOS BiauKai 等） */
+/**
+ * 標楷體優先（Windows DFKai-SB／macOS BiauKai）；
+ * 系統沒有時用已載入的霞鶩文楷 LXGW WenKai。
+ */
 const STAMP_KAI =
-  '"標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "KaiTi", "STKaiti", "Noto Serif TC", serif';
+  '"標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "LXGW WenKai", "KaiTi", "STKaiti", serif';
 
-/** 內容區左右內緣（viewBox 225×75） */
+/** 內容區左右內緣（viewBox 225×75）；垂直中線 */
 const STAMP_INNER_LEFT = 6;
 const STAMP_INNER_RIGHT = 221;
 const STAMP_INNER_W = STAMP_INNER_RIGHT - STAMP_INNER_LEFT;
+const STAMP_CENTER_Y = 37.5;
 /** 職稱：姓名 = 4：6（姓名佔六等分） */
 const TITLE_SHARE = 4;
 const NAME_SHARE = 6;
@@ -17,8 +21,8 @@ const TITLE_ZONE_W = (STAMP_INNER_W * TITLE_SHARE) / (TITLE_SHARE + NAME_SHARE);
 const NAME_ZONE_W = (STAMP_INNER_W * NAME_SHARE) / (TITLE_SHARE + NAME_SHARE);
 const NAME_ZONE_LEFT = STAMP_INNER_LEFT + TITLE_ZONE_W;
 const NAME_CENTER_X = NAME_ZONE_LEFT + NAME_ZONE_W / 2;
-/** 戳章內高約 70；姓名字級盡量貼齊上下內緣 */
-const NAME_FILL_FONT = 62;
+/** 戳章內高約 70；姓名字級盡量貼齊上下內緣且垂直置中 */
+const NAME_FILL_FONT = 64;
 /** 職稱字級上限（與改欄寬前相同，不因左欄壓縮而變小） */
 const TITLE_FONT_MAX_TWO = 26;
 const TITLE_FONT_MAX_ONE = 30;
@@ -91,7 +95,7 @@ function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, mi
 
 /**
  * 扁長紅框職名章（實物約 0.75×2.25cm）
- * 左職稱（四等分、字級不變、左側壓縮）／右姓名（六等分、標楷體、盡量填滿高度）
+ * 左職稱（四等分、字級不變、左側壓縮）／右姓名（六等分、標楷體、上下置中填滿高度）
  * 會畢／閱畢顯示於戳章下方；簽文／指示顯示於戳章上方（簽文欄可寬於戳章，戳章置中）
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
@@ -129,11 +133,16 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   // 兩排同寬對齊；寬度不超過左四等分
   const titleBlockWidth = Math.min(titleZoneInnerW, longestTitle * titleFont);
   const titleLeftX = STAMP_INNER_LEFT + titlePad;
-  // 姓名：六等分寬、字級貼齊內高；過寬時以 textLength 微壓字距／字形
+  // 兩排相對戳章垂直中線對稱
+  const titleLineGap = titleFont + 4;
+  const titleY1 = STAMP_CENTER_Y - titleLineGap / 2;
+  const titleY2 = STAMP_CENTER_Y + titleLineGap / 2;
+
+  // 姓名：六等分寬、字級貼齊內高且上下置中；僅壓字距、不縮字形（避免高度被壓扁）
   const nameChars = Math.max(1, [...name].length);
   const nameMaxW = NAME_ZONE_W - 4;
-  const nameNaturalW = nameChars * NAME_FILL_FONT;
-  const nameTextLength = Math.min(nameMaxW, Math.max(nameNaturalW * 0.88, NAME_FILL_FONT * 0.85));
+  const nameNaturalW = nameChars * NAME_FILL_FONT * 0.96;
+  const nameTextLength = Math.min(nameMaxW, Math.max(nameNaturalW, NAME_FILL_FONT * 0.9));
 
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
@@ -144,6 +153,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
       style={{
         width: widthPx,
         height: heightPx,
+        fontFamily: STAMP_KAI,
       }}
       aria-hidden
       title={`${caption} ${name}`}
@@ -167,14 +177,14 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           rx="1"
         />
 
-        {/* 左四等分：職銜（字級不變） */}
+        {/* 左四等分：職銜（標楷體、垂直置中） */}
         {twoLine ? (
           <>
             <text
               x={titleLeftX}
-              y="26"
+              y={titleY1}
               textAnchor="start"
-              dominantBaseline="middle"
+              dominantBaseline="central"
               fill={STAMP_RED}
               fontFamily={STAMP_KAI}
               fontSize={titleFont}
@@ -185,9 +195,9 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
             </text>
             <text
               x={titleLeftX}
-              y="52"
+              y={titleY2}
               textAnchor="start"
-              dominantBaseline="middle"
+              dominantBaseline="central"
               fill={STAMP_RED}
               fontFamily={STAMP_KAI}
               fontSize={titleFont}
@@ -200,9 +210,9 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
         ) : (
           <text
             x={titleLeftX + titleBlockWidth / 2}
-            y="40"
+            y={STAMP_CENTER_Y}
             textAnchor="middle"
-            dominantBaseline="middle"
+            dominantBaseline="central"
             fill={STAMP_RED}
             fontFamily={STAMP_KAI}
             fontSize={titleFont}
@@ -212,17 +222,17 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           </text>
         )}
 
-        {/* 右六等分：姓名（標楷體、填滿高度） */}
+        {/* 右六等分：姓名（標楷體、上下置中、填滿高度） */}
         <text
           x={NAME_CENTER_X}
-          y="39"
+          y={STAMP_CENTER_Y}
           textAnchor="middle"
-          dominantBaseline="middle"
+          dominantBaseline="central"
           fill={STAMP_RED}
           fontFamily={STAMP_KAI}
           fontSize={NAME_FILL_FONT}
           textLength={nameTextLength}
-          lengthAdjust="spacingAndGlyphs"
+          lengthAdjust="spacing"
         >
           {name}
         </text>

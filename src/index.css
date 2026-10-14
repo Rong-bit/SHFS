@@ -2,6 +2,13 @@
 
 :root {
   --ui-font-size: 16px;
+  /* 電子章：系統標楷體優先，否則霞鶩文楷（楷書風格） */
+  --stamp-kai-font: "標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "LXGW WenKai",
+    "KaiTi", "STKaiti", serif;
+}
+
+.electronic-stamp-flat {
+  font-family: var(--stamp-kai-font);
 }
 
 html {
