@@ -24,7 +24,12 @@ import {
   dismissPatrolReviewFocus,
 } from '../../utils/patrolDeepLink';
 import { usePatrolReviews } from '../../utils/patrolReviewSync';
-import { ElectronicStamp } from '../Common/ElectronicStamp';
+import {
+  ElectronicStamp,
+  STAMP_REMARK_COL_LIST_PX,
+  STAMP_REMARK_COL_PREVIEW_PX,
+  stampDisplayWidthPx,
+} from '../Common/ElectronicStamp';
 
 type ViewerMode = 'teacher' | 'staff' | 'admin';
 
@@ -454,7 +459,8 @@ export const PatrolReviewInbox: React.FC<{
                     {c.signOffs.map((s) => (
                       <div
                         key={`${s.role}-${s.personId}-${s.stampedAt}`}
-                        className="flex flex-col items-center gap-1 w-[168px]"
+                        className="flex flex-col items-center gap-1"
+                        style={{ width: STAMP_REMARK_COL_LIST_PX }}
                       >
                         {s.instruction && (
                           <div className="text-sm text-amber-900 text-left font-semibold leading-snug w-full break-words">
@@ -474,7 +480,7 @@ export const PatrolReviewInbox: React.FC<{
                             };
                           })()}
                           personName={s.personName}
-                          size={168}
+                          size={stampDisplayWidthPx(STAMP_REMARK_COL_LIST_PX)}
                         />
                         <div className="text-[11px] text-center text-slate-700 font-bold">
                           {s.action}
@@ -582,7 +588,10 @@ export const PatrolReviewInbox: React.FC<{
                 />
               </label>
             )}
-            <div className="flex flex-col items-center gap-1.5 py-2 w-[200px] mx-auto">
+            <div
+              className="flex flex-col items-center gap-1.5 py-2 mx-auto"
+              style={{ width: STAMP_REMARK_COL_PREVIEW_PX }}
+            >
               {instruction.trim() && signOffAllowsRemark(stampRole) && (
                 <div className="text-base text-amber-900 text-left font-semibold leading-snug w-full break-words">
                   {instruction.trim()}
@@ -595,7 +604,7 @@ export const PatrolReviewInbox: React.FC<{
                   viewer.kind === 'staff' ? viewer.staffTitle : undefined
                 )}
                 personName={viewer.name}
-                size={200}
+                size={stampDisplayWidthPx(STAMP_REMARK_COL_PREVIEW_PX)}
               />
               <div className="text-sm font-extrabold text-slate-900 tracking-wide">
                 {stampAction}

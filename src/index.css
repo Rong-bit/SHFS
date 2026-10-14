@@ -13,9 +13,9 @@ html {
     font-size: 16px;
   }
 
-  /* 電子戳章實物：高 0.75cm × 寬 2.8cm */
+  /* 電子戳章實物：高 0.75cm × 寬 2.25cm */
   .electronic-stamp-flat {
-    width: 2.8cm !important;
+    width: 2.25cm !important;
     height: 0.75cm !important;
   }
 }

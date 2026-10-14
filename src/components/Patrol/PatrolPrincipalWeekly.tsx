@@ -10,7 +10,11 @@ import {
   weekRangeContaining,
 } from '../../utils/patrolReview';
 import { usePatrolReviews } from '../../utils/patrolReviewSync';
-import { ElectronicStamp } from '../Common/ElectronicStamp';
+import {
+  ElectronicStamp,
+  STAMP_REMARK_COL_PREVIEW_PX,
+  stampDisplayWidthPx,
+} from '../Common/ElectronicStamp';
 
 /** 校長每周彙整：勾選異常案、填指示、批次電子核章並留存教務處 */
 export const PatrolPrincipalWeekly: React.FC = () => {
@@ -217,7 +221,10 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 placeholder="例：請相關單位持續關懷並回報改善情形"
               />
             </label>
-            <div className="flex flex-col items-center gap-1.5 w-[200px] mx-auto">
+            <div
+              className="flex flex-col items-center gap-1.5 mx-auto"
+              style={{ width: STAMP_REMARK_COL_PREVIEW_PX }}
+            >
               {instruction.trim() && (
                 <div className="text-base text-amber-900 text-left font-semibold leading-snug w-full break-words">
                   {instruction.trim()}
@@ -228,7 +235,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 officeLabel="校長室"
                 titleLabel="校長"
                 personName={principalStaff?.name || '校長'}
-                size={200}
+                size={stampDisplayWidthPx(STAMP_REMARK_COL_PREVIEW_PX)}
               />
               <div className="text-sm font-extrabold text-slate-900 tracking-wide">校長核章</div>
             </div>

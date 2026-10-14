@@ -331,7 +331,7 @@ export function stampCaptionFromRole(
 }
 
 /**
- * 乙種職名章（約 0.75×2.8cm）：橫式左職銜、右姓名。
+ * 職名章（約 0.75×2.25cm）：橫式左職銜、右姓名。
  * 主任／組長→「教師兼…」；校長→「校長」。動作字不進戳章。
  * @param _action 保留相容舊呼叫；不進戳章
  * @param staffTitle 登入者職稱（如教務主任），用於組成「教師兼…」

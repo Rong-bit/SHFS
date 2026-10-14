@@ -6,12 +6,22 @@ const STAMP_KAI =
   '"DFKai-SB", "DFKaiShu-SB-Estd-BF", "標楷體", "KaiTi", "STKaiti", "BiauKai", "Noto Serif TC", serif';
 
 /**
- * 乙種職名章規格（臺北市版／學校處室主管常用）：
- * 長 2.8cm、寬 0.75cm。
+ * 職名章螢幕／列印規格：
+ * 寬 2.25cm、高 0.75cm。
+ * 簽文欄維持舊寬（對應 2.8cm），戳章依比例縮窄並在簽文欄內置中。
  */
 export const STAMP_HEIGHT_CM = 0.75;
-export const STAMP_WIDTH_CM = 2.8;
-const STAMP_ASPECT = STAMP_WIDTH_CM / STAMP_HEIGHT_CM; // ≈ 3.733
+export const STAMP_WIDTH_CM = 2.25;
+/** 簽文欄對應的參考寬（舊戳章寬）；簽文維持此寬度 */
+export const STAMP_REMARK_REF_CM = 2.8;
+export const STAMP_REMARK_COL_LIST_PX = 168;
+export const STAMP_REMARK_COL_PREVIEW_PX = 200;
+const STAMP_ASPECT = STAMP_WIDTH_CM / STAMP_HEIGHT_CM; // = 3
+
+/** 簽文欄寬（px）→ 戳章螢幕寬（px），維持 2.25／2.8 比例 */
+export function stampDisplayWidthPx(remarkColPx: number): number {
+  return Math.round((remarkColPx * STAMP_WIDTH_CM) / STAMP_REMARK_REF_CM);
+}
 
 type ElectronicStampProps = {
   /**
@@ -26,8 +36,8 @@ type ElectronicStampProps = {
   /** 姓名（右一排），如 陳柏宇 */
   personName: string;
   /**
-   * 螢幕預覽寬度（px）。列印時固定為 2.8cm × 0.75cm。
-   * @default 240
+   * 螢幕預覽寬度（px）。列印時固定為 2.25cm × 0.75cm。
+   * @default 193
    */
   size?: number;
   className?: string;
@@ -60,9 +70,9 @@ function maxFontForLine(charCount: number, maxWidth: number, maxFont: number, mi
 }
 
 /**
- * 扁長紅框職名章（實物約 0.75×2.8cm）
+ * 扁長紅框職名章（實物約 0.75×2.25cm）
  * 左：職銜二排且兩排同寬對齊（例「教　師　兼」對齊「教務主任」）；右：姓名一排
- * 會畢／閱畢顯示於戳章下方；簽文／指示顯示於戳章上方（寬度不超過戳章）
+ * 會畢／閱畢顯示於戳章下方；簽文／指示顯示於戳章上方（簽文欄可寬於戳章，戳章置中）
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   stampCaption,
@@ -70,7 +80,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   titleLabel,
   personName,
   actionLabel,
-  size = 240,
+  size = stampDisplayWidthPx(240),
   className = '',
 }) => {
   const caption = (
@@ -86,20 +96,20 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const lines = splitStampCaptionLines(caption);
   const twoLine = lines.length === 2;
 
-  // viewBox 280×75；左欄職銜、右欄姓名
-  const leftMaxW = twoLine ? 148 : 130;
+  // viewBox 225×75（對應 2.25×0.75cm）；左欄職銜、右欄姓名
+  const leftMaxW = twoLine ? 119 : 104;
   const longestTitle = Math.max(...lines.map((l) => [...l].length));
   const titleFont = maxFontForLine(
     longestTitle,
     leftMaxW,
-    twoLine ? 28 : 32,
-    twoLine ? 12 : 14
+    twoLine ? 26 : 30,
+    twoLine ? 11 : 13
   );
   // 兩排共用同一寬度：左緣對齊、右緣對齊（「教師兼」字距拉開對齊「教務主任」）
   const titleBlockWidth = Math.min(leftMaxW, longestTitle * titleFont);
-  const titleLeftX = 14;
-  // 姓名較職銜再大一級（上限 38；可用寬略增以免三字名被壓回）
-  const nameFont = maxFontForLine([...name].length, 110, 38, 15);
+  const titleLeftX = 11;
+  // 姓名較職銜再大一級（上限 34；可用寬配合 2.25cm）
+  const nameFont = maxFontForLine([...name].length, 88, 34, 14);
 
   const widthPx = size;
   const heightPx = size / STAMP_ASPECT;
@@ -115,7 +125,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
       title={`${caption} ${name}`}
     >
       <svg
-        viewBox="0 0 280 75"
+        viewBox="0 0 225 75"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
         width="100%"
@@ -123,13 +133,13 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
         style={{ display: 'block' }}
       >
         <rect
-          x="2.5"
+          x="2"
           y="2.5"
-          width="275"
+          width="221"
           height="70"
           fill="none"
           stroke={STAMP_RED}
-          strokeWidth="2.4"
+          strokeWidth="2.2"
           rx="1"
         />
 
@@ -180,7 +190,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
 
         {/* 右：姓名一排 */}
         <text
-          x="215"
+          x="173"
           y="40"
           textAnchor="middle"
           dominantBaseline="middle"
