@@ -16,14 +16,14 @@ import { teacherNameMatches } from './schoolDepartments';
 import { lookupTeacherEmail } from './teacherEmailImporter';
 
 export const PATROL_REVIEW_ROLE_LABELS: Record<PatrolReviewRole, string> = {
-  student_affairs: '生輔組',
-  academic: '教學組',
+  student_affairs: '生輔組長',
+  academic: '教學組長',
   dean_academic: '教務主任',
   dean_student: '學務主任',
   homeroom: '導師',
   subject_teacher: '任課老師',
   principal: '校長',
-  internship: '實習組',
+  internship: '實習組長',
   dean_internship: '實習主任',
   dean_general_affairs: '總務主任',
 };
@@ -146,11 +146,11 @@ export function mergeNotifyRolesFromGroups(
 export function summarizeNotifyGroupRoles(roles: PatrolNotifyRoles): string {
   const r = resolvePatrolNotifyRoles(roles);
   const parts: string[] = [];
-  if (r.student_affairs) parts.push('生輔組');
+  if (r.student_affairs) parts.push('生輔組長');
   if (r.dean_student) parts.push('學務主任');
-  if (r.academic) parts.push('教學組');
+  if (r.academic) parts.push('教學組長');
   if (r.dean_academic) parts.push('教務主任');
-  if (r.internship) parts.push('實習組');
+  if (r.internship) parts.push('實習組長');
   if (r.dean_internship) parts.push('實習主任');
   if (r.dean_general_affairs) parts.push('總務主任');
   if (r.homeroom) parts.push('導師');
