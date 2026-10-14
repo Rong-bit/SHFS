@@ -9,14 +9,16 @@ const STAMP_RED = '#c41e3a';
 export const STAMP_KAI_FONT =
   '"標楷體", "DFKai-SB", "DFKaiShu-SB-Estd-BF", "BiauKai", "LXGW WenKai", "KaiTi", "STKaiti", serif';
 
-/** 對照實物：左職稱約三成、右姓名約七成 */
-const TITLE_SHARE = 3;
-const NAME_SHARE = 7;
-/** 姓名字級相對戳章內高（接近實物填滿） */
-const NAME_FONT_RATIO = 0.92;
-/** 職稱字級相對戳章內高 */
-const TITLE_FONT_RATIO_TWO = 0.32;
-const TITLE_FONT_RATIO_ONE = 0.4;
+/** 左職稱／右姓名欄寬比 */
+const TITLE_SHARE = 4;
+const NAME_SHARE = 6;
+/** 姓名字級相對戳章內高 */
+const NAME_FONT_RATIO = 0.9;
+/** 職稱字級相對戳章內高（上限；會再依欄寬與字距下修） */
+const TITLE_FONT_RATIO_TWO = 0.36;
+const TITLE_FONT_RATIO_ONE = 0.44;
+/** 職稱字距相對字寬（拉開「教務主任」四字） */
+const TITLE_CHAR_GAP_RATIO = 0.4;
 
 /**
  * 職名章螢幕／列印規格：
@@ -75,15 +77,17 @@ export function splitStampCaptionLines(caption: string): [string] | [string, str
   return [chars.slice(0, mid).join(''), chars.slice(mid).join('')];
 }
 
-/** 單排職稱：字元等距拉開（「教師兼」對齊「教務主任」同寬） */
+/** 單排職稱：固定字距等分拉開，兩排共用同一寬度 */
 function TitleLine({
   text,
   fontSize,
   width,
+  gap,
 }: {
   text: string;
   fontSize: number;
   width: number;
+  gap: number;
 }) {
   const chars = [...text];
   if (chars.length <= 1) {
@@ -117,7 +121,9 @@ function TitleLine({
       }}
     >
       {chars.map((ch, i) => (
-        <span key={`${ch}-${i}`}>{ch}</span>
+        <span key={`${ch}-${i}`} style={{ flex: '0 0 auto' }}>
+          {ch}
+        </span>
       ))}
     </div>
   );
@@ -125,7 +131,7 @@ function TitleLine({
 
 /**
  * 扁長紅框職名章（實物約 0.75×2.25cm）
- * 版面依實物參考圖：左職稱二排同寬、右姓名大方填滿；標楷體、上下置中。
+ * 左職稱二排同寬（字距拉開）／右姓名整塊上下置中；標楷體。
  */
 export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   stampCaption,
@@ -153,19 +159,27 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const heightPx = size / STAMP_ASPECT;
   const borderPx = Math.max(1.5, widthPx * 0.013);
   const innerH = Math.max(1, heightPx - borderPx * 2);
-  const innerPadX = Math.max(3, widthPx * 0.025);
-  const colGap = Math.max(4, widthPx * 0.035);
+  const innerPadX = Math.max(3, widthPx * 0.022);
+  const colGap = Math.max(5, widthPx * 0.04);
 
-  const titleFontPx = innerH * (twoLine ? TITLE_FONT_RATIO_TWO : TITLE_FONT_RATIO_ONE);
   const longestTitle = Math.max(...lines.map((l) => [...l].length));
-  // 職稱塊寬 = 最長一排字寬（兩排同寬）；不撐滿左欄以免貼到姓名
+  const titleMaxW = widthPx * (TITLE_SHARE / (TITLE_SHARE + NAME_SHARE)) - innerPadX * 0.3;
+  // 字級須讓「最長一排 + 字距」放進左欄，避免四字被擠實
+  const titleSlots = longestTitle + Math.max(0, longestTitle - 1) * TITLE_CHAR_GAP_RATIO;
+  const titleFontPx = Math.min(
+    innerH * (twoLine ? TITLE_FONT_RATIO_TWO : TITLE_FONT_RATIO_ONE),
+    titleMaxW / Math.max(titleSlots, 1)
+  );
+  const titleCharGap = titleFontPx * TITLE_CHAR_GAP_RATIO;
   const titleBlockW = Math.min(
-    widthPx * (TITLE_SHARE / (TITLE_SHARE + NAME_SHARE)) - innerPadX,
-    longestTitle * titleFontPx * 0.98
+    titleMaxW,
+    longestTitle * titleFontPx + Math.max(0, longestTitle - 1) * titleCharGap
   );
 
-  const nameChars = [...name];
-  const nameFontPx = innerH * NAME_FONT_RATIO;
+  const nameChars = Math.max(1, [...name].length);
+  const nameAvailW =
+    widthPx - borderPx * 2 - innerPadX * 2 - titleBlockW - colGap;
+  const nameFontPx = Math.min(innerH * NAME_FONT_RATIO, nameAvailW / (nameChars * 0.92));
 
   return (
     <div
@@ -190,26 +204,32 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
       aria-hidden
       title={`${caption} ${name}`}
     >
-      {/* 左：職稱二排同寬、上下置中 */}
+      {/* 左：職稱二排同寬、字距拉開、上下置中 */}
       <div
         style={{
           flex: '0 0 auto',
           width: titleBlockW,
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          gap: Math.max(2, innerH * 0.1),
+          gap: Math.max(2, innerH * 0.12),
           fontFamily: STAMP_KAI_FONT,
         }}
       >
         {lines.map((line) => (
           <div key={line}>
-            <TitleLine text={line} fontSize={titleFontPx} width={titleBlockW} />
+            <TitleLine
+              text={line}
+              fontSize={titleFontPx}
+              width={titleBlockW}
+              gap={titleCharGap}
+            />
           </div>
         ))}
       </div>
 
-      {/* 右：姓名字元均分於剩餘寬度，上下置中、字級貼齊高度 */}
+      {/* 右：姓名整塊幾何上下置中 */}
       <div
         style={{
           flex: '1 1 auto',
@@ -217,28 +237,23 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
           height: '100%',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: nameChars.length <= 1 ? 'center' : 'space-between',
+          justifyContent: 'center',
           overflow: 'hidden',
           fontFamily: STAMP_KAI_FONT,
-          paddingLeft: Math.max(1, widthPx * 0.01),
         }}
       >
-        {nameChars.map((ch, i) => (
-          <span
-            key={`${ch}-${i}`}
-            style={{
-              flex: nameChars.length <= 1 ? '0 0 auto' : '1 1 0',
-              minWidth: 0,
-              textAlign: 'center',
-              fontSize: nameFontPx,
-              lineHeight: 1,
-              fontFamily: STAMP_KAI_FONT,
-              color: STAMP_RED,
-            }}
-          >
-            {ch}
-          </span>
-        ))}
+        <div
+          style={{
+            fontSize: nameFontPx,
+            lineHeight: 1,
+            fontFamily: STAMP_KAI_FONT,
+            color: STAMP_RED,
+            whiteSpace: 'nowrap',
+            letterSpacing: nameChars >= 3 ? '0.08em' : '0.12em',
+          }}
+        >
+          {name}
+        </div>
       </div>
     </div>
   );
