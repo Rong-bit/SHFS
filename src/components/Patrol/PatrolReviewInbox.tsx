@@ -461,11 +461,13 @@ export const PatrolReviewInbox: React.FC<{
                     {c.signOffs.map((s) => (
                       <div
                         key={`${s.role}-${s.personId}-${s.stampedAt}`}
-                        className="flex flex-col items-center gap-1"
+                        className="flex flex-col items-center gap-1 w-[168px]"
                       >
-                        <div className="text-sm text-center text-slate-800 font-extrabold tracking-wide">
-                          {s.action}
-                        </div>
+                        {s.instruction && (
+                          <div className="text-xs text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                            {s.instruction}
+                          </div>
+                        )}
                         <ElectronicStamp
                           {...(() => {
                             const layout = stampOfficeAndTitle(s.role, s.action);
@@ -477,11 +479,9 @@ export const PatrolReviewInbox: React.FC<{
                           personName={s.personName}
                           size={168}
                         />
-                        {s.instruction && (
-                          <div className="text-[10px] text-amber-800 text-center max-w-[12rem]">
-                            {s.role === 'principal' ? '指示' : '簽文'}：{s.instruction}
-                          </div>
-                        )}
+                        <div className="text-[11px] text-center text-slate-700 font-bold">
+                          {s.action}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -585,10 +585,12 @@ export const PatrolReviewInbox: React.FC<{
                 />
               </label>
             )}
-            <div className="flex flex-col items-center gap-1.5 py-2">
-              <div className="text-base font-extrabold text-slate-900 tracking-wide">
-                {stampAction}
-              </div>
+            <div className="flex flex-col items-center gap-1.5 py-2 w-[200px] mx-auto">
+              {instruction.trim() && signOffAllowsRemark(stampRole) && (
+                <div className="text-sm text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                  {instruction.trim()}
+                </div>
+              )}
               <ElectronicStamp
                 {...stampOfficeAndTitle(
                   stampRole,
@@ -598,12 +600,10 @@ export const PatrolReviewInbox: React.FC<{
                 personName={viewer.name}
                 size={200}
               />
+              <div className="text-sm font-extrabold text-slate-900 tracking-wide">
+                {stampAction}
+              </div>
               <div className="text-[11px] text-slate-500">{viewer.name}</div>
-              {instruction.trim() && signOffAllowsRemark(stampRole) && (
-                <div className="text-[11px] text-amber-800 text-center max-w-sm px-2">
-                  {stampRole === 'principal' ? '指示' : '簽文'}：{instruction.trim()}
-                </div>
-              )}
             </div>
             <div className="flex justify-end gap-2">
               <button

@@ -208,8 +208,12 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 placeholder="例：請相關單位持續關懷並回報改善情形"
               />
             </label>
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="text-base font-extrabold text-slate-900 tracking-wide">校長核章</div>
+            <div className="flex flex-col items-center gap-1.5 w-[200px] mx-auto">
+              {instruction.trim() && (
+                <div className="text-sm text-amber-900 text-center font-semibold leading-snug w-full break-words">
+                  {instruction.trim()}
+                </div>
+              )}
               <ElectronicStamp
                 stampCaption="校長"
                 officeLabel="校長室"
@@ -217,6 +221,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 personName={principalStaff?.name || '校長'}
                 size={200}
               />
+              <div className="text-sm font-extrabold text-slate-900 tracking-wide">校長核章</div>
             </div>
             <div className="flex justify-end gap-2">
               <button
