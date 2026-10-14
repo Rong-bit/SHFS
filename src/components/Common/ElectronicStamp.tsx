@@ -17,8 +17,8 @@ const NAME_FONT_RATIO = 0.92;
 /** 職稱字級相對戳章內高（上限；會再依欄寬與字距下修） */
 const TITLE_FONT_RATIO_TWO = 0.42;
 const TITLE_FONT_RATIO_ONE = 0.5;
-/** 職稱字距相對字寬（拉開「教務主任」四字，避免過密） */
-const TITLE_CHAR_GAP_RATIO = 0.26;
+/** 職稱字距相對字寬（「教務主任」略留空隙，勿過疏） */
+const TITLE_CHAR_GAP_RATIO = 0.14;
 
 /**
  * 職名章螢幕／列印規格：
