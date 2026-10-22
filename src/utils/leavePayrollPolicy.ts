@@ -271,7 +271,7 @@ export function listBillableLeaveDatesInMonth(
   excludeDates?: Set<string>,
   billableOptions?: LeaveBillableOptions
 ): string[] {
-  const weeksInMonth = billableOptions?.weeksInMonth ?? 4;
+  const weeksInMonth = billableOptions?.weeksInMonth ?? 5;
   return listBillableLeaveDatesInRange(request, excludeDates, billableOptions).filter((iso) =>
     isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth)
   );

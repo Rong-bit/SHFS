@@ -6,7 +6,10 @@ export type CalendarSettlementOptions = {
   holidaySet?: Set<string> | null;
   temporaryMoves?: TemporaryScheduleMove[] | null;
   partialStops?: PartialNonTeachingDay[] | null;
-  /** 每月結算週數（預設 4）；超出曆月天數併入前後結算月 */
+  /**
+   * 全月折算週數基準（僅折算分母；區間改為結至曆月最後週六，不再決定長度）。
+   * 保留欄位以相容舊呼叫。
+   */
   weeksInMonth?: number;
   /** 課輔等：只計此日起（含） */
   activeStartIso?: string | null;
@@ -68,14 +71,14 @@ function dateInSettlementPeriod(
   iso: string,
   year: number,
   month: number,
-  weeksInMonth: number
+  _weeksInMonth?: number
 ): boolean {
-  const period = resolveSettlementPeriod(month, year, weeksInMonth);
+  const period = resolveSettlementPeriod(month, year);
   return iso >= period.startIso && iso <= period.endIso;
 }
 
 /**
- * 結算用：各「星期幾–節次」在該結算月（連續 N 週區間）應計幾次。
+ * 結算用：各「星期幾–節次」在該結算月（結至曆月最後週六）應計幾次。
  * - 平日且非整天放假：各節 +1（再扣半日停課節次）
  * - 超鐘點編制內可傳空 holidaySet（國定假日仍計）；外聘／課輔／代課仍傳放假日
  * - 暫時移課：扣 sourceDate（若該日原先有計入），並在 targetDate 加回「source 星期」的節次（週六亦可）
@@ -86,10 +89,9 @@ export function slotOccurrenceCountsInMonth(
   options?: CalendarSettlementOptions
 ): Map<string, number> {
   const holidaySet = options?.holidaySet ?? new Set<string>();
-  const weeksInMonth = options?.weeksInMonth ?? 4;
   const maxPeriod = options?.maxPeriod ?? DEFAULT_MAX_PERIOD;
   const allPeriods = periodsUpTo(maxPeriod);
-  const period = resolveSettlementPeriod(month, year, weeksInMonth);
+  const period = resolveSettlementPeriod(month, year);
   const partialByDate = new Map<string, Set<number>>();
   for (const stop of options?.partialStops || []) {
     if (!stop?.date || !stop.periods?.length) continue;
@@ -122,7 +124,7 @@ export function slotOccurrenceCountsInMonth(
     if (sourceDow == null) continue;
     const periods = resolvePeriods(move.periods, maxPeriod);
 
-    if (dateInSettlementPeriod(move.sourceDate, year, month, weeksInMonth)) {
+    if (dateInSettlementPeriod(move.sourceDate, year, month)) {
       const srcJs = isoJsDay(move.sourceDate);
       if (
         srcJs != null &&
@@ -139,7 +141,7 @@ export function slotOccurrenceCountsInMonth(
       }
     }
 
-    if (dateInSettlementPeriod(move.targetDate, year, month, weeksInMonth)) {
+    if (dateInSettlementPeriod(move.targetDate, year, month)) {
       if (!inActiveWindow(move.targetDate)) continue;
       if (holidaySet.has(move.targetDate)) continue;
       const blockedTarget = partialByDate.get(move.targetDate);

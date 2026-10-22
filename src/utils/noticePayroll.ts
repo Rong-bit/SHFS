@@ -457,7 +457,7 @@ function collectCandidateDatesForRow(
     allowFallback: opts.allowMatchFallback !== false,
   });
   const dates: string[] = [];
-  const weeksInMonth = opts.weeksInMonth ?? 4;
+  const weeksInMonth = opts.weeksInMonth ?? 5;
 
   for (const r of matching) {
     if (!r.leaveDateStart) continue;
@@ -485,7 +485,7 @@ function inferNoticeRowDateIso(
   opts: NoticePayrollResolveOptions,
   consumed: Set<string>
 ): string | null {
-  const weeksInMonth = opts.weeksInMonth ?? 4;
+  const weeksInMonth = opts.weeksInMonth ?? 5;
   const candidates = collectCandidateDatesForRow(row, opts);
   const period = row.period.trim();
   const className = row.className.trim();
@@ -527,7 +527,7 @@ export function listResolvedNoticeRowsInSettlementMonth(
   rows: SubstituteNoticeRow[],
   opts: NoticePayrollResolveOptions
 ): ResolvedNoticePayrollRow[] {
-  const weeksInMonth = opts.weeksInMonth ?? 4;
+  const weeksInMonth = opts.weeksInMonth ?? 5;
   const consumed = new Set<string>();
   const resolved: ResolvedNoticePayrollRow[] = [];
 
@@ -572,7 +572,7 @@ export function countNoticeRowsSubstitutePayrollInMonth(
   rows: SubstituteNoticeRow[],
   settlementMonth: number,
   settlementYear: number,
-  weeksInMonth = 4,
+  weeksInMonth = 5,
   resolveOpts?: Omit<NoticePayrollResolveOptions, 'settlementMonth' | 'settlementYear' | 'weeksInMonth'>
 ): number {
   const opts: NoticePayrollResolveOptions = {
@@ -594,7 +594,7 @@ export function listNoticeRowsInSettlementMonth(
   rows: SubstituteNoticeRow[],
   settlementMonth: number,
   settlementYear: number,
-  weeksInMonth = 4
+  weeksInMonth = 5
 ): SubstituteNoticeRow[] {
   return listResolvedNoticeRowsInSettlementMonth(rows, {
     relatedRequests: [],

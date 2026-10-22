@@ -1023,7 +1023,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
   const submitDispatchForm = () => {
     const dispatchMonth = settlementMonthForEventIso(
       leaveDateStart || swapEffectiveDate,
-      systemConfig.weeksInMonth ?? 4
+      systemConfig.weeksInMonth ?? 5
     );
 
     const actingHomeroomOnly =

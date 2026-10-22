@@ -298,7 +298,7 @@ const configToForm = (systemConfig: SystemConfig): SystemConfig => ({
   academicYear: systemConfig?.academicYear ?? '114',
   semester: systemConfig?.semester ?? '1',
   currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
-  weeksInMonth: systemConfig?.weeksInMonth ?? 4,
+  weeksInMonth: systemConfig?.weeksInMonth ?? 5,
   counselingStartDate: systemConfig?.counselingStartDate || '',
   counselingEndDate: systemConfig?.counselingEndDate || '',
   ...pickCalendarFields(systemConfig),
@@ -1785,7 +1785,7 @@ export const AdminSettings: React.FC = () => {
                     min={1}
                     required
                   />
-                  <span className="text-[10px] text-slate-400">每月固定 N 週結算；超出曆月天數併入前後月份（自 8 月第一個週日起算）</span>
+                  <span className="text-[10px] text-slate-400">全月折算分母（例：實際 4 週月＝4/N）；結算區間結至該曆月最後週六（通常 4 或 5 週；8 月起日偏晚可為 3）；7～8 月交界空隙併入 7 月</span>
                 </div>
               </div>
             </div>

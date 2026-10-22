@@ -224,7 +224,8 @@ export interface SystemConfig {
   academicYear: string; // 114
   semester: string; // 1
   currentMonth: number; // 10
-  weeksInMonth: number; // 4 週
+  /** 全月折算週數基準（分母；結算區間改為結至曆月最後週六，實際週數為 4 或 5） */
+  weeksInMonth: number;
   /** 課業輔導課開課起日（YYYY-MM-DD）；空白＝該結算期全日都計 */
   counselingStartDate?: string;
   /** 課業輔導課開課迄日（YYYY-MM-DD）；空白＝該結算期全日都計 */

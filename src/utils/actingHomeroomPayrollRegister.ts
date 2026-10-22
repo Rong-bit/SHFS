@@ -115,7 +115,7 @@ export function listActingHomeroomDaysInMonth(
   settlementMonth: number,
   settlementYear: number,
   holidaySet: Set<string>,
-  weeksInMonth = 4
+  weeksInMonth = 5
 ): string[] {
   if (!leaveDateStart) return [];
   const end = resolveLeaveDateEnd(leaveDateStart, leaveDateEnd) || leaveDateStart;
@@ -274,7 +274,7 @@ export function buildActingHomeroomPayrollRows(
       settlementMonth,
       settlementYear,
       holidaySet,
-      systemConfig.weeksInMonth ?? 4
+      systemConfig.weeksInMonth ?? 5
     );
     if (days.length === 0) continue;
 

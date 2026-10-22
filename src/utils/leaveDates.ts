@@ -123,7 +123,7 @@ export type LeaveBillableOptions = {
   period?: number;
   temporaryMoves?: TemporaryScheduleMove[] | null;
   partialStops?: PartialNonTeachingDay[] | null;
-  /** 每月結算週數（預設 4） */
+  /** 全月折算週數基準（分母；區間改為結至曆月最後週六，不再決定長度） */
   weeksInMonth?: number;
   /** 課輔開課起迄：此窗外不計課輔請假扣節 */
   activeStartIso?: string | null;
@@ -384,7 +384,7 @@ export function countMatchingWeekdaysInMonth(
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
 
   let count = 0;
-  const weeksInMonth = billableOptions?.weeksInMonth ?? 4;
+  const weeksInMonth = billableOptions?.weeksInMonth ?? 5;
   for (let cur = new Date(s); cur <= e; cur.setDate(cur.getDate() + 1)) {
     if (cur.getDay() !== dayOfWeek) continue;
     const iso = dateToIsoLocal(cur);

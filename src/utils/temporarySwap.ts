@@ -131,7 +131,7 @@ export function temporarySwapPeriodDeltaInMonth(
   settlementYear: number,
   matchSession: (s: CourseSession) => boolean,
   holidaySet?: Set<string> | null,
-  weeksInMonth = 4,
+  weeksInMonth = 5,
   activeStartIso?: string | null,
   activeEndIso?: string | null
 ): number {

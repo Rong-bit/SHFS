@@ -156,7 +156,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   ),
   semester: '1',
   currentMonth: new Date().getMonth() + 1,
-  weeksInMonth: 4,
+  weeksInMonth: 5,
   nonTeachingDays: [],
   autoSyncNationalHolidays: true,
   temporaryScheduleMoves: [],

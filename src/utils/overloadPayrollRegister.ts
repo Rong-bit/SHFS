@@ -115,7 +115,7 @@ export const formatRocYear = (westernYear: number) => westernYear - 1911;
 export const formatPayrollMonthRangeLabel = (
   month: number,
   westernYear: number,
-  weeksInMonth = 4
+  weeksInMonth = 5
 ) => formatSettlementMonthRangeLabel(month, westernYear, weeksInMonth);
 
 const formatMd = (dateStr: string) => {
