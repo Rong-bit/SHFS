@@ -111,7 +111,7 @@ export const TeacherSchedule: React.FC = () => {
   const overloadPeriods = overloadBreakdown.concurrent;
   const thisMonth = settlementPeriodContainingIso(
     isoDaysAgo(0),
-    systemConfig.weeksInMonth ?? 4
+    systemConfig.weeksInMonth ?? 5
   ).settlementMonth;
   const monthSettlement = calculateMonthlySettlement(thisMonth).find(
     (s) => s.teacherId === currentTeacher.id

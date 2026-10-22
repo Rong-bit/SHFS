@@ -404,12 +404,12 @@ export const calendarYearForSettlementMonth = (
   return calendarYearFromWallClock(month, now);
 };
 
-/** 該結算月各星期幾出現次數（連續 N 週區間；excludeDates 為 YYYY-MM-DD 放假日） */
+/** 該結算月各星期幾出現次數（結至曆月最後週六；excludeDates 為 YYYY-MM-DD 放假日） */
 export const weekdayOccurrencesInMonth = (
   year: number,
   month: number,
   excludeDates?: Iterable<string> | Set<string> | null,
-  weeksInMonth = 4
+  _weeksInMonth?: number
 ) => {
   const exclude =
     excludeDates instanceof Set
@@ -417,7 +417,7 @@ export const weekdayOccurrencesInMonth = (
       : excludeDates
       ? new Set(excludeDates)
       : null;
-  const period = resolveSettlementPeriod(month, year, weeksInMonth);
+  const period = resolveSettlementPeriod(month, year);
   const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
   eachDateInSettlementPeriod(period, (iso, jsDay) => {
     if (exclude?.has(iso)) return;
@@ -430,17 +430,17 @@ export const countMondaysInMonth = (
   year: number,
   month: number,
   excludeDates?: Iterable<string> | Set<string> | null,
-  weeksInMonth = 4
-) => weekdayOccurrencesInMonth(year, month, excludeDates, weeksInMonth)[1];
+  _weeksInMonth?: number
+) => weekdayOccurrencesInMonth(year, month, excludeDates)[1];
 
-/** 結算週數：依系統設定每月固定 N 週（預設 4） */
+/** 結算週數估算：該結算期平日出現次數平均 */
 export const averageWeekdayWeeks = (
   year: number,
   month: number,
   excludeDates?: Iterable<string> | Set<string> | null,
-  weeksInMonth = 4
+  _weeksInMonth?: number
 ) => {
-  const c = weekdayOccurrencesInMonth(year, month, excludeDates, weeksInMonth);
+  const c = weekdayOccurrencesInMonth(year, month, excludeDates);
   return (c[1] + c[2] + c[3] + c[4] + c[5]) / 5;
 };
 
@@ -570,14 +570,17 @@ export const monthlyOverloadPeriods = (
   );
 };
 
-/** 折算週數：每月固定 N 週（系統參數 weeksInMonth，預設 4） */
+/** 結算實際週數：該月結算期（結至曆月最後週六）的週數，自然為 4 或 5 */
 export const settlementWeeksForMonth = (
   month: number,
   now = new Date(),
-  excludeDates?: Iterable<string> | Set<string> | null,
+  _excludeDates?: Iterable<string> | Set<string> | null,
   academicYear?: string | number,
-  calendar?: CalendarSettlementOptions
-) => calendar?.weeksInMonth ?? 4;
+  _calendar?: CalendarSettlementOptions
+) => {
+  const year = calendarYearForSettlementMonth(month, now, academicYear);
+  return resolveSettlementPeriod(month, year).weeks;
+};
 
 /** 每週超鐘點＝課表標示兼課的節數（有課表才計；不再用授課−基本估算） */
 export const teacherWeeklyOverload = (

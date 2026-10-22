@@ -595,7 +595,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     if (!currentTeacher) return;
     const requestMonth = settlementMonthForEventIso(
       leaveDateStart || swapEffectiveDate,
-      systemConfig.weeksInMonth ?? 4
+      systemConfig.weeksInMonth ?? 5
     );
 
     if (teacherSessions.length === 0 && requestType !== 'substitute') {

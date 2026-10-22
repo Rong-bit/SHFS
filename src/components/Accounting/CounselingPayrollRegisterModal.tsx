@@ -73,7 +73,7 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
     holidaySet,
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
-    weeksInMonth: systemConfig.weeksInMonth ?? 4,
+    weeksInMonth: systemConfig.weeksInMonth ?? 5,
   };
   const settlementYear = calendarYearForSettlementMonth(
     month,
@@ -90,7 +90,7 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
   const counselingRange = resolveCounselingActiveRange(
     month,
     settlementYear,
-    systemConfig.weeksInMonth ?? 4,
+    systemConfig.weeksInMonth ?? 5,
     systemConfig.counselingStartDate,
     systemConfig.counselingEndDate
   );

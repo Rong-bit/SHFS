@@ -75,7 +75,7 @@ export function buildSubstitutePayrollRemarks(
   });
   const parts: string[] = [];
   const noticeBatchHandled = new Set<string>();
-  const weeksInMonth = systemConfig.weeksInMonth ?? 4;
+  const weeksInMonth = systemConfig.weeksInMonth ?? 5;
 
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;

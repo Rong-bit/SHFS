@@ -29,23 +29,39 @@ export function firstPayrollSundayOnOrAfterAugust1(westernYear: number): Date {
   return new Date(westernYear, 7, 1 + (7 - jsDay), 12, 0, 0);
 }
 
+/** 該曆月最後一個週六（month = 1～12） */
+export function lastSaturdayOfMonth(westernYear: number, month: number): Date {
+  const d = new Date(westernYear, month, 0, 12, 0, 0);
+  while (d.getDay() !== 6) d.setDate(d.getDate() - 1);
+  return d;
+}
+
 /**
- * 結算月對應的連續 N 週區間（預設 4 週）。
- * 超出曆月天數併入前後結算月，例 115/8 → 8/2～8/29。
+ * 結算月區間：結至該曆月最後一個週六；週數隨月自然為 4 或 5。
+ * 8 月自該學年 8/1 後第一個週日起；其後各月自上期迄日隔天（週日）起。
+ * 例：115/10 → 9/27～10/31（5 週）。
+ *
+ * `@param _weeksInMonth` 已不再決定區間長度（保留參數以相容舊呼叫；請改用全月折算分母）。
  */
 export function resolveSettlementPeriod(
   settlementMonth: number,
   settlementWesternYear: number,
-  weeksInMonth = 4
+  _weeksInMonth?: number
 ): SettlementPeriod {
-  const weeks = Math.max(1, weeksInMonth);
-  const ayAugustYear = academicAugustWesternYear(settlementMonth, settlementWesternYear);
-  const anchor = firstPayrollSundayOnOrAfterAugust1(ayAugustYear);
-  const periodIndex = academicSettlementMonthIndex(settlementMonth);
-  const start = new Date(anchor);
-  start.setDate(start.getDate() + periodIndex * weeks * 7);
-  const end = new Date(start);
-  end.setDate(end.getDate() + weeks * 7 - 1);
+  const end = lastSaturdayOfMonth(settlementWesternYear, settlementMonth);
+  let start: Date;
+  if (settlementMonth === 8) {
+    start = firstPayrollSundayOnOrAfterAugust1(settlementWesternYear);
+  } else {
+    const prevMonth = settlementMonth === 1 ? 12 : settlementMonth - 1;
+    const prevYear = settlementMonth === 1 ? settlementWesternYear - 1 : settlementWesternYear;
+    const prevEnd = lastSaturdayOfMonth(prevYear, prevMonth);
+    start = new Date(prevEnd);
+    start.setDate(start.getDate() + 1);
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  const days = Math.round((end.getTime() - start.getTime()) / dayMs) + 1;
+  const weeks = Math.max(1, Math.round(days / 7));
   return {
     settlementMonth,
     settlementYear: settlementWesternYear,
@@ -53,6 +69,17 @@ export function resolveSettlementPeriod(
     endIso: dateToIsoLocal(end),
     weeks,
   };
+}
+
+/** 月額依實際結算週數／全月折算基準比例折算（例：4 週月、基準 5 → 4/5） */
+export function prorateFullMonthAmount(
+  amount: number,
+  actualWeeks: number,
+  weeksInMonthBasis: number
+): number {
+  const basis = Math.max(1, weeksInMonthBasis);
+  const weeks = Math.max(0, actualWeeks);
+  return amount * (weeks / basis);
 }
 
 export function isDateInSettlementPeriod(
@@ -66,9 +93,9 @@ export function isDateInSettlementMonth(
   iso: string,
   settlementMonth: number,
   settlementWesternYear: number,
-  weeksInMonth = 4
+  _weeksInMonth?: number
 ): boolean {
-  const period = resolveSettlementPeriod(settlementMonth, settlementWesternYear, weeksInMonth);
+  const period = resolveSettlementPeriod(settlementMonth, settlementWesternYear);
   return isDateInSettlementPeriod(iso, period);
 }
 
@@ -83,13 +110,13 @@ function parseIsoParts(iso: string): { year: number; month: number } | null {
 }
 
 /**
- * 找出包含該日的結算期（連續 N 週）。
- * 例：115 學年 4 週、8/1 為週六 → 8/30 屬 9 月期（8/30～9/26），不屬 8 月期（8/2～8/29）。
+ * 找出包含該日的結算期（結至曆月最後週六）。
+ * 例：115 學年 8/1 為週六 → 8/30 屬 9 月期（8/30～9/26），不屬 8 月期（8/2～8/29）。
  * 若落在兩期之間的空隙，改對應曆月結算期（與申請畫面預設一致）。
  */
 export function settlementPeriodContainingIso(
   iso: string,
-  weeksInMonth = 4
+  _weeksInMonth?: number
 ): SettlementPeriod {
   const parts = parseIsoParts(iso);
   const fallbackYear = parts?.year ?? new Date().getFullYear();
@@ -98,19 +125,19 @@ export function settlementPeriodContainingIso(
     for (const ay of [parts.year + 1, parts.year, parts.year - 1, parts.year - 2]) {
       for (const month of ACADEMIC_MONTH_ORDER) {
         const settlementYear = month >= 8 ? ay : ay + 1;
-        const period = resolveSettlementPeriod(month, settlementYear, weeksInMonth);
+        const period = resolveSettlementPeriod(month, settlementYear);
         if (iso >= period.startIso && iso <= period.endIso) return period;
       }
     }
   }
-  return resolveSettlementPeriod(fallbackMonth, fallbackYear, weeksInMonth);
+  return resolveSettlementPeriod(fallbackMonth, fallbackYear);
 }
 
 export function settlementMonthForEventIso(
   eventIso: string | undefined,
-  weeksInMonth = 4
+  _weeksInMonth?: number
 ): number {
-  return settlementPeriodContainingIso(eventIso || isoDaysAgo(0), weeksInMonth).settlementMonth;
+  return settlementPeriodContainingIso(eventIso || isoDaysAgo(0)).settlementMonth;
 }
 
 export function isoDaysAgo(days: number, from = new Date()): string {
@@ -132,9 +159,9 @@ export function formatRocDateLabel(iso: string): string {
 export function formatPayrollMonthRangeLabel(
   settlementMonth: number,
   settlementWesternYear: number,
-  weeksInMonth = 4
+  _weeksInMonth?: number
 ): string {
-  const period = resolveSettlementPeriod(settlementMonth, settlementWesternYear, weeksInMonth);
+  const period = resolveSettlementPeriod(settlementMonth, settlementWesternYear);
   return `${formatRocDateLabel(period.startIso)} ~ ${formatRocDateLabel(period.endIso)} 共(${period.weeks}週)`;
 }
 
@@ -179,11 +206,11 @@ export function countSchoolWeeksInIsoRange(startIso: string, endIso: string): nu
 export function resolveCounselingActiveRange(
   settlementMonth: number,
   settlementYear: number,
-  weeksInMonth: number,
+  _weeksInMonth: number,
   counselingStartDate?: string | null,
   counselingEndDate?: string | null
 ): { startIso: string; endIso: string; weeks: number } | null {
-  const period = resolveSettlementPeriod(settlementMonth, settlementYear, weeksInMonth);
+  const period = resolveSettlementPeriod(settlementMonth, settlementYear);
   const clipped = clipDateRange(
     period.startIso,
     period.endIso,

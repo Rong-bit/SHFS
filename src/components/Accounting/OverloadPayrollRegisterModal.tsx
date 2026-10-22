@@ -67,7 +67,7 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
     holidaySet,
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: systemConfig.partialNonTeachingDays || [],
-    weeksInMonth: systemConfig.weeksInMonth ?? 4,
+    weeksInMonth: systemConfig.weeksInMonth ?? 5,
   };
   const settlementYear = calendarYearForSettlementMonth(
     month,

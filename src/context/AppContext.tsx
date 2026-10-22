@@ -3429,7 +3429,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       holidaySet,
       temporaryMoves: systemConfig.temporaryScheduleMoves || [],
       partialStops: systemConfig.partialNonTeachingDays || [],
-      weeksInMonth: systemConfig.weeksInMonth ?? 4,
+      weeksInMonth: systemConfig.weeksInMonth ?? 5,
       maxPeriod: periodCfg.maxPeriod,
     };
     const weeks = settlementWeeksForMonth(
@@ -3507,7 +3507,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: payrollPartialStops,
-          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          weeksInMonth: systemConfig.weeksInMonth ?? 5,
         }
       );
       const swapConcurrentDelta = temporarySwapPeriodDeltaInMonth(
@@ -3521,7 +3521,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.dayOfWeek <= 5 &&
           isDaytimePeriod(s.period, systemConfig),
         holidaySet,
-        systemConfig.weeksInMonth ?? 4
+        systemConfig.weeksInMonth ?? 5
       );
       const substituteConcurrentAdd = countSubstituteTeacherConcurrentAddPeriodsInMonth(
         requests,
@@ -3538,7 +3538,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             isDaytimePeriod(s!.period, systemConfig),
           skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          weeksInMonth: systemConfig.weeksInMonth ?? 5,
           resolvePartialStopsForRequest: (r) =>
             partialStopsForPayroll(
               systemConfig.partialNonTeachingDays,
@@ -3578,7 +3578,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: [],
-          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          weeksInMonth: systemConfig.weeksInMonth ?? 5,
           activeStartIso: counselingStart,
           activeEndIso: counselingEnd,
         },
@@ -3593,7 +3593,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           holidaySet,
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          weeksInMonth: systemConfig.weeksInMonth ?? 5,
           activeStartIso: counselingStart,
           activeEndIso: counselingEnd,
         },
@@ -3620,7 +3620,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           partialStops: systemConfig.partialNonTeachingDays || [],
-          weeksInMonth: systemConfig.weeksInMonth ?? 4,
+          weeksInMonth: systemConfig.weeksInMonth ?? 5,
           activeStartIso: counselingStart,
           activeEndIso: counselingEnd,
         }
@@ -3635,7 +3635,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           s.dayOfWeek <= 5 &&
           isCounselingPeriod(s.period, systemConfig),
         holidaySet,
-        systemConfig.weeksInMonth ?? 4,
+        systemConfig.weeksInMonth ?? 5,
         counselingStart,
         counselingEnd
       );
@@ -3672,7 +3672,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const leaveCalendarOpts = {
         temporaryMoves: systemConfig.temporaryScheduleMoves || [],
-        weeksInMonth: systemConfig.weeksInMonth ?? 4,
+        weeksInMonth: systemConfig.weeksInMonth ?? 5,
       };
       const noticeBatchCounted = new Set<string>();
 

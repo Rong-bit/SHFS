@@ -156,7 +156,7 @@ export const AccountingSettlement: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">
             基準費率：日間部 <strong>{systemConfig.dayHourlyRate} 元/節</strong> ｜
             課輔 <strong>{systemConfig.nightHourlyRate} 元/節</strong> ｜ 
-            本月依 <strong>{formatPayrollMonthRangeLabel(selectedMonth, settlementYear, systemConfig.weeksInMonth ?? 4)}</strong>
+            本月依 <strong>{formatPayrollMonthRangeLabel(selectedMonth, settlementYear, systemConfig.weeksInMonth ?? 5)}</strong>
             {academicYearStale && (
               <span className="block mt-1 text-amber-800">
                 系統學年度仍為 {systemConfig.academicYear}（建議 {expectedAy}），結算西元年已自動以西曆校正；請至「標準與參數 → 學校與學制」更新學年度以免單號／報表標題混淆。

@@ -118,7 +118,7 @@ export function listCounselingHolidayDeducts(
   const { counselingPeriods } = resolvePeriodConfig(periodCfg);
   if (counselingDays.size === 0 || counselingPeriods.length === 0 || !nonTeachingDays?.length)
     return [];
-  const weeksInMonth = options?.weeksInMonth ?? 4;
+  const weeksInMonth = options?.weeksInMonth ?? 5;
   const out: CounselingHolidayDeduct[] = [];
   const seen = new Set<string>();
   for (const day of nonTeachingDays) {
@@ -167,7 +167,7 @@ export function listCounselingPartialStopDeducts(
   const { counselingPeriods } = resolvePeriodConfig(periodCfg);
   if (counselingDays.size === 0 || counselingPeriods.length === 0 || !partialStops?.length)
     return [];
-  const weeksInMonth = options?.weeksInMonth ?? 4;
+  const weeksInMonth = options?.weeksInMonth ?? 5;
   const holidaySet = options?.holidaySet ?? new Set<string>();
   const out: CounselingHolidayDeduct[] = [];
   const seen = new Set<string>();
@@ -212,7 +212,7 @@ function listBillableLeaveDatesInMonth(
   const end = request.leaveDateEnd || request.leaveDateStart;
   const dayOfWeek = request.originalSession.dayOfWeek;
   const period = request.originalSession.period;
-  const weeksInMonth = calendarOpts.weeksInMonth ?? 4;
+  const weeksInMonth = calendarOpts.weeksInMonth ?? 5;
   const billableOpts = {
     period,
     temporaryMoves: calendarOpts.temporaryMoves,
@@ -252,7 +252,7 @@ export function buildCounselingPayrollRemarks(
   const calendarOpts = {
     temporaryMoves: systemConfig.temporaryScheduleMoves || [],
     partialStops: allPartialStops,
-    weeksInMonth: systemConfig.weeksInMonth ?? 4,
+    weeksInMonth: systemConfig.weeksInMonth ?? 5,
     activeStartIso: systemConfig.counselingStartDate?.trim() || undefined,
     activeEndIso: systemConfig.counselingEndDate?.trim() || undefined,
   };
