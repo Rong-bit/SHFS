@@ -37,9 +37,10 @@ export function lastSaturdayOfMonth(westernYear: number, month: number): Date {
 }
 
 /**
- * 結算月區間：結至該曆月最後一個週六；週數隨月自然為 4 或 5。
+ * 結算月區間：結至該曆月最後一個週六；週數隨月自然為 4 或 5（8 月若起日偏晚可為 3）。
  * 8 月自該學年 8/1 後第一個週日起；其後各月自上期迄日隔天（週日）起。
- * 例：115/10 → 9/27～10/31（5 週）。
+ * 7 月：若與翌學年 8 月起日之間有空隙，迄日延長至 8 月起日前一天（合併孤兒日，避免漏計）。
+ * 例：115/10 → 9/27～10/31（5 週）；115/7 可能為 6/28～8/1（銜接 8/2 起之 8 月期）。
  *
  * `@param _weeksInMonth` 已不再決定區間長度（保留參數以相容舊呼叫；請改用全月折算分母）。
  */
@@ -48,7 +49,7 @@ export function resolveSettlementPeriod(
   settlementWesternYear: number,
   _weeksInMonth?: number
 ): SettlementPeriod {
-  const end = lastSaturdayOfMonth(settlementWesternYear, settlementMonth);
+  let end = lastSaturdayOfMonth(settlementWesternYear, settlementMonth);
   let start: Date;
   if (settlementMonth === 8) {
     start = firstPayrollSundayOnOrAfterAugust1(settlementWesternYear);
@@ -58,6 +59,15 @@ export function resolveSettlementPeriod(
     const prevEnd = lastSaturdayOfMonth(prevYear, prevMonth);
     start = new Date(prevEnd);
     start.setDate(start.getDate() + 1);
+  }
+  // 學年交界：7 月最後週六～8 月第一個週日之間的空隙併入 7 月
+  if (settlementMonth === 7) {
+    const augStart = firstPayrollSundayOnOrAfterAugust1(settlementWesternYear);
+    const dayBeforeAug = new Date(augStart);
+    dayBeforeAug.setDate(dayBeforeAug.getDate() - 1);
+    if (dayBeforeAug.getTime() > end.getTime()) {
+      end = dayBeforeAug;
+    }
   }
   const dayMs = 24 * 60 * 60 * 1000;
   const days = Math.round((end.getTime() - start.getTime()) / dayMs) + 1;

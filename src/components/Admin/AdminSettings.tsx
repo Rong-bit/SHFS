@@ -1785,7 +1785,7 @@ export const AdminSettings: React.FC = () => {
                     min={1}
                     required
                   />
-                  <span className="text-[10px] text-slate-400">全月折算分母（例：實際 4 週月＝4/N）；結算區間為結至該曆月最後週六，週數隨月為 4 或 5（自 8 月第一個週日起）</span>
+                  <span className="text-[10px] text-slate-400">全月折算分母（例：實際 4 週月＝4/N）；結算區間結至該曆月最後週六（通常 4 或 5 週；8 月起日偏晚可為 3）；7～8 月交界空隙併入 7 月</span>
                 </div>
               </div>
             </div>
