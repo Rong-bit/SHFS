@@ -323,6 +323,36 @@ function noticeHoursLabelForSession(session: Pick<CourseSession, 'isConcurrent'>
   return session.isConcurrent ? '兼課' : '';
 }
 
+/**
+ * 已儲存通知單列：科目／班級未改但鐘點欄空白時，以現行課表預設列回填「兼課」。
+ * （常見於課表重匯後才標兼課，或申請快照缺 isConcurrent；避免清冊 L 欄漏顯示）
+ * 科目已改（如改監考）對不到同科目預設列，保留空白視為基鐘。
+ */
+export function syncNoticeHoursFromDefaults(
+  savedRows: NoticeRow[],
+  defaultRows: NoticeRow[]
+): NoticeRow[] {
+  if (!savedRows.length || !defaultRows.length) return savedRows;
+  const unused = defaultRows.map((row) => ({ row, used: false }));
+  return savedRows.map((row) => {
+    if ((row.hours || '').trim() === '兼課') return row;
+    const periodKey = normalizeNoticePeriod(row.period);
+    const classKey = (row.className || '').trim();
+    const subjectKey = (row.subjectName || '').trim();
+    const hit = unused.find((item) => {
+      if (item.used) return false;
+      if (normalizeNoticePeriod(item.row.period) !== periodKey) return false;
+      if ((item.row.className || '').trim() !== classKey) return false;
+      if ((item.row.subjectName || '').trim() !== subjectKey) return false;
+      return true;
+    });
+    if (!hit) return row;
+    hit.used = true;
+    if ((hit.row.hours || '').trim() !== '兼課') return row;
+    return { ...row, hours: '兼課' };
+  });
+}
+
 function sessionRow(session: CourseSession, dateIso?: string): NoticeRow {
   const weekday = weekdayFromIso(dateIso) ?? session.dayOfWeek;
   return {
@@ -526,12 +556,16 @@ export function buildNoticeDocument(
         : `${printGroup[0].requestNumber}～${printGroup[printGroup.length - 1].requestNumber}`
       : liveRequest.requestNumber;
 
+  const displayRows = savedNoticeRows
+    ? syncNoticeHoursFromDefaults(savedNoticeRows, defaultRows)
+    : defaultRows;
+
   return {
     liveRequest,
     printGroup,
     defaultRows,
     savedNoticeRows,
-    displayRows: savedNoticeRows ?? defaultRows,
+    displayRows,
     title,
     addressee,
     greeting,

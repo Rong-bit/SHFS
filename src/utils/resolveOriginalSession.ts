@@ -14,10 +14,36 @@ function isLeaveCoverNote(notes?: string): boolean {
   return Boolean(notes?.includes('[代課]') || notes?.includes('[請假派代]'));
 }
 
+/** 合併現行課表欄位，但保留申請快照的星期／節次／場地優先權 */
+function mergeLiveOntoSnap(snap: CourseSession, live: CourseSession): CourseSession {
+  return {
+    ...snap,
+    ...live,
+    id: live.id,
+    dayOfWeek: snap.dayOfWeek,
+    period: snap.period,
+    venueId: snap.venueId || live.venueId,
+    venueName: snap.venueName || live.venueName,
+    className: snap.className || live.className,
+    subjectName: snap.subjectName || live.subjectName,
+    // 兼課以現行課表為準（匯入後重標兼課時，通知單鐘點欄才會跟著顯示）
+    isConcurrent: Boolean(live.isConcurrent),
+  };
+}
+
+function sameLeaveSlot(s: CourseSession, snap: CourseSession): boolean {
+  return (
+    s.dayOfWeek === snap.dayOfWeek &&
+    s.period === snap.period &&
+    (!snap.className || !s.className || s.className === snap.className)
+  );
+}
+
 /**
  * 將佔位／暫代 originalSession 對應到現行課表課堂（含真實 id）。
  * 非佔位：保留申請快照的星期／節次／場地（通知單「原排定」、核准套用 snap），
  * 僅合併現行 id 與任課等欄位，避免核准／列印把原時段蓋成異動後時段。
+ * 課表重匯後 id 變更時，改以申請人＋原時段對回，以免兼課標記丟失。
  */
 export const resolveOriginalSession = (
   request: SubstituteRequest,
@@ -37,19 +63,29 @@ export const resolveOriginalSession = (
   }
   if (!isPlaceholderSession(orig)) {
     const byId = sessions.find((s) => s.id === orig.id);
-    if (!byId) return orig;
-    return {
-      ...orig,
-      ...byId,
-      id: byId.id,
-      // 申請當下之時段／場地不可被現行課表覆寫
-      dayOfWeek: orig.dayOfWeek,
-      period: orig.period,
-      venueId: orig.venueId || byId.venueId,
-      venueName: orig.venueName || byId.venueName,
-      className: orig.className || byId.className,
-      subjectName: orig.subjectName || byId.subjectName,
-    };
+    if (byId) return mergeLiveOntoSnap(orig, byId);
+
+    const teacherId = request.applicantTeacherId || orig.teacherId;
+    const byApplicantSlot = teacherId
+      ? sessions.find((s) => sameLeaveSlot(s, orig) && s.teacherId === teacherId)
+      : undefined;
+    if (byApplicantSlot) return mergeLiveOntoSnap(orig, byApplicantSlot);
+
+    // 舊版曾把任課改成代課老師：仍可對回該課堂並取回兼課標記
+    if (request.substituteTeacherId) {
+      const byCover = sessions.find(
+        (s) =>
+          sameLeaveSlot(s, orig) &&
+          s.teacherId === request.substituteTeacherId &&
+          isLeaveCoverNote(s.notes) &&
+          Boolean(
+            !request.applicantTeacherName || s.notes?.includes(request.applicantTeacherName)
+          )
+      );
+      if (byCover) return mergeLiveOntoSnap(orig, byCover);
+    }
+
+    return orig;
   }
 
   const sameSlot = (s: CourseSession) =>
@@ -59,7 +95,7 @@ export const resolveOriginalSession = (
     (s) => sameSlot(s) && s.teacherId === request.applicantTeacherId
   );
   if (byApplicant) {
-    return { ...orig, ...byApplicant, id: byApplicant.id };
+    return { ...orig, ...byApplicant, id: byApplicant.id, isConcurrent: Boolean(byApplicant.isConcurrent) };
   }
 
   // 舊版曾把任課改成代課老師：仍可對回該課堂
@@ -74,7 +110,7 @@ export const resolveOriginalSession = (
         )
     );
     if (byCover) {
-      return { ...orig, ...byCover, id: byCover.id };
+      return { ...orig, ...byCover, id: byCover.id, isConcurrent: Boolean(byCover.isConcurrent) };
     }
   }
 
@@ -87,7 +123,12 @@ export const resolveOriginalSession = (
         isLeaveCoverNote(s.notes)
     );
     if (byLeaveNote) {
-      return { ...orig, ...byLeaveNote, id: byLeaveNote.id };
+      return {
+        ...orig,
+        ...byLeaveNote,
+        id: byLeaveNote.id,
+        isConcurrent: Boolean(byLeaveNote.isConcurrent),
+      };
     }
   }
 
@@ -108,15 +149,8 @@ export const resolveSwapTargetSession = (
   const byId = sessions.find((s) => s.id === snap.id);
   if (byId) {
     return {
-      ...snap,
-      ...byId,
-      id: byId.id,
-      dayOfWeek: snap.dayOfWeek,
-      period: snap.period,
-      venueId: snap.venueId || byId.venueId,
-      venueName: snap.venueName || byId.venueName,
-      className: snap.className || byId.className,
-      subjectName: snap.subjectName || byId.subjectName,
+      ...mergeLiveOntoSnap(snap, byId),
+      // mergeLiveOntoSnap 已處理；對調同樣以現行兼課為準
     };
   }
 
@@ -128,15 +162,7 @@ export const resolveSwapTargetSession = (
         s.period === snap.period
     );
     if (bySlot) {
-      return {
-        ...snap,
-        ...bySlot,
-        id: bySlot.id,
-        dayOfWeek: snap.dayOfWeek,
-        period: snap.period,
-        venueId: snap.venueId || bySlot.venueId,
-        venueName: snap.venueName || bySlot.venueName,
-      };
+      return mergeLiveOntoSnap(snap, bySlot);
     }
   }
 
