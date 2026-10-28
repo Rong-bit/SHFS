@@ -3484,7 +3484,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         overloadCalendarOpts,
         systemConfig
       );
-      // 請假日按日扣兼課（依對照表：身心調適假不扣；事病假僅公費派代日扣）
+      // 請假日按日扣兼課（依對照表：公費派代日扣，含身心調適假；事病假僅達門檻日扣）
       const leaveConcurrentDeduct = countApplicantConcurrentDeductPeriodsInMonth(
         requests,
         teacher.id,

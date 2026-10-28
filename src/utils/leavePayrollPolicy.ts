@@ -216,24 +216,26 @@ export function isConcurrentTeachingSession(
   );
 }
 
-/** 兼課（超鐘點）請假是否扣 A 兼課費：身心調適假不扣；其餘僅公費派代日才扣 */
+/** 兼課（超鐘點）請假是否扣 A 兼課費：僅公費派代日才扣（含身心調適假） */
 export function shouldDeductConcurrentOnLeaveDate(
   date: string,
   request: SubstituteRequest,
   ctx: LeavePayrollContext
 ): boolean {
-  const lt = normalizeLeaveType(request.leaveType, request.reason);
-  if (lt === 'wellness') return false;
   return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
 }
 
-/** 超鐘點代課：A 扣兼課、B 應加兼課（兼課清冊）；身心調適假超鐘點仍走代課清冊 */
+/**
+ * 超鐘點代課：A 扣兼課、B 應加兼課（兼課清冊）。
+ * 身心調適假例外：A 仍扣兼課，但 B 入代課清冊（不走兼課轉移）。
+ */
 export function shouldTransferConcurrentToSubstituteOnLeaveDate(
   date: string,
   request: SubstituteRequest,
   ctx: LeavePayrollContext
 ): boolean {
   if (!isConcurrentTeachingSession(request.originalSession, ctx.periodConfig)) return false;
+  if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') return false;
   return shouldDeductConcurrentOnLeaveDate(date, request, ctx);
 }
 
@@ -635,7 +637,9 @@ export function leavePaymentDisplayLabel(
       return {
         kind: 'public',
         label: '公費派代',
-        detail: '身心調適假：基本鐘點與超鐘點（兼課）皆入代課清冊，請假人不扣兼課',
+        detail: options?.isConcurrentSession
+          ? '身心調適假超鐘點：扣請假人兼課；代課人入代課清冊（不走兼課轉移）'
+          : '身心調適假：基本鐘點入代課清冊，請假人照支原薪；超鐘點則扣請假人兼課',
       };
     }
     const concurrentTransfer = options?.isConcurrentSession;
@@ -756,7 +760,7 @@ export function requestUsesCustomizedNoticePayroll(
   );
 }
 
-/** 請假兼課扣減：僅課表標示兼課之節次。基鐘不扣；身心調適假不扣；事病假僅公費派代日扣。儲存通知單後兼課仍扣，讓該節改入代課清冊。 */
+/** 請假兼課扣減：僅課表標示兼課之節次。基鐘不扣；公費派代日（含身心調適假）扣。儲存通知單後兼課仍扣，讓該節改入代課清冊。 */
 export function countApplicantConcurrentDeductPeriodsInMonth(
   requests: SubstituteRequest[],
   applicantTeacherId: string,
@@ -785,7 +789,6 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
 
     if (!r.leaveDateStart) {
       if (!options?.includeLegacyWithoutDates?.(r)) continue;
-      if (normalizeLeaveType(r.leaveType, r.reason) === 'wellness') continue;
       if (resolveRequestPaymentType(r, ctx, excludeDates, periodOpts) !== 'public') continue;
       total += countLeaveSubstitutePeriods(r, excludeDates, {
         settlementMonth,
