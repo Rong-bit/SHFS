@@ -165,7 +165,90 @@ const custom = request({
 });
 const customDoc = buildNoticeDocument(custom, [custom], sessions);
 assert.equal(customDoc.displayRows[0].className, '資訊一甲');
-assert.equal(customDoc.displayRows[0].hours, '');
+assert.equal(customDoc.displayRows[0].hours, ''); // 科目已改，不回填兼課
+
+// 課表重匯後 session id 變更：仍應依申請人＋時段對回兼課，清冊 L 欄顯示「兼課」
+const wed1 = session({
+  id: 's-wed-1-new',
+  dayOfWeek: 3,
+  period: 1,
+  isConcurrent: true,
+  subjectName: '專題製作',
+  className: '電機三甲',
+});
+const wed2 = session({
+  id: 's-wed-2-new',
+  dayOfWeek: 3,
+  period: 2,
+  isConcurrent: true,
+  subjectName: '專題製作',
+  className: '電機三甲',
+});
+const remappedSessions = [...sessions, wed1, wed2];
+const leaveWed1 = request({
+  id: 'wed-1',
+  requestNumber: '115-1-0090',
+  batchGroupId: 'batch-wed',
+  requestType: 'substitute',
+  leaveType: 'official',
+  leaveDateStart: '2026-10-07',
+  leaveDateEnd: '2026-10-07',
+  substituteTeacherId: 't9',
+  substituteTeacherName: '陳代課',
+  originalSession: {
+    ...wed1,
+    id: 's-wed-1-old', // 匯入前舊 id
+    isConcurrent: false, // 舊快照未標兼課
+  },
+});
+const leaveWed2 = request({
+  id: 'wed-2',
+  requestNumber: '115-1-0090',
+  batchGroupId: 'batch-wed',
+  requestType: 'substitute',
+  leaveType: 'official',
+  leaveDateStart: '2026-10-07',
+  leaveDateEnd: '2026-10-07',
+  substituteTeacherId: 't9',
+  substituteTeacherName: '陳代課',
+  originalSession: {
+    ...wed2,
+    id: 's-wed-2-old',
+    isConcurrent: undefined,
+  },
+});
+const wedDoc = buildNoticeDocument(leaveWed1, [leaveWed1, leaveWed2], remappedSessions);
+assert.equal(wedDoc.displayRows.length, 2);
+assert.equal(wedDoc.displayRows[0].weekday, '3');
+assert.equal(wedDoc.displayRows[0].period, '1');
+assert.equal(wedDoc.displayRows[0].hours, '兼課');
+assert.equal(wedDoc.displayRows[1].period, '2');
+assert.equal(wedDoc.displayRows[1].hours, '兼課');
+
+// 已存表格鐘點空白、但科目班級仍同課表兼課列 → 清冊應回填「兼課」
+const staleSaved = request({
+  id: 'stale-hours',
+  requestType: 'substitute',
+  leaveType: 'official',
+  leaveDateStart: '2026-09-07',
+  leaveDateEnd: '2026-09-07',
+  substituteTeacherId: 't9',
+  substituteTeacherName: '陳代課',
+  noticeRowsCustomized: true,
+  noticeRows: [
+    {
+      date: '2026/9/7',
+      weekday: '1',
+      period: '2',
+      className: '電機二甲',
+      subjectName: '電工機械',
+      hours: '',
+    },
+  ],
+  originalSession: sessions[0],
+});
+const staleDoc = buildNoticeDocument(staleSaved, [staleSaved], sessions);
+assert.equal(staleDoc.displayRows[0].hours, '兼課');
 
 const docs = anchors.map((anchor) => buildNoticeDocument(anchor, requests, sessions));
 const roster = buildNoticeRosterRows(docs);
