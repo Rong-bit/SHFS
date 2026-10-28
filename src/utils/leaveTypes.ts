@@ -53,6 +53,7 @@ export const paymentTypeForLeaveType = (leaveType: LeaveType): PaymentType => {
     case 'official':
     case 'marriage':
     case 'maternity':
+    case 'prenatal':
     case 'bereavement':
     case 'wellness':
       return 'public';
@@ -85,6 +86,8 @@ export const leaveTypeLabel = (
       return '病假 (檢附就醫收據/證明)';
     case 'maternity':
       return '娩假 / 陪產假 (公費派代 · 按小時計)';
+    case 'prenatal':
+      return '產檢假 (公費派代 · 按小時計)';
     case 'bereavement':
       return '喪假 (公費派代 · 得以時計 · 百日內請畢)';
     case 'wellness':
@@ -109,6 +112,8 @@ export const leaveTypeRemarkShort = (leaveType?: LeaveType, reason?: string): st
       return '婚假';
     case 'maternity':
       return /陪產/.test(reason || '') ? '陪產假' : '產假';
+    case 'prenatal':
+      return '產檢假';
     case 'bereavement':
       return '喪假';
     default:
@@ -125,6 +130,7 @@ export const actingHomeroomLeaveRemarkShort = (
   if (/加班補休|補休/.test(r)) return '加班補休';
   if (/婚假/.test(r)) return '婚假';
   if (/陪產/.test(r)) return '陪產假';
+  if (/產檢/.test(r)) return '產檢假';
   if (/公差/.test(r)) return '公差假';
   switch (normalizeLeaveTypeForForm(leaveType || 'official')) {
     case 'wellness':
@@ -139,6 +145,8 @@ export const actingHomeroomLeaveRemarkShort = (
       return '婚假';
     case 'maternity':
       return '產假';
+    case 'prenatal':
+      return '產檢假';
     case 'bereavement':
       return '喪假';
     default:
@@ -158,6 +166,8 @@ export const defaultReasonForLeaveType = (
       return '申請婚假 (公費派代)';
     case 'maternity':
       return '申請娩假/陪產假 (公費派代)';
+    case 'prenatal':
+      return '申請產檢假 (公費派代)';
     case 'bereavement':
       return '申請喪假 (公費派代)';
     case 'wellness':
@@ -180,6 +190,7 @@ export function leaveTypeFormOptions(
     { value: 'official', label: '🏛️ 公假 / 公差 (公文指派、出差)' },
     { value: 'marriage', label: '💒 婚假 (公費派代 · 按小時計)' },
     { value: 'maternity', label: '👶 娩假 / 陪產假 (公費派代 · 按小時計)' },
+    { value: 'prenatal', label: '🤰 產檢假 (公費派代 · 按小時計)' },
     { value: 'bereavement', label: '🕯️ 喪假 (公費派代 · 得以時計 · 百日內請畢)' },
     {
       value: 'wellness',

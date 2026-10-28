@@ -78,6 +78,7 @@ export type LeaveType =
   | 'official' // 公假/公差 (公費派代)
   | 'marriage' // 婚假 (公費派代 · 按小時計)
   | 'maternity' // 娩假/陪產假 (公費派代 · 按小時計)
+  | 'prenatal' // 產檢假 (公費派代 · 按小時計；鐘點同娩假／陪產假)
   | 'wellness' // 身心調適假 (公費派代 · 21 小時/學年)
   | 'personal' // 事假 (第 8 天起公費派代)
   | 'sick' // 病假 (連續 3 日起公費派代)
