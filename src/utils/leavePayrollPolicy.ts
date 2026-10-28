@@ -53,6 +53,7 @@ export const IN_SCOPE_LEAVE_TYPES: LeaveType[] = [
   'official',
   'marriage',
   'maternity',
+  'prenatal',
   'bereavement',
   'wellness',
   'personal',
@@ -172,6 +173,7 @@ export function isAlwaysPublicLeaveType(leaveType?: LeaveType, reason?: string):
     lt === 'official' ||
     lt === 'marriage' ||
     lt === 'maternity' ||
+    lt === 'prenatal' ||
     lt === 'bereavement' ||
     lt === 'wellness'
   );
