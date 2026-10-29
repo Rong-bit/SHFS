@@ -156,16 +156,17 @@ export function buildConcurrentPayrollRemarks(
     const period = r.originalSession?.period;
     const periodLabel = period ? `(第${period}節)` : '';
     const periodOpts = { ...calendarOpts, period };
-    const dates = r.leaveDateStart
-      ? listBillableLeaveDatesInMonth(
-          r,
-          settlementMonth,
-          settlementYear,
-          holidaySet,
-          periodOpts
-        ).filter(matchDate)
-      : [];
-    if (dates.length > 0) {
+    // 有請假日時，備註只列通過 matchDate 的日期。
+    // 不可在全部被篩掉後改用未套用 skip（如科目改監考）的 countPeriods，
+    // 否則兼課清冊備註會残留已改入代課清冊的節次。
+    if (r.leaveDateStart) {
+      const dates = listBillableLeaveDatesInMonth(
+        r,
+        settlementMonth,
+        settlementYear,
+        holidaySet,
+        periodOpts
+      ).filter(matchDate);
       for (const iso of dates) {
         parts.push(`${formatMd(iso)}${prefix}1節${periodLabel}`);
       }
@@ -173,16 +174,6 @@ export function buildConcurrentPayrollRemarks(
     }
     const periods = countPeriods();
     if (periods <= 0) return;
-    const start = r.leaveDateStart;
-    const end = r.leaveDateEnd || r.leaveDateStart;
-    if (start) {
-      if (end && end !== start) {
-        parts.push(`${formatMd(start)}~${formatMd(end)}${prefix}${periods}節${periodLabel}`);
-      } else {
-        parts.push(`${formatMd(start)}${prefix}${periods}節${periodLabel}`);
-      }
-      return;
-    }
     parts.push(`${prefix}${periods}節${periodLabel}`);
   };
 

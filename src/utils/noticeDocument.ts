@@ -12,7 +12,7 @@ import {
   isTemporarySwap,
   resolveTemporarySwapOccurrenceDates,
 } from './temporarySwap';
-import { parseNoticeRowDateToIso } from './noticePayroll';
+import { mergeCustomizedNoticeRowsFromPool, parseNoticeRowDateToIso } from './noticePayroll';
 import { isActingHomeroomOnlyRequest } from './actingHomeroomPayrollRegister';
 
 export type NoticeRow = SubstituteNoticeRow;
@@ -130,65 +130,20 @@ export function alignNoticeRowsToRequests(
 /**
  * 同號多節可能各存一份 noticeRows（舊資料／分次儲存）。
  * 依節次合併，若同一節有多個版本，優先採用「已相對課表原科目／班級改過」的那一列。
- * 若節次對不上申請列，仍保留最完整的一張表格供「依列順序」對應。
+ * 與代課／兼課清冊的 resolveEffectiveNoticeRows 共用合併規則，避免列表已顯示監考、清冊仍算兼課。
  */
 export function resolveSharedNoticeRows(
   req: SubstituteRequest,
   siblingRequests?: SubstituteRequest[]
 ): NoticeRow[] | null {
-  const pool = [req, ...(siblingRequests || [])];
-  const byPeriod = new Map<string, NoticeRow[]>();
-  let primaryTable: NoticeRow[] | null = null;
-
-  for (const r of pool) {
-    if (!r.noticeRowsCustomized || !r.noticeRows?.length) continue;
-    if (!primaryTable || r.noticeRows.length > primaryTable.length) {
-      primaryTable = r.noticeRows;
-    }
-    for (const row of r.noticeRows) {
-      const key = normalizeNoticePeriod(row.period);
-      if (!key) continue;
-      const list = byPeriod.get(key) || [];
-      list.push(row);
-      byPeriod.set(key, list);
-    }
+  const seen = new Set<string>();
+  const pool: SubstituteRequest[] = [];
+  for (const r of [req, ...(siblingRequests || [])]) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    pool.push(r);
   }
-  if (byPeriod.size === 0) {
-    return primaryTable && primaryTable.length > 0 ? [...primaryTable] : null;
-  }
-
-  const merged: NoticeRow[] = [];
-  for (const [periodKey, rows] of byPeriod) {
-    const owner =
-      pool.find((r) => normalizeNoticePeriod(r.originalSession?.period) === periodKey) || req;
-    const origSubject = (owner.originalSession?.subjectName || '').trim();
-    const origClass = (owner.originalSession?.className || '').trim();
-    // 科目有改者優先（避免僅班級不同的舊列把「監考」蓋回「英文閱讀」）
-    const subjectChanged = rows.filter((row) => {
-      const sub = (row.subjectName || '').trim();
-      return Boolean(sub && sub !== origSubject);
-    });
-    const classChanged = rows.filter((row) => {
-      const cls = (row.className || '').trim();
-      return Boolean(cls && cls !== origClass);
-    });
-    const pick = subjectChanged.length
-      ? subjectChanged[subjectChanged.length - 1]
-      : classChanged.length
-        ? classChanged[classChanged.length - 1]
-        : rows[rows.length - 1];
-    merged.push(pick);
-  }
-
-  // 合併結果節次數少於完整表格時（節次被改偏），改回完整表格供順序對應
-  if (primaryTable && primaryTable.length > merged.length) {
-    return [...primaryTable];
-  }
-  return merged.sort(
-    (a, b) =>
-      (Number(normalizeNoticePeriod(a.period)) || 0) -
-      (Number(normalizeNoticePeriod(b.period)) || 0)
-  );
+  return mergeCustomizedNoticeRowsFromPool(pool);
 }
 
 export type NoticeDisplaySlot = {
