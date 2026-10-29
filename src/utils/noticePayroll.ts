@@ -190,38 +190,109 @@ export function classifySavedNoticeRows(
   });
 }
 
-export function resolveEffectiveNoticeRows(
+/** 節次字串正規化（與通知單顯示端一致） */
+function normalizeNoticePeriodKey(period: string | number | null | undefined): string {
+  const raw = String(period ?? '')
+    .trim()
+    .replace(/^第\s*/, '')
+    .replace(/\s*節$/, '');
+  if (!raw) return '';
+  const n = Number(raw);
+  return Number.isFinite(n) ? String(n) : raw;
+}
+
+/**
+ * 同張通知單多節可能各存一份 noticeRows（舊資料／分次儲存）。
+ * 依節次合併，科目或班級相對課表有改者優先（如改「監考」），
+ * 避免薪資仍吃到舊的兼課列、列表卻已顯示監考。
+ */
+export function mergeCustomizedNoticeRowsFromPool(
+  pool: SubstituteRequest[]
+): SubstituteNoticeRow[] | null {
+  const byPeriod = new Map<string, SubstituteNoticeRow[]>();
+  let primaryTable: SubstituteNoticeRow[] | null = null;
+
+  for (const r of pool) {
+    if (!r.noticeRowsCustomized || !r.noticeRows?.length) continue;
+    const rows = r.noticeRows.filter(isMeaningfulNoticeRow);
+    if (rows.length === 0) continue;
+    if (!primaryTable || rows.length > primaryTable.length) {
+      primaryTable = rows;
+    }
+    for (const row of rows) {
+      const key = normalizeNoticePeriodKey(row.period);
+      if (!key) continue;
+      const list = byPeriod.get(key) || [];
+      list.push(row);
+      byPeriod.set(key, list);
+    }
+  }
+  if (byPeriod.size === 0) {
+    return primaryTable && primaryTable.length > 0 ? [...primaryTable] : null;
+  }
+
+  const merged: SubstituteNoticeRow[] = [];
+  for (const [periodKey, rows] of byPeriod) {
+    const owner =
+      pool.find((r) => normalizeNoticePeriodKey(r.originalSession?.period) === periodKey) ||
+      pool[0];
+    const origSubject = (owner?.originalSession?.subjectName || '').trim();
+    const origClass = (owner?.originalSession?.className || '').trim();
+    const subjectChanged = rows.filter((row) => {
+      const sub = (row.subjectName || '').trim();
+      return Boolean(sub && sub !== origSubject);
+    });
+    const classChanged = rows.filter((row) => {
+      const cls = (row.className || '').trim();
+      return Boolean(cls && cls !== origClass);
+    });
+    const pick = subjectChanged.length
+      ? subjectChanged[subjectChanged.length - 1]
+      : classChanged.length
+        ? classChanged[classChanged.length - 1]
+        : rows[rows.length - 1];
+    merged.push(pick);
+  }
+
+  // 合併結果節次數少於完整表格時（節次被改偏），改回完整表格
+  if (primaryTable && primaryTable.length > merged.length) {
+    return [...primaryTable];
+  }
+  return sortNoticeRowsByDatePeriod(merged);
+}
+
+/** 同一張通知單／同一代課教師的申請列（含本人） */
+function noticeSheetPoolForPayroll(
   request: SubstituteRequest,
   allRequests: SubstituteRequest[]
-): SubstituteNoticeRow[] | null {
-  const customizedRows = (r: SubstituteRequest) =>
-    r.noticeRowsCustomized
-      ? r.noticeRows?.filter(isMeaningfulNoticeRow) ?? []
-      : [];
-
-  const own = customizedRows(request);
-  if (own.length > 0) return own;
-
+): SubstituteRequest[] {
   const num = (request.requestNumber || '').trim();
-  for (const r of allRequests) {
-    if (request.batchGroupId) {
-      if (r.batchGroupId !== request.batchGroupId) continue;
+  const pool = allRequests.filter((r) => {
+    if (r.id === request.id) return true;
+    if (request.batchGroupId != null && request.batchGroupId !== '') {
+      if (r.batchGroupId !== request.batchGroupId) return false;
     } else if (num) {
-      if (r.requestNumber !== num) continue;
+      if (r.requestNumber !== num) return false;
     } else {
-      break;
+      return false;
     }
     if (
       request.substituteTeacherId &&
       r.substituteTeacherId &&
       r.substituteTeacherId !== request.substituteTeacherId
     ) {
-      continue;
+      return false;
     }
-    const batchRows = customizedRows(r);
-    if (batchRows.length > 0) return batchRows;
-  }
-  return null;
+    return true;
+  });
+  return pool.length > 0 ? pool : [request];
+}
+
+export function resolveEffectiveNoticeRows(
+  request: SubstituteRequest,
+  allRequests: SubstituteRequest[]
+): SubstituteNoticeRow[] | null {
+  return mergeCustomizedNoticeRowsFromPool(noticeSheetPoolForPayroll(request, allRequests));
 }
 
 export function getRelatedSubstituteRequests(
