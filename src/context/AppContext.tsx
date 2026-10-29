@@ -122,6 +122,7 @@ import {
   getRelatedSubstituteRequests,
   moveNoticeRowsWithReassignedSessions,
   noticeDateUsesModifiedSubstitutePayroll,
+  requestHasModifiedNoticePayrollRow,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
 import { holidaySetForOverloadPayroll, partialStopsForPayroll } from '../utils/salaryCodes';
@@ -3536,6 +3537,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             s!.dayOfWeek >= 1 &&
             s!.dayOfWeek <= 5 &&
             isDaytimePeriod(s!.period, systemConfig),
+          // 舊單無請假日無法逐日 skip：整張通知單有修改列則不應加兼課
+          skipRequest: (r) =>
+            !r.leaveDateStart && requestHasModifiedNoticePayrollRow(r, requests),
           skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           weeksInMonth: systemConfig.weeksInMonth ?? 5,

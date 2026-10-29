@@ -261,7 +261,7 @@ export function mergeCustomizedNoticeRowsFromPool(
   return sortNoticeRowsByDatePeriod(merged);
 }
 
-/** 同一張通知單／同一代課教師的申請列（含本人） */
+/** 同一張通知單／同一代課教師的申請列（含本人；同號僅併已核准，避免草稿監考污染薪資） */
 function noticeSheetPoolForPayroll(
   request: SubstituteRequest,
   allRequests: SubstituteRequest[]
@@ -269,6 +269,8 @@ function noticeSheetPoolForPayroll(
   const num = (request.requestNumber || '').trim();
   const pool = allRequests.filter((r) => {
     if (r.id === request.id) return true;
+    // 未核准／非代課單不參與合併，否則 pending 草稿改監考會蓋掉已核准兼課列
+    if (r.status !== 'approved' || r.requestType !== 'substitute') return false;
     if (request.batchGroupId != null && request.batchGroupId !== '') {
       if (r.batchGroupId !== request.batchGroupId) return false;
     } else if (num) {

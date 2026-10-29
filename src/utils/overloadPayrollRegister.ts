@@ -9,7 +9,10 @@ import {
   shouldDeductConcurrentOnLeaveDate,
   shouldTransferConcurrentToSubstituteOnLeaveDate,
 } from './leavePayrollPolicy';
-import { noticeDateUsesModifiedSubstitutePayroll } from './noticePayroll';
+import {
+  noticeDateUsesModifiedSubstitutePayroll,
+  requestHasModifiedNoticePayrollRow,
+} from './noticePayroll';
 import { nonTeachingDateSet } from './holidays';
 import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes';
 import { isDaytimePeriod } from './periodConfig';
@@ -226,15 +229,18 @@ export function buildConcurrentPayrollRemarks(
       (iso) =>
         shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx) &&
         !noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
-      () =>
-        countSubstituteConcurrentAddPeriodsInMonth(
+      () => {
+        // 舊單無請假日：無法逐日 skip，整張若已改入代課清冊則備註不再列應加兼課
+        if (requestHasModifiedNoticePayrollRow(r, requests)) return 0;
+        return countSubstituteConcurrentAddPeriodsInMonth(
           r,
           settlementMonth,
           settlementYear,
           payrollCtx,
           holidaySet,
           periodOpts
-        )
+        );
+      }
     );
   }
 
