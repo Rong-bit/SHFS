@@ -333,4 +333,99 @@ runCase('同號舊列合併採監考', [staleOwn, freshSibling], 2);
   assert.equal(concurrentRemarks.includes('(第3節)'), false, '兼課備註不可再列已改監考的第3節');
 }
 
+// 5) 刻意改節次 3、4→2、3：有改的列皆進代課，兼課應加為 0
+{
+  const session4 = { ...session, id: 's4c', period: 4, className: '英文二乙', subjectName: '數學' };
+  const remapped = [
+    {
+      date: '2026/10/16',
+      weekday: '5',
+      period: '2',
+      className: '英文二甲',
+      subjectName: '監考',
+      hours: '',
+    },
+    {
+      date: '2026/10/16',
+      weekday: '5',
+      period: '3',
+      className: '英文二乙',
+      subjectName: '監考',
+      hours: '',
+    },
+  ];
+  const r3 = {
+    ...baseReq,
+    id: 'r-remap-3',
+    batchGroupId: 'bg-remap',
+    originalSession: session,
+    noticeRowsCustomized: true as const,
+    noticeRows: remapped,
+  };
+  const r4 = {
+    ...baseReq,
+    id: 'r-remap-4',
+    batchGroupId: 'bg-remap',
+    originalSession: session4,
+    noticeRowsCustomized: true as const,
+    noticeRows: remapped,
+  };
+  const all = [r3, r4];
+  const ctx = buildLeavePayrollContext(all, INITIAL_SYSTEM_CONFIG);
+  assert.equal(
+    noticeDateUsesModifiedSubstitutePayroll(r3, all, '2026-10-16'),
+    true,
+    '改節次後第3節申請應對到已修改列'
+  );
+  assert.equal(
+    noticeDateUsesModifiedSubstitutePayroll(r4, all, '2026-10-16'),
+    true,
+    '改節次後第4節申請應對到已修改列'
+  );
+  const add = countSubstituteTeacherConcurrentAddPeriodsInMonth(
+    all,
+    'liu',
+    10,
+    2026,
+    ctx,
+    undefined,
+    {
+      matchSession: (s) => Boolean(s?.isConcurrent),
+      skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, all, iso),
+    }
+  );
+  assert.equal(add, 0, '刻意改節次且皆修改時兼課應加為 0');
+  const effective = resolveEffectiveNoticeRows(r3, all)!;
+  const related = getRelatedSubstituteRequests(r3, all);
+  const payroll = countSubstitutePayrollWithNoticeRows(
+    effective,
+    related,
+    10,
+    2026,
+    5,
+    undefined,
+    undefined,
+    ctx,
+    () => 0,
+    'liu'
+  );
+  assert.equal(payroll.periods, 2, '刻意改節次後兩列修改皆進代課清冊');
+  const concurrentRemarks = buildConcurrentPayrollRemarks(
+    'liu',
+    10,
+    2026,
+    all,
+    INITIAL_SYSTEM_CONFIG
+  );
+  assert.equal(concurrentRemarks, '', `兼課備註應為空（實際：${concurrentRemarks || '空'}）`);
+  const substituteRemarks = buildSubstitutePayrollRemarks(
+    'liu',
+    10,
+    2026,
+    all,
+    INITIAL_SYSTEM_CONFIG
+  );
+  assert.match(substituteRemarks, /代吳東儒公假1節/, `代課備註應有內容（實際：${substituteRemarks}）`);
+}
+
 console.log('notice invigilation payroll checks passed');

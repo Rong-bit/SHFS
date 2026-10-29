@@ -399,12 +399,131 @@ export type NoticePayrollResolveOptions = {
   calendarOpts?: LeaveBillableOptions;
   /** false＝通知單列必須對到該代課老師自己的節次，不可整表算給第一人 */
   allowMatchFallback?: boolean;
+  /** 完整通知單列；刻意改節次（3、4→2、3）時依列順序對申請單 */
+  allNoticeRows?: SubstituteNoticeRow[];
 };
 
 export type ResolvedNoticePayrollRow = {
   row: SubstituteNoticeRow;
   iso: string;
 };
+
+function normalizePeriodNum(period: string | number | null | undefined): number {
+  const key = normalizeNoticePeriodKey(period);
+  const n = Number(key);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function noticeRowPeriodsDistinct(rows: SubstituteNoticeRow[]): boolean {
+  const nums = rows.map((r) => normalizePeriodNum(r.period)).filter((n) => n > 0);
+  return nums.length === rows.length && new Set(nums).size === nums.length;
+}
+
+function orderedRequestsBySession(related: SubstituteRequest[]): SubstituteRequest[] {
+  return [...related]
+    .filter((r) => r.originalSession)
+    .sort(
+      (a, b) =>
+        (a.originalSession!.dayOfWeek || 0) - (b.originalSession!.dayOfWeek || 0) ||
+        (a.originalSession!.period || 0) - (b.originalSession!.period || 0) ||
+        a.id.localeCompare(b.id)
+    );
+}
+
+function orderedNoticeRowsByPeriod(rows: SubstituteNoticeRow[]): SubstituteNoticeRow[] {
+  return [...rows].sort(
+    (a, b) =>
+      normalizePeriodNum(a.period) - normalizePeriodNum(b.period) ||
+      a.className.localeCompare(b.className, 'zh-Hant')
+  );
+}
+
+/** 列數＝申請節數、兩邊節次皆不重複 → 可依順序對位（含刻意改節次） */
+function canPairNoticeRowsByOrder(
+  rows: SubstituteNoticeRow[],
+  related: SubstituteRequest[]
+): boolean {
+  const meaningful = rows.filter(isMeaningfulNoticeRow);
+  const reqs = orderedRequestsBySession(related);
+  if (reqs.length < 2 || meaningful.length !== reqs.length) return false;
+  if (!noticeRowPeriodsDistinct(meaningful)) return false;
+  const reqPeriods = reqs.map((r) => r.originalSession!.period);
+  return new Set(reqPeriods).size === reqPeriods.length;
+}
+
+/** 通知單節次集合與課表節次不同（如 3、4→2、3） */
+function noticePeriodsRemappedFromRequests(
+  rows: SubstituteNoticeRow[],
+  related: SubstituteRequest[]
+): boolean {
+  if (!canPairNoticeRowsByOrder(rows, related)) return false;
+  const rowPeriods = new Set(
+    orderedNoticeRowsByPeriod(rows.filter(isMeaningfulNoticeRow)).map((r) =>
+      normalizePeriodNum(r.period)
+    )
+  );
+  const reqPeriods = new Set(orderedRequestsBySession(related).map((r) => r.originalSession!.period));
+  if (rowPeriods.size !== reqPeriods.size) return true;
+  for (const p of rowPeriods) {
+    if (!reqPeriods.has(p)) return true;
+  }
+  return false;
+}
+
+function findRequestByNoticeRowOrder(
+  row: SubstituteNoticeRow,
+  allRows: SubstituteNoticeRow[],
+  related: SubstituteRequest[]
+): SubstituteRequest | null {
+  const meaningful = allRows.filter(isMeaningfulNoticeRow);
+  if (!canPairNoticeRowsByOrder(meaningful, related)) return null;
+  const orderedRows = orderedNoticeRowsByPeriod(meaningful);
+  const orderedReqs = orderedRequestsBySession(related);
+  const rowKey = noticeRowKey(row);
+  const idx = orderedRows.findIndex((r) => noticeRowKey(r) === rowKey);
+  if (idx < 0 || idx >= orderedReqs.length) return null;
+  return orderedReqs[idx];
+}
+
+/** 將申請單對到通知單列：刻意改節次時依順序，否則依課表節次 */
+function findNoticeRowPairedToRequest(
+  request: SubstituteRequest,
+  rows: SubstituteNoticeRow[],
+  related: SubstituteRequest[]
+): SubstituteNoticeRow | null {
+  const meaningful = rows.filter(isMeaningfulNoticeRow);
+  if (meaningful.length === 0) return null;
+
+  if (noticePeriodsRemappedFromRequests(meaningful, related)) {
+    const orderedRows = orderedNoticeRowsByPeriod(meaningful);
+    const orderedReqs = orderedRequestsBySession(related);
+    const idx = orderedReqs.findIndex((r) => r.id === request.id);
+    if (idx >= 0 && idx < orderedRows.length) return orderedRows[idx];
+    return null;
+  }
+
+  const sessPeriod = request.originalSession?.period;
+  if (sessPeriod) {
+    const samePeriod = meaningful.filter((r) => normalizePeriodNum(r.period) === sessPeriod);
+    if (samePeriod.length === 1) return samePeriod[0];
+    if (samePeriod.length > 1) {
+      const classKey = (request.originalSession?.className || '').trim();
+      return samePeriod.find((r) => r.className.trim() === classKey) || samePeriod[0];
+    }
+  }
+
+  if (canPairNoticeRowsByOrder(meaningful, related)) {
+    const orderedRows = orderedNoticeRowsByPeriod(meaningful);
+    const orderedReqs = orderedRequestsBySession(related);
+    const idx = orderedReqs.findIndex((r) => r.id === request.id);
+    if (idx >= 0 && idx < orderedRows.length) return orderedRows[idx];
+  }
+
+  if (related.length === 1 && related[0]?.id === request.id && meaningful.length === 1) {
+    return meaningful[0];
+  }
+  return null;
+}
 
 function matchesNoticeSlot(
   row: SubstituteNoticeRow,
@@ -442,11 +561,27 @@ function distinctSubstituteTeacherIds(related: SubstituteRequest[]): string[] {
   ];
 }
 
+function sheetRelatedRequests(
+  request: SubstituteRequest,
+  allRequests: SubstituteRequest[]
+): SubstituteRequest[] {
+  const related = getRelatedSubstituteRequests(request, allRequests);
+  if (!request.substituteTeacherId) return related;
+  return related.filter((r) => r.substituteTeacherId === request.substituteTeacherId);
+}
+
 function findMatchingRequests(
   row: SubstituteNoticeRow,
   related: SubstituteRequest[],
-  options?: { allowFallback?: boolean }
+  options?: { allowFallback?: boolean; allNoticeRows?: SubstituteNoticeRow[] }
 ): SubstituteRequest[] {
+  const allRows = options?.allNoticeRows?.filter(isMeaningfulNoticeRow);
+  // 刻意改節次時優先依列順序，避免「通知單第3節」誤對到課表第3節申請
+  if (allRows && noticePeriodsRemappedFromRequests(allRows, related)) {
+    const byOrder = findRequestByNoticeRowOrder(row, allRows, related);
+    if (byOrder) return [byOrder];
+  }
+
   const mixedSubs = distinctSubstituteTeacherIds(related).length > 1;
   const distinctPeriods = new Set(
     related
@@ -466,6 +601,12 @@ function findMatchingRequests(
   // 科目／班級改成監考等人工調整後，仍依節次／星期對到原請假單
   const bySlot = related.filter((r) => matchesNoticeSlot(row, r, { requireClassName: false }));
   if (bySlot.length > 0) return bySlot;
+
+  if (allRows) {
+    const byOrder = findRequestByNoticeRowOrder(row, allRows, related);
+    if (byOrder) return [byOrder];
+  }
+
   if (options?.allowFallback === false || mixedSubs) return [];
   return related.filter((r) => Boolean(r.leaveDateStart && r.originalSession));
 }
@@ -481,11 +622,19 @@ export function requestsForSubstituteTeacher(
 function listClassifiedNoticeRowsForRequest(
   request: SubstituteRequest,
   allRequests: SubstituteRequest[]
-): { row: SubstituteNoticeRow; modified: boolean }[] {
+): {
+  saved: SubstituteNoticeRow[];
+  related: SubstituteRequest[];
+  classified: { row: SubstituteNoticeRow; modified: boolean }[];
+} | null {
   const saved = resolveEffectiveNoticeRows(request, allRequests);
-  if (!saved) return [];
-  const related = getRelatedSubstituteRequests(request, allRequests);
-  return classifySavedNoticeRows(saved, buildDefaultNoticeRowsFromRequests(related));
+  if (!saved) return null;
+  const related = sheetRelatedRequests(request, allRequests);
+  return {
+    saved,
+    related,
+    classified: classifySavedNoticeRows(saved, buildDefaultNoticeRowsFromRequests(related)),
+  };
 }
 
 /** 此請假單對應的通知單列是否曾人工修改（僅該列改入代課清冊；未改列維持兼課轉移） */
@@ -493,9 +642,12 @@ export function requestHasModifiedNoticePayrollRow(
   request: SubstituteRequest,
   allRequests: SubstituteRequest[]
 ): boolean {
-  return listClassifiedNoticeRowsForRequest(request, allRequests).some(
-    ({ row, modified }) =>
-      modified && findMatchingRequests(row, [request], { allowFallback: false }).length > 0
+  const listed = listClassifiedNoticeRowsForRequest(request, allRequests);
+  if (!listed) return false;
+  const paired = findNoticeRowPairedToRequest(request, listed.saved, listed.related);
+  if (!paired) return false;
+  return listed.classified.some(
+    (item) => item.modified && noticeRowKey(item.row) === noticeRowKey(paired)
   );
 }
 
@@ -505,21 +657,19 @@ export function noticeDateUsesModifiedSubstitutePayroll(
   allRequests: SubstituteRequest[],
   isoDate: string
 ): boolean {
-  return listClassifiedNoticeRowsForRequest(request, allRequests).some(({ row, modified }) => {
-    if (!modified) return false;
-    if (findMatchingRequests(row, [request], { allowFallback: false }).length === 0) {
-      return false;
-    }
-    const parsed = parseNoticeRowDateToIso(row.date);
-    if (parsed) return parsed === isoDate;
-    const weekday = parseNoticeWeekday(row.weekday);
-    if (weekday != null && dateToDayOfWeek(isoDate) !== weekday) return false;
-    const period = Number(row.period);
-    if (row.period.trim() && Number.isFinite(period) && period > 0) {
-      if (request.originalSession?.period !== period) return false;
-    }
-    return true;
-  });
+  const listed = listClassifiedNoticeRowsForRequest(request, allRequests);
+  if (!listed) return false;
+  const paired = findNoticeRowPairedToRequest(request, listed.saved, listed.related);
+  if (!paired) return false;
+  const item = listed.classified.find((c) => noticeRowKey(c.row) === noticeRowKey(paired));
+  if (!item?.modified) return false;
+
+  const parsed = parseNoticeRowDateToIso(item.row.date);
+  if (parsed) return parsed === isoDate;
+  const weekday = parseNoticeWeekday(item.row.weekday);
+  if (weekday != null && dateToDayOfWeek(isoDate) !== weekday) return false;
+  // 刻意改節次後通知單 period 可與課表不同，對位已由 findNoticeRowPairedToRequest 完成
+  return true;
 }
 
 function collectCandidateDatesForRow(
@@ -528,6 +678,7 @@ function collectCandidateDatesForRow(
 ): string[] {
   const matching = findMatchingRequests(row, opts.relatedRequests, {
     allowFallback: opts.allowMatchFallback !== false,
+    allNoticeRows: opts.allNoticeRows,
   });
   const dates: string[] = [];
   const weeksInMonth = opts.weeksInMonth ?? 5;
@@ -623,10 +774,15 @@ export function filterResolvedNoticeRowsForPublicPayroll(
   relatedRequests: SubstituteRequest[],
   ctx: LeavePayrollContext,
   excludeDates?: Set<string>,
-  calendarOpts?: LeaveBillableOptions
+  calendarOpts?: LeaveBillableOptions,
+  allNoticeRows?: SubstituteNoticeRow[]
 ): ResolvedNoticePayrollRow[] {
+  const tableRows = allNoticeRows ?? resolvedRows.map(({ row }) => row);
   return resolvedRows.filter(({ row, iso }) => {
-    const matching = findMatchingRequests(row, relatedRequests, { allowFallback: false });
+    const matching = findMatchingRequests(row, relatedRequests, {
+      allowFallback: false,
+      allNoticeRows: tableRows,
+    });
     if (matching.length === 0) return false;
     return matching.some((r) => {
       if (!r.leaveDateStart || !r.originalSession) return false;
@@ -707,13 +863,15 @@ export function countSubstitutePayrollWithNoticeRows(
     holidaySet,
     calendarOpts,
     allowMatchFallback: false,
+    allNoticeRows: effectiveNoticeRows,
   };
   const resolvedRows = filterResolvedNoticeRowsForPublicPayroll(
     listResolvedNoticeRowsInSettlementMonth(effectiveNoticeRows, resolveOpts),
     scopedRelated,
     payrollCtx,
     holidaySet,
-    calendarOpts
+    calendarOpts,
+    effectiveNoticeRows
   );
   const classified = classifySavedNoticeRows(
     effectiveNoticeRows,
@@ -723,7 +881,10 @@ export function countSubstitutePayrollWithNoticeRows(
   const substituteRows = resolvedRows.filter(({ row }) => {
     if (
       forSubstituteTeacherId &&
-      findMatchingRequests(row, scopedRelated, { allowFallback: false }).length === 0
+      findMatchingRequests(row, scopedRelated, {
+        allowFallback: false,
+        allNoticeRows: effectiveNoticeRows,
+      }).length === 0
     ) {
       return false;
     }
