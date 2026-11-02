@@ -1054,7 +1054,33 @@ export function listSubstitutePublicPayrollDatesInMonth(
   );
 }
 
-/** 多張單加總代課節數：同一日同一節（跨班合授）只計 1 */
+/** 這批單裡已改走兼課清冊的「日期|節次」。同一節不可再入代課清冊。 */
+function concurrentTransferSlotKeys(
+  requests: SubstituteRequest[],
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptionsFor?: (request: SubstituteRequest) => LeaveBillableOptions | undefined
+): Set<string> {
+  const keys = new Set<string>();
+  for (const request of requests) {
+    const period = request.originalSession?.period ?? 0;
+    for (const iso of listSubstituteConcurrentAddDatesInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      billableOptionsFor?.(request)
+    )) {
+      keys.add(`${iso}|${period}`);
+    }
+  }
+  return keys;
+}
+
+/** 多張單加總代課節數：同一日同一節（跨班合授）只計 1；該節若已計兼課則不再計代課 */
 export function sumUniqueSubstitutePublicPayrollPeriods(
   requests: SubstituteRequest[],
   settlementMonth: number,
@@ -1064,6 +1090,14 @@ export function sumUniqueSubstitutePublicPayrollPeriods(
   billableOptionsFor?: (request: SubstituteRequest) => LeaveBillableOptions | undefined
 ): number {
   const seen = new Set<string>();
+  const concurrentSlots = concurrentTransferSlotKeys(
+    requests,
+    settlementMonth,
+    settlementYear,
+    ctx,
+    excludeDates,
+    billableOptionsFor
+  );
   let total = 0;
   for (const request of requests) {
     const billableOptions = billableOptionsFor?.(request);
@@ -1091,7 +1125,7 @@ export function sumUniqueSubstitutePublicPayrollPeriods(
       billableOptions
     )) {
       const key = `${iso}|${period}`;
-      if (seen.has(key)) continue;
+      if (seen.has(key) || concurrentSlots.has(key)) continue;
       seen.add(key);
       total += 1;
     }

@@ -15,6 +15,7 @@ import {
   countDistinctDayPeriods,
   expandWithCombinedClassPartners,
   formatCombinedLeaveCount,
+  markCombinedSlotConcurrent,
   isPracticalSession,
   SCHOOL_DEPARTMENTS,
 } from '../../utils/schoolDepartments';
@@ -1078,9 +1079,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
         ? [selectedOriginalSession]
         : [];
     if (requestType === 'substitute' && applicantTeacher) {
-      sessionsToDispatch = expandWithCombinedClassPartners(
-        sessionsToDispatch,
-        sessions.filter((s) => s.teacherId === applicantTeacher.id)
+      sessionsToDispatch = markCombinedSlotConcurrent(
+        expandWithCombinedClassPartners(
+          sessionsToDispatch,
+          sessions.filter((s) => s.teacherId === applicantTeacher.id)
+        )
       );
     }
 

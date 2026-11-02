@@ -3,6 +3,7 @@ import { leaveTypeRemarkShort } from './leaveTypes';
 import {
   buildLeavePayrollContext,
   countSubstitutePublicPayrollPeriodsInMonth,
+  listSubstituteConcurrentAddDatesInMonth,
   listSubstitutePublicPayrollDatesInMonth,
   sumUniqueSubstitutePublicPayrollPeriods,
   isLeaveDatePublicPayroll,
@@ -14,6 +15,7 @@ import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes'
 import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
+  noticeDateUsesModifiedSubstitutePayroll,
   parseNoticeRowHours,
   resolveEffectiveNoticeRows,
 } from './noticePayroll';
@@ -78,6 +80,31 @@ export function buildSubstitutePayrollRemarks(
   const parts: string[] = [];
   const noticeBatchHandled = new Set<string>();
   const seenPaySlot = new Set<string>();
+  const concurrentPaySlots = new Set<string>();
+  for (const r of requests) {
+    if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
+    if (r.substituteTeacherId !== teacherId || !r.substituteTeacherId) continue;
+    const period = r.originalSession?.period ?? 0;
+    for (const iso of listSubstituteConcurrentAddDatesInMonth(
+      r,
+      settlementMonth,
+      settlementYear,
+      payrollCtx,
+      holidaySet,
+      {
+        ...baseCalendarOpts,
+        period,
+        partialStops: partialStopsForPayroll(
+          systemConfig.partialNonTeachingDays,
+          { id: r.applicantTeacherId, name: r.applicantTeacherName },
+          systemConfig
+        ),
+      }
+    )) {
+      if (noticeDateUsesModifiedSubstitutePayroll(r, requests, iso)) continue;
+      concurrentPaySlots.add(`${iso}|${period}`);
+    }
+  }
   const weeksInMonth = systemConfig.weeksInMonth ?? 5;
 
   for (const r of requests) {
@@ -131,7 +158,7 @@ export function buildSubstitutePayrollRemarks(
       if (payrollResult.useBasicRate) {
         for (const { row, iso } of payrollResult.resolvedRows) {
           const slotKey = `${iso}|${row.period}`;
-          if (seenPaySlot.has(slotKey)) continue;
+          if (seenPaySlot.has(slotKey) || concurrentPaySlots.has(slotKey)) continue;
           seenPaySlot.add(slotKey);
           const hours = parseNoticeRowHours(row.hours);
           const periodLabel = row.period ? formatPeriodLabel(Number(row.period)) : '';
@@ -150,6 +177,7 @@ export function buildSubstitutePayrollRemarks(
             !shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx)
         );
         for (const iso of dates) {
+          if (concurrentPaySlots.has(`${iso}|${period}`)) continue;
           parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);
         }
       } else if (payrollResult.periods > 0) {
@@ -170,7 +198,7 @@ export function buildSubstitutePayrollRemarks(
       );
       for (const iso of dates) {
         const slotKey = `${iso}|${period}`;
-        if (seenPaySlot.has(slotKey)) continue;
+        if (seenPaySlot.has(slotKey) || concurrentPaySlots.has(slotKey)) continue;
         seenPaySlot.add(slotKey);
         parts.push(`${formatMd(iso)}${prefix}1節${formatPeriodLabel(period)}`);
       }

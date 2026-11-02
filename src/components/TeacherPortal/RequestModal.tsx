@@ -37,6 +37,7 @@ import {
   combinedClassPartners,
   countDistinctDayPeriods,
   expandWithCombinedClassPartners,
+  markCombinedSlotConcurrent,
 } from '../../utils/schoolDepartments';
 import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { isPlaceholderSession } from '../../utils/resolveOriginalSession';
@@ -617,7 +618,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     }
 
     if (requestType === 'substitute') {
-      const sessionsToLeave = leaveSessionsForSubmit;
+      const sessionsToLeave = markCombinedSlotConcurrent(leaveSessionsForSubmit);
       if (sessionsToLeave.length === 0) {
         alert(
           leavePickMode === 'multi'

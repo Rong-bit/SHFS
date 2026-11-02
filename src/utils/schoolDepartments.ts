@@ -221,6 +221,22 @@ export function countDistinctDayPeriods(
   return new Set(sessions.map((s) => `${s.dayOfWeek}-${s.period}`)).size;
 }
 
+/**
+ * 同一節只要有一班是兼課，送出的請假快照都標成兼課。
+ * 回傳新物件，不改課表上原本的列。
+ */
+export function markCombinedSlotConcurrent(sessions: CourseSession[]): CourseSession[] {
+  const concurrentSlots = new Set(
+    sessions.filter((s) => s.isConcurrent).map((s) => `${s.dayOfWeek}-${s.period}`)
+  );
+  if (concurrentSlots.size === 0) return sessions;
+  return sessions.map((session) =>
+    session.isConcurrent || !concurrentSlots.has(`${session.dayOfWeek}-${session.period}`)
+      ? session
+      : { ...session, isConcurrent: true }
+  );
+}
+
 /** 一批請假單的節數：跨班同一節顯示「1 節（2 班）」 */
 export function formatCombinedLeaveCount(
   items: Array<{ originalSession?: { dayOfWeek: number; period: number } | null }>

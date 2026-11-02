@@ -12,6 +12,7 @@ import {
   countWeeklyConcurrentPeriods,
   expandWithCombinedClassPartners,
   formatCombinedLeaveCount,
+  markCombinedSlotConcurrent,
   isSameSubjectCombinedClass,
   monthlyConcurrentPeriods,
 } from '../src/utils/schoolDepartments';
@@ -229,6 +230,38 @@ assert.equal(
   0,
   '跨班兼課不入代課清冊'
 );
+
+const mixed = [
+  leaveReq('m1', '電機二忠'),
+  {
+    ...leaveReq('m2', '電機二孝'),
+    originalSession: session({
+      id: 'm2',
+      className: '電機二孝',
+      period: 3,
+      dayOfWeek: 2,
+      isConcurrent: false,
+    }),
+  },
+];
+const mixedCtx = buildLeavePayrollContext(mixed, INITIAL_SYSTEM_CONFIG);
+assert.equal(
+  countApplicantConcurrentDeductPeriodsInMonth(mixed, 't1', 10, 2026, mixedCtx),
+  1,
+  '只有一班標兼課時，應減仍只計 1'
+);
+assert.equal(
+  countSubstituteTeacherConcurrentAddPeriodsInMonth(mixed, 't-b', 10, 2026, mixedCtx),
+  1
+);
+assert.equal(
+  sumUniqueSubstitutePublicPayrollPeriods(mixed, 10, 2026, mixedCtx),
+  0,
+  '同一節已走兼課，另一班不可再入代課'
+);
+const marked = markCombinedSlotConcurrent(mixed.map((r) => r.originalSession));
+assert.equal(marked.every((s) => s.isConcurrent), true);
+assert.equal(mixed[1].originalSession.isConcurrent, false, '不改原課表列');
 
 const partnerOcc = {
   teacherId: 't-b',

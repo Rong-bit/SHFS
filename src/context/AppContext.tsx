@@ -60,6 +60,7 @@ import {
   buildLeavePayrollContext,
   countApplicantConcurrentDeductPeriodsInMonth,
   countSubstitutePublicPayrollPeriodsInMonth,
+  listSubstituteConcurrentAddDatesInMonth,
   listSubstitutePublicPayrollDatesInMonth,
   sumUniqueSubstitutePublicPayrollPeriods,
   countSubstituteTeacherConcurrentAddPeriodsInMonth,
@@ -3686,6 +3687,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       const noticeBatchCounted = new Set<string>();
       const seenPublicSlots = new Set<string>();
+      const concurrentPaySlots = new Set<string>();
+      requests
+        .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
+        .forEach((r) => {
+          if (resolveSubstitutePayrollTeacherId(r) !== teacher.id) return;
+          const applicant = teachers.find((t) => t.id === r.applicantTeacherId);
+          const period = r.originalSession?.period ?? 0;
+          for (const iso of listSubstituteConcurrentAddDatesInMonth(
+            r,
+            settlementMonth,
+            settlementYear,
+            payrollCtx,
+            holidaySet,
+            {
+              ...leaveCalendarOpts,
+              period,
+              partialStops: partialStopsForPayroll(
+                systemConfig.partialNonTeachingDays,
+                applicant,
+                systemConfig
+              ),
+            }
+          )) {
+            concurrentPaySlots.add(`${iso}|${period}`);
+          }
+        });
 
       requests
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
@@ -3764,7 +3791,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 periodOpts
               )) {
                 const key = `${iso}|${period}`;
-                if (seenPublicSlots.has(key)) continue;
+                if (seenPublicSlots.has(key) || concurrentPaySlots.has(key)) continue;
                 seenPublicSlots.add(key);
                 publicPeriods += 1;
               }
