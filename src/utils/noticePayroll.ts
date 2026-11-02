@@ -890,7 +890,7 @@ export function countSubstitutePayrollWithNoticeRows(
     }
     const modified = modifiedByRow.get(noticeRowKey(row));
     if (modified) return true;
-    // 未修改的兼課列維持兼課轉移，不入代課清冊
+    // 未修改的兼課列維持兼課轉移，不入代課清冊（含身心調適假）
     return row.hours.trim() !== '兼課';
   });
   const customizedPeriods = substituteRows.reduce(

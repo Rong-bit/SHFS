@@ -218,18 +218,22 @@ export function isConcurrentTeachingSession(
   );
 }
 
-/** 兼課（超鐘點）請假是否扣 A 兼課費：僅公費派代日才扣（含身心調適假） */
+/**
+ * 兼課（超鐘點）請假是否扣 A 兼課費：僅公費派代日才扣。
+ * 身心調適假例外：A 不扣兼課（未改通知單列時 B 仍應加兼課）。
+ */
 export function shouldDeductConcurrentOnLeaveDate(
   date: string,
   request: SubstituteRequest,
   ctx: LeavePayrollContext
 ): boolean {
+  if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') return false;
   return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
 }
 
 /**
- * 超鐘點代課：A 扣兼課、B 應加兼課（兼課清冊）。
- * 身心調適假例外：A 仍扣兼課，但 B 入代課清冊（不走兼課轉移）。
+ * 超鐘點代課：B 應加兼課（兼課清冊）。通知單有修改列時改入代課清冊。
+ * 一般公費假別：A 扣多少 B 加多少。身心調適假：A 不扣，B 仍應加。
  */
 export function shouldTransferConcurrentToSubstituteOnLeaveDate(
   date: string,
@@ -237,7 +241,9 @@ export function shouldTransferConcurrentToSubstituteOnLeaveDate(
   ctx: LeavePayrollContext
 ): boolean {
   if (!isConcurrentTeachingSession(request.originalSession, ctx.periodConfig)) return false;
-  if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') return false;
+  if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') {
+    return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
+  }
   return shouldDeductConcurrentOnLeaveDate(date, request, ctx);
 }
 
@@ -339,7 +345,6 @@ export function countSubstituteConcurrentAddPeriodsInMonth(
   if (!isConcurrentTeachingSession(request.originalSession, ctx.periodConfig)) return 0;
 
   if (!request.leaveDateStart) {
-    if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') return 0;
     if (resolveRequestPaymentType(request, ctx, excludeDates, billableOptions) !== 'public') {
       return 0;
     }
@@ -631,7 +636,9 @@ export function leavePaymentDisplayLabel(
         kind: 'public',
         label: '公費派代',
         detail: options?.isConcurrentSession
-          ? '已儲存課程表格：僅修改列改入代課清冊；未改的兼課列仍應加兼課。請假人該節為兼課，仍應減兼課'
+          ? lt === 'wellness'
+            ? '已儲存課程表格：僅修改列改入代課清冊；未改的兼課列代課人應加兼課，請假人不扣兼課'
+            : '已儲存課程表格：僅修改列改入代課清冊；未改的兼課列仍應加兼課。請假人該節為兼課，仍應減兼課'
           : '已儲存課程表格：僅修改列改入代課清冊；請假人該節為基鐘，照支原薪、不扣兼課',
       };
     }
@@ -640,8 +647,8 @@ export function leavePaymentDisplayLabel(
         kind: 'public',
         label: '公費派代',
         detail: options?.isConcurrentSession
-          ? '身心調適假超鐘點：扣請假人兼課；代課人入代課清冊（不走兼課轉移）'
-          : '身心調適假：基本鐘點入代課清冊，請假人照支原薪；超鐘點則扣請假人兼課',
+          ? '身心調適假超鐘點：請假人不扣兼課；代課人應加兼課（兼課清冊）。通知單有修改列則改入代課清冊'
+          : '身心調適假：基本鐘點入代課清冊，請假人照支原薪；超鐘點則代課人應加兼課、請假人不扣',
       };
     }
     const concurrentTransfer = options?.isConcurrentSession;
@@ -762,7 +769,7 @@ export function requestUsesCustomizedNoticePayroll(
   );
 }
 
-/** 請假兼課扣減：僅課表標示兼課之節次。基鐘不扣；公費派代日（含身心調適假）扣。儲存通知單後兼課仍扣，讓該節改入代課清冊。 */
+/** 請假兼課扣減：僅課表標示兼課之節次。基鐘不扣；公費派代日扣（身心調適假不扣）。 */
 export function countApplicantConcurrentDeductPeriodsInMonth(
   requests: SubstituteRequest[],
   applicantTeacherId: string,
