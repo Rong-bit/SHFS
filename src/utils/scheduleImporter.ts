@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { CourseSession, Teacher, WorkshopVenue, DayOfWeek, DepartmentType } from '../types';
-import { departmentFromClassName, departmentFromLabel, gradeYearFromClassName, isInternshipCourse } from './schoolDepartments';
+import { departmentFromClassName, departmentFromLabel, isInternshipCourse, isSameSubjectCombinedClass } from './schoolDepartments';
 import { isDaytimePeriod, resolvePeriodConfig } from './periodConfig';
 import {
   classifyVenueKind,
@@ -207,32 +207,104 @@ interface TeacherSlotHit {
   subjectCode: string;
 }
 
-const normalizeClashText = (s: string) => s.replace(/\s+/g, '').toLowerCase();
-
 /** 忠/孝等同科同年級同時段合班，或完全重複列，不視為教師衝堂 */
 const isCombinedOrDuplicateTeacherSlot = (
   prev: TeacherSlotHit,
   className: string,
   subjectName: string,
   subjectCode: string
-) => {
-  const sameSubject =
-    (subjectName && normalizeClashText(prev.subjectName) === normalizeClashText(subjectName)) ||
-    (subjectCode && prev.subjectCode && prev.subjectCode === subjectCode);
-  if (!sameSubject) return false;
-  if (prev.className === className) return true;
-  const prevDept = departmentFromClassName(prev.className);
-  const nextDept = departmentFromClassName(className);
-  const prevGrade = gradeYearFromClassName(prev.className);
-  const nextGrade = gradeYearFromClassName(className);
-  return Boolean(
-    prevDept &&
-      nextDept &&
-      prevDept === nextDept &&
-      prevGrade &&
-      nextGrade &&
-      prevGrade === nextGrade
+) =>
+  isSameSubjectCombinedClass(
+    {
+      className: prev.className,
+      subjectName: prev.subjectName,
+      subjectCode: prev.subjectCode,
+    },
+    { className, subjectName, subjectCode }
   );
+
+/**
+ * 同老師、同時段、同科同年級合班（忠／孝等）：只要其中一班標兼課，兩班都標兼課。
+ * 鐘點仍依「星期–節次」只計 1 節，不因班數加總。
+ */
+export const applyCombinedClassConcurrent = (rows: ParsedImportRow[]): ParsedImportRow[] => {
+  const promote = new Map<number, string>();
+  const byTeacherSlot = new Map<string, number[]>();
+
+  rows.forEach((row, idx) => {
+    const teachers = splitTeacherNames(row.teacherName);
+    const names = teachers.length > 0 ? teachers : [row.teacherName.trim()].filter(Boolean);
+    names.forEach((teacher) => {
+      const key = `${row.dayOfWeek}|${row.period}|${teacher}`;
+      const list = byTeacherSlot.get(key) || [];
+      list.push(idx);
+      byTeacherSlot.set(key, list);
+    });
+  });
+
+  byTeacherSlot.forEach((indices) => {
+    const unique = [...new Set(indices)];
+    const parent = unique.map((_, i) => i);
+    const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    const union = (a: number, b: number) => {
+      parent[find(a)] = find(b);
+    };
+    for (let i = 0; i < unique.length; i += 1) {
+      for (let j = i + 1; j < unique.length; j += 1) {
+        if (isSameSubjectCombinedClass(rows[unique[i]], rows[unique[j]])) union(i, j);
+      }
+    }
+    const groups = new Map<number, number[]>();
+    unique.forEach((rowIdx, i) => {
+      const root = find(i);
+      const group = groups.get(root) || [];
+      group.push(rowIdx);
+      groups.set(root, group);
+    });
+    groups.forEach((members) => {
+      const classNames = [...new Set(members.map((i) => rows[i].className))];
+      if (classNames.length < 2) return;
+      if (!members.some((i) => rows[i].isConcurrent)) return;
+      const marked = [...new Set(members.filter((i) => rows[i].isConcurrent).map((i) => rows[i].className))];
+      members.forEach((i) => {
+        if (rows[i].isConcurrent || promote.has(i)) return;
+        promote.set(
+          i,
+          `與${marked.join('、')}同時段合班，已一併標為兼課（此節鐘點仍只計 1）`
+        );
+      });
+    });
+  });
+
+  if (promote.size === 0) return rows;
+  return rows.map((row, idx) => {
+    const note = promote.get(idx);
+    if (!note) return row;
+    return {
+      ...row,
+      isConcurrent: true,
+      warnings: [...row.warnings, note],
+    };
+  });
+};
+
+/** 匯入預覽：這列同時段合上的其他班 */
+export const combinedImportPartnerClassNames = (
+  row: ParsedImportRow,
+  rows: ParsedImportRow[]
+): string[] => {
+  const teachers = new Set(splitTeacherNames(row.teacherName));
+  const names = new Set<string>();
+  rows.forEach((other) => {
+    if (other === row) return;
+    if (other.dayOfWeek !== row.dayOfWeek || other.period !== row.period) return;
+    if (other.className === row.className) return;
+    if (!isSameSubjectCombinedClass(row, other)) return;
+    const otherTeachers = splitTeacherNames(other.teacherName);
+    if (!otherTeachers.some((name) => teachers.has(name))) return;
+    names.add(other.className);
+  });
+  return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 };
 
 /**
@@ -644,7 +716,7 @@ export const parseScheduleFile = async (
     });
 
     return {
-      validRows,
+      validRows: applyCombinedClassConcurrent(validRows),
       invalidRows,
       totalCount: rawRows.length,
       newTeachersDetected: Array.from(newTeachersSet),
@@ -863,7 +935,7 @@ export const parseScheduleFile = async (
   });
 
   return {
-    validRows,
+    validRows: applyCombinedClassConcurrent(validRows),
     invalidRows,
     totalCount: rawRows.length,
     newTeachersDetected: Array.from(newTeachersSet),

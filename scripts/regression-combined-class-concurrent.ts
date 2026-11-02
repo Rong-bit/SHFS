@@ -1,0 +1,205 @@
+/**
+ * 同科同年級忠／孝同時段合班：跨班、一班兼課則兩班皆兼課，鐘點只計 1 節。
+ * 執行：npx tsx scripts/regression-combined-class-concurrent.ts
+ */
+import assert from 'node:assert/strict';
+import * as XLSX from 'xlsx';
+import type { CourseSession, SubstituteRequest } from '../src/types';
+import { INITIAL_SYSTEM_CONFIG } from '../src/data/mockData';
+import {
+  breakdownWeeklyOverloadPeriods,
+  countWeeklyConcurrentPeriods,
+  isSameSubjectCombinedClass,
+  monthlyConcurrentPeriods,
+} from '../src/utils/schoolDepartments';
+import {
+  applyCombinedClassConcurrent,
+  combinedImportPartnerClassNames,
+  parseScheduleFile,
+  type ParsedImportRow,
+} from '../src/utils/scheduleImporter';
+import {
+  buildLeavePayrollContext,
+  countApplicantConcurrentDeductPeriodsInMonth,
+  countSubstituteTeacherConcurrentAddPeriodsInMonth,
+} from '../src/utils/leavePayrollPolicy';
+
+const row = (partial: Partial<ParsedImportRow> & Pick<ParsedImportRow, 'className' | 'subjectName' | 'teacherName'>): ParsedImportRow => ({
+  rowNumber: partial.rowNumber ?? 2,
+  dayOfWeek: partial.dayOfWeek ?? 1,
+  period: partial.period ?? 1,
+  className: partial.className,
+  subjectName: partial.subjectName,
+  teacherName: partial.teacherName,
+  venueName: partial.venueName ?? '原班教室',
+  isPractical: partial.isPractical ?? false,
+  isConcurrent: partial.isConcurrent ?? false,
+  errors: partial.errors ?? [],
+  warnings: partial.warnings ?? [],
+});
+
+const session = (partial: Partial<CourseSession> & Pick<CourseSession, 'id' | 'className'>): CourseSession => ({
+  id: partial.id,
+  dayOfWeek: partial.dayOfWeek ?? 2,
+  period: partial.period ?? 3,
+  className: partial.className,
+  subjectName: partial.subjectName ?? '基本電學',
+  teacherId: partial.teacherId ?? 't1',
+  teacherName: partial.teacherName ?? '王小明',
+  venueId: 'v1',
+  venueName: '教室',
+  isPractical: false,
+  isConcurrent: partial.isConcurrent ?? false,
+});
+
+assert.equal(
+  isSameSubjectCombinedClass(
+    { className: '電機二忠', subjectName: '基本電學' },
+    { className: '電機二孝', subjectName: '基本電學' }
+  ),
+  true
+);
+assert.equal(
+  isSameSubjectCombinedClass(
+    { className: '機二忠', subjectName: '基本電學' },
+    { className: '機二孝', subjectName: '基本電學' }
+  ),
+  true,
+  '簡稱班名也視為同科合班'
+);
+assert.equal(
+  isSameSubjectCombinedClass(
+    { className: '電機二忠', subjectName: '基本電學' },
+    { className: '電機三孝', subjectName: '基本電學' }
+  ),
+  false
+);
+assert.equal(
+  isSameSubjectCombinedClass(
+    { className: '電機二忠', subjectName: '基本電學' },
+    { className: '電機二孝', subjectName: '電子學' }
+  ),
+  false
+);
+
+const promoted = applyCombinedClassConcurrent([
+  row({ className: '電機二忠', subjectName: '基本電學', teacherName: '王小明', isConcurrent: true }),
+  row({ className: '電機二孝', subjectName: '基本電學', teacherName: '王小明', isConcurrent: false, rowNumber: 3 }),
+]);
+assert.equal(promoted[0].isConcurrent, true);
+assert.equal(promoted[1].isConcurrent, true, '孝班應一併標為兼課');
+assert.match(promoted[1].warnings.join(''), /兼課/);
+assert.deepEqual(combinedImportPartnerClassNames(promoted[0], promoted), ['電機二孝']);
+
+const shortNames = applyCombinedClassConcurrent([
+  row({ className: '機二忠', subjectName: '實習', teacherName: '王小明', isConcurrent: false }),
+  row({ className: '機二孝', subjectName: '實習', teacherName: '王小明', isConcurrent: true, rowNumber: 3 }),
+]);
+assert.equal(shortNames[0].isConcurrent, true);
+assert.equal(shortNames[1].isConcurrent, true);
+
+const untouched = applyCombinedClassConcurrent([
+  row({ className: '電機二忠', subjectName: '基本電學', teacherName: '王小明', isConcurrent: true }),
+  row({ className: '電機二孝', subjectName: '電子學', teacherName: '王小明', isConcurrent: false, rowNumber: 3 }),
+]);
+assert.equal(untouched[1].isConcurrent, false, '不同科目不連動兼課');
+
+const otherTeacher = applyCombinedClassConcurrent([
+  row({ className: '電機二忠', subjectName: '基本電學', teacherName: '王小明', isConcurrent: true }),
+  row({ className: '電機二孝', subjectName: '基本電學', teacherName: '李大華', isConcurrent: false, rowNumber: 3 }),
+]);
+assert.equal(otherTeacher[1].isConcurrent, false);
+
+const both = [
+  session({ id: 'a', className: '電機二忠', isConcurrent: true }),
+  session({ id: 'b', className: '電機二孝', isConcurrent: true }),
+];
+const onlyOne = [
+  session({ id: 'a', className: '電機二忠', isConcurrent: true }),
+  session({ id: 'b', className: '電機二孝', isConcurrent: false }),
+];
+assert.equal(countWeeklyConcurrentPeriods(both, 't1', INITIAL_SYSTEM_CONFIG), 1);
+assert.equal(countWeeklyConcurrentPeriods(onlyOne, 't1', INITIAL_SYSTEM_CONFIG), 1);
+assert.equal(breakdownWeeklyOverloadPeriods(both, 't1', INITIAL_SYSTEM_CONFIG).counted, 1);
+assert.equal(
+  monthlyConcurrentPeriods(both, 't1', 2026, 10, new Set(), undefined, INITIAL_SYSTEM_CONFIG),
+  monthlyConcurrentPeriods(onlyOne, 't1', 2026, 10, new Set(), undefined, INITIAL_SYSTEM_CONFIG)
+);
+
+const leaveSession = (id: string, className: string, period = 3): CourseSession =>
+  session({ id, className, period, dayOfWeek: 2, isConcurrent: true });
+
+const leaveReq = (id: string, className: string, period = 3): SubstituteRequest => ({
+  id,
+  requestNumber: `115-1-${id}`,
+  requestType: 'substitute',
+  applicantTeacherId: 't1',
+  applicantTeacherName: '王小明',
+  applicantDepartment: '電機科',
+  reason: '產檢',
+  leaveType: 'prenatal',
+  paymentType: 'public',
+  leaveDateStart: '2026-10-06',
+  leaveDateEnd: '2026-10-06',
+  substituteTeacherId: 't-b',
+  substituteTeacherName: '代課乙',
+  originalSession: leaveSession(id, className, period),
+  status: 'approved',
+  createdAt: '2026-10-01 09:00',
+  reviewedAt: '2026-10-02 10:00',
+  clashStatus: { hasClash: false, severity: 'none', messages: [] },
+});
+
+const paired = [leaveReq('r1', '電機二忠'), leaveReq('r2', '電機二孝')];
+const ctx = buildLeavePayrollContext(paired, INITIAL_SYSTEM_CONFIG);
+assert.equal(
+  countApplicantConcurrentDeductPeriodsInMonth(paired, 't1', 10, 2026, ctx),
+  1,
+  '合班兩張請假單，兼課應減只計 1'
+);
+assert.equal(
+  countSubstituteTeacherConcurrentAddPeriodsInMonth(paired, 't-b', 10, 2026, ctx),
+  1,
+  '同一代課人合班應加只計 1'
+);
+
+const differentPeriods = [leaveReq('r3', '電機二忠', 3), leaveReq('r4', '電機二忠', 4)];
+const ctxPeriods = buildLeavePayrollContext(differentPeriods, INITIAL_SYSTEM_CONFIG);
+assert.equal(
+  countApplicantConcurrentDeductPeriodsInMonth(differentPeriods, 't1', 10, 2026, ctxPeriods),
+  2,
+  '不同節次仍各計 1 節'
+);
+
+const sheet = XLSX.utils.json_to_sheet([
+  {
+    星期: 1,
+    節次: 1,
+    班級: '電機二忠',
+    科目名稱: '基本電學',
+    任課教師: '王小明',
+    兼課: 1,
+  },
+  {
+    星期: 1,
+    節次: 1,
+    班級: '電機二孝',
+    科目名稱: '基本電學',
+    任課教師: '王小明',
+    兼課: '',
+  },
+]);
+const wb = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb, sheet, '課表');
+const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+const file = new File([bytes], 'combined.xlsx');
+const parsed = await parseScheduleFile(file, [], []);
+const zhong = parsed.validRows.find((r) => r.className === '電機二忠');
+const xiao = parsed.validRows.find((r) => r.className === '電機二孝');
+assert.ok(zhong && xiao, '兩班都應匯入');
+assert.equal(zhong.isConcurrent, true);
+assert.equal(xiao.isConcurrent, true, '匯入時孝班應被標成兼課');
+assert.equal(parsed.clashesInFile.length, 0, '同科合班不應列為教師衝堂');
+assert.deepEqual(combinedImportPartnerClassNames(zhong, parsed.validRows), ['電機二孝']);
+
+console.log('combined class concurrent checks passed');

@@ -22,6 +22,7 @@ import {
   displayTeacherTitle,
   gradeYearFromClassName,
   gradeYearsFromSessions,
+  combinedClassPartners,
   isPracticalSession,
   type GradeYear,
 } from '../../utils/schoolDepartments';
@@ -438,20 +439,34 @@ export const SchoolTimetableMatrix: React.FC = () => {
                           >
                             {cellSessions.length > 0 ? (
                               <div className={isStacked ? 'flex flex-col gap-1.5' : 'h-full'}>
-                                {cellSessions.map((session) => (
+                                {cellSessions.map((session) => {
+                                  const partners = combinedClassPartners(session, sessions);
+                                  const showCross = partners.length > 0;
+                                  const showConcurrent =
+                                    Boolean(session.isConcurrent) ||
+                                    partners.some((p) => p.isConcurrent);
+                                  return (
                                   <div
                                     key={session.id}
                                     className={`${isStacked ? '' : 'h-full'} p-2 rounded-xl border flex flex-col justify-between ${
                                       isPracticalSession(session)
                                         ? 'bg-amber-50 border-amber-300 text-amber-950 ring-1 ring-amber-400/20'
-                                        : session.isConcurrent
+                                        : showConcurrent
                                           ? 'bg-violet-50 border-violet-300 text-violet-950 ring-1 ring-violet-400/20'
                                           : 'bg-indigo-50/80 border-indigo-200 text-indigo-950'
                                     }`}
                                   >
                                     <div>
                                       <div className="flex flex-wrap items-center justify-end gap-0.5">
-                                          {session.isConcurrent && (
+                                          {showCross && (
+                                            <span
+                                              className="text-[10px] bg-sky-600 text-white px-1.5 py-0.2 rounded font-semibold"
+                                              title={partners.map((p) => p.className).join('、')}
+                                            >
+                                              跨班
+                                            </span>
+                                          )}
+                                          {showConcurrent && (
                                             <span className="text-[10px] bg-violet-600 text-white px-1.5 py-0.2 rounded font-semibold">
                                               兼課
                                             </span>
@@ -489,7 +504,8 @@ export const SchoolTimetableMatrix: React.FC = () => {
                                       ) : null;
                                     })()}
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             ) : (
                               <div className="h-full flex items-center justify-center text-slate-300 text-[11px]">
