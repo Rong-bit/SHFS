@@ -136,11 +136,18 @@ export function temporarySwapPeriodDeltaInMonth(
   activeEndIso?: string | null
 ): number {
   let delta = 0;
+  const seen = new Set<string>();
   const inMonth = (iso: string) =>
     isDateInSettlementMonth(iso, settlementMonth, settlementYear, weeksInMonth) &&
     isoInInclusiveRange(iso, activeStartIso, activeEndIso);
   const billable = (iso: string) =>
     !holidaySet || !isNonTeachingDate(iso, holidaySet);
+  const bump = (iso: string, period: number, amount: number) => {
+    const key = `${amount > 0 ? '+' : '-'}|${iso}|${period}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    delta += amount;
+  };
 
   for (const r of requests) {
     if (!isTemporarySwap(r) || r.status !== 'approved' || !r.effectiveDate) continue;
@@ -154,21 +161,26 @@ export function temporarySwapPeriodDeltaInMonth(
     );
 
     // 申請人：原日依原課堂條件少計、對調日依對方課堂條件多計
+    // 合班兩張單落在同一日同一節時只計一次
     if (r.applicantTeacherId === teacherId) {
       if (matchSession(r.originalSession)) {
-        if (inMonth(applicantDate) && billable(applicantDate)) delta -= 1;
+        if (inMonth(applicantDate) && billable(applicantDate)) {
+          bump(applicantDate, r.originalSession.period, -1);
+        }
       }
       if (matchSession(partner)) {
-        if (inMonth(partnerDate) && billable(partnerDate)) delta += 1;
+        if (inMonth(partnerDate) && billable(partnerDate)) bump(partnerDate, partner.period, 1);
       }
     }
     // 對調教師：對稱（原對調堂少計、改上申請人時段多計）
     if (r.swapTargetTeacherId === teacherId) {
       if (matchSession(partner)) {
-        if (inMonth(partnerDate) && billable(partnerDate)) delta -= 1;
+        if (inMonth(partnerDate) && billable(partnerDate)) bump(partnerDate, partner.period, -1);
       }
       if (matchSession(r.originalSession)) {
-        if (inMonth(applicantDate) && billable(applicantDate)) delta += 1;
+        if (inMonth(applicantDate) && billable(applicantDate)) {
+          bump(applicantDate, r.originalSession.period, 1);
+        }
       }
     }
   }

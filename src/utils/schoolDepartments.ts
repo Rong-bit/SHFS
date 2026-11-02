@@ -105,6 +105,153 @@ export const gradeYearFromClassName = (className: string): GradeYear | null => {
   return map[m[0]] ?? null;
 };
 
+const SECTION_CLASS_TAIL = /[忠孝仁愛信義和平甲乙丙丁]$/;
+
+/** 班名去掉忠／孝／甲／乙等班序後的字幹，例如 電機二忠、機二孝 → 可比對是否同年級同科合班 */
+const classSectionStem = (className: string) => {
+  const text = String(className || '').replace(/\s+/g, '');
+  const m = text.match(/^(.+?)[忠孝仁愛信義和平甲乙丙丁]$/);
+  return m?.[1] || '';
+};
+
+/**
+ * 同一科目，且為同一班的重複列，或同科同年級不同班（忠／孝、甲／乙，含機二忠這類簡稱）。
+ * 用於合班不視為教師衝堂，以及跨班兼課只計一節。
+ */
+export function isSameSubjectCombinedClass(
+  a: { className: string; subjectName?: string; subjectCode?: string },
+  b: { className: string; subjectName?: string; subjectCode?: string }
+): boolean {
+  const norm = (s?: string) => String(s || '').replace(/\s+/g, '').toLowerCase();
+  const sameName = Boolean(a.subjectName && norm(a.subjectName) === norm(b.subjectName));
+  const sameCode = Boolean(a.subjectCode && b.subjectCode && a.subjectCode === b.subjectCode);
+  if (!sameName && !sameCode) return false;
+  if ((a.className || '') === (b.className || '')) return true;
+  const stemA = classSectionStem(a.className);
+  const stemB = classSectionStem(b.className);
+  if (stemA && stemA === stemB && SECTION_CLASS_TAIL.test(a.className.replace(/\s+/g, '')) && SECTION_CLASS_TAIL.test(b.className.replace(/\s+/g, ''))) {
+    return true;
+  }
+  const prevDept = departmentFromClassName(a.className);
+  const nextDept = departmentFromClassName(b.className);
+  const prevGrade = gradeYearFromClassName(a.className);
+  const nextGrade = gradeYearFromClassName(b.className);
+  return Boolean(
+    prevDept &&
+      nextDept &&
+      prevDept === nextDept &&
+      prevGrade &&
+      nextGrade &&
+      prevGrade === nextGrade
+  );
+}
+
+/** 同一格裡、同科同年級合上的班名（不含本班重複列） */
+export function crossClassNamesInSlot<T extends { className: string; subjectName?: string; subjectCode?: string }>(
+  slotSessions: T[]
+): string[] {
+  const names = new Set<string>();
+  for (let i = 0; i < slotSessions.length; i += 1) {
+    for (let j = i + 1; j < slotSessions.length; j += 1) {
+      const left = slotSessions[i];
+      const right = slotSessions[j];
+      if (left.className === right.className) continue;
+      if (!isSameSubjectCombinedClass(left, right)) continue;
+      names.add(left.className);
+      names.add(right.className);
+    }
+  }
+  return [...names].sort((x, y) => x.localeCompare(y, 'zh-Hant'));
+}
+
+/** 與這堂課同時段、同老師、同科合上的其他班 */
+export function combinedClassPartners<
+  T extends {
+    id?: string;
+    teacherId: string;
+    dayOfWeek: number;
+    period: number;
+    className: string;
+    subjectName?: string;
+    subjectCode?: string;
+  },
+>(session: T, all: T[]): T[] {
+  return all.filter((other) => {
+    if (other === session) return false;
+    if (session.id && other.id && session.id === other.id) return false;
+    if (other.teacherId !== session.teacherId) return false;
+    if (other.dayOfWeek !== session.dayOfWeek || other.period !== session.period) return false;
+    if (other.className === session.className) return false;
+    return isSameSubjectCombinedClass(session, other);
+  });
+}
+
+/** 請假／派代：選到合班的一班時，同一節的其他班一併帶上 */
+export function expandWithCombinedClassPartners<
+  T extends {
+    id?: string;
+    teacherId: string;
+    dayOfWeek: number;
+    period: number;
+    className: string;
+    subjectName?: string;
+    subjectCode?: string;
+  },
+>(selected: T[], all: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  const keyOf = (s: T) => s.id || `${s.teacherId}|${s.dayOfWeek}|${s.period}|${s.className}`;
+  const push = (s: T) => {
+    const key = keyOf(s);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(s);
+  };
+  selected.forEach((s) => {
+    push(s);
+    combinedClassPartners(s, all).forEach(push);
+  });
+  return out;
+}
+
+/** 同一星期同一節只算一節（跨班合授不因班數加總） */
+export function countDistinctDayPeriods(
+  sessions: Array<{ dayOfWeek: number; period: number }>
+): number {
+  return new Set(sessions.map((s) => `${s.dayOfWeek}-${s.period}`)).size;
+}
+
+/**
+ * 同一節只要有一班是兼課，送出的請假快照都標成兼課。
+ * 回傳新物件，不改課表上原本的列。
+ */
+export function markCombinedSlotConcurrent(sessions: CourseSession[]): CourseSession[] {
+  return sessions.map((session) => {
+    if (session.isConcurrent) return session;
+    const partnerIsConcurrent = sessions.some(
+      (other) =>
+        other !== session &&
+        other.isConcurrent &&
+        other.teacherId === session.teacherId &&
+        other.dayOfWeek === session.dayOfWeek &&
+        other.period === session.period &&
+        isSameSubjectCombinedClass(session, other)
+    );
+    return partnerIsConcurrent ? { ...session, isConcurrent: true } : session;
+  });
+}
+
+/** 一批請假單的節數：跨班同一節顯示「1 節（2 班）」 */
+export function formatCombinedLeaveCount(
+  items: Array<{ originalSession?: { dayOfWeek: number; period: number } | null }>
+): string {
+  const sessions = items.flatMap((item) => (item.originalSession ? [item.originalSession] : []));
+  const slots = countDistinctDayPeriods(sessions);
+  const count = Math.max(slots, items.length);
+  if (slots > 0 && items.length > slots) return `${slots} 節（${items.length} 班）`;
+  return `${count} 節`;
+}
+
 /** 從教室／科目等文字判斷科別（教室名不一定在開頭） */
 export const departmentFromLabel = (text: string): DepartmentType | null => {
   const compact = compactText(text);

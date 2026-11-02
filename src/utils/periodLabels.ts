@@ -54,7 +54,8 @@ export function formatDayPeriodSummary(
   });
   const body = parts.join('；');
   if (options?.withTotal === false) return body;
-  return `${body} · 共 ${sessions.length} 節`;
+  const slots = new Set(sessions.map((s) => `${s.dayOfWeek}-${s.period}`)).size;
+  return `${body} · 共 ${slots} 節`;
 }
 
 export type AffectedSessionSlice = {

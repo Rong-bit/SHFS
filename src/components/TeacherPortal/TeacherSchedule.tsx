@@ -26,7 +26,7 @@ import { exportScheduleToExcel } from '../../utils/scheduleImporter';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { ModalShell } from '../Common/ModalShell';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, displayTeacherTitle, isHomeroomTeacherSlot, isPracticalSession } from '../../utils/schoolDepartments';
+import { breakdownWeeklyOverloadPeriods, crossClassNamesInSlot, displayTeacherTitle, isHomeroomTeacherSlot, isPracticalSession } from '../../utils/schoolDepartments';
 import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import {
   findApprovedTemporarySwapsForSession,
@@ -431,7 +431,17 @@ export const TeacherSchedule: React.FC = () => {
                       {days.map((d) => {
                         const slotSessions = getSessionsAt(d.day, pDef.period);
                         const session = slotSessions[0];
-                        const leaveLabel = session ? getLeaveCoverLabel(session) : null;
+                        const crossNames = crossClassNamesInSlot(slotSessions);
+                        const showCross = crossNames.length > 1;
+                        const concurrentPool = showCross
+                          ? slotSessions.filter((s) => crossNames.includes(s.className))
+                          : session
+                            ? [session]
+                            : [];
+                        const showConcurrent = concurrentPool.some((s) => s.isConcurrent);
+                        const classLabel = showCross ? crossNames.join('、') : session?.className;
+                        const leaveLabel =
+                          slotSessions.map((s) => getLeaveCoverLabel(s)).find(Boolean) || null;
                         const swapLabel = session ? getTemporarySwapLabel(session) : null;
                         const subDuty = !session ? getSubDutyAt(d.day, pDef.period) : null;
                         return (
@@ -449,7 +459,7 @@ export const TeacherSchedule: React.FC = () => {
                                     ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950 ring-1 ring-indigo-400/30'
                                     : isPracticalSession(session)
                                     ? 'bg-amber-50/90 border-amber-300 text-amber-950 ring-1 ring-amber-400/30'
-                                    : session.isConcurrent
+                                    : showConcurrent
                                       ? 'bg-violet-50/90 border-violet-300 text-violet-950 ring-1 ring-violet-400/30'
                                       : 'bg-blue-50/70 border-blue-200 text-slate-900'
                                 }`}
@@ -466,10 +476,10 @@ export const TeacherSchedule: React.FC = () => {
                                           同班對調
                                         </span>
                                       )}
-                                      {slotSessions.length > 1 && (
+                                      {showCross && (
                                         <span
                                           className="text-[10px] px-1.5 py-0.2 bg-sky-600 text-white rounded font-medium"
-                                          title={slotSessions.map((s) => s.className).join('、')}
+                                          title={crossNames.join('、')}
                                         >
                                           跨班
                                         </span>
@@ -479,7 +489,7 @@ export const TeacherSchedule: React.FC = () => {
                                           班會
                                         </span>
                                       )}
-                                      {session.isConcurrent && (
+                                      {showConcurrent && (
                                         <span className="text-[10px] px-1.5 py-0.2 bg-violet-600 text-white rounded font-medium">
                                           兼課
                                         </span>
@@ -488,12 +498,16 @@ export const TeacherSchedule: React.FC = () => {
                                         <span className="text-[10px] px-1.5 py-0.2 bg-amber-500 text-white rounded font-medium">
                                           實習工場
                                         </span>
-                                      ) : !leaveLabel && !session.isConcurrent ? (
+                                      ) : !leaveLabel && !showConcurrent ? (
                                         <span className="text-[10px] text-slate-500 font-normal">正課</span>
                                       ) : null}
                                   </div>
-                                  <div className="font-bold text-xs text-slate-900 whitespace-nowrap mt-0.5">
-                                    {session.className}
+                                  <div
+                                    className={`font-bold text-xs text-slate-900 mt-0.5 ${
+                                      showCross ? 'leading-snug' : 'whitespace-nowrap'
+                                    }`}
+                                  >
+                                    {classLabel}
                                   </div>
                                   <div className="font-semibold text-xs text-slate-800 mt-1 line-clamp-1">
                                     {session.subjectName}

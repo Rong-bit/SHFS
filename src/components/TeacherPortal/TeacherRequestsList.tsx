@@ -4,6 +4,7 @@ import { SubstituteRequest } from '../../types';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import { formatDayPeriodSummary } from '../../utils/periodLabels';
+import { formatCombinedLeaveCount } from '../../utils/schoolDepartments';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { exportNoticesToExcel } from '../../utils/noticeExcel';
@@ -274,7 +275,7 @@ export const TeacherRequestsList: React.FC = () => {
                   </span>
                   {(items.length > 1 || sameNumberSplit) && (
                     <span className="text-[11px] text-slate-500 font-semibold">
-                      {items.length > 1 ? `${items.length} 節` : ''}
+                      {items.length > 1 ? formatCombinedLeaveCount(items) : ''}
                       {items.length > 1 && sameNumberSplit ? ' · ' : ''}
                       {sameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : ''}
                     </span>

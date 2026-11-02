@@ -60,6 +60,9 @@ import {
   buildLeavePayrollContext,
   countApplicantConcurrentDeductPeriodsInMonth,
   countSubstitutePublicPayrollPeriodsInMonth,
+  listSubstituteConcurrentAddDatesInMonth,
+  listSubstitutePublicPayrollDatesInMonth,
+  sumUniqueSubstitutePublicPayrollPeriods,
   countSubstituteTeacherConcurrentAddPeriodsInMonth,
   resolveRequestPaymentType,
   resolveSubstitutePayrollTeacherId,
@@ -114,6 +117,7 @@ import {
   collectSubstituteOccupancies,
   countWeeklySubstituteOccupancySlots,
   leaveFallsOnExamDays,
+  substituteOccupanciesBlockingSlot,
   teacherHasSubstituteOccupancy,
   teacherWeeklyLoadTowardLimit,
 } from '../utils/substituteCandidates';
@@ -121,7 +125,7 @@ import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
   moveNoticeRowsWithReassignedSessions,
-  noticeDateUsesModifiedSubstitutePayroll,
+  leaveDateMovedOffConcurrentPayroll,
   requestHasModifiedNoticePayrollRow,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
@@ -1813,9 +1817,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           substituteTeacherId,
           originalSession.dayOfWeek,
           originalSession.period,
-          collectSubstituteOccupancies(requestPool, {
-            excludeRequestIds: params.excludeRequestIds,
-          }),
+          substituteOccupanciesBlockingSlot(
+            requestPool,
+            originalSession,
+            applicantTeacherId,
+            { excludeRequestIds: params.excludeRequestIds }
+          ),
           { leaveDateStart, leaveDateEnd },
           // 舊無日期假單核准時，仍須與已有請假區間的佔用衝突
           { undatedProbeBlocksDated: true }
@@ -3540,7 +3547,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // 舊單無請假日無法逐日 skip：整張通知單有修改列則不應加兼課
           skipRequest: (r) =>
             !r.leaveDateStart && requestHasModifiedNoticePayrollRow(r, requests),
-          skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
+          skipDate: (iso, r) => leaveDateMovedOffConcurrentPayroll(r, requests, iso),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           weeksInMonth: systemConfig.weeksInMonth ?? 5,
           resolvePartialStopsForRequest: (r) =>
@@ -3679,6 +3686,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         weeksInMonth: systemConfig.weeksInMonth ?? 5,
       };
       const noticeBatchCounted = new Set<string>();
+      const seenPublicSlots = new Set<string>();
+      const concurrentPaySlots = new Set<string>();
+      requests
+        .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
+        .forEach((r) => {
+          if (resolveSubstitutePayrollTeacherId(r) !== teacher.id) return;
+          const applicant = teachers.find((t) => t.id === r.applicantTeacherId);
+          const period = r.originalSession?.period ?? 0;
+          for (const iso of listSubstituteConcurrentAddDatesInMonth(
+            r,
+            settlementMonth,
+            settlementYear,
+            payrollCtx,
+            holidaySet,
+            {
+              ...leaveCalendarOpts,
+              period,
+              partialStops: partialStopsForPayroll(
+                systemConfig.partialNonTeachingDays,
+                applicant,
+                systemConfig
+              ),
+            }
+          )) {
+            if (leaveDateMovedOffConcurrentPayroll(r, requests, iso)) continue;
+            concurrentPaySlots.add(`${iso}|${period}`);
+          }
+        });
 
       requests
         .filter((r) => r.status === 'approved' && r.requestType === 'substitute')
@@ -3719,36 +3754,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               periodOpts,
               payrollCtx,
               () =>
-                relatedForTeacher.reduce(
-                  (sum, req) =>
-                    sum +
-                    countSubstitutePublicPayrollPeriodsInMonth(
-                      req,
-                      settlementMonth,
-                      settlementYear,
-                      payrollCtx,
-                      holidaySet,
-                      {
-                        ...leaveCalendarOpts,
-                        period: req.originalSession?.period,
-                        partialStops: periodOpts.partialStops,
-                      }
-                    ),
-                  0
+                sumUniqueSubstitutePublicPayrollPeriods(
+                  relatedForTeacher,
+                  settlementMonth,
+                  settlementYear,
+                  payrollCtx,
+                  holidaySet,
+                  (req) => ({
+                    ...leaveCalendarOpts,
+                    period: req.originalSession?.period,
+                    partialStops: periodOpts.partialStops,
+                  })
                 ),
               teacher.id
             );
             publicPeriods = payrollResult.periods;
             rate = payrollResult.useBasicRate ? hourlyRate : rateForRequest(r);
           } else {
-            publicPeriods = countSubstitutePublicPayrollPeriodsInMonth(
-              r,
-              settlementMonth,
-              settlementYear,
-              payrollCtx,
-              holidaySet,
-              periodOpts
-            );
+            const period = r.originalSession?.period ?? 0;
+            if (!r.leaveDateStart) {
+              // 無日期舊單沒有可對齊的上課日，不能和別張單併成同一節
+              publicPeriods = countSubstitutePublicPayrollPeriodsInMonth(
+                r,
+                settlementMonth,
+                settlementYear,
+                payrollCtx,
+                holidaySet,
+                periodOpts
+              );
+            } else {
+              for (const iso of listSubstitutePublicPayrollDatesInMonth(
+                r,
+                settlementMonth,
+                settlementYear,
+                payrollCtx,
+                holidaySet,
+                periodOpts
+              )) {
+                const key = `${iso}|${period}`;
+                if (seenPublicSlots.has(key) || concurrentPaySlots.has(key)) continue;
+                seenPublicSlots.add(key);
+                publicPeriods += 1;
+              }
+            }
           }
 
           if (publicPeriods <= 0) return;

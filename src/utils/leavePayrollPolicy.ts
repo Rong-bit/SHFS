@@ -311,6 +311,26 @@ export function countPublicPayrollPeriodsInMonth(
   ).length;
 }
 
+export function listConcurrentDeductDatesInMonth(
+  request: SubstituteRequest,
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptions?: LeaveBillableOptions
+): string[] {
+  if (request.requestType !== 'substitute') return [];
+  if (!request.leaveDateStart) return [];
+  const dates = listBillableLeaveDatesInMonth(
+    request,
+    settlementMonth,
+    settlementYear,
+    excludeDates,
+    billableOptions
+  );
+  return dates.filter((d) => shouldDeductConcurrentOnLeaveDate(d, request, ctx));
+}
+
 export function countConcurrentDeductPeriodsInMonth(
   request: SubstituteRequest,
   settlementMonth: number,
@@ -319,16 +339,14 @@ export function countConcurrentDeductPeriodsInMonth(
   excludeDates?: Set<string>,
   billableOptions?: LeaveBillableOptions
 ): number {
-  if (request.requestType !== 'substitute') return 0;
-  if (!request.leaveDateStart) return 0;
-  const dates = listBillableLeaveDatesInMonth(
+  return listConcurrentDeductDatesInMonth(
     request,
     settlementMonth,
     settlementYear,
+    ctx,
     excludeDates,
     billableOptions
-  );
-  return dates.filter((d) => shouldDeductConcurrentOnLeaveDate(d, request, ctx)).length;
+  ).length;
 }
 
 /** 單張請假單：代課教師 B 應加兼課節數（A 扣多少 B 拿多少） */
@@ -372,6 +390,29 @@ export function countSubstituteConcurrentAddPeriodsInMonth(
     return inMonth;
   }
 
+  return listSubstituteConcurrentAddDatesInMonth(
+    request,
+    settlementMonth,
+    settlementYear,
+    ctx,
+    excludeDates,
+    billableOptions
+  ).length;
+}
+
+/** 單張請假單：代課人應加兼課的請假日（不含無日期的舊單） */
+export function listSubstituteConcurrentAddDatesInMonth(
+  request: SubstituteRequest,
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptions?: LeaveBillableOptions
+): string[] {
+  if (request.requestType !== 'substitute') return [];
+  if (!resolveSubstitutePayrollTeacherId(request)) return [];
+  if (!isConcurrentTeachingSession(request.originalSession, ctx.periodConfig)) return [];
+  if (!request.leaveDateStart) return [];
   const dates = listBillableLeaveDatesInMonth(
     request,
     settlementMonth,
@@ -379,8 +420,7 @@ export function countSubstituteConcurrentAddPeriodsInMonth(
     excludeDates,
     billableOptions
   );
-  return dates.filter((d) => shouldTransferConcurrentToSubstituteOnLeaveDate(d, request, ctx))
-    .length;
+  return dates.filter((d) => shouldTransferConcurrentToSubstituteOnLeaveDate(d, request, ctx));
 }
 
 /** 整張請假單是否含任一公費派代節次（UI／篩選用） */
@@ -661,7 +701,7 @@ export function leavePaymentDisplayLabel(
             ? `事假學年第 ${thresholds.personalLeavePublicDayThreshold} 天起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
             : lt === 'sick'
               ? `病假連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
-              : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）；基本鐘點入代課清冊',
+              : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）。這節不另進代課清冊',
       };
     }
     return {
@@ -786,6 +826,8 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
     weeksInMonth: options?.weeksInMonth,
   };
   let total = 0;
+  // 忠／孝合班同一節若各有一張請假單，兼課應減只計 1 節
+  const seenSlot = new Set<string>();
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (r.applicantTeacherId !== applicantTeacherId || !r.substituteTeacherId) continue;
@@ -807,7 +849,7 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
       continue;
     }
 
-    total += countConcurrentDeductPeriodsInMonth(
+    const dates = listConcurrentDeductDatesInMonth(
       r,
       settlementMonth,
       settlementYear,
@@ -815,6 +857,13 @@ export function countApplicantConcurrentDeductPeriodsInMonth(
       excludeDates,
       periodOpts
     );
+    const period = r.originalSession?.period ?? 0;
+    for (const iso of dates) {
+      const key = `${iso}|${period}`;
+      if (seenSlot.has(key)) continue;
+      seenSlot.add(key);
+      total += 1;
+    }
   }
   return total;
 }
@@ -831,6 +880,8 @@ export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
 ): number {
   const match = options?.matchSession ?? (() => true);
   let total = 0;
+  // 同一代課人同時段合班兩張單，兼課應加只計 1 節
+  const seenSlot = new Set<string>();
   for (const r of requests) {
     if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
     if (r.substituteTeacherId !== substituteTeacherId) continue;
@@ -858,7 +909,18 @@ export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
       }
     }
 
-    total += countSubstituteConcurrentAddPeriodsInMonth(
+    if (!r.leaveDateStart) {
+      total += countSubstituteConcurrentAddPeriodsInMonth(
+        r,
+        settlementMonth,
+        settlementYear,
+        ctx,
+        extraExclude,
+        periodOpts
+      );
+      continue;
+    }
+    const dates = listSubstituteConcurrentAddDatesInMonth(
       r,
       settlementMonth,
       settlementYear,
@@ -866,6 +928,13 @@ export function countSubstituteTeacherConcurrentAddPeriodsInMonth(
       extraExclude,
       periodOpts
     );
+    const period = r.originalSession?.period ?? 0;
+    for (const iso of dates) {
+      const key = `${iso}|${period}`;
+      if (seenSlot.has(key)) continue;
+      seenSlot.add(key);
+      total += 1;
+    }
   }
   return total;
 }
@@ -943,4 +1012,123 @@ export function countSubstitutePublicPayrollPeriodsInMonth(
     billableOptions
   );
   return Math.max(0, publicTotal - concurrentTransfer);
+}
+
+/**
+ * 這張單要入代課清冊的請假日（已扣掉改走兼課清冊的日子）。
+ * 無請假日的舊單不在此列，請改用 countSubstitutePublicPayrollPeriodsInMonth。
+ */
+export function listSubstitutePublicPayrollDatesInMonth(
+  request: SubstituteRequest,
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptions?: LeaveBillableOptions
+): string[] {
+  if (request.status !== 'approved' || request.requestType !== 'substitute') return [];
+  if (!resolveSubstitutePayrollTeacherId(request)) return [];
+  if (!request.leaveDateStart) return [];
+  const dates = listBillableLeaveDatesInMonth(
+    request,
+    settlementMonth,
+    settlementYear,
+    excludeDates,
+    billableOptions
+  );
+  const personalDates = collectPersonalLeaveDatesInAcademicYear(ctx, request.applicantTeacherId);
+  const concurrent = new Set(
+    listSubstituteConcurrentAddDatesInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      billableOptions
+    )
+  );
+  return dates.filter(
+    (d) =>
+      isLeaveDatePublicPayroll(d, request, ctx, request.applicantTeacherId, personalDates) &&
+      !concurrent.has(d)
+  );
+}
+
+/** 這批單裡已改走兼課清冊的「日期|節次」。同一節不可再入代課清冊。 */
+function concurrentTransferSlotKeys(
+  requests: SubstituteRequest[],
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptionsFor?: (request: SubstituteRequest) => LeaveBillableOptions | undefined
+): Set<string> {
+  const keys = new Set<string>();
+  for (const request of requests) {
+    const period = request.originalSession?.period ?? 0;
+    for (const iso of listSubstituteConcurrentAddDatesInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      billableOptionsFor?.(request)
+    )) {
+      keys.add(`${iso}|${period}`);
+    }
+  }
+  return keys;
+}
+
+/** 多張單加總代課節數：同一日同一節（跨班合授）只計 1；該節若已計兼課則不再計代課 */
+export function sumUniqueSubstitutePublicPayrollPeriods(
+  requests: SubstituteRequest[],
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptionsFor?: (request: SubstituteRequest) => LeaveBillableOptions | undefined
+): number {
+  const seen = new Set<string>();
+  const concurrentSlots = concurrentTransferSlotKeys(
+    requests,
+    settlementMonth,
+    settlementYear,
+    ctx,
+    excludeDates,
+    billableOptionsFor
+  );
+  let total = 0;
+  for (const request of requests) {
+    const billableOptions = billableOptionsFor?.(request);
+    const period = request.originalSession?.period ?? 0;
+    if (!request.leaveDateStart) {
+      // 無日期舊單無法對到同一上課日，維持逐張加總
+      const n = countSubstitutePublicPayrollPeriodsInMonth(
+        request,
+        settlementMonth,
+        settlementYear,
+        ctx,
+        excludeDates,
+        billableOptions
+      );
+      if (n <= 0) continue;
+      total += n;
+      continue;
+    }
+    for (const iso of listSubstitutePublicPayrollDatesInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      billableOptions
+    )) {
+      const key = `${iso}|${period}`;
+      if (seen.has(key) || concurrentSlots.has(key)) continue;
+      seen.add(key);
+      total += 1;
+    }
+  }
+  return total;
 }

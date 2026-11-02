@@ -5,6 +5,7 @@ import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/actingHomeroomPayrollRegister';
+import { formatCombinedLeaveCount } from '../../utils/schoolDepartments';
 import { ModalShell } from '../Common/ModalShell';
 import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
 import { resolveDisplayClassSubject } from '../../utils/noticeDocument';
@@ -81,8 +82,11 @@ export const PendingApprovals: React.FC = () => {
       ? requests.filter((r) => r.batchGroupId === req.batchGroupId && r.status === 'pending').length
       : 1;
     if (pendingCount > 1) {
+      const pendingItems = req.batchGroupId
+        ? requests.filter((r) => r.batchGroupId === req.batchGroupId && r.status === 'pending')
+        : [req];
       const ok = window.confirm(
-        `此為連續節次申請（共 ${pendingCount} 節待簽核），將整批一次核准（與刪除／取消相同）。確定？`
+        `此申請將整批一次核准（${formatCombinedLeaveCount(pendingItems)}）。確定？`
       );
       if (!ok) return;
     }

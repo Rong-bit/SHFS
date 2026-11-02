@@ -4,6 +4,7 @@ import {
   parseScheduleFile,
   generateTemplateExcel,
   exportScheduleToExcel,
+  combinedImportPartnerClassNames,
   ImportParseResult,
   ParsedImportRow,
 } from '../../utils/scheduleImporter';
@@ -428,7 +429,7 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                支援匯入 Excel (.xlsx / .xls) 或 CSV 課表，自動檢核教師、實習工場與班級衝堂
+                支援匯入 Excel (.xlsx / .xls) 或 CSV 課表，自動檢核教師、實習工場與班級衝堂。同科同年級同時段合班（如忠、孝）會標「跨班」；其中一班兼課則兩班皆為兼課，鐘點只計 1 節。
               </p>
             </div>
           </div>
@@ -1010,6 +1011,10 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                             const dayNames = ['', '週一', '週二', '週三', '週四', '週五'];
                             const isError = row.errors.length > 0;
                             const hasWarning = row.warnings.length > 0;
+                            const crossPartners = combinedImportPartnerClassNames(
+                              row,
+                              parseResult.validRows
+                            );
 
                             return (
                               <tr
@@ -1024,7 +1029,19 @@ export const ScheduleImportModal: React.FC<ScheduleImportModalProps> = ({
                                 <td className="p-2.5 text-center font-semibold text-slate-800">
                                   {dayNames[row.dayOfWeek]} 第{row.period}節
                                 </td>
-                                <td className="p-2.5 font-bold text-slate-900">{row.className}</td>
+                                <td className="p-2.5 font-bold text-slate-900">
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span>{row.className}</span>
+                                    {crossPartners.length > 0 && (
+                                      <span
+                                        className="px-1.5 py-0.5 bg-sky-600 text-white rounded font-bold text-[10px]"
+                                        title={crossPartners.join('、')}
+                                      >
+                                        跨班
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="p-2.5 font-medium text-slate-800">
                                   {row.subjectName}
                                   {row.notes && (

@@ -33,6 +33,12 @@ import { WellnessLeaveHoursAlert } from '../Common/WellnessLeaveHoursAlert';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { leaveFallsOnExamDays, rankSubstituteCandidates } from '../../utils/substituteCandidates';
 import { formatPeriodsLabel } from '../../utils/periodLabels';
+import {
+  combinedClassPartners,
+  countDistinctDayPeriods,
+  expandWithCombinedClassPartners,
+  markCombinedSlotConcurrent,
+} from '../../utils/schoolDepartments';
 import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { isPlaceholderSession } from '../../utils/resolveOriginalSession';
 import {
@@ -195,14 +201,19 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
 
   const leaveSessionsForSubmit = useMemo((): CourseSession[] => {
     if (requestType !== 'substitute') return [];
-    if (leavePickMode === 'multi' && teacherSessions.length > 0) return batchLeaveSessions;
-    if (matchedLeaveSession) return [matchedLeaveSession];
-    if (placeholderSession) return [placeholderSession];
-    return [];
+    const picked =
+      leavePickMode === 'multi' && teacherSessions.length > 0
+        ? batchLeaveSessions
+        : matchedLeaveSession
+          ? [matchedLeaveSession]
+          : placeholderSession
+            ? [placeholderSession]
+            : [];
+    return expandWithCombinedClassPartners(picked, teacherSessions);
   }, [
     requestType,
     leavePickMode,
-    teacherSessions.length,
+    teacherSessions,
     batchLeaveSessions,
     matchedLeaveSession,
     placeholderSession,
@@ -261,9 +272,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   ]);
 
   const paymentDisplay = leavePaymentDisplayLabel(resolvedSubstitutePayment, leaveType, reason, {
-    isConcurrentSession: Boolean(
-      (selectedSession ?? leaveSessionsForSubmit[0])?.isConcurrent
-    ),
+    isConcurrentSession: leaveSessionsForSubmit.some((s) => s.isConcurrent),
   });
 
   const wellnessHoursStatus = useMemo(() => {
@@ -329,6 +338,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
           : leaveDateStart || undefined,
       examDays: systemConfig.examDays,
       nonTeachingDays: systemConfig.nonTeachingDays,
+      applicantTeacherId: currentTeacher.id,
+      combinedLeaveSessions: targets,
     });
   }, [
     teachers,
@@ -528,13 +539,14 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
               ? leaveDateEnd || leaveDateStart || undefined
               : leaveDateStart || undefined,
         });
-        const prefix = targets.length > 1 ? `第${originalSession.period}節：` : '';
+        const prefix =
+          countDistinctDayPeriods(targets) > 1 ? `第${originalSession.period}節：` : '';
         return {
           ...result,
           messages: result.messages.map((m) => `${prefix}${m}`),
         };
       });
-      const messages = results.flatMap((r) => r.messages);
+      const messages = [...new Set(results.flatMap((r) => r.messages))];
       const hasClash = results.some((r) => r.hasClash);
       const severity = results.some((r) => r.severity === 'danger')
         ? ('danger' as const)
@@ -604,7 +616,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
     }
 
     if (requestType === 'substitute') {
-      const sessionsToLeave = leaveSessionsForSubmit;
+      const sessionsToLeave = markCombinedSlotConcurrent(leaveSessionsForSubmit);
       if (sessionsToLeave.length === 0) {
         alert(
           leavePickMode === 'multi'
@@ -1080,7 +1092,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                       <label className="block text-xs font-semibold text-slate-700">
                         請假節次
                         {leaveFilterDays.length > 0
-                          ? `（僅 ${formatWeekdayList(leaveFilterDays, dayNames)} · ${leaveSelectableSessions.length} 節）`
+                          ? `（僅 ${formatWeekdayList(leaveFilterDays, dayNames)} · ${countDistinctDayPeriods(leaveSelectableSessions)} 節）`
                           : '（請先選請假日期，或暫列全部有課節次）'}
                       </label>
                       <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden text-[11px] font-bold">
@@ -1132,6 +1144,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                         {leaveSelectableSessions.map((s) => (
                           <option key={s.id} value={s.id}>
                             {dayNames[s.dayOfWeek]} 第{s.period}節 《{s.subjectName}》
+                            {combinedClassPartners(s, leaveSelectableSessions).length > 0
+                              ? '（跨班）'
+                              : ''}
                           </option>
                         ))}
                       </select>
@@ -1163,7 +1178,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                             ))}
                           </select>
                           <span className="text-[11px] text-indigo-800 font-medium">
-                            已選 {batchLeaveSessions.length} 節
+                            已選 {countDistinctDayPeriods(batchLeaveSessions)} 節
                             {batchLeaveSessions.length > 0
                               ? `（${formatPeriodsLabel(batchLeaveSessions.map((s) => s.period))}）`
                               : ''}
@@ -1177,6 +1192,10 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                             <p className="text-[11px] text-amber-800">此日沒有排定課堂。</p>
                           ) : (
                             multiDaySessions.map((s) => {
+                              const partnerIds = combinedClassPartners(s, multiDaySessions).map(
+                                (p) => p.id
+                              );
+                              const groupIds = [s.id, ...partnerIds];
                               const checked = selectedLeaveSlotIds.includes(s.id);
                               return (
                                 <label
@@ -1194,8 +1213,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                                     onChange={() => {
                                       setSelectedLeaveSlotIds((prev) => {
                                         const next = checked
-                                          ? prev.filter((id) => id !== s.id)
-                                          : [...prev, s.id];
+                                          ? prev.filter((id) => !groupIds.includes(id))
+                                          : [...new Set([...prev, ...groupIds])];
                                         const still = multiDaySessions.filter((x) =>
                                           next.includes(x.id)
                                         );
@@ -1213,6 +1232,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
                                       第{s.period}節
                                     </span>{' '}
                                     《{s.subjectName}》 {s.className}
+                                    {partnerIds.length > 0 ? (
+                                      <span className="ml-1 text-sky-700">跨班</span>
+                                    ) : null}
                                     {s.isPractical ? (
                                       <span className="ml-1 text-amber-700">實習</span>
                                     ) : null}
@@ -1730,8 +1752,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
               }`}
             >
               <span>
-                {requestType === 'substitute' && leaveSessionsForSubmit.length > 1
-                  ? `送出連續 ${leaveSessionsForSubmit.length} 節請假申請`
+                {requestType === 'substitute' &&
+                countDistinctDayPeriods(leaveSessionsForSubmit) > 1
+                  ? `送出連續 ${countDistinctDayPeriods(leaveSessionsForSubmit)} 節請假申請`
                   : '送出調代課申請單'}
               </span>
             </button>

@@ -14,6 +14,7 @@ import {
   type LeavePayrollContext,
 } from './leavePayrollPolicy';
 import { isDateInSettlementMonth } from './settlementPeriod';
+import { isSameSubjectCombinedClass } from './schoolDepartments';
 
 export function isMeaningfulNoticeRow(row: SubstituteNoticeRow): boolean {
   return Boolean(
@@ -651,6 +652,14 @@ export function requestHasModifiedNoticePayrollRow(
   );
 }
 
+function noticeRowAppliesToIso(row: SubstituteNoticeRow, isoDate: string): boolean {
+  const parsed = parseNoticeRowDateToIso(row.date);
+  if (parsed) return parsed === isoDate;
+  const weekday = parseNoticeWeekday(row.weekday);
+  if (weekday != null) return dateToDayOfWeek(isoDate) === weekday;
+  return false;
+}
+
 /** 該請假日是否已改入代課清冊（未改的兼課列仍應加兼課） */
 export function noticeDateUsesModifiedSubstitutePayroll(
   request: SubstituteRequest,
@@ -659,6 +668,29 @@ export function noticeDateUsesModifiedSubstitutePayroll(
 ): boolean {
   const listed = listClassifiedNoticeRowsForRequest(request, allRequests);
   if (!listed) return false;
+
+  const session = request.originalSession;
+  const onThisDate = listed.classified.filter(({ row }) => noticeRowAppliesToIso(row, isoDate));
+  const period = session?.period ?? 0;
+  const onPeriod = period
+    ? onThisDate.filter(({ row }) => {
+        const n = normalizePeriodNum(row.period);
+        return n === 0 || n === period;
+      })
+    : onThisDate;
+  const classKey = (session?.className || '').trim();
+  const onClass = classKey
+    ? onPeriod.filter(({ row }) => row.className.trim() === classKey)
+    : [];
+  if (onClass.length > 0) return onClass.some((item) => item.modified);
+  const otherClassNames = new Set(
+    listed.related
+      .map((r) => (r.id === request.id ? '' : r.originalSession?.className || '').trim())
+      .filter(Boolean)
+  );
+  const unclaimed = onPeriod.filter(({ row }) => !otherClassNames.has(row.className.trim()));
+  if (unclaimed.length > 0) return unclaimed.some((item) => item.modified);
+
   const paired = findNoticeRowPairedToRequest(request, listed.saved, listed.related);
   if (!paired) return false;
   const item = listed.classified.find((c) => noticeRowKey(c.row) === noticeRowKey(paired));
@@ -670,6 +702,39 @@ export function noticeDateUsesModifiedSubstitutePayroll(
   if (weekday != null && dateToDayOfWeek(isoDate) !== weekday) return false;
   // 刻意改節次後通知單 period 可與課表不同，對位已由 findNoticeRowPairedToRequest 完成
   return true;
+}
+
+/**
+ * 這張單，或同一節跨班的另一張單，通知單該日已改入代課清冊。
+ * 改了一班就不能再讓另一班走兼課應加，否則同一節會領兩次。
+ */
+export function leaveDateMovedOffConcurrentPayroll(
+  request: SubstituteRequest,
+  allRequests: SubstituteRequest[],
+  isoDate: string
+): boolean {
+  if (noticeDateUsesModifiedSubstitutePayroll(request, allRequests, isoDate)) return true;
+  const session = request.originalSession;
+  if (!session) return false;
+  return allRequests.some((other) => {
+    if (other.id === request.id) return false;
+    if (other.status !== 'approved' || other.requestType !== 'substitute') return false;
+    if (other.applicantTeacherId !== request.applicantTeacherId) return false;
+    if (
+      !other.leaveDateStart ||
+      !leaveRangeCoversDate(other.leaveDateStart, other.leaveDateEnd, isoDate)
+    ) {
+      return false;
+    }
+    const otherSession = other.originalSession;
+    if (!otherSession) return false;
+    if (otherSession.dayOfWeek !== session.dayOfWeek || otherSession.period !== session.period) {
+      return false;
+    }
+    if (otherSession.className === session.className) return false;
+    if (!isSameSubjectCombinedClass(session, otherSession)) return false;
+    return noticeDateUsesModifiedSubstitutePayroll(other, allRequests, isoDate);
+  });
 }
 
 function collectCandidateDatesForRow(
@@ -893,14 +958,41 @@ export function countSubstitutePayrollWithNoticeRows(
     // 未修改的兼課列維持兼課轉移，不入代課清冊（含身心調適假）
     return row.hours.trim() !== '兼課';
   });
-  const customizedPeriods = substituteRows.reduce(
-    (sum, { row }) => sum + parseNoticeRowHours(row.hours),
-    0
+  const slotKeyOf = (iso: string, period: string) => `${iso}|${normalizeNoticePeriodKey(period)}`;
+  const concurrentNoticeSlots = new Set(
+    resolvedRows
+      .filter(({ row }) => {
+        const modified = modifiedByRow.get(noticeRowKey(row));
+        return !modified && row.hours.trim() === '兼課';
+      })
+      .map(({ row, iso }) => slotKeyOf(iso, row.period))
   );
+  const bySlot = new Map<string, ResolvedNoticePayrollRow[]>();
+  for (const item of substituteRows) {
+    const key = slotKeyOf(item.iso, item.row.period);
+    const list = bySlot.get(key) || [];
+    list.push(item);
+    bySlot.set(key, list);
+  }
+  const keptRows: ResolvedNoticePayrollRow[] = [];
+  let customizedPeriods = 0;
+  for (const [key, list] of bySlot) {
+    const modified = list.filter((item) => modifiedByRow.get(noticeRowKey(item.row)));
+    if (modified.length > 0) {
+      const pick = modified[0];
+      customizedPeriods += parseNoticeRowHours(pick.row.hours);
+      keptRows.push(pick);
+      continue;
+    }
+    if (concurrentNoticeSlots.has(key)) continue;
+    const pick = list[0];
+    customizedPeriods += parseNoticeRowHours(pick.row.hours);
+    keptRows.push(pick);
+  }
 
   const hasModifiedRow = classified.some((item) => item.modified);
   if (hasModifiedRow || effectiveNoticeRows.some(isMeaningfulNoticeRow)) {
-    return { periods: customizedPeriods, useBasicRate: true, resolvedRows: substituteRows };
+    return { periods: customizedPeriods, useBasicRate: true, resolvedRows: keptRows };
   }
 
   return {
