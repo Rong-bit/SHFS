@@ -28,7 +28,11 @@ import {
   countSubstituteTeacherConcurrentAddPeriodsInMonth,
   sumUniqueSubstitutePublicPayrollPeriods,
 } from '../src/utils/leavePayrollPolicy';
-import { countSubstitutePayrollWithNoticeRows } from '../src/utils/noticePayroll';
+import {
+  countSubstitutePayrollWithNoticeRows,
+  leaveDateMovedOffConcurrentPayroll,
+  noticeDateUsesModifiedSubstitutePayroll,
+} from '../src/utils/noticePayroll';
 import {
   isCombinedPartnerOccupancy,
   rankSubstituteCandidates,
@@ -262,6 +266,11 @@ assert.equal(
 const marked = markCombinedSlotConcurrent(mixed.map((r) => r.originalSession));
 assert.equal(marked.every((s) => s.isConcurrent), true);
 assert.equal(mixed[1].originalSession.isConcurrent, false, '不改原課表列');
+const unrelated = markCombinedSlotConcurrent([
+  session({ id: 'u1', className: '電機二忠', subjectName: '基本電學', isConcurrent: true }),
+  session({ id: 'u2', className: '電機二孝', subjectName: '電子學', isConcurrent: false }),
+]);
+assert.equal(unrelated[1].isConcurrent, false, '不同科目同時段不連動兼課');
 
 const partnerOcc = {
   teacherId: 't-b',
@@ -358,6 +367,203 @@ const noticePayroll = countSubstitutePayrollWithNoticeRows(
   't-b'
 );
 assert.equal(noticePayroll.periods, 1, '通知單兩班基鐘列只計 1 節');
+
+const editedNoticeRows = [
+  {
+    date: '2026/10/6',
+    weekday: '2',
+    period: '3',
+    className: '電機二忠',
+    subjectName: '監考',
+    hours: '兼課',
+  },
+  {
+    date: '2026/10/6',
+    weekday: '2',
+    period: '3',
+    className: '電機二孝',
+    subjectName: '基本電學',
+    hours: '兼課',
+  },
+];
+const editedPair = [leaveReq('n1', '電機二忠'), leaveReq('n2', '電機二孝')].map((r) => ({
+  ...r,
+  batchGroupId: 'batch-edited',
+  noticeRowsCustomized: true,
+  noticeRows: editedNoticeRows,
+}));
+const editedPayroll = countSubstitutePayrollWithNoticeRows(
+  editedNoticeRows,
+  editedPair,
+  10,
+  2026,
+  5,
+  undefined,
+  undefined,
+  buildLeavePayrollContext(editedPair, INITIAL_SYSTEM_CONFIG),
+  () => 99,
+  't-b'
+);
+assert.equal(editedPayroll.periods, 1, '只改一班成監考時，代課仍只計 1 節');
+assert.equal(
+  leaveDateMovedOffConcurrentPayroll(editedPair[1], editedPair, '2026-10-06'),
+  true,
+  '另一班未改，仍應視為這節已離開兼課應加'
+);
+assert.equal(
+  countSubstituteTeacherConcurrentAddPeriodsInMonth(
+    editedPair,
+    't-b',
+    10,
+    2026,
+    buildLeavePayrollContext(editedPair, INITIAL_SYSTEM_CONFIG),
+    undefined,
+    {
+      skipDate: (iso, r) => leaveDateMovedOffConcurrentPayroll(r, editedPair, iso),
+    }
+  ),
+  0,
+  '通知單改了一班後，另一班不可再加兼課'
+);
+
+const multiWeekRows = [
+  {
+    date: '2026/10/6',
+    weekday: '2',
+    period: '3',
+    className: '電機二忠',
+    subjectName: '基本電學',
+    hours: '兼課',
+  },
+  {
+    date: '2026/10/13',
+    weekday: '2',
+    period: '3',
+    className: '電機二忠',
+    subjectName: '監考',
+    hours: '兼課',
+  },
+  {
+    date: '2026/10/6',
+    weekday: '2',
+    period: '3',
+    className: '電機二孝',
+    subjectName: '基本電學',
+    hours: '兼課',
+  },
+  {
+    date: '2026/10/13',
+    weekday: '2',
+    period: '3',
+    className: '電機二孝',
+    subjectName: '基本電學',
+    hours: '兼課',
+  },
+];
+const multiWeekPair = [leaveReq('w1', '電機二忠'), leaveReq('w2', '電機二孝')].map((r) => ({
+  ...r,
+  leaveDateEnd: '2026-10-13',
+  batchGroupId: 'batch-weeks',
+  noticeRowsCustomized: true,
+  noticeRows: multiWeekRows,
+}));
+assert.equal(
+  noticeDateUsesModifiedSubstitutePayroll(multiWeekPair[0], multiWeekPair, '2026-10-06'),
+  false,
+  '只改第二週時，第一週仍是未改兼課'
+);
+assert.equal(
+  noticeDateUsesModifiedSubstitutePayroll(multiWeekPair[0], multiWeekPair, '2026-10-13'),
+  true,
+  '第二週改成監考應改入代課'
+);
+assert.equal(
+  leaveDateMovedOffConcurrentPayroll(multiWeekPair[1], multiWeekPair, '2026-10-06'),
+  false,
+  '第一週另一班仍走兼課應加'
+);
+assert.equal(
+  leaveDateMovedOffConcurrentPayroll(multiWeekPair[1], multiWeekPair, '2026-10-13'),
+  true,
+  '第二週另一班不可再加兼課'
+);
+const multiWeekCtx = buildLeavePayrollContext(multiWeekPair, INITIAL_SYSTEM_CONFIG);
+assert.equal(
+  countSubstitutePayrollWithNoticeRows(
+    multiWeekRows,
+    multiWeekPair,
+    10,
+    2026,
+    5,
+    undefined,
+    undefined,
+    multiWeekCtx,
+    () => 99,
+    't-b'
+  ).periods,
+  1,
+  '兩週只改一天時，代課只計那一天'
+);
+assert.equal(
+  countSubstituteTeacherConcurrentAddPeriodsInMonth(
+    multiWeekPair,
+    't-b',
+    10,
+    2026,
+    multiWeekCtx,
+    undefined,
+    {
+      skipDate: (iso, r) => leaveDateMovedOffConcurrentPayroll(r, multiWeekPair, iso),
+    }
+  ),
+  1,
+  '未改的那一週兼課應加仍計 1'
+);
+const pendingEdited = {
+  ...leaveReq('p1', '電機二忠'),
+  status: 'pending' as const,
+  noticeRowsCustomized: true,
+  noticeRows: [
+    {
+      date: '2026/10/6',
+      weekday: '2',
+      period: '3',
+      className: '電機二忠',
+      subjectName: '監考',
+      hours: '兼課',
+    },
+  ],
+};
+assert.equal(
+  leaveDateMovedOffConcurrentPayroll(leaveReq('a-xiao', '電機二孝'), [leaveReq('a-xiao', '電機二孝'), pendingEdited], '2026-10-06'),
+  false,
+  '尚未核准的跨班改列，不可讓已核准的另一班失去兼課應加'
+);
+const laterWeekOnly = {
+  ...leaveReq('later', '電機二忠'),
+  leaveDateStart: '2026-11-03',
+  leaveDateEnd: '2026-11-03',
+  noticeRowsCustomized: true,
+  noticeRows: [
+    {
+      date: '',
+      weekday: '2',
+      period: '3',
+      className: '電機二忠',
+      subjectName: '監考',
+      hours: '兼課',
+    },
+  ],
+};
+assert.equal(
+  leaveDateMovedOffConcurrentPayroll(
+    editedPair[1],
+    [editedPair[1], laterWeekOnly],
+    '2026-10-06'
+  ),
+  false,
+  '別週的跨班單不可讓本週兼課應加消失'
+);
 
 const sheet = XLSX.utils.json_to_sheet([
   {

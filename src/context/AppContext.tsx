@@ -125,7 +125,7 @@ import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
   moveNoticeRowsWithReassignedSessions,
-  noticeDateUsesModifiedSubstitutePayroll,
+  leaveDateMovedOffConcurrentPayroll,
   requestHasModifiedNoticePayrollRow,
   resolveEffectiveNoticeRows,
 } from '../utils/noticePayroll';
@@ -3547,7 +3547,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // 舊單無請假日無法逐日 skip：整張通知單有修改列則不應加兼課
           skipRequest: (r) =>
             !r.leaveDateStart && requestHasModifiedNoticePayrollRow(r, requests),
-          skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, requests, iso),
+          skipDate: (iso, r) => leaveDateMovedOffConcurrentPayroll(r, requests, iso),
           temporaryMoves: systemConfig.temporaryScheduleMoves || [],
           weeksInMonth: systemConfig.weeksInMonth ?? 5,
           resolvePartialStopsForRequest: (r) =>
@@ -3710,6 +3710,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               ),
             }
           )) {
+            if (leaveDateMovedOffConcurrentPayroll(r, requests, iso)) continue;
             concurrentPaySlots.add(`${iso}|${period}`);
           }
         });

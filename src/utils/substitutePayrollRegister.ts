@@ -15,7 +15,7 @@ import { resolveTeacherSalaryCode, partialStopsForPayroll } from './salaryCodes'
 import {
   countSubstitutePayrollWithNoticeRows,
   getRelatedSubstituteRequests,
-  noticeDateUsesModifiedSubstitutePayroll,
+  leaveDateMovedOffConcurrentPayroll,
   parseNoticeRowHours,
   resolveEffectiveNoticeRows,
 } from './noticePayroll';
@@ -101,7 +101,7 @@ export function buildSubstitutePayrollRemarks(
         ),
       }
     )) {
-      if (noticeDateUsesModifiedSubstitutePayroll(r, requests, iso)) continue;
+      if (leaveDateMovedOffConcurrentPayroll(r, requests, iso)) continue;
       concurrentPaySlots.add(`${iso}|${period}`);
     }
   }

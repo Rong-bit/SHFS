@@ -787,7 +787,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
     resolvedDispatchPayment,
     leaveType,
     reason,
-    { isConcurrentSession: Boolean(dispatchSampleSession?.isConcurrent) }
+    {
+      isConcurrentSession: expandWithCombinedClassPartners(
+        (dispatchSampleSession ? [dispatchSampleSession] : batchSelectedSessions) as CourseSession[],
+        applicantSessions
+      ).some((s) => s.isConcurrent),
+    }
   );
 
   const dispatchSessionsForWellness = useMemo(() => {

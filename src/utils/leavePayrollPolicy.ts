@@ -701,7 +701,7 @@ export function leavePaymentDisplayLabel(
             ? `事假學年第 ${thresholds.personalLeavePublicDayThreshold} 天起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
             : lt === 'sick'
               ? `病假連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
-              : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）；基本鐘點入代課清冊',
+              : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）。這節不另進代課清冊',
       };
     }
     return {

@@ -272,9 +272,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ initialSession, onCl
   ]);
 
   const paymentDisplay = leavePaymentDisplayLabel(resolvedSubstitutePayment, leaveType, reason, {
-    isConcurrentSession: Boolean(
-      (selectedSession ?? leaveSessionsForSubmit[0])?.isConcurrent
-    ),
+    isConcurrentSession: leaveSessionsForSubmit.some((s) => s.isConcurrent),
   });
 
   const wellnessHoursStatus = useMemo(() => {

@@ -226,15 +226,19 @@ export function countDistinctDayPeriods(
  * 回傳新物件，不改課表上原本的列。
  */
 export function markCombinedSlotConcurrent(sessions: CourseSession[]): CourseSession[] {
-  const concurrentSlots = new Set(
-    sessions.filter((s) => s.isConcurrent).map((s) => `${s.dayOfWeek}-${s.period}`)
-  );
-  if (concurrentSlots.size === 0) return sessions;
-  return sessions.map((session) =>
-    session.isConcurrent || !concurrentSlots.has(`${session.dayOfWeek}-${session.period}`)
-      ? session
-      : { ...session, isConcurrent: true }
-  );
+  return sessions.map((session) => {
+    if (session.isConcurrent) return session;
+    const partnerIsConcurrent = sessions.some(
+      (other) =>
+        other !== session &&
+        other.isConcurrent &&
+        other.teacherId === session.teacherId &&
+        other.dayOfWeek === session.dayOfWeek &&
+        other.period === session.period &&
+        isSameSubjectCombinedClass(session, other)
+    );
+    return partnerIsConcurrent ? { ...session, isConcurrent: true } : session;
+  });
 }
 
 /** 一批請假單的節數：跨班同一節顯示「1 節（2 班）」 */
