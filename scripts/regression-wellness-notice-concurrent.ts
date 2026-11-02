@@ -1,5 +1,5 @@
 /**
- * 身心調適假超鐘點通知單：未改走兼課清冊；有修改改入代課清冊。
+ * 身心調適假超鐘點通知單：未改 → 兼課清冊（A 不扣、B 應加）；有修改 → 代課清冊。
  * 執行：npx tsx scripts/regression-wellness-notice-concurrent.ts
  */
 import assert from 'node:assert/strict';
@@ -53,7 +53,7 @@ const base = {
   originalSession: session,
 };
 
-// 1) 未改兼課列 → 兼課清冊
+// 1) 未改兼課列 → 兼課清冊（A 不扣、B 應加）
 {
   const req: SubstituteRequest = {
     ...base,
@@ -81,8 +81,8 @@ const base = {
   );
   assert.equal(
     countApplicantConcurrentDeductPeriodsInMonth(reqs, 't-a', 10, 2026, ctx),
-    1,
-    '請假人兼課仍應減 1'
+    0,
+    '請假人兼課不應減'
   );
 
   const add = countSubstituteTeacherConcurrentAddPeriodsInMonth(
@@ -128,9 +128,22 @@ const base = {
     /代請假甲身心假/,
     `兼課清冊備註應有身心假（實際：${concurrentRemarks || '空'}）`
   );
+
+  const applicantRemarks = buildConcurrentPayrollRemarks(
+    't-a',
+    10,
+    2026,
+    reqs,
+    INITIAL_SYSTEM_CONFIG
+  );
+  assert.equal(
+    /請.*身心假扣兼課/.test(applicantRemarks),
+    false,
+    `請假人兼課備註不可有扣兼課（實際：${applicantRemarks || '空'}）`
+  );
 }
 
-// 2) 有修改（科目改監考）→ 代課清冊
+// 2) 有修改（科目改監考）→ 代課清冊；A 仍不扣
 {
   const req: SubstituteRequest = {
     ...base,
@@ -156,6 +169,11 @@ const base = {
     noticeDateUsesModifiedSubstitutePayroll(req, reqs, '2026-10-07'),
     true,
     '改科目應視為已修改'
+  );
+  assert.equal(
+    countApplicantConcurrentDeductPeriodsInMonth(reqs, 't-a', 10, 2026, ctx),
+    0,
+    '有修改時請假人兼課仍不應減'
   );
 
   const add = countSubstituteTeacherConcurrentAddPeriodsInMonth(
