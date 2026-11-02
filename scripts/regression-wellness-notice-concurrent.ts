@@ -1,5 +1,5 @@
 /**
- * 身心調適假超鐘點：即使通知單已儲存且兼課列未改，代課人仍入代課清冊（不漏算、不走兼課轉移）。
+ * 身心調適假超鐘點通知單：未改走兼課清冊；有修改改入代課清冊。
  * 執行：npx tsx scripts/regression-wellness-notice-concurrent.ts
  */
 import assert from 'node:assert/strict';
@@ -33,149 +33,188 @@ const session: CourseSession = {
   isConcurrent: true,
 };
 
-const wellnessSavedUnmodified: SubstituteRequest = {
-  id: 'r-wellness-notice',
+const base = {
   requestNumber: '115-1-0300',
-  requestType: 'substitute',
+  requestType: 'substitute' as const,
   applicantTeacherId: 't-a',
   applicantTeacherName: '請假甲',
   applicantDepartment: '電機科',
   reason: '身心調適',
-  leaveType: 'wellness',
-  paymentType: 'public',
+  leaveType: 'wellness' as const,
+  paymentType: 'public' as const,
   leaveDateStart: '2026-10-07',
   leaveDateEnd: '2026-10-07',
   substituteTeacherId: 't-b',
   substituteTeacherName: '代課乙',
-  originalSession: session,
-  status: 'approved',
+  status: 'approved' as const,
   createdAt: '2026-10-01 09:00',
   reviewedAt: '2026-10-02 10:00',
-  clashStatus: { hasClash: false, severity: 'none', messages: [] },
-  noticeRowsCustomized: true,
-  noticeRows: [
+  clashStatus: { hasClash: false, severity: 'none' as const, messages: [] as string[] },
+  originalSession: session,
+};
+
+// 1) 未改兼課列 → 兼課清冊
+{
+  const req: SubstituteRequest = {
+    ...base,
+    id: 'r-wellness-unmodified',
+    noticeRowsCustomized: true,
+    noticeRows: [
+      {
+        date: '2026/10/7',
+        weekday: '3',
+        period: '2',
+        className: '電機二甲',
+        subjectName: '專題製作',
+        hours: '兼課',
+      },
+    ],
+  };
+  const reqs = [req];
+  const ctx = buildLeavePayrollContext(reqs, INITIAL_SYSTEM_CONFIG);
+  const effective = resolveEffectiveNoticeRows(req, reqs)!;
+
+  assert.equal(
+    noticeDateUsesModifiedSubstitutePayroll(req, reqs, '2026-10-07'),
+    false,
+    '未改兼課列不應視為已修改'
+  );
+  assert.equal(
+    countApplicantConcurrentDeductPeriodsInMonth(reqs, 't-a', 10, 2026, ctx),
+    1,
+    '請假人兼課仍應減 1'
+  );
+
+  const add = countSubstituteTeacherConcurrentAddPeriodsInMonth(
+    reqs,
+    't-b',
+    10,
+    2026,
+    ctx,
+    undefined,
     {
-      date: '2026/10/7', // 與 buildDefaultNoticeRowsFromRequests 格式一致
-      weekday: '3',
-      period: '2',
-      className: '電機二甲',
-      subjectName: '專題製作',
-      hours: '兼課',
-    },
-  ],
-};
+      matchSession: (s) => Boolean(s?.isConcurrent),
+      skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, reqs, iso),
+    }
+  );
+  assert.equal(add, 1, '未改兼課列：代課人兼課應加 1');
 
-const reqs = [wellnessSavedUnmodified];
-const ctx = buildLeavePayrollContext(reqs, INITIAL_SYSTEM_CONFIG);
-const effective = resolveEffectiveNoticeRows(wellnessSavedUnmodified, reqs);
-assert.ok(effective, '應有已存通知單列');
+  const related = getRelatedSubstituteRequests(req, reqs).filter(
+    (r) => r.substituteTeacherId === 't-b'
+  );
+  const payroll = countSubstitutePayrollWithNoticeRows(
+    effective,
+    related,
+    10,
+    2026,
+    5,
+    undefined,
+    undefined,
+    ctx,
+    () => 0,
+    't-b'
+  );
+  assert.equal(payroll.periods, 0, '未改兼課列不入代課清冊');
 
-assert.equal(
-  noticeDateUsesModifiedSubstitutePayroll(wellnessSavedUnmodified, reqs, '2026-10-07'),
-  false,
-  '兼課列未改，不應標成「已修改列」'
-);
+  const concurrentRemarks = buildConcurrentPayrollRemarks(
+    't-b',
+    10,
+    2026,
+    reqs,
+    INITIAL_SYSTEM_CONFIG
+  );
+  assert.match(
+    concurrentRemarks,
+    /代請假甲身心假/,
+    `兼課清冊備註應有身心假（實際：${concurrentRemarks || '空'}）`
+  );
+}
 
-const deduct = countApplicantConcurrentDeductPeriodsInMonth(reqs, 't-a', 10, 2026, ctx);
-assert.equal(deduct, 1, '請假人兼課仍應減 1 節');
+// 2) 有修改（科目改監考）→ 代課清冊
+{
+  const req: SubstituteRequest = {
+    ...base,
+    id: 'r-wellness-modified',
+    requestNumber: '115-1-0301',
+    noticeRowsCustomized: true,
+    noticeRows: [
+      {
+        date: '2026/10/7',
+        weekday: '3',
+        period: '2',
+        className: '電機二甲',
+        subjectName: '監考',
+        hours: '兼課',
+      },
+    ],
+  };
+  const reqs = [req];
+  const ctx = buildLeavePayrollContext(reqs, INITIAL_SYSTEM_CONFIG);
+  const effective = resolveEffectiveNoticeRows(req, reqs)!;
 
-const add = countSubstituteTeacherConcurrentAddPeriodsInMonth(
-  reqs,
-  't-b',
-  10,
-  2026,
-  ctx,
-  undefined,
-  {
-    matchSession: (s) => Boolean(s?.isConcurrent),
-    skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, reqs, iso),
-  }
-);
-assert.equal(add, 0, '代課人兼課應加為 0（不走兼課轉移）');
+  assert.equal(
+    noticeDateUsesModifiedSubstitutePayroll(req, reqs, '2026-10-07'),
+    true,
+    '改科目應視為已修改'
+  );
 
-const related = getRelatedSubstituteRequests(wellnessSavedUnmodified, reqs).filter(
-  (r) => r.substituteTeacherId === 't-b'
-);
-const payroll = countSubstitutePayrollWithNoticeRows(
-  effective!,
-  related,
-  10,
-  2026,
-  5,
-  undefined,
-  undefined,
-  ctx,
-  () => 0,
-  't-b'
-);
-assert.equal(payroll.periods, 1, '未改兼課列仍應入代課清冊 1 節');
-assert.equal(payroll.useBasicRate, true, '已存通知單應以基本鐘點計');
+  const add = countSubstituteTeacherConcurrentAddPeriodsInMonth(
+    reqs,
+    't-b',
+    10,
+    2026,
+    ctx,
+    undefined,
+    {
+      matchSession: (s) => Boolean(s?.isConcurrent),
+      skipDate: (iso, r) => noticeDateUsesModifiedSubstitutePayroll(r, reqs, iso),
+    }
+  );
+  assert.equal(add, 0, '有修改：代課人兼課應加為 0');
 
-const concurrentRemarks = buildConcurrentPayrollRemarks(
-  't-b',
-  10,
-  2026,
-  reqs,
-  INITIAL_SYSTEM_CONFIG
-);
-assert.equal(
-  concurrentRemarks.includes('代請假甲'),
-  false,
-  `兼課清冊備註不可列身心調適假兼課轉移（實際：${concurrentRemarks || '空'}）`
-);
+  const related = getRelatedSubstituteRequests(req, reqs).filter(
+    (r) => r.substituteTeacherId === 't-b'
+  );
+  const payroll = countSubstitutePayrollWithNoticeRows(
+    effective,
+    related,
+    10,
+    2026,
+    5,
+    undefined,
+    undefined,
+    ctx,
+    () => 0,
+    't-b'
+  );
+  assert.equal(payroll.periods, 1, '有修改：應入代課清冊 1 節');
+  assert.equal(payroll.useBasicRate, true, '有修改：以基本鐘點計');
 
-const substituteRemarks = buildSubstitutePayrollRemarks(
-  't-b',
-  10,
-  2026,
-  reqs,
-  INITIAL_SYSTEM_CONFIG
-);
-assert.match(
-  substituteRemarks,
-  /10\/7代請假甲身心假1節/,
-  `代課清冊備註應有身心假節次（實際：${substituteRemarks || '空'}）`
-);
+  const concurrentRemarks = buildConcurrentPayrollRemarks(
+    't-b',
+    10,
+    2026,
+    reqs,
+    INITIAL_SYSTEM_CONFIG
+  );
+  assert.equal(
+    concurrentRemarks.includes('代請假甲'),
+    false,
+    `有修改後兼課清冊不可再列（實際：${concurrentRemarks || '空'}）`
+  );
 
-// 對照：公假未改兼課列仍走兼課轉移、不入代課清冊
-const officialSavedUnmodified: SubstituteRequest = {
-  ...wellnessSavedUnmodified,
-  id: 'r-official-notice',
-  requestNumber: '115-1-0301',
-  reason: '公假開會',
-  leaveType: 'official',
-};
-const officialReqs = [officialSavedUnmodified];
-const officialCtx = buildLeavePayrollContext(officialReqs, INITIAL_SYSTEM_CONFIG);
-const officialEffective = resolveEffectiveNoticeRows(officialSavedUnmodified, officialReqs)!;
-const officialRelated = getRelatedSubstituteRequests(officialSavedUnmodified, officialReqs);
-const officialPayroll = countSubstitutePayrollWithNoticeRows(
-  officialEffective,
-  officialRelated,
-  10,
-  2026,
-  5,
-  undefined,
-  undefined,
-  officialCtx,
-  () => 0,
-  't-b'
-);
-assert.equal(officialPayroll.periods, 0, '公假未改兼課列不入代課清冊');
-const officialAdd = countSubstituteTeacherConcurrentAddPeriodsInMonth(
-  officialReqs,
-  't-b',
-  10,
-  2026,
-  officialCtx,
-  undefined,
-  { matchSession: (s) => Boolean(s?.isConcurrent) }
-);
-assert.equal(officialAdd, 1, '公假未改兼課列仍應加兼課 1');
+  const substituteRemarks = buildSubstitutePayrollRemarks(
+    't-b',
+    10,
+    2026,
+    reqs,
+    INITIAL_SYSTEM_CONFIG
+  );
+  assert.match(
+    substituteRemarks,
+    /10\/7代請假甲身心假1節/,
+    `代課清冊備註應有身心假（實際：${substituteRemarks || '空'}）`
+  );
+}
 
-console.log('wellness notice concurrent payroll checks passed', {
-  deduct,
-  add,
-  subPayroll: payroll.periods,
-  substituteRemarks,
-});
+console.log('wellness notice concurrent payroll checks passed');

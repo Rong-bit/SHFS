@@ -175,7 +175,7 @@ export const NoticeTableEditor: React.FC<{
         <div>
           <p className="text-xs font-bold text-indigo-900">課程表格（可人工調整）</p>
           <p className="text-[10px] text-indigo-800 leading-snug mt-0.5">
-            日期、星期、節次、班級、科目可手動輸入；鐘點欄兼課為「兼課」、基鐘留白。按「儲存表格」後，僅有修改的列改入代課清冊（基本鐘點）；未改的列仍依課表原邏輯（兼課走兼課轉移，基鐘走代課清冊；身心調適假超鐘點例外：未改兼課列仍入代課清冊）。請假人該節若為兼課仍應減；若為基鐘則照支原薪、不扣兼課。列印前請先儲存表格。
+            日期、星期、節次、班級、科目可手動輸入；鐘點欄兼課為「兼課」、基鐘留白。按「儲存表格」後，僅有修改的列改入代課清冊（基本鐘點）；未改的列仍依課表原邏輯（兼課走兼課轉移，基鐘走代課清冊）。請假人該節若為兼課仍應減；若為基鐘則照支原薪、不扣兼課。列印前請先儲存表格。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -309,7 +309,7 @@ export const NoticeTableEditor: React.FC<{
               <span>課程表格已儲存</span>
             </div>
             <p className="text-sm text-slate-600 mt-3 leading-relaxed">
-              已儲存。僅修改過的列改入代課清冊；未改的列仍依課表原邏輯（身心調適假超鐘點未改列仍入代課清冊）。請假人該節若為兼課仍應減；若為基鐘則照支原薪、不扣兼課。
+              已儲存。僅修改過的列改入代課清冊；未改的列仍依課表原邏輯。請假人該節若為兼課仍應減；若為基鐘則照支原薪、不扣兼課。
             </p>
             <div className="flex justify-end mt-5">
               <button

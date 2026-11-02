@@ -11,7 +11,6 @@ import {
   isLeaveDatePublicPayroll,
   listBillableLeaveDatesInMonth,
   listBillableLeaveDatesInRange,
-  shouldTransferConcurrentToSubstituteOnLeaveDate,
   type LeavePayrollContext,
 } from './leavePayrollPolicy';
 import { isDateInSettlementMonth } from './settlementPeriod';
@@ -879,22 +878,20 @@ export function countSubstitutePayrollWithNoticeRows(
     buildDefaultNoticeRowsFromRequests(scopedRelated)
   );
   const modifiedByRow = new Map(classified.map((item) => [noticeRowKey(item.row), item.modified]));
-  const substituteRows = resolvedRows.filter(({ row, iso }) => {
-    const matching = findMatchingRequests(row, scopedRelated, {
-      allowFallback: false,
-      allNoticeRows: effectiveNoticeRows,
-    });
-    if (forSubstituteTeacherId && matching.length === 0) {
+  const substituteRows = resolvedRows.filter(({ row }) => {
+    if (
+      forSubstituteTeacherId &&
+      findMatchingRequests(row, scopedRelated, {
+        allowFallback: false,
+        allNoticeRows: effectiveNoticeRows,
+      }).length === 0
+    ) {
       return false;
     }
     const modified = modifiedByRow.get(noticeRowKey(row));
     if (modified) return true;
-    if (row.hours.trim() !== '兼課') return true;
-    // 未修改兼課列：會走兼課轉移者不入代課清冊；身心調適假等不轉移者仍入代課清冊
-    if (matching.length === 0) return false;
-    return matching.every(
-      (r) => !shouldTransferConcurrentToSubstituteOnLeaveDate(iso, r, payrollCtx)
-    );
+    // 未修改的兼課列維持兼課轉移，不入代課清冊（含身心調適假）
+    return row.hours.trim() !== '兼課';
   });
   const customizedPeriods = substituteRows.reduce(
     (sum, { row }) => sum + parseNoticeRowHours(row.hours),

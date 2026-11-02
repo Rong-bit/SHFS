@@ -1,5 +1,5 @@
 /**
- * 身心調適假超鐘點：請假人應減兼課；代課人入代課清冊（不走兼課轉移）。
+ * 身心調適假超鐘點：與一般公費假別相同——請假人應減兼課；代課人兼課應加（兼課轉移）。
  * 執行：npx tsx scripts/regression-wellness-concurrent-deduct.ts
  */
 import assert from 'node:assert/strict';
@@ -59,8 +59,8 @@ assert.equal(
 );
 assert.equal(
   shouldTransferConcurrentToSubstituteOnLeaveDate('2026-10-07', wellnessReq, ctx),
-  false,
-  '身心調適假超鐘點不走兼課轉移給代課人'
+  true,
+  '身心調適假超鐘點應走兼課轉移給代課人'
 );
 
 const deduct = countApplicantConcurrentDeductPeriodsInMonth(
@@ -78,7 +78,7 @@ const add = countSubstituteConcurrentAddPeriodsInMonth(
   2026,
   ctx
 );
-assert.equal(add, 0, '代課人兼課應加為 0');
+assert.equal(add, 1, '代課人兼課應加 1 節');
 
 const subPayroll = countSubstitutePublicPayrollPeriodsInMonth(
   wellnessReq,
@@ -86,15 +86,14 @@ const subPayroll = countSubstitutePublicPayrollPeriodsInMonth(
   2026,
   ctx
 );
-assert.equal(subPayroll, 1, '代課人入代課清冊 1 節');
+assert.equal(subPayroll, 0, '未改通知單時不入代課清冊（已走兼課轉移）');
 
 const label = leavePaymentDisplayLabel('public', 'wellness', undefined, {
   isConcurrentSession: true,
 });
-assert.match(label.detail, /扣請假人兼課/);
-assert.match(label.detail, /代課清冊/);
+assert.match(label.detail, /兼課清冊/);
 
-console.log('wellness concurrent deduct checks passed', {
+console.log('wellness concurrent transfer checks passed', {
   deduct,
   add,
   subPayroll,
