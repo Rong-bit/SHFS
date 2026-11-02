@@ -186,6 +186,52 @@ export function combinedClassPartners<
   });
 }
 
+/** 請假／派代：選到合班的一班時，同一節的其他班一併帶上 */
+export function expandWithCombinedClassPartners<
+  T extends {
+    id?: string;
+    teacherId: string;
+    dayOfWeek: number;
+    period: number;
+    className: string;
+    subjectName?: string;
+    subjectCode?: string;
+  },
+>(selected: T[], all: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  const keyOf = (s: T) => s.id || `${s.teacherId}|${s.dayOfWeek}|${s.period}|${s.className}`;
+  const push = (s: T) => {
+    const key = keyOf(s);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(s);
+  };
+  selected.forEach((s) => {
+    push(s);
+    combinedClassPartners(s, all).forEach(push);
+  });
+  return out;
+}
+
+/** 同一星期同一節只算一節（跨班合授不因班數加總） */
+export function countDistinctDayPeriods(
+  sessions: Array<{ dayOfWeek: number; period: number }>
+): number {
+  return new Set(sessions.map((s) => `${s.dayOfWeek}-${s.period}`)).size;
+}
+
+/** 一批請假單的節數：跨班同一節顯示「1 節（2 班）」 */
+export function formatCombinedLeaveCount(
+  items: Array<{ originalSession?: { dayOfWeek: number; period: number } | null }>
+): string {
+  const sessions = items.flatMap((item) => (item.originalSession ? [item.originalSession] : []));
+  const slots = countDistinctDayPeriods(sessions);
+  const count = Math.max(slots, items.length);
+  if (slots > 0 && items.length > slots) return `${slots} 節（${items.length} 班）`;
+  return `${count} 節`;
+}
+
 /** 從教室／科目等文字判斷科別（教室名不一定在開頭） */
 export const departmentFromLabel = (text: string): DepartmentType | null => {
   const compact = compactText(text);

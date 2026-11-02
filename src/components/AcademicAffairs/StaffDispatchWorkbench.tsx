@@ -10,7 +10,14 @@ import {
   SubstituteRequest,
   Teacher 
 } from '../../types';
-import { isPracticalSession, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import {
+  combinedClassPartners,
+  countDistinctDayPeriods,
+  expandWithCombinedClassPartners,
+  formatCombinedLeaveCount,
+  isPracticalSession,
+  SCHOOL_DEPARTMENTS,
+} from '../../utils/schoolDepartments';
 import {
   BEREAVEMENT_LEAVE_LEGAL_NOTE,
   defaultReasonForLeaveType,
@@ -453,6 +460,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
           : leaveDateStart || undefined,
       examDays: systemConfig.examDays,
       nonTeachingDays: systemConfig.nonTeachingDays,
+      applicantTeacherId: applicantTeacher.id,
+      combinedLeaveSessions: targetSessions,
     });
   }, [
     teachers,
@@ -490,6 +499,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
         leaveDateEnd: periodRangeLeaveEnd,
         examDays: systemConfig.examDays,
         nonTeachingDays: systemConfig.nonTeachingDays,
+        applicantTeacherId: applicantTeacher.id,
+        combinedLeaveSessions: [session],
       });
     });
     return map;
@@ -513,12 +524,40 @@ export const StaffDispatchWorkbench: React.FC = () => {
     return substituteTeacherId;
   };
 
+  const applicantSessionPool = applicantTeacher
+    ? sessions.filter((s) => s.teacherId === applicantTeacher.id)
+    : [];
+
+  /** 跨班同一節共用一位代理人；連續節次仍不回落到全域人選 */
+  const substituteIdResolved = (sessionId: string) => {
+    const direct = substituteIdForSession(sessionId);
+    if (direct || sessionPickMode !== 'periodRange') return direct;
+    const session = applicantSessionPool.find((s) => s.id === sessionId);
+    if (!session) return '';
+    return (
+      combinedClassPartners(session, applicantSessionPool)
+        .map((partner) => substituteIdForSession(partner.id))
+        .find(Boolean) || ''
+    );
+  };
+
+  const withCombinedPartnerIds = (sessionIds: string[]) => {
+    const extra = sessionIds.flatMap((id) => {
+      const session = applicantSessionPool.find((s) => s.id === id);
+      if (!session) return [];
+      return combinedClassPartners(session, applicantSessionPool).map((partner) => partner.id);
+    });
+    return [...new Set([...sessionIds, ...extra])];
+  };
+
   const applySubstituteToSelectedSessions = (teacherId: string) => {
     setSessionSubstituteIds((prev) => {
       const next = { ...prev };
-      batchSelectedSessions.forEach((session) => {
-        next[session.id] = teacherId;
-      });
+      withCombinedPartnerIds(batchSelectedSessions.map((session) => session.id)).forEach(
+        (sessionId) => {
+          next[sessionId] = teacherId;
+        }
+      );
       return next;
     });
   };
@@ -528,10 +567,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
     setSessionSubstituteIds((prev) => {
       const next = { ...prev };
       const startIdx = batchSelectedSessions.findIndex((session) => session.id === fromSessionId);
-      const targetIds =
+      const targetIds = withCombinedPartnerIds(
         startIdx >= 0
           ? batchSelectedSessions.slice(startIdx).map((session) => session.id)
-          : [fromSessionId];
+          : [fromSessionId]
+      );
       targetIds.forEach((sessionId) => {
         if (teacherId) next[sessionId] = teacherId;
         else delete next[sessionId];
@@ -553,13 +593,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
   });
 
   const selectedSessionSubstituteIds = batchSelectedSessions.map((session) =>
-    substituteIdForSession(session.id)
+    substituteIdResolved(session.id)
   );
   const missingPeriodSubstitutes =
     requestType === 'substitute' &&
     sessionPickMode === 'periodRange' &&
     substituteTeacherRequired &&
-    batchSelectedSessions.some((session) => !substituteIdForSession(session.id));
+    batchSelectedSessions.some((session) => !substituteIdResolved(session.id));
   const dispatchSubstituteMissing =
     requestType === 'substitute' &&
     substituteTeacherRequired &&
@@ -1037,6 +1077,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
         : selectedOriginalSession
         ? [selectedOriginalSession]
         : [];
+    if (requestType === 'substitute' && applicantTeacher) {
+      sessionsToDispatch = expandWithCombinedClassPartners(
+        sessionsToDispatch,
+        sessions.filter((s) => s.teacherId === applicantTeacher.id)
+      );
+    }
 
     if (sessionsToDispatch.length === 0 && actingHomeroomOnly && applicantTeacher) {
       const placeholder = buildActingHomeroomOnlySession(applicantTeacher, leaveDateStart);
@@ -1168,7 +1214,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
           swapTargetSession: requestType === 'swap' ? swapPartnerSession : undefined,
           substituteTeacherId:
             requestType === 'substitute'
-              ? substituteIdForSession(originalSession.id) || undefined
+              ? substituteIdResolved(originalSession.id) || undefined
               : undefined,
           actingHomeroomTeacherId:
             requestType === 'substitute' ? actingHomeroomTeacherId || undefined : undefined,
@@ -1233,7 +1279,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
         sessionsToDispatch.map((originalSession) => {
           const sessionSubId =
             requestType === 'substitute'
-              ? substituteIdForSession(originalSession.id)
+              ? substituteIdResolved(originalSession.id) || undefined
               : undefined;
           const sessionSubTeacher = sessionSubId
             ? teachers.find((t) => t.id === sessionSubId)
@@ -2174,15 +2220,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         將一次派代「{dayNames[rangeDayOfWeek]} 第
                         {Math.min(rangePeriodStart, rangePeriodEnd)}～
                         {Math.max(rangePeriodStart, rangePeriodEnd)}節」內有課的節次（目前{' '}
-                        {periodRangeSessions.length} 節，已勾選 {batchSelectedSessions.length} 節）。各節可指定不同代理人；指定本節代理人會自動套用至後續已勾選節次，中途改選則自該節起變更。假單編號相同，通知單分張列印。
+                        {countDistinctDayPeriods(periodRangeSessions)} 節，已勾選 {countDistinctDayPeriods(batchSelectedSessions)} 節）。跨班同一節只算 1 節，兩班會一起派代。各節可指定不同代理人；指定本節代理人會自動套用至後續已勾選節次，中途改選則自該節起變更。假單編號相同，通知單分張列印。
                       </p>
                     </div>
                   )}
 
                   <label className="block text-xs font-bold text-slate-700 mb-2">
                     {requestType === 'substitute' && sessionPickMode === 'periodRange'
-                      ? `連續節次課堂（可取消勾選個別節次 · ${batchSelectedSessions.length}/${periodRangeSessions.length}）`
-                      : `請點選欲辦理調代之課堂 (${applicantSessions.length} 節)${
+                      ? `連續節次課堂（可取消勾選個別節次 · ${countDistinctDayPeriods(batchSelectedSessions)}/${countDistinctDayPeriods(periodRangeSessions)} 節）`
+                      : `請點選欲辦理調代之課堂 (${countDistinctDayPeriods(applicantSessions)} 節)${
                           leaveFilterDays.length > 0
                             ? ` · 僅顯示${formatWeekdayList(leaveFilterDays, dayNames)}`
                             : ''
@@ -2204,16 +2250,23 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-96 overflow-y-auto pr-1">
                         {periodRangeSessions.map((s) => {
+                          const partnerIds = combinedClassPartners(s, periodRangeSessions).map(
+                            (p) => p.id
+                          );
+                          const groupIds = [s.id, ...partnerIds];
                           const isSelected = selectedSessionIds.includes(s.id);
-                          const sessionSubId = substituteIdForSession(s.id);
+                          const sessionSubId =
+                            substituteIdForSession(s.id) ||
+                            partnerIds.map((id) => substituteIdForSession(id)).find(Boolean) ||
+                            '';
                           return (
                             <div
                               key={s.id}
                               onClick={() => {
                                 setSelectedSessionIds((prev) =>
                                   prev.includes(s.id)
-                                    ? prev.filter((id) => id !== s.id)
-                                    : [...prev, s.id]
+                                    ? prev.filter((id) => !groupIds.includes(id))
+                                    : [...new Set([...prev, ...groupIds])]
                                 );
                               }}
                               className={`p-3 rounded-xl border cursor-pointer transition ${
@@ -2228,6 +2281,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   {dayNames[s.dayOfWeek]} 第{s.period}節
                                 </span>
                                 <span className="flex items-center gap-0.5 shrink-0">
+                                  {partnerIds.length > 0 && (
+                                    <span className="px-1.5 py-0.2 bg-sky-100 text-sky-800 border border-sky-300 rounded text-[10px] font-bold">
+                                      跨班
+                                    </span>
+                                  )}
                                   {s.isConcurrent && (
                                     <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 border border-violet-300 rounded text-[10px] font-bold">
                                       兼課
@@ -2323,6 +2381,11 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                 {dayNames[s.dayOfWeek]} 第{s.period}節
                               </span>
                               <span className="flex items-center gap-0.5 shrink-0">
+                              {combinedClassPartners(s, applicantSessions).length > 0 && (
+                                <span className="px-1.5 py-0.2 bg-sky-100 text-sky-800 border border-sky-300 rounded text-[10px] font-bold">
+                                  跨班
+                                </span>
+                              )}
                               {s.isConcurrent && (
                                 <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 border border-violet-300 rounded text-[10px] font-bold">
                                   兼課
@@ -2740,7 +2803,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
                     <span className="text-slate-400 block">原授課堂：</span>
                     <strong className="text-slate-100 text-sm">
                       {selectedOriginalSession ? (
-                        `${selectedOriginalSession.className} ｜ ${selectedOriginalSession.subjectName}`
+                        `${expandWithCombinedClassPartners(
+                          requestType === 'substitute' && sessionPickMode === 'periodRange'
+                            ? batchSelectedSessions
+                            : [selectedOriginalSession],
+                          applicantSessions
+                        )
+                          .map((s) => s.className)
+                          .filter((name, index, all) => all.indexOf(name) === index)
+                          .join('、')} ｜ ${selectedOriginalSession.subjectName}`
                       ) : (
                         '未選定'
                       )}
@@ -2752,7 +2823,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         batchSelectedSessions.length > 1
                           ? `${dayNames[selectedOriginalSession.dayOfWeek]} ${formatPeriodsLabel(
                               batchSelectedSessions.map((s) => s.period)
-                            )}（共 ${batchSelectedSessions.length} 節）`
+                            )}（共 ${formatCombinedLeaveCount(batchSelectedSessions.map((s) => ({ originalSession: s })))}）`
                           : `${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節 (${selectedOriginalSession.venueName})`)}
                     </div>
                   </div>
@@ -3142,7 +3213,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             {req.requestNumber}
                             {(items.length > 1 || isSameNumberSplit) && (
                               <div className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">
-                                {items.length > 1 ? `${items.length} 節` : null}
+                                {items.length > 1 ? formatCombinedLeaveCount(items) : null}
                                 {items.length > 1 && isSameNumberSplit ? ' · ' : null}
                                 {isSameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : null}
                               </div>
@@ -3319,8 +3390,15 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                         ).length
                                       : 1;
                                     if (pendingCount > 1) {
+                                      const pendingItems = req.batchGroupId
+                                        ? requests.filter(
+                                            (r) =>
+                                              r.batchGroupId === req.batchGroupId &&
+                                              r.status === 'pending'
+                                          )
+                                        : [req];
                                       const ok = window.confirm(
-                                        `此為連續節次（共 ${pendingCount} 節待核定），將整批一次核准。確定？`
+                                        `此申請將整批一次核定（${formatCombinedLeaveCount(pendingItems)}）。確定？`
                                       );
                                       if (!ok) return;
                                     }

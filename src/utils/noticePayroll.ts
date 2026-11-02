@@ -893,10 +893,13 @@ export function countSubstitutePayrollWithNoticeRows(
     // 未修改的兼課列維持兼課轉移，不入代課清冊（含身心調適假）
     return row.hours.trim() !== '兼課';
   });
-  const customizedPeriods = substituteRows.reduce(
-    (sum, { row }) => sum + parseNoticeRowHours(row.hours),
-    0
-  );
+  const seenNoticeSlot = new Set<string>();
+  const customizedPeriods = substituteRows.reduce((sum, { row, iso }) => {
+    const key = `${iso}|${row.period}`;
+    if (seenNoticeSlot.has(key)) return sum;
+    seenNoticeSlot.add(key);
+    return sum + parseNoticeRowHours(row.hours);
+  }, 0);
 
   const hasModifiedRow = classified.some((item) => item.modified);
   if (hasModifiedRow || effectiveNoticeRows.some(isMeaningfulNoticeRow)) {

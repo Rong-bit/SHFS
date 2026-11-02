@@ -6,7 +6,11 @@ import {
   SubstituteRequest,
   Teacher,
 } from '../types';
-import { teacherWeeklyOverload, type HomeroomSlotConfig } from './schoolDepartments';
+import {
+  isSameSubjectCombinedClass,
+  teacherWeeklyOverload,
+  type HomeroomSlotConfig,
+} from './schoolDepartments';
 import { resolveLeaveDateEnd } from './leaveDates';
 import { dateToIsoLocal, nonTeachingDateSet } from './holidays';
 
@@ -28,6 +32,10 @@ export type SubstituteOccupancy = {
   period: number;
   leaveDateStart?: string;
   leaveDateEnd?: string;
+  applicantTeacherId?: string;
+  className?: string;
+  subjectName?: string;
+  subjectCode?: string;
 };
 
 function leaveRangesOverlap(
@@ -130,6 +138,9 @@ export function collectSubstituteOccupancies(
       period: r.originalSession.period,
       leaveDateStart: r.leaveDateStart,
       leaveDateEnd: r.leaveDateEnd,
+      applicantTeacherId: r.applicantTeacherId,
+      className: r.originalSession.className,
+      subjectName: r.originalSession.subjectName,
     });
   }
   return out;
@@ -155,6 +166,38 @@ export function teacherHasSubstituteOccupancy(
       opts
     );
   });
+}
+
+/**
+ * 同一位請假人的跨班合授：代課人在該節已接下另一班，不算第二個佔用。
+ * 不同請假人、不同科目，或同一班重複派代，仍視為佔用。
+ */
+export function isCombinedPartnerOccupancy(
+  occupancy: SubstituteOccupancy,
+  session: { className: string; subjectName?: string; subjectCode?: string },
+  applicantTeacherId: string
+): boolean {
+  if (!occupancy.className || occupancy.className === session.className) return false;
+  if (occupancy.applicantTeacherId && occupancy.applicantTeacherId !== applicantTeacherId) {
+    return false;
+  }
+  return isSameSubjectCombinedClass(session, {
+    className: occupancy.className,
+    subjectName: occupancy.subjectName,
+    subjectCode: occupancy.subjectCode,
+  });
+}
+
+/** 衝堂用佔用：拿掉「同一節跨班合授」的夥伴班，避免兩班一起請假被當成代課人衝堂 */
+export function substituteOccupanciesBlockingSlot(
+  requests: SubstituteRequest[],
+  session: { className: string; subjectName?: string; subjectCode?: string },
+  applicantTeacherId: string,
+  options?: { excludeRequestIds?: string[] }
+): SubstituteOccupancy[] {
+  return collectSubstituteOccupancies(requests, options).filter(
+    (occupancy) => !isCombinedPartnerOccupancy(occupancy, session, applicantTeacherId)
+  );
 }
 
 /** 代課教師本週負荷：已派代／待簽核代課佔用的不重複（星期＋節次）數 */
@@ -211,6 +254,14 @@ export function rankSubstituteCandidates(params: {
   examDays?: ExamDay[] | null;
   /** 放假日：段考判定時略過 */
   nonTeachingDays?: NonTeachingDay[] | null;
+  /** 這次要一起請假的課堂。夥伴班已派給同一人時，不把該人標成衝堂 */
+  combinedLeaveSessions?: Array<{
+    className: string;
+    subjectName?: string;
+    subjectCode?: string;
+    period: number;
+  }>;
+  applicantTeacherId?: string;
 }): SubstituteCandidate[] {
   const {
     teachers,
@@ -253,12 +304,20 @@ export function rankSubstituteCandidates(params: {
             s.period === p
         )
       );
-      const hasOccupancyClash = periods.some((p) =>
-        teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, occupancies, probeLeave, {
+      const hasOccupancyClash = periods.some((p) => {
+        const blocking = occupancies.filter((occupancy) => {
+          if (!params.applicantTeacherId || !params.combinedLeaveSessions?.length) return true;
+          return !params.combinedLeaveSessions.some(
+            (leaveSession) =>
+              leaveSession.period === p &&
+              isCombinedPartnerOccupancy(occupancy, leaveSession, params.applicantTeacherId!)
+          );
+        });
+        return teacherHasSubstituteOccupancy(t.id, targetDayOfWeek, p, blocking, probeLeave, {
           // 智慧派代／請假探測：無日期舊單亦不可與有區間佔用同槽
           undatedProbeBlocksDated: true,
-        })
-      );
+        });
+      });
       const examClashWaived = examWaiver && hasRegularClash && !hasOccupancyClash;
       const hasClash = hasOccupancyClash || (hasRegularClash && !examWaiver);
       const isSameSubject = subjects.some((subj) =>

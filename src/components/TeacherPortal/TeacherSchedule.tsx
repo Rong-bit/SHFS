@@ -440,7 +440,8 @@ export const TeacherSchedule: React.FC = () => {
                             : [];
                         const showConcurrent = concurrentPool.some((s) => s.isConcurrent);
                         const classLabel = showCross ? crossNames.join('、') : session?.className;
-                        const leaveLabel = session ? getLeaveCoverLabel(session) : null;
+                        const leaveLabel =
+                          slotSessions.map((s) => getLeaveCoverLabel(s)).find(Boolean) || null;
                         const swapLabel = session ? getTemporarySwapLabel(session) : null;
                         const subDuty = !session ? getSubDutyAt(d.day, pDef.period) : null;
                         return (

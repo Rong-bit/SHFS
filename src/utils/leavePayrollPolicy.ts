@@ -1013,3 +1013,88 @@ export function countSubstitutePublicPayrollPeriodsInMonth(
   );
   return Math.max(0, publicTotal - concurrentTransfer);
 }
+
+/**
+ * 這張單要入代課清冊的請假日（已扣掉改走兼課清冊的日子）。
+ * 無請假日的舊單不在此列，請改用 countSubstitutePublicPayrollPeriodsInMonth。
+ */
+export function listSubstitutePublicPayrollDatesInMonth(
+  request: SubstituteRequest,
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptions?: LeaveBillableOptions
+): string[] {
+  if (request.status !== 'approved' || request.requestType !== 'substitute') return [];
+  if (!resolveSubstitutePayrollTeacherId(request)) return [];
+  if (!request.leaveDateStart) return [];
+  const dates = listBillableLeaveDatesInMonth(
+    request,
+    settlementMonth,
+    settlementYear,
+    excludeDates,
+    billableOptions
+  );
+  const personalDates = collectPersonalLeaveDatesInAcademicYear(ctx, request.applicantTeacherId);
+  const concurrent = new Set(
+    listSubstituteConcurrentAddDatesInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      billableOptions
+    )
+  );
+  return dates.filter(
+    (d) =>
+      isLeaveDatePublicPayroll(d, request, ctx, request.applicantTeacherId, personalDates) &&
+      !concurrent.has(d)
+  );
+}
+
+/** 多張單加總代課節數：同一日同一節（跨班合授）只計 1 */
+export function sumUniqueSubstitutePublicPayrollPeriods(
+  requests: SubstituteRequest[],
+  settlementMonth: number,
+  settlementYear: number,
+  ctx: LeavePayrollContext,
+  excludeDates?: Set<string>,
+  billableOptionsFor?: (request: SubstituteRequest) => LeaveBillableOptions | undefined
+): number {
+  const seen = new Set<string>();
+  let total = 0;
+  for (const request of requests) {
+    const billableOptions = billableOptionsFor?.(request);
+    const period = request.originalSession?.period ?? 0;
+    if (!request.leaveDateStart) {
+      // 無日期舊單無法對到同一上課日，維持逐張加總
+      const n = countSubstitutePublicPayrollPeriodsInMonth(
+        request,
+        settlementMonth,
+        settlementYear,
+        ctx,
+        excludeDates,
+        billableOptions
+      );
+      if (n <= 0) continue;
+      total += n;
+      continue;
+    }
+    for (const iso of listSubstitutePublicPayrollDatesInMonth(
+      request,
+      settlementMonth,
+      settlementYear,
+      ctx,
+      excludeDates,
+      billableOptions
+    )) {
+      const key = `${iso}|${period}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      total += 1;
+    }
+  }
+  return total;
+}

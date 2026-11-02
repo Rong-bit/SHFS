@@ -8,7 +8,10 @@ import type { CourseSession, SubstituteRequest } from '../src/types';
 import { INITIAL_SYSTEM_CONFIG } from '../src/data/mockData';
 import {
   breakdownWeeklyOverloadPeriods,
+  countDistinctDayPeriods,
   countWeeklyConcurrentPeriods,
+  expandWithCombinedClassPartners,
+  formatCombinedLeaveCount,
   isSameSubjectCombinedClass,
   monthlyConcurrentPeriods,
 } from '../src/utils/schoolDepartments';
@@ -22,7 +25,15 @@ import {
   buildLeavePayrollContext,
   countApplicantConcurrentDeductPeriodsInMonth,
   countSubstituteTeacherConcurrentAddPeriodsInMonth,
+  sumUniqueSubstitutePublicPayrollPeriods,
 } from '../src/utils/leavePayrollPolicy';
+import { countSubstitutePayrollWithNoticeRows } from '../src/utils/noticePayroll';
+import {
+  isCombinedPartnerOccupancy,
+  rankSubstituteCandidates,
+  substituteOccupanciesBlockingSlot,
+} from '../src/utils/substituteCandidates';
+import type { Teacher } from '../src/types';
 
 const row = (partial: Partial<ParsedImportRow> & Pick<ParsedImportRow, 'className' | 'subjectName' | 'teacherName'>): ParsedImportRow => ({
   rowNumber: partial.rowNumber ?? 2,
@@ -170,6 +181,150 @@ assert.equal(
   2,
   '不同節次仍各計 1 節'
 );
+
+const zhongSession = session({ id: 'a', className: '電機二忠', isConcurrent: true });
+const xiaoSession = session({ id: 'b', className: '電機二孝', isConcurrent: false });
+const expanded = expandWithCombinedClassPartners([zhongSession], [zhongSession, xiaoSession]);
+assert.deepEqual(new Set(expanded.map((s) => s.className)), new Set(['電機二忠', '電機二孝']));
+assert.equal(countDistinctDayPeriods(expanded), 1);
+assert.equal(
+  formatCombinedLeaveCount(expanded.map((s) => ({ originalSession: s }))),
+  '1 節（2 班）'
+);
+
+const basicReq = (id: string, className: string, period = 3): SubstituteRequest => ({
+  ...leaveReq(id, className, period),
+  leaveType: 'official',
+  reason: '公假',
+  originalSession: session({
+    id,
+    className,
+    period,
+    dayOfWeek: 2,
+    isConcurrent: false,
+  }),
+});
+const basicPair = [basicReq('b1', '電機二忠'), basicReq('b2', '電機二孝')];
+const basicCtx = buildLeavePayrollContext(basicPair, INITIAL_SYSTEM_CONFIG);
+assert.equal(
+  sumUniqueSubstitutePublicPayrollPeriods(basicPair, 10, 2026, basicCtx),
+  1,
+  '跨班基鐘代課只計 1 節'
+);
+assert.equal(
+  sumUniqueSubstitutePublicPayrollPeriods(
+    [basicReq('b3', '電機二忠', 3), basicReq('b4', '電機二忠', 4)],
+    10,
+    2026,
+    buildLeavePayrollContext(
+      [basicReq('b3', '電機二忠', 3), basicReq('b4', '電機二忠', 4)],
+      INITIAL_SYSTEM_CONFIG
+    )
+  ),
+  2,
+  '不同節次代課仍各計 1 節'
+);
+assert.equal(
+  sumUniqueSubstitutePublicPayrollPeriods(paired, 10, 2026, ctx),
+  0,
+  '跨班兼課不入代課清冊'
+);
+
+const partnerOcc = {
+  teacherId: 't-b',
+  dayOfWeek: 2 as const,
+  period: 3,
+  leaveDateStart: '2026-10-06',
+  leaveDateEnd: '2026-10-06',
+  applicantTeacherId: 't1',
+  className: '電機二忠',
+  subjectName: '基本電學',
+};
+assert.equal(
+  isCombinedPartnerOccupancy(partnerOcc, { className: '電機二孝', subjectName: '基本電學' }, 't1'),
+  true
+);
+assert.equal(
+  isCombinedPartnerOccupancy(partnerOcc, { className: '電機二忠', subjectName: '基本電學' }, 't1'),
+  false,
+  '同一班再派一次仍算佔用'
+);
+assert.equal(
+  isCombinedPartnerOccupancy(partnerOcc, { className: '電機二孝', subjectName: '基本電學' }, 't-other'),
+  false,
+  '不同請假人不視為跨班同一節'
+);
+const blocking = substituteOccupanciesBlockingSlot(
+  [basicReq('b1', '電機二忠')],
+  { className: '電機二孝', subjectName: '基本電學' },
+  't1'
+);
+assert.equal(blocking.length, 0, '已接下忠班的代課人，再派孝班不應被擋');
+const sameClassBlocking = substituteOccupanciesBlockingSlot(
+  [basicReq('b1', '電機二忠')],
+  { className: '電機二忠', subjectName: '基本電學' },
+  't1'
+);
+assert.equal(sameClassBlocking.length, 1, '同一班重複派代仍應擋住');
+
+const teachers: Teacher[] = [
+  {
+    id: 't-b',
+    name: '代課乙',
+    department: '電機科',
+    title: '專任教師',
+    weeklyActualPeriods: 0,
+    basePeriods: 16,
+    email: '',
+    phone: '',
+    certifications: [],
+  },
+];
+const ranked = rankSubstituteCandidates({
+  teachers,
+  sessions: [],
+  requests: [basicReq('b1', '電機二忠')],
+  excludeTeacherId: 't1',
+  targetDayOfWeek: 2,
+  targetPeriod: 3,
+  subjectName: '基本電學',
+  applicantDepartment: '電機科',
+  maxWeeklyOverloadPeriods: 9,
+  leaveDateStart: '2026-10-06',
+  leaveDateEnd: '2026-10-06',
+  applicantTeacherId: 't1',
+  combinedLeaveSessions: [{ className: '電機二孝', subjectName: '基本電學', period: 3 }],
+});
+assert.equal(ranked[0]?.hasClash, false, '跨班夥伴已派代，不應把同一代課人排成衝堂');
+
+const noticePair = basicPair.map((r) => ({
+  ...r,
+  batchGroupId: 'batch-cross',
+  noticeRowsCustomized: true,
+  noticeRows: [
+    {
+      date: '2026/10/6',
+      weekday: '2',
+      period: '3',
+      className: r.originalSession.className,
+      subjectName: '基本電學',
+      hours: '',
+    },
+  ],
+}));
+const noticePayroll = countSubstitutePayrollWithNoticeRows(
+  noticePair.flatMap((r) => r.noticeRows || []),
+  noticePair,
+  10,
+  2026,
+  5,
+  undefined,
+  undefined,
+  buildLeavePayrollContext(noticePair, INITIAL_SYSTEM_CONFIG),
+  () => 99,
+  't-b'
+);
+assert.equal(noticePayroll.periods, 1, '通知單兩班基鐘列只計 1 節');
 
 const sheet = XLSX.utils.json_to_sheet([
   {
