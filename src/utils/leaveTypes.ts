@@ -12,12 +12,12 @@ export { WELLNESS_HOURS_PER_LEAVE_DAY, WELLNESS_LEAVE_HOURS_PER_YEAR };
 
 export function wellnessLeaveLegalNote(config?: LeaveThresholdConfig | null): string {
   const { wellnessLeaveHoursPerYear } = resolveLeaveThresholds(config);
-  return `依薪資對照表：每學年准給 ${wellnessLeaveHoursPerYear} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時，得以時計）；代課鐘點費由學校支給（公費派代）。`;
+  return `依教師請假規則／薪資對照表：每學年准給 ${wellnessLeaveHoursPerYear} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時，得以時計）；日數併入事假累計；代課鐘點費由學校支給（公費派代）。超鐘點扣請假人兼課、代課走兼課轉移。`;
 }
 
 export function personalLeavePolicyNote(config?: LeaveThresholdConfig | null): string {
   const { personalLeavePublicDayThreshold } = resolveLeaveThresholds(config);
-  return `事假學年累計第 ${personalLeavePublicDayThreshold} 天起改公費派代；未達門檻者不入代課清冊，請假人自行與代課教師約定。`;
+  return `事假學年累計第 ${personalLeavePublicDayThreshold} 天起改公費派代（含身心調適假日數併計）；未達門檻者不入代課清冊，請假人自行與代課教師約定。`;
 }
 
 export function sickLeavePolicyNote(config?: LeaveThresholdConfig | null): string {
