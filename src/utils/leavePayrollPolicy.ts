@@ -124,7 +124,10 @@ function requestInContext(
   return statuses.includes(r.status);
 }
 
-/** 學年內已使用／申請中之事假曆日（去重、排序） */
+/**
+ * 學年內已使用／申請中之事假累計曆日（去重、排序）。
+ * 依教師請假規則：身心調適假日數併入事假計算（同日去重）。
+ */
 export function collectPersonalLeaveDatesInAcademicYear(
   ctx: LeavePayrollContext,
   teacherId: string
@@ -134,7 +137,8 @@ export function collectPersonalLeaveDatesInAcademicYear(
   for (const r of ctx.requests) {
     if (r.requestType !== 'substitute' || r.applicantTeacherId !== teacherId) continue;
     if (!requestInContext(r, ctx)) continue;
-    if (normalizeLeaveType(r.leaveType, r.reason) !== 'personal') continue;
+    const lt = normalizeLeaveType(r.leaveType, r.reason);
+    if (lt !== 'personal' && lt !== 'wellness') continue;
     if (!r.leaveDateStart) continue;
     const resolved = resolveLeaveDateEnd(r.leaveDateStart, r.leaveDateEnd) || r.leaveDateStart;
     for (const d of enumerateIsoDates(r.leaveDateStart, resolved)) {
@@ -220,20 +224,19 @@ export function isConcurrentTeachingSession(
 
 /**
  * 兼課（超鐘點）請假是否扣 A 兼課費：僅公費派代日才扣。
- * 身心調適假例外：A 不扣兼課（未改通知單列時 B 仍應加兼課）。
+ * 身心調適假為公費假別，與其他公費假相同：超鐘點應扣請假人兼課。
  */
 export function shouldDeductConcurrentOnLeaveDate(
   date: string,
   request: SubstituteRequest,
   ctx: LeavePayrollContext
 ): boolean {
-  if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') return false;
   return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
 }
 
 /**
  * 超鐘點代課：B 應加兼課（兼課清冊）。通知單有修改列時改入代課清冊。
- * 一般公費假別：A 扣多少 B 加多少。身心調適假：A 不扣，B 仍應加。
+ * 公費假別（含身心調適假）：A 扣多少 B 加多少。
  */
 export function shouldTransferConcurrentToSubstituteOnLeaveDate(
   date: string,
@@ -241,9 +244,6 @@ export function shouldTransferConcurrentToSubstituteOnLeaveDate(
   ctx: LeavePayrollContext
 ): boolean {
   if (!isConcurrentTeachingSession(request.originalSession, ctx.periodConfig)) return false;
-  if (normalizeLeaveType(request.leaveType, request.reason) === 'wellness') {
-    return isLeaveDatePublicPayroll(date, request, ctx, request.applicantTeacherId);
-  }
   return shouldDeductConcurrentOnLeaveDate(date, request, ctx);
 }
 
@@ -676,19 +676,8 @@ export function leavePaymentDisplayLabel(
         kind: 'public',
         label: '公費派代',
         detail: options?.isConcurrentSession
-          ? lt === 'wellness'
-            ? '已儲存課程表格：僅修改列改入代課清冊；未改的兼課列代課人應加兼課，請假人不扣兼課'
-            : '已儲存課程表格：僅修改列改入代課清冊；未改的兼課列仍應加兼課。請假人該節為兼課，仍應減兼課'
+          ? '已儲存課程表格：僅修改列改入代課清冊；未改的兼課列仍應加兼課。請假人該節為兼課，仍應減兼課'
           : '已儲存課程表格：僅修改列改入代課清冊；請假人該節為基鐘，照支原薪、不扣兼課',
-      };
-    }
-    if (lt === 'wellness') {
-      return {
-        kind: 'public',
-        label: '公費派代',
-        detail: options?.isConcurrentSession
-          ? '身心調適假超鐘點：請假人不扣兼課；代課人應加兼課（兼課清冊）。通知單有修改列則改入代課清冊'
-          : '身心調適假：基本鐘點入代課清冊，請假人照支原薪；超鐘點則代課人應加兼課、請假人不扣',
       };
     }
     const concurrentTransfer = options?.isConcurrentSession;
@@ -701,7 +690,9 @@ export function leavePaymentDisplayLabel(
             ? `事假學年第 ${thresholds.personalLeavePublicDayThreshold} 天起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
             : lt === 'sick'
               ? `病假連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日起：超鐘點（兼課）扣請假人、加代課人（兼課清冊）`
-              : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）。這節不另進代課清冊',
+              : lt === 'wellness'
+                ? '身心調適假超鐘點：扣請假人、加代課人（兼課清冊）。通知單有修改列則改入代課清冊'
+                : '超鐘點（兼課）：扣請假人、加代課人（兼課清冊）。這節不另進代課清冊',
       };
     }
     return {
@@ -712,7 +703,9 @@ export function leavePaymentDisplayLabel(
           ? `事假學年第 ${thresholds.personalLeavePublicDayThreshold} 天起：基本鐘點入代課清冊`
           : lt === 'sick'
             ? `病假連續 ${thresholds.sickLeaveConsecutiveDayThreshold} 日起：基本鐘點入代課清冊`
-            : '基本鐘點：代課鐘點費由學校支給（代課清冊）',
+            : lt === 'wellness'
+              ? '身心調適假：基本鐘點入代課清冊，請假人照支原薪；日數併入事假累計'
+              : '基本鐘點：代課鐘點費由學校支給（代課清冊）',
     };
   }
   if (lt === 'personal') {
@@ -809,7 +802,7 @@ export function requestUsesCustomizedNoticePayroll(
   );
 }
 
-/** 請假兼課扣減：僅課表標示兼課之節次。基鐘不扣；公費派代日扣（身心調適假不扣）。 */
+/** 請假兼課扣減：僅課表標示兼課之節次。基鐘不扣；公費派代日扣（含身心調適假）。 */
 export function countApplicantConcurrentDeductPeriodsInMonth(
   requests: SubstituteRequest[],
   applicantTeacherId: string,
