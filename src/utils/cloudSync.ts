@@ -1,6 +1,11 @@
 import { AcademicStaff, CourseSession, SubstituteRequest, SystemConfig, Teacher, WorkshopVenue } from '../types';
 import { mergeAuthTrustRevocations } from './localAuthTrust';
 import {
+  DEFAULT_FIREBASE_WEB_CONFIG,
+  FirebaseWebConfig,
+  rtdbFetch,
+} from './firebaseRtdbClient';
+import {
   aesGcmDecrypt,
   aesGcmEncrypt,
   deriveAesGcmRawKey,
@@ -17,6 +22,12 @@ export interface CloudSyncSettings {
   enabled: boolean;
   databaseUrl: string;
   schoolKey: string;
+  /** Firebase Web API Key（公開設定；背景匿名登入用） */
+  apiKey?: string;
+  /** Firebase App ID（1:…:web:…；App Check 用） */
+  appId?: string;
+  /** reCAPTCHA v3 site key（App Check） */
+  appCheckSiteKey?: string;
 }
 
 export interface SharedSchoolData {
@@ -39,20 +50,47 @@ interface EncryptedEnvelope {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+const emptyCloudSyncSettings = (): CloudSyncSettings => ({
+  enabled: false,
+  databaseUrl: DEFAULT_DATABASE_URL,
+  schoolKey: '',
+  apiKey: DEFAULT_FIREBASE_WEB_CONFIG.apiKey,
+  appId: DEFAULT_FIREBASE_WEB_CONFIG.appId,
+  appCheckSiteKey: DEFAULT_FIREBASE_WEB_CONFIG.appCheckSiteKey,
+});
+
 export const loadCloudSyncSettings = (): CloudSyncSettings => {
   try {
     const raw = localStorage.getItem(CLOUD_SYNC_STORAGE_KEY);
-    if (!raw) return { enabled: false, databaseUrl: DEFAULT_DATABASE_URL, schoolKey: '' };
+    if (!raw) return emptyCloudSyncSettings();
     const parsed = JSON.parse(raw);
     return {
       enabled: Boolean(parsed.enabled),
       databaseUrl: String(parsed.databaseUrl || DEFAULT_DATABASE_URL).trim() || DEFAULT_DATABASE_URL,
       schoolKey: String(parsed.schoolKey || '').trim(),
+      apiKey: String(parsed.apiKey ?? DEFAULT_FIREBASE_WEB_CONFIG.apiKey ?? '').trim(),
+      appId: String(parsed.appId ?? DEFAULT_FIREBASE_WEB_CONFIG.appId ?? '').trim(),
+      appCheckSiteKey: String(
+        parsed.appCheckSiteKey ?? DEFAULT_FIREBASE_WEB_CONFIG.appCheckSiteKey ?? ''
+      ).trim(),
     };
   } catch {
-    return { enabled: false, databaseUrl: DEFAULT_DATABASE_URL, schoolKey: '' };
+    return emptyCloudSyncSettings();
   }
 };
+
+/** 解析實際使用的 Firebase Web 設定（設定值優先，否則用內建預設） */
+export const resolveFirebaseWebConfig = (settings: CloudSyncSettings): FirebaseWebConfig => ({
+  apiKey: (settings.apiKey || DEFAULT_FIREBASE_WEB_CONFIG.apiKey || '').trim(),
+  appId: (settings.appId || DEFAULT_FIREBASE_WEB_CONFIG.appId || '').trim(),
+  appCheckSiteKey: (settings.appCheckSiteKey || DEFAULT_FIREBASE_WEB_CONFIG.appCheckSiteKey || '').trim(),
+});
+
+const rtdbConfigFor = (settings: CloudSyncSettings, requireAuth = false) => ({
+  databaseUrl: normalizeDatabaseUrl(settings.databaseUrl),
+  ...resolveFirebaseWebConfig(settings),
+  requireAuth,
+});
 
 export const saveCloudSyncSettings = (settings: CloudSyncSettings) => {
   localStorage.setItem(CLOUD_SYNC_STORAGE_KEY, JSON.stringify(settings));
@@ -244,9 +282,11 @@ export const pullRemoteUpdatedAt = async (settings: CloudSyncSettings): Promise<
   if (!isCloudSyncReady(settings)) return null;
   const base = normalizeDatabaseUrl(settings.databaseUrl);
   const id = await pathIdForSchool(settings.schoolKey);
-  const res = await fetch(`${base}/shfs/${id}/updatedAt.json`);
+  const res = await rtdbFetch(`${base}/shfs/${id}/updatedAt.json`, undefined, rtdbConfigFor(settings));
   if (!res.ok) {
-    throw new Error(`同步讀取失敗（HTTP ${res.status}）。請確認資料庫網址與規則。`);
+    throw new Error(
+      `同步讀取失敗（HTTP ${res.status}）。請確認資料庫網址、規則（需 auth != null）與 Web API 金鑰。`
+    );
   }
   const value = await res.json();
   return typeof value === 'number' ? value : null;
@@ -257,9 +297,11 @@ export const pullSharedSchoolData = async (
 ): Promise<SharedSchoolData | null> => {
   if (!isCloudSyncReady(settings)) return null;
   const endpoint = await buildEndpoint(settings);
-  const res = await fetch(endpoint);
+  const res = await rtdbFetch(endpoint, undefined, rtdbConfigFor(settings));
   if (!res.ok) {
-    throw new Error(`同步讀取失敗（HTTP ${res.status}）。請確認資料庫網址與規則。`);
+    throw new Error(
+      `同步讀取失敗（HTTP ${res.status}）。請確認資料庫網址、規則（需 auth != null）與 Web API 金鑰。`
+    );
   }
   const json = await res.json();
   if (!json) return null;
@@ -301,16 +343,22 @@ export const pushSharedSchoolData = async (
     headers['If-None-Match'] = '*';
   }
 
-  const res = await fetch(endpoint, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(envelope),
-  });
+  const res = await rtdbFetch(
+    endpoint,
+    {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(envelope),
+    },
+    rtdbConfigFor(settings)
+  );
   if (res.status === 412) {
     return 'conflict';
   }
   if (!res.ok) {
-    throw new Error(`同步寫入失敗（HTTP ${res.status}）。請確認 Realtime Database 規則允許寫入。`);
+    throw new Error(
+      `同步寫入失敗（HTTP ${res.status}）。請確認規則允許已登入寫入（auth != null），並已填 Web API 金鑰。`
+    );
   }
   return 'ok';
 };
@@ -335,17 +383,26 @@ export const probeCloudSync = async (settings: CloudSyncSettings): Promise<Cloud
   const key = settings.schoolKey.trim();
   if (key.length < 4) throw new Error('同步密碼至少 4 個字');
 
-  const endpoint = await buildEndpoint({ ...settings, schoolKey: key, enabled: true });
-  const res = await fetch(endpoint);
-  if (!res.ok) throw new Error(`連線失敗（HTTP ${res.status}）。請確認網路或資料庫網址。`);
+  const probeSettings = { ...settings, schoolKey: key, enabled: true };
+  const web = resolveFirebaseWebConfig(probeSettings);
+  const endpoint = await buildEndpoint(probeSettings);
+  const res = await rtdbFetch(endpoint, undefined, rtdbConfigFor(probeSettings, Boolean(web.apiKey)));
+  if (!res.ok) {
+    throw new Error(
+      `連線失敗（HTTP ${res.status}）。請確認網路、資料庫網址、匿名登入／App Check，以及規則為 auth != null。`
+    );
+  }
 
   const json = await res.json();
+  const authHint = web.apiKey
+    ? '已使用 Firebase 匿名登入。'
+    : '尚未設定 Web API 金鑰：規則若仍為公開讀寫，資料庫有被大量讀取風險；請儘快依說明收緊規則並填金鑰。';
+
   if (!json) {
     return {
       ok: true,
       hasRemoteData: false,
-      message:
-        '連線成功，但此密碼對應的雲端尚無資料。若其他電腦已在同步，代表密碼可能不一致（大小寫、符號、空白都要相同）；若這是全校第一台啟用，可繼續。',
+      message: `連線成功，但此密碼對應的雲端尚無資料。若其他電腦已在同步，代表密碼可能不一致（大小寫、符號、空白都要相同）；若這是全校第一台啟用，可繼續。${authHint}`,
     };
   }
 
@@ -360,7 +417,7 @@ export const probeCloudSync = async (settings: CloudSyncSettings): Promise<Cloud
     return {
       ok: true,
       hasRemoteData: true,
-      message: '連線成功，已讀到學校雲端資料，可以加入同步。',
+      message: `連線成功，已讀到學校雲端資料，可以加入同步。${authHint}`,
     };
   }
 

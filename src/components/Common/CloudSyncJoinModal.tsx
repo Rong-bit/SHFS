@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Cloud, X, KeyRound, Check, Loader2, AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { DEFAULT_DATABASE_URL, probeCloudSync } from '../../utils/cloudSync';
+import {
+  DEFAULT_DATABASE_URL,
+  loadCloudSyncSettings,
+  probeCloudSync,
+  resolveFirebaseWebConfig,
+} from '../../utils/cloudSync';
+import { DEFAULT_FIREBASE_WEB_CONFIG } from '../../utils/firebaseRtdbClient';
 import { isSecureCryptoContext } from '../../utils/secureCrypto';
 import { ModalShell } from './ModalShell';
 
@@ -13,6 +19,9 @@ interface CloudSyncJoinModalProps {
 export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, onClose }) => {
   const { cloudSyncSettings, cloudSyncStatus, cloudSyncMessage, updateCloudSyncSettings } = useApp();
   const [schoolKey, setSchoolKey] = useState(cloudSyncSettings.schoolKey || '');
+  const initialWeb = resolveFirebaseWebConfig(cloudSyncSettings);
+  const [apiKey, setApiKey] = useState(initialWeb.apiKey);
+  const [showApiKey, setShowApiKey] = useState(!initialWeb.apiKey);
   const [msg, setMsg] = useState('');
   const [msgTone, setMsgTone] = useState<'ok' | 'warn' | 'err'>('ok');
   const [saving, setSaving] = useState(false);
@@ -20,10 +29,13 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
   useEffect(() => {
     if (isOpen) {
       setSchoolKey(cloudSyncSettings.schoolKey || '');
+      const web = resolveFirebaseWebConfig(cloudSyncSettings);
+      setApiKey(web.apiKey);
+      setShowApiKey(!web.apiKey);
       setMsg('');
       setMsgTone('ok');
     }
-  }, [isOpen, cloudSyncSettings.schoolKey]);
+  }, [isOpen, cloudSyncSettings]);
 
   if (!isOpen) return null;
 
@@ -36,10 +48,24 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
     }
     setSaving(true);
     setMsg('');
+    const stored = loadCloudSyncSettings();
+    const web = resolveFirebaseWebConfig({
+      ...stored,
+      ...cloudSyncSettings,
+      apiKey: apiKey.trim() || cloudSyncSettings.apiKey || stored.apiKey || DEFAULT_FIREBASE_WEB_CONFIG.apiKey,
+      appId: cloudSyncSettings.appId || stored.appId || DEFAULT_FIREBASE_WEB_CONFIG.appId,
+      appCheckSiteKey:
+        cloudSyncSettings.appCheckSiteKey ||
+        stored.appCheckSiteKey ||
+        DEFAULT_FIREBASE_WEB_CONFIG.appCheckSiteKey,
+    });
     const next = {
       enabled: true,
       databaseUrl: (cloudSyncSettings.databaseUrl || DEFAULT_DATABASE_URL).trim() || DEFAULT_DATABASE_URL,
       schoolKey: key,
+      apiKey: web.apiKey,
+      appId: web.appId,
+      appCheckSiteKey: web.appCheckSiteKey,
     };
     try {
       const probe = await probeCloudSync(next);
@@ -124,6 +150,33 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
             }}
           />
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowApiKey((v) => !v)}
+          className="text-[11px] font-bold text-sky-300 hover:text-sky-200"
+        >
+          {showApiKey ? '收合' : '展開'}進階：Firebase Web API 金鑰
+        </button>
+        {showApiKey && (
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Web API 金鑰（管理員收緊規則後需要；與同步密碼不同）
+            </label>
+            <input
+              type="text"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="向管理員索取 Web API Key（全校同一組）"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 text-white border border-slate-700 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              若應用已內建預設金鑰或本機曾存過，可留空。規則改為 auth != null 後若連線失敗，請向管理員索取同一組金鑰。
+            </p>
+          </div>
+        )}
 
         {cloudSyncStatus === 'synced' && (
           <p className="text-[11px] text-emerald-300">目前這台電腦已在同步中。</p>

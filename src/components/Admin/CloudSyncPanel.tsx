@@ -1,8 +1,22 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, Check, AlertCircle, Loader2, KeyRound, Link as LinkIcon } from 'lucide-react';
+import { Cloud, CloudOff, Check, AlertCircle, Loader2, KeyRound, Link as LinkIcon, Shield } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CloudSyncSettings, DEFAULT_DATABASE_URL, testCloudSyncConnection } from '../../utils/cloudSync';
+import {
+  CloudSyncSettings,
+  DEFAULT_DATABASE_URL,
+  resolveFirebaseWebConfig,
+  testCloudSyncConnection,
+} from '../../utils/cloudSync';
 import { isSecureCryptoContext } from '../../utils/secureCrypto';
+
+const SETTINGS_FROM_FORM = (form: CloudSyncSettings): CloudSyncSettings => ({
+  enabled: form.enabled,
+  databaseUrl: form.databaseUrl.trim(),
+  schoolKey: form.schoolKey.trim(),
+  apiKey: (form.apiKey || '').trim(),
+  appId: (form.appId || '').trim(),
+  appCheckSiteKey: (form.appCheckSiteKey || '').trim(),
+});
 
 export const CloudSyncPanel: React.FC = () => {
   const {
@@ -19,6 +33,9 @@ export const CloudSyncPanel: React.FC = () => {
   const [testMsg, setTestMsg] = useState('');
   const [testing, setTesting] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(
+    Boolean(cloudSyncSettings.apiKey || cloudSyncSettings.appId || cloudSyncSettings.appCheckSiteKey)
+  );
 
   const statusLabel =
     cloudSyncStatus === 'synced'
@@ -30,11 +47,7 @@ export const CloudSyncPanel: React.FC = () => {
       : '尚未啟用';
 
   const handleSave = () => {
-    updateCloudSyncSettings({
-      enabled: form.enabled,
-      databaseUrl: form.databaseUrl.trim(),
-      schoolKey: form.schoolKey.trim(),
-    });
+    updateCloudSyncSettings(SETTINGS_FROM_FORM(form));
     setTestMsg('設定已儲存');
   };
 
@@ -42,15 +55,11 @@ export const CloudSyncPanel: React.FC = () => {
     setTesting(true);
     setTestMsg('');
     try {
-      updateCloudSyncSettings({
-        enabled: form.enabled,
-        databaseUrl: form.databaseUrl.trim(),
-        schoolKey: form.schoolKey.trim(),
-      });
+      const next = SETTINGS_FROM_FORM(form);
+      updateCloudSyncSettings(next);
       const msg = await testCloudSyncConnection({
+        ...next,
         enabled: true,
-        databaseUrl: form.databaseUrl.trim(),
-        schoolKey: form.schoolKey.trim(),
       });
       setTestMsg(msg);
     } catch (err: any) {
@@ -59,6 +68,9 @@ export const CloudSyncPanel: React.FC = () => {
       setTesting(false);
     }
   };
+
+  const resolvedWeb = resolveFirebaseWebConfig(form);
+  const missingAuth = !resolvedWeb.apiKey;
 
   return (
     <div className="space-y-6">
@@ -192,6 +204,76 @@ export const CloudSyncPanel: React.FC = () => {
             </p>
           </div>
 
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="text-[11px] font-bold text-sky-700 hover:text-sky-900"
+          >
+            {showAdvanced ? '收合' : '展開'}防大量讀取設定（Firebase Auth / App Check）
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-3 p-3 rounded-xl border border-sky-200 bg-sky-50/60">
+              <p className="text-[11px] text-slate-600 leading-relaxed flex items-start gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-sky-600 mt-0.5 shrink-0" />
+                <span>
+                  教師端仍只需輸入「學校同步密碼」。這裡的 Web API
+                  金鑰會在背景做匿名登入；建議再啟用 App Check，並把資料庫規則改成{' '}
+                  <code className="font-mono">auth != null</code>，才能擋住外人匿名狂讀。
+                </span>
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Firebase Web API 金鑰
+                </label>
+                <input
+                  type="text"
+                  value={form.apiKey || ''}
+                  onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                  placeholder="專案設定 → 一般 → 您的應用程式 → Web API Key"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  App ID（選填，啟用 App Check 時需要）
+                </label>
+                <input
+                  type="text"
+                  value={form.appId || ''}
+                  onChange={(e) => setForm({ ...form, appId: e.target.value })}
+                  placeholder="1:1234567890:web:abcdef…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  App Check reCAPTCHA v3 Site Key（選填）
+                </label>
+                <input
+                  type="text"
+                  value={form.appCheckSiteKey || ''}
+                  onChange={(e) => setForm({ ...form, appCheckSiteKey: e.target.value })}
+                  placeholder="App Check → 註冊應用程式 → reCAPTCHA v3"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {missingAuth && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-950 leading-relaxed">
+              尚未設定 Web API 金鑰。若 Firebase 規則仍是公開讀寫，外人可大量下載密文並產生費用。請依右側步驟啟用匿名登入、填入金鑰，再把規則改成{' '}
+              <code className="font-mono">auth != null</code>。
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -239,27 +321,41 @@ export const CloudSyncPanel: React.FC = () => {
             </li>
             <li>左側「Build」➔「Realtime Database」➔ 建立資料庫，地區選新加坡或台灣最近的。</li>
             <li>
-              規則改成：
+              「Build」➔「Authentication」➔ Sign-in method ➔ 啟用 <strong>Anonymous</strong>。
+            </li>
+            <li>
+              （建議）「Build」➔「App Check」➔ 註冊 Web 應用程式（reCAPTCHA v3），稍後可對 Realtime Database
+              改為強制執行（Enforce）。
+            </li>
+            <li>
+              規則改成（僅允許已登入／匿名 Auth 讀寫；可直接貼上倉庫內{' '}
+              <code>database.rules.json</code>）：
               <pre className="mt-1 p-2 bg-slate-900 text-amber-200 rounded-lg overflow-x-auto text-[11px]">{`{
   "rules": {
     "shfs": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "shfs_patrol": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }`}</pre>
               <span className="block mt-1 text-[11px] text-slate-500">
-                已在使用同步的學校，請補上 <code>shfs_patrol</code> 這段；巡堂紀錄與會辦案（路徑{' '}
-                <code>shfs_patrol/…/_review</code>）都會寫在此規則下。
+                巡堂紀錄與會辦案（路徑 <code>shfs_patrol/…/_review</code>）同在{' '}
+                <code>shfs_patrol</code> 規則下。先填好本頁 Web API 金鑰並測試連線成功後，再把舊的{' '}
+                <code>.read/.write: true</code> 改成上面這組，避免同步中斷。
               </span>
             </li>
-            <li>複製資料庫網址（結尾通常是 <code>.firebasedatabase.app</code> 或 <code>.firebaseio.com</code>）。</li>
             <li>
-              管理員在本頁填網址與學校同步密碼並啟用。老師電腦只要在右上角按「加入同步」、輸入同一組學校同步密碼即可，不必登入系統管理員。
+              複製資料庫網址（結尾通常是 <code>.firebasedatabase.app</code> 或{' '}
+              <code>.firebaseio.com</code>），並到「專案設定 → 一般」複製 Web API
+              金鑰（與 App Check 的 App ID / Site Key）填入左側進階欄位。
+            </li>
+            <li>
+              管理員在本頁填網址、學校同步密碼並啟用。老師電腦只要在右上角按「加入同步」、輸入同一組學校同步密碼即可（不必再填 API
+              金鑰；會使用本機已存或應用內建的公開 Web 設定）。
             </li>
           </ol>
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">

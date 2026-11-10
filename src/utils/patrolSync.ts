@@ -8,7 +8,9 @@ import {
   isCloudSyncReady,
   normalizeDatabaseUrl,
   pathIdForSchool,
+  resolveFirebaseWebConfig,
 } from './cloudSync';
+import { rtdbFetch } from './firebaseRtdbClient';
 import { dateToIsoLocal } from './holidays';
 
 export const PATROL_RECORDS_KEY = 'voc_patrol_records_v1';
@@ -66,20 +68,33 @@ const patrolBase = async (settings: CloudSyncSettings) => {
   return `${normalizeDatabaseUrl(settings.databaseUrl)}/shfs_patrol/${id}`;
 };
 
+const patrolRtdbConfig = (settings: CloudSyncSettings) => ({
+  databaseUrl: normalizeDatabaseUrl(settings.databaseUrl),
+  ...resolveFirebaseWebConfig(settings),
+});
+
 const pushPatrolRecord = async (settings: CloudSyncSettings, record: PatrolRecord) => {
   const base = await patrolBase(settings);
   const envelope = await encryptJson(settings.schoolKey, record);
-  const res = await fetch(`${base}/${record.date}/${record.id}.json`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(envelope),
-  });
+  const res = await rtdbFetch(
+    `${base}/${record.date}/${record.id}.json`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(envelope),
+    },
+    patrolRtdbConfig(settings)
+  );
   if (!res.ok) throw new Error(`巡堂紀錄上傳失敗（HTTP ${res.status}）`);
 };
 
 const deletePatrolRecordRemote = async (settings: CloudSyncSettings, date: string, id: string) => {
   const base = await patrolBase(settings);
-  const res = await fetch(`${base}/${date}/${id}.json`, { method: 'DELETE' });
+  const res = await rtdbFetch(
+    `${base}/${date}/${id}.json`,
+    { method: 'DELETE' },
+    patrolRtdbConfig(settings)
+  );
   if (!res.ok) throw new Error(`巡堂紀錄刪除失敗（HTTP ${res.status}）`);
 };
 
@@ -93,8 +108,12 @@ export const pullPatrolRecords = async (
   const qs = `orderBy=${encodeURIComponent('"$key"')}&startAt=${encodeURIComponent(
     `"${dateFrom}"`
   )}&endAt=${encodeURIComponent(`"${dateTo}"`)}`;
-  const res = await fetch(`${base}.json?${qs}`);
-  if (!res.ok) throw new Error(`巡堂紀錄讀取失敗（HTTP ${res.status}）。請確認資料庫規則允許 shfs_patrol 路徑。`);
+  const res = await rtdbFetch(`${base}.json?${qs}`, undefined, patrolRtdbConfig(settings));
+  if (!res.ok) {
+    throw new Error(
+      `巡堂紀錄讀取失敗（HTTP ${res.status}）。請確認 shfs_patrol 規則為 auth != null，並已設定 Web API 金鑰。`
+    );
+  }
   const json = (await res.json()) as Record<string, Record<string, { iv: string; ct: string }>> | null;
   if (!json) return [];
   const out: PatrolRecord[] = [];
