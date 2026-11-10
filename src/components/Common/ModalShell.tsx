@@ -32,7 +32,8 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     scroll === 'panel'
       ? `${maxHeightClassName} overflow-y-auto overscroll-contain`
       : scroll === 'body'
-        ? `${maxHeightClassName} overflow-hidden flex flex-col`
+        ? // min-h-0：手機 Safari flex 子層才能收縮，否則固定底欄常被裁切
+          `${maxHeightClassName} overflow-hidden flex flex-col min-h-0`
         : 'overflow-visible';
 
   return (
