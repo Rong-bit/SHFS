@@ -6,14 +6,29 @@ import { StaffDispatchWorkbench } from './StaffDispatchWorkbench';
 import { TeacherLeaveCalendar } from './TeacherLeaveCalendar';
 import { PatrolReport } from '../Patrol/PatrolReport';
 import { PatrolReviewInbox } from '../Patrol/PatrolReviewInbox';
+import { ClassLogReport } from '../ClassLog/ClassLogReport';
 import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
-import { CalendarDays, ClipboardCheck, ClipboardList, Grid, MapPin, UserCheck } from 'lucide-react';
+import {
+  BookOpen,
+  CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
+  Grid,
+  MapPin,
+  UserCheck,
+} from 'lucide-react';
 
 export const AcademicAffairsMain: React.FC = () => {
   const { requests } = useApp();
   const focusCaseId = readPatrolReviewFocusId();
   const [activeTab, setActiveTab] = useState<
-    'dispatch' | 'approvals' | 'matrix' | 'leave-calendar' | 'patrol' | 'patrol-review'
+    | 'dispatch'
+    | 'approvals'
+    | 'matrix'
+    | 'leave-calendar'
+    | 'patrol'
+    | 'patrol-review'
+    | 'class-log'
   >(() => (focusCaseId ? 'patrol-review' : 'dispatch'));
 
   useEffect(() => {
@@ -111,6 +126,19 @@ export const AcademicAffairsMain: React.FC = () => {
             <ClipboardList className="w-4 h-4 text-rose-400" />
             <span>巡堂會辦核章</span>
           </button>
+
+          <button
+            id="tab-academic-class-log"
+            onClick={() => setActiveTab('class-log')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition ${
+              activeTab === 'class-log'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-sky-400" />
+            <span>教室日誌彙整</span>
+          </button>
         </div>
       </div>
 
@@ -122,6 +150,7 @@ export const AcademicAffairsMain: React.FC = () => {
       {activeTab === 'patrol-review' && (
         <PatrolReviewInbox mode="staff" focusCaseId={focusCaseId} />
       )}
+      {activeTab === 'class-log' && <ClassLogReport />}
 
     </div>
   );
