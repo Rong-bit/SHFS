@@ -10,6 +10,7 @@ import {
   findConsecutiveClassLogSlots,
   listClassLogSlotsForTeacher,
   resolveClassLogDisplayEntry,
+  shouldDefaultApplyConsecutive,
 } from '../src/utils/classLogSlots';
 import type { ClassLogEntry } from '../src/types';
 
@@ -126,6 +127,22 @@ const selfAlsoOrig = listClassLogSlotsForTeacher({
 });
 assert.equal(selfAlsoOrig.length, 1);
 assert.equal(selfAlsoOrig[0].isSubstituteFill, true, '代課標記應覆寫同一 period|sessionId');
+
+// 原任課已核准派代給他人：原任當天不應再出現該節（避免與代課搶同一 id）
+const origOnLeave = listClassLogSlotsForTeacher({
+  teacherId: 't-orig',
+  isoDate: '2026-11-10',
+  sessions: [
+    session({ id: 's-cover', period: 5, dayOfWeek: tue, teacherId: 't-orig', teacherName: '原任甲' }),
+    session({ id: 's-free', period: 1, dayOfWeek: tue, teacherId: 't-orig', teacherName: '原任甲' }),
+  ],
+  requests: [approvedSub],
+});
+assert.deepEqual(
+  origOnLeave.map((s) => s.sessionId),
+  ['s-free'],
+  '已派代之 s-cover 不應再出現在原任待填清單'
+);
 
 // 週末無槽
 assert.deepEqual(
@@ -262,6 +279,36 @@ assert.equal(
   }),
   undefined,
   '中斷的第6節不應鏡射第2節內容'
+);
+
+const slot2 = consecutiveDaySlots.find((s) => s.period === 2)!;
+const slot3 = consecutiveDaySlots.find((s) => s.period === 3)!;
+const block234 = findConsecutiveClassLogSlots(consecutiveDaySlots, slot3);
+// 本節已填且連續節皆空：視為先前只填一節，預設不套用
+assert.equal(
+  shouldDefaultApplyConsecutive({
+    block: block234,
+    center: slot2,
+    date: '2026-11-10',
+    entriesById: byId,
+    displayProgress: entryP2.progress,
+    displayNote: '',
+  }),
+  false,
+  '僅本節有紀錄時預設不勾選一併套用'
+);
+// 開空的第3節（鏡射第2節內容）：應預設套用以便寫入整段
+assert.equal(
+  shouldDefaultApplyConsecutive({
+    block: block234,
+    center: slot3,
+    date: '2026-11-10',
+    entriesById: byId,
+    displayProgress: entryP2.progress,
+    displayNote: '',
+  }),
+  true,
+  '開尚未寫入的連續節應預設套用'
 );
 
 console.log('regression-class-log: ok');

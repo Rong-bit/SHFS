@@ -37,9 +37,31 @@ function slotFromSession(session: CourseSession, isSubstituteFill: boolean): Cla
   };
 }
 
+/** 該課堂於指定日是否已被核准派代（有代課者）涵蓋 */
+export function isSessionCoveredByApprovedSubstitute(
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'className'>,
+  isoDate: string,
+  requests: SubstituteRequest[]
+): boolean {
+  return requests.some((r) => {
+    if (r.status !== 'approved' || r.requestType !== 'substitute') return false;
+    if (!r.substituteTeacherId) return false;
+    if (!leaveRangeCoversDate(r.leaveDateStart, r.leaveDateEnd, isoDate)) return false;
+    const orig = r.originalSession;
+    if (!orig) return false;
+    return (
+      orig.id === session.id ||
+      (orig.dayOfWeek === session.dayOfWeek &&
+        orig.period === session.period &&
+        r.applicantTeacherId === session.teacherId &&
+        (!orig.className || !session.className || orig.className === session.className))
+    );
+  });
+}
+
 /**
  * 指定日期、指定教師應填的課堂：
- * - 本人課表該星期的課
+ * - 本人課表該星期的課（當日已核准派代涵蓋者除外，避免與代課者搶同一筆）
  * - 另加當日已核准、自己為代課者之請假派代課堂
  */
 export function listClassLogSlotsForTeacher(params: {
@@ -56,6 +78,7 @@ export function listClassLogSlotsForTeacher(params: {
 
   for (const s of sessions) {
     if (s.teacherId !== teacherId || s.dayOfWeek !== dow) continue;
+    if (isSessionCoveredByApprovedSubstitute(s, isoDate, requests)) continue;
     const key = `${s.period}|${s.id}`;
     byKey.set(key, slotFromSession(s, false));
   }
@@ -145,4 +168,49 @@ export function resolveClassLogDisplayEntry(params: {
     if (e) return e;
   }
   return undefined;
+}
+
+/**
+ * 開啟表單時是否預設勾選「一併套用」：
+ * - 僅一節 → 否
+ * - 本節已有紀錄且其他連續節皆空 → 否（先前刻意只填一節）
+ * - 其他節已有不同進度 → 否（避免覆寫）
+ * - 其餘（首次填寫或整段內容一致）→ 是
+ */
+export function shouldDefaultApplyConsecutive(params: {
+  block: ClassLogSlot[];
+  center: ClassLogSlot;
+  date: string;
+  entriesById: Map<string, ClassLogEntry>;
+  displayProgress: string;
+  displayNote: string;
+}): boolean {
+  const { block, center, date, entriesById, displayProgress, displayNote } = params;
+  if (block.length <= 1) return false;
+
+  const centerId = classLogEntryId({
+    date,
+    period: center.period,
+    sessionId: center.sessionId,
+  });
+  const centerExisting = entriesById.get(centerId);
+  let siblingFilled = 0;
+
+  for (const s of block) {
+    if (s.period === center.period && s.sessionId === center.sessionId) continue;
+    const e = entriesById.get(
+      classLogEntryId({ date, period: s.period, sessionId: s.sessionId })
+    );
+    if (!e) continue;
+    siblingFilled += 1;
+    if (
+      (e.progress || '') !== (displayProgress || '') ||
+      (e.note || '') !== (displayNote || '')
+    ) {
+      return false;
+    }
+  }
+
+  if (centerExisting && siblingFilled === 0) return false;
+  return true;
 }

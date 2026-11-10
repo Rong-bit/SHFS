@@ -152,10 +152,14 @@ export function useClassLogs() {
     const settings = settingsRef.current;
     if (!isCloudSyncReady(settings) || flushingRef.current) return;
     flushingRef.current = true;
+    let drainedClean = false;
     try {
       for (;;) {
         const ops = loadPending();
-        if (ops.length === 0) break;
+        if (ops.length === 0) {
+          drainedClean = true;
+          break;
+        }
         const op = ops[0];
         if (op.op === 'put') await pushClassLogEntry(settings, op.record);
         else await deleteClassLogRemote(settings, op.date, op.id);
@@ -168,6 +172,8 @@ export function useClassLogs() {
     } finally {
       flushingRef.current = false;
       setPendingCount(loadPending().length);
+      // flush 期間若另有 saveEntry 入隊，排空後再排一次
+      if (drainedClean && loadPending().length > 0) void flush();
     }
   }, []);
 
@@ -254,7 +260,8 @@ export function useClassLogs() {
         const next = [...outside, ...inside];
         saveLocalClassLogs(next);
         setEntries(next);
-        setError('');
+        // 仍有待上傳時保留上傳錯誤，勿被成功讀取清掉
+        if (loadPending().length === 0) setError('');
       } catch (err) {
         setError(err instanceof Error ? err.message : '教室日誌讀取失敗');
       } finally {

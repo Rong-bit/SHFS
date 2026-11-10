@@ -11,6 +11,7 @@ import {
   findConsecutiveClassLogSlots,
   listClassLogSlotsForTeacher,
   resolveClassLogDisplayEntry,
+  shouldDefaultApplyConsecutive,
 } from '../../utils/classLogSlots';
 import { useClassLogs } from '../../utils/classLogSync';
 import { ModalShell } from '../Common/ModalShell';
@@ -64,8 +65,9 @@ export const ClassLogMain: React.FC = () => {
     return map;
   }, [entries, date]);
 
+  // 已填只計本節真實寫入，不含「同連續節內容」鏡射
   const filledCount = slots.filter((s) =>
-    resolveClassLogDisplayEntry({ slot: s, date, slots, entriesById })
+    entriesById.has(classLogEntryId({ date, period: s.period, sessionId: s.sessionId }))
   ).length;
 
   const openSlot = (slot: ClassLogSlot) => {
@@ -75,14 +77,23 @@ export const ClassLogMain: React.FC = () => {
       existing ||
       resolveClassLogDisplayEntry({ slot, date, slots, entriesById });
     const consecutiveSlots = findConsecutiveClassLogSlots(slots, slot);
+    const progress = display?.progress || '';
+    const note = display?.note || '';
     setFormError('');
     setConfirmDeleteId(null);
     setDraft({
       slot,
-      progress: display?.progress || '',
-      note: display?.note || '',
+      progress,
+      note,
       existing,
-      applyConsecutive: consecutiveSlots.length > 1,
+      applyConsecutive: shouldDefaultApplyConsecutive({
+        block: consecutiveSlots,
+        center: slot,
+        date,
+        entriesById,
+        displayProgress: progress,
+        displayNote: note,
+      }),
       consecutiveSlots,
     });
   };
@@ -142,7 +153,28 @@ export const ClassLogMain: React.FC = () => {
       setConfirmDeleteId(entry.id);
       return;
     }
-    deleteEntry(entry);
+    // 同作者連續節若內容相同一併刪，避免刪一節仍被鏡射顯示
+    const centerSlot =
+      draft?.slot ||
+      slots.find((s) => s.period === entry.period && s.sessionId === entry.sessionId);
+    const block = centerSlot
+      ? findConsecutiveClassLogSlots(slots, centerSlot)
+      : [];
+    const toDelete: ClassLogEntry[] = [];
+    for (const s of block) {
+      const id = classLogEntryId({ date, period: s.period, sessionId: s.sessionId });
+      const e = entriesById.get(id);
+      if (!e || e.authorTeacherId !== entry.authorTeacherId) continue;
+      if (
+        e.id === entry.id ||
+        ((e.progress || '') === (entry.progress || '') &&
+          (e.note || '') === (entry.note || ''))
+      ) {
+        toDelete.push(e);
+      }
+    }
+    if (toDelete.length === 0) toDelete.push(entry);
+    for (const e of toDelete) deleteEntry(e);
     setConfirmDeleteId(null);
     setDraft(null);
   };
@@ -361,7 +393,11 @@ export const ClassLogMain: React.FC = () => {
                 className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-rose-300 text-xs font-bold text-rose-700 hover:bg-rose-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                {confirmDeleteId === draft.existing.id ? '再按一次確認刪除' : '刪除'}
+                {confirmDeleteId === draft.existing.id
+                  ? draft.consecutiveSlots.length > 1
+                    ? '再按一次確認刪除（含相同內容連續節）'
+                    : '再按一次確認刪除'
+                  : '刪除'}
               </button>
             )}
             <div className="ml-auto flex gap-2">
