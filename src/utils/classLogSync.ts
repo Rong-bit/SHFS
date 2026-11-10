@@ -55,9 +55,14 @@ const savePending = (ops: PendingOp[]) =>
 
 export { classLogEntryId };
 
+/**
+ * 掛在既有 shfs_patrol 路徑下，沿用學校已開放的巡堂規則，
+ * 不必另開 shfs_class_log（否則常見 HTTP 401，與會辦 _review 同理）。
+ * 結構：shfs_patrol/{schoolId}/_class_log/{date}/{entryId}
+ */
 const classLogBase = async (settings: CloudSyncSettings) => {
   const id = await pathIdForSchool(settings.schoolKey);
-  return `${normalizeDatabaseUrl(settings.databaseUrl)}/shfs_class_log/${id}`;
+  return `${normalizeDatabaseUrl(settings.databaseUrl)}/shfs_patrol/${id}/_class_log`;
 };
 
 const classLogRtdbConfig = (settings: CloudSyncSettings) => ({
@@ -102,7 +107,7 @@ export const pullClassLogEntries = async (
   const res = await rtdbFetch(`${base}.json?${qs}`, undefined, classLogRtdbConfig(settings));
   if (!res.ok) {
     throw new Error(
-      `教室日誌讀取失敗（HTTP ${res.status}）。請確認 shfs_class_log 規則為 auth != null，並已設定 Web API 金鑰。`
+      `教室日誌讀取失敗（HTTP ${res.status}）。請確認 shfs_patrol 規則為 auth != null（日誌在 shfs_patrol/…/_class_log），並已設定 Web API 金鑰。`
     );
   }
   const json = (await res.json()) as Record<

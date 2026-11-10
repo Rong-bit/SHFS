@@ -7,10 +7,6 @@
     "shfs_patrol": {
       ".read": "auth != null",
       ".write": "auth != null"
-    },
-    "shfs_class_log": {
-      ".read": "auth != null",
-      ".write": "auth != null"
     }
   }
 }
