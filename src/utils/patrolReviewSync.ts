@@ -8,7 +8,9 @@ import {
   isCloudSyncReady,
   normalizeDatabaseUrl,
   pathIdForSchool,
+  resolveFirebaseWebConfig,
 } from './cloudSync';
+import { rtdbFetch } from './firebaseRtdbClient';
 import { dateToIsoLocal } from './holidays';
 
 export const PATROL_REVIEW_KEY = 'voc_patrol_review_v1';
@@ -122,20 +124,33 @@ const reviewBase = async (settings: CloudSyncSettings) => {
   return `${normalizeDatabaseUrl(settings.databaseUrl)}/shfs_patrol/${id}/_review`;
 };
 
+const reviewRtdbConfig = (settings: CloudSyncSettings) => ({
+  databaseUrl: normalizeDatabaseUrl(settings.databaseUrl),
+  ...resolveFirebaseWebConfig(settings),
+});
+
 const pushReview = async (settings: CloudSyncSettings, record: PatrolReviewCase) => {
   const base = await reviewBase(settings);
   const envelope = await encryptJson(settings.schoolKey, record);
-  const res = await fetch(`${base}/${record.date}/${record.id}.json`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(envelope),
-  });
+  const res = await rtdbFetch(
+    `${base}/${record.date}/${record.id}.json`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(envelope),
+    },
+    reviewRtdbConfig(settings)
+  );
   if (!res.ok) throw new Error(`巡堂會辦上傳失敗（HTTP ${res.status}）`);
 };
 
 const deleteReviewRemote = async (settings: CloudSyncSettings, date: string, id: string) => {
   const base = await reviewBase(settings);
-  const res = await fetch(`${base}/${date}/${id}.json`, { method: 'DELETE' });
+  const res = await rtdbFetch(
+    `${base}/${date}/${id}.json`,
+    { method: 'DELETE' },
+    reviewRtdbConfig(settings)
+  );
   if (!res.ok) throw new Error(`巡堂會辦刪除失敗（HTTP ${res.status}）`);
 };
 
@@ -148,10 +163,10 @@ export const pullPatrolReviews = async (
   const qs = `orderBy=${encodeURIComponent('"$key"')}&startAt=${encodeURIComponent(
     `"${dateFrom}"`
   )}&endAt=${encodeURIComponent(`"${dateTo}"`)}`;
-  const res = await fetch(`${base}.json?${qs}`);
+  const res = await rtdbFetch(`${base}.json?${qs}`, undefined, reviewRtdbConfig(settings));
   if (!res.ok) {
     throw new Error(
-      `巡堂會辦讀取失敗（HTTP ${res.status}）。請確認資料庫規則允許 shfs_patrol 路徑讀寫（會辦案在 shfs_patrol/…/_review）。`
+      `巡堂會辦讀取失敗（HTTP ${res.status}）。請確認 shfs_patrol 規則為 auth != null（會辦案在 shfs_patrol/…/_review），並已設定 Web API 金鑰。`
     );
   }
   const json = (await res.json()) as Record<

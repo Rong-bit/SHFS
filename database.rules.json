@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "shfs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "shfs_patrol": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

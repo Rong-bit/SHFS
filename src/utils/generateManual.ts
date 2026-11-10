@@ -350,7 +350,8 @@ export const downloadSystemManual = () => {
     · 段考巡堂：依教室配置逐間巡查（不依課表佔用）；觀察項目同課間
     · 紀錄逐筆加密上傳到雲端（路徑 shfs_patrol），多人同時巡堂不會互相覆蓋；
       未加入同步或離線時先存本機，連線後自動補傳
-    · Firebase 資料庫規則需允許 shfs_patrol 路徑讀寫（會辦案在 shfs_patrol/…/_review）
+    · Firebase 資料庫規則需允許已登入讀寫 shfs_patrol（auth != null；會辦案在 shfs_patrol/…/_review）
+    · 建議啟用 Anonymous Auth + App Check，並填入 Web API 金鑰，避免資料庫被匿名大量讀取
 
   巡堂異常會辦與電子核章：
     · 僅「有缺失／異常」才建立會辦案並寄 email（需於「系統維護 → 巡堂會辦寄信」設定 SMTP）
@@ -374,7 +375,7 @@ export const downloadSystemManual = () => {
 6.4 課表與同步
 ──────────────
   · 課表匯入精靈（Excel／CSV）、下載範本、備份匯出
-  · 跨電腦雲端同步（伺服器 URL、同步密碼、啟用後每 5 秒同步）
+  · 跨電腦雲端同步（資料庫 URL、同步密碼、Web API 金鑰／App Check；啟用後約每 5 秒同步）
 
 6.5 系統維護
 ────────────

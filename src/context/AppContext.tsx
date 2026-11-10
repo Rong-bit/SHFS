@@ -1229,7 +1229,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloudSyncSettings.enabled, cloudSyncSettings.databaseUrl, cloudSyncSettings.schoolKey]);
+  }, [
+    cloudSyncSettings.enabled,
+    cloudSyncSettings.databaseUrl,
+    cloudSyncSettings.schoolKey,
+    cloudSyncSettings.apiKey,
+    cloudSyncSettings.appId,
+    cloudSyncSettings.appCheckSiteKey,
+  ]);
 
   useEffect(() => {
     if (!isCloudSyncReady(cloudSyncSettings) || !cloudReadyRef.current) return;
