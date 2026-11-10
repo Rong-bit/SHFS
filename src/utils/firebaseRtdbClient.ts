@@ -9,10 +9,14 @@ export type FirebaseWebConfig = {
   appCheckSiteKey: string;
 };
 
-/** 預設專案公開 Web 設定（非機密；請在 Firebase Console 啟用匿名登入與 App Check） */
+/**
+ * 預設專案公開 Web 設定（非機密，本就會出現在前端）。
+ * 內建後教師端「加入同步」通常只需學校同步密碼；規則為 auth != null 時仍可匿名登入。
+ * App Check Site Key 仍請在管理員同步頁選填（各環境不同）。
+ */
 export const DEFAULT_FIREBASE_WEB_CONFIG: FirebaseWebConfig = {
-  apiKey: '',
-  appId: '',
+  apiKey: 'AIzaSyA7ayyjSuimQtGIE0Kr8U74Myc2Kk8ANRk',
+  appId: '1:271798485364:web:f6a9e20de95cca4dbb6c21',
   appCheckSiteKey: '',
 };
 

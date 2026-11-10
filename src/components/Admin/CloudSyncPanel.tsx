@@ -354,8 +354,8 @@ export const CloudSyncPanel: React.FC = () => {
               金鑰（與 App Check 的 App ID / Site Key）填入左側進階欄位。
             </li>
             <li>
-              管理員在本頁填網址、學校同步密碼並啟用。老師電腦只要在右上角按「加入同步」、輸入同一組學校同步密碼即可（不必再填 API
-              金鑰；會使用本機已存或應用內建的公開 Web 設定）。
+              管理員在本頁填網址、學校同步密碼並啟用。老師電腦只要按「加入同步」、輸入同一組學校同步密碼即可（應用已內建
+              Web API 金鑰；僅在連線失敗時才需展開進階欄位改貼金鑰）。
             </li>
           </ol>
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
