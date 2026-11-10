@@ -1,4 +1,16 @@
-import { PatrolCheckItem, PatrolRoom, SystemConfig } from '../types';
+import { PatrolCheckItem, PatrolRoom, SystemConfig, TeacherTitle } from '../types';
+import { normalizeTeacherTitle } from './schoolDepartments';
+
+/** 巡堂登錄資格：僅處室「組長」「主任」；科主任／導師／專任／校長不可 */
+export const PATROL_ELIGIBLE_TITLES: TeacherTitle[] = ['組長', '主任'];
+
+export function canPerformPatrol(
+  teacher: { title?: string } | null | undefined
+): boolean {
+  if (!teacher?.title) return false;
+  const title = normalizeTeacherTitle(teacher.title);
+  return PATROL_ELIGIBLE_TITLES.includes(title);
+}
 
 export const DEFAULT_PATROL_CHECK_ITEMS: PatrolCheckItem[] = [
   { id: 'lights', label: '燈已關' },

@@ -6,6 +6,7 @@ import { dateToIsoLocal } from '../../utils/holidays';
 import { downloadPatrolTeacherManual } from '../../utils/generateManual';
 import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import {
+  canPerformPatrol,
   groupPatrolRooms,
   resolvePatrolCheckItems,
   resolvePatrolObservationItems,
@@ -76,6 +77,7 @@ export const PatrolMain: React.FC = () => {
   } | null>(null);
   /** 寄信進行中的 recordId → 世代號；清案／重送時遞增以丟棄過期結果 */
   const notifyGenRef = React.useRef<Map<string, number>>(new Map());
+  const patrolAllowed = canPerformPatrol(currentTeacher);
 
   const notifyGroups = useMemo(
     () => resolvePatrolNotifyGroups(systemConfig.patrolMailConfig),
@@ -409,6 +411,18 @@ export const PatrolMain: React.FC = () => {
 
   if (!currentTeacher) {
     return <p className="text-sm text-slate-500">請先在上方選擇教師身分。</p>;
+  }
+
+  if (!patrolAllowed) {
+    return (
+      <div className="bg-white border border-amber-200 rounded-2xl px-4 py-8 text-center space-y-2">
+        <p className="text-sm font-bold text-amber-950">目前身分無巡堂登錄資格</p>
+        <p className="text-xs text-amber-900">
+          僅師資名冊職稱為「組長」或「主任」者可巡堂；科主任、導師、專任教師、校長不可登錄巡堂。
+          若您實際擔任處室組長／主任，請洽管理員將職稱改為「組長」或「主任」。
+        </p>
+      </div>
+    );
   }
 
   if (rooms.length === 0) {
