@@ -12,6 +12,7 @@ import {
   resolveClassLogDisplayEntry,
   shouldDefaultApplyConsecutive,
 } from '../src/utils/classLogSlots';
+import { retainClassLogEntries, trimPendingOps } from '../src/utils/classLogSync';
 import type { ClassLogEntry } from '../src/types';
 
 function session(partial: {
@@ -333,5 +334,28 @@ assert.equal(
   false,
   '連續節進度不同時預設不勾選，避免覆寫'
 );
+
+// —— 本機保留／佇列修剪（配額不足時依此縮短）——
+const retentionSamples: ClassLogEntry[] = [
+  { ...entryP2, id: 'old', date: '2026-01-01' },
+  { ...entryP2, id: 'mid', date: '2026-10-01' },
+  { ...entryP2, id: 'new', date: '2026-11-10' },
+];
+assert.deepEqual(
+  retainClassLogEntries(retentionSamples, 30, '2026-11-10').map((r) => r.id),
+  ['new'],
+  '保留 30 天應只留下近期'
+);
+assert.deepEqual(
+  retainClassLogEntries(retentionSamples, 60, '2026-11-10').map((r) => r.id).sort(),
+  ['mid', 'new'],
+  '保留 60 天應含 10 月與 11 月'
+);
+assert.deepEqual(
+  trimPendingOps([1, 2, 3, 4, 5], 3),
+  [3, 4, 5],
+  '佇列過長只留尾端'
+);
+assert.deepEqual(trimPendingOps([1, 2], 5), [1, 2], '未超限不修剪');
 
 console.log('regression-class-log: ok');
