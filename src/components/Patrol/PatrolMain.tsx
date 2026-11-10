@@ -98,28 +98,12 @@ export const PatrolMain: React.FC = () => {
     if (!fullPatrolAllowed && mode !== 'exam') setMode('exam');
   }, [fullPatrolAllowed, mode, currentTeacher?.id]);
 
-  const examDaysKey = useMemo(
-    () =>
-      [...examDays]
-        .map((d) => d.date)
-        .filter(Boolean)
-        .sort()
-        .join(','),
-    [examDays]
-  );
-
-  // 一般教師進入時：若今日非段考日，自動對到最近的段考日（若有設定）
+  // 一般教師日期鎖在今天：避免改選未來段考日在非段考時期登錄
   useEffect(() => {
     if (fullPatrolAllowed) return;
-    const sorted = examDaysKey ? examDaysKey.split(',') : [];
-    if (sorted.length === 0) return;
-    if (sorted.includes(date)) return;
     const today = dateToIsoLocal(new Date());
-    const upcoming = sorted.find((d) => d >= today) || sorted[sorted.length - 1];
-    if (upcoming) setDate(upcoming);
-    // 只在切換身分／段考日清單變更時對齊，避免手動改日期被拉回
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullPatrolAllowed, currentTeacher?.id, examDaysKey]);
+    if (date !== today) setDate(today);
+  }, [fullPatrolAllowed, currentTeacher?.id, date]);
 
   const notifyGroups = useMemo(
     () => resolvePatrolNotifyGroups(systemConfig.patrolMailConfig),
@@ -523,21 +507,17 @@ export const PatrolMain: React.FC = () => {
       <p className="text-xs text-slate-500">{MODES.find((m) => m.id === mode)?.hint}</p>
       {!fullPatrolAllowed && (
         <p className="text-xs text-sky-900 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
-          您的職稱僅能「段考巡堂」，且須選管理員設定的段考日
+          您的職稱僅能「段考巡堂」，且僅限「今天」又為行事曆段考日時可登錄
           {examDays.length === 0
             ? '（目前尚未設定段考日，請洽管理員於「學校行事曆 → 段考日」新增）。'
             : dateIsExamDay
               ? '。'
-              : `；目前日期不是段考日，請改選：${examDays
-                  .map((d) => d.date)
-                  .sort()
-                  .slice(0, 5)
-                  .join('、')}${examDays.length > 5 ? '…' : ''}。`}
+              : '；今天不是段考日，非段考時期無法登錄。'}
         </p>
       )}
       {!canRecordToday && fullPatrolAllowed === false && mode === 'exam' && (
         <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-          此日期無法登錄段考巡堂（非段考日或尚未設定段考日）。可瀏覽，但無法點教室登錄。
+          非段考日（或尚未設定段考日）無法登錄段考巡堂。可瀏覽畫面，但無法點教室登錄。
         </p>
       )}
 
@@ -547,8 +527,22 @@ export const PatrolMain: React.FC = () => {
           <input
             type="date"
             value={date}
-            onChange={(e) => e.target.value && setDate(e.target.value)}
-            className="mt-1 block bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+            readOnly={!fullPatrolAllowed}
+            disabled={!fullPatrolAllowed}
+            onChange={(e) => {
+              if (!fullPatrolAllowed) return;
+              if (e.target.value) setDate(e.target.value);
+            }}
+            title={
+              fullPatrolAllowed
+                ? undefined
+                : '一般教師僅能於今天登錄段考巡堂，不可改選其他日期'
+            }
+            className={`mt-1 block border border-slate-300 rounded-lg px-2.5 py-2 text-sm ${
+              fullPatrolAllowed
+                ? 'bg-slate-50'
+                : 'bg-slate-100 text-slate-500 cursor-not-allowed'
+            }`}
           />
         </label>
         {usesPeriod && (
@@ -661,7 +655,7 @@ export const PatrolMain: React.FC = () => {
                         onClick={() => {
                           if (!canRecordToday) {
                             window.alert(
-                              '一般教師僅能於段考日登錄段考巡堂。請改選管理員設定的段考日期。'
+                              '一般教師僅能在「今天」且為行事曆段考日時登錄段考巡堂；非段考時期無法登錄。'
                             );
                             return;
                           }
