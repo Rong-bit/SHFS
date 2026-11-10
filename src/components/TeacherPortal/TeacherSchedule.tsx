@@ -8,7 +8,6 @@ import {
   Clock, 
   Wrench, 
   BookOpen, 
-  Plus, 
   ArrowLeftRight, 
   AlertCircle,
   Coins,
@@ -259,18 +258,10 @@ export const TeacherSchedule: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-700/80 flex items-center justify-between">
+          <div className="mt-4 pt-3 border-t border-slate-700/80">
             <span className="text-xs text-slate-400">
-              點選課堂可調課／派代；工場名稱可直接下拉改選（匯入後對應用）
+              點選課堂可調課／派代；工場名稱可直接下拉改選（匯入後對應用）。也可使用上方「新增調代課申請」。
             </span>
-            <button
-              id="btn-add-request-hero"
-              onClick={() => handleCellClick(teacherSessions[0])}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow transition active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>新增調代課申請</span>
-            </button>
           </div>
         </div>
 
