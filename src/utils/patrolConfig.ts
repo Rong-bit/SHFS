@@ -6,6 +6,7 @@ import {
   SystemConfig,
   TeacherTitle,
 } from '../types';
+import { dateToIsoLocal } from './holidays';
 import { normalizeTeacherTitle } from './schoolDepartments';
 
 /** 一般巡堂（課間／室外課／放學）：僅處室「組長」「主任」 */
@@ -58,7 +59,7 @@ export function canPerformPatrolKind(
 
 /**
  * 指定日期是否可實際登錄／截章：
- * - 一般教師段考巡堂：僅限 systemConfig.examDays
+ * - 一般教師段考巡堂：須為行事曆段考日，且僅限「今天」（不可在非段考時期改選未來／過去段考日先登）
  * - 組長／主任：不限段考日（各模式依職稱）
  */
 export function canRecordPatrolOnDate(params: {
@@ -66,12 +67,16 @@ export function canRecordPatrolOnDate(params: {
   kind: PatrolKind;
   isoDate: string;
   examDays?: Pick<ExamDay, 'date'>[] | null;
+  /** 測試用；預設為本機今天 */
+  todayIso?: string;
 }): boolean {
   const { teacher, kind, isoDate, examDays } = params;
   if (!canPerformPatrolKind(teacher, kind)) return false;
   if (kind !== 'exam') return true;
   if (canPerformFullPatrol(teacher)) return true;
-  return isConfiguredExamDay(isoDate, examDays);
+  if (!isConfiguredExamDay(isoDate, examDays)) return false;
+  const today = params.todayIso || dateToIsoLocal(new Date());
+  return isoDate === today;
 }
 
 /** @deprecated 請改用 canPerformFullPatrol／canPerformPatrolKind */
