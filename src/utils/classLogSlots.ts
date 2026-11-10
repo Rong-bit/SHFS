@@ -173,9 +173,9 @@ export function resolveClassLogDisplayEntry(params: {
 /**
  * 開啟表單時是否預設勾選「一併套用」：
  * - 僅一節 → 否
- * - 本節已有紀錄且其他連續節皆空 → 否（先前刻意只填一節）
- * - 其他節已有不同進度 → 否（避免覆寫）
- * - 其餘（首次填寫或整段內容一致）→ 是
+ * - 其他節已有不同進度／備註 → 否（避免覆寫）
+ * - 其餘（首次填寫、整段一致、或本節已填但連續節尚無獨立紀錄）→ 是
+ *   （後者讓「更新並截章」會把鏡射中的連續節也寫成各節已填）
  */
 export function shouldDefaultApplyConsecutive(params: {
   block: ClassLogSlot[];
@@ -188,21 +188,12 @@ export function shouldDefaultApplyConsecutive(params: {
   const { block, center, date, entriesById, displayProgress, displayNote } = params;
   if (block.length <= 1) return false;
 
-  const centerId = classLogEntryId({
-    date,
-    period: center.period,
-    sessionId: center.sessionId,
-  });
-  const centerExisting = entriesById.get(centerId);
-  let siblingFilled = 0;
-
   for (const s of block) {
     if (s.period === center.period && s.sessionId === center.sessionId) continue;
     const e = entriesById.get(
       classLogEntryId({ date, period: s.period, sessionId: s.sessionId })
     );
     if (!e) continue;
-    siblingFilled += 1;
     if (
       (e.progress || '') !== (displayProgress || '') ||
       (e.note || '') !== (displayNote || '')
@@ -211,6 +202,5 @@ export function shouldDefaultApplyConsecutive(params: {
     }
   }
 
-  if (centerExisting && siblingFilled === 0) return false;
   return true;
 }

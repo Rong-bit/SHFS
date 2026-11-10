@@ -32,12 +32,21 @@ type DraftState = {
 
 export const ClassLogMain: React.FC = () => {
   const { sessions, requests, currentTeacher } = useApp();
-  const { entries, pendingCount, loading, error, cloudReady, saveEntry, deleteEntry, refresh } =
-    useClassLogs();
+  const {
+    entries,
+    pendingCount,
+    loading,
+    error,
+    cloudReady,
+    saveEntries,
+    deleteEntries,
+    refresh,
+  } = useClassLogs();
   const [date, setDate] = useState(() => dateToIsoLocal(new Date()));
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void refresh(date, date);
@@ -95,7 +104,11 @@ export const ClassLogMain: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!draft || !currentTeacher) return;
+    // 手機鍵盤收起，避免第一次點擊只關掉鍵盤、按鈕看似無反應
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    if (saving || !draft || !currentTeacher) return;
     const progress = draft.progress.trim();
     if (!progress) {
       setFormError('請填寫教學進度');
@@ -109,14 +122,14 @@ export const ClassLogMain: React.FC = () => {
         ? draft.consecutiveSlots
         : [draft.slot];
 
-    for (const target of targets) {
+    const batch: ClassLogEntry[] = targets.map((target) => {
       const id = classLogEntryId({
         date,
         period: target.period,
         sessionId: target.sessionId,
       });
       const prev = entriesById.get(id);
-      const entry: ClassLogEntry = {
+      return {
         id,
         date,
         period: target.period,
@@ -137,10 +150,19 @@ export const ClassLogMain: React.FC = () => {
         createdAt: prev?.createdAt || now,
         updatedAt: now,
       };
-      saveEntry(entry);
+    });
+
+    setSaving(true);
+    try {
+      saveEntries(batch);
+      setDraft(null);
+      setFormError('');
+      setConfirmDeleteId(null);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : '儲存失敗，請再試一次');
+    } finally {
+      setSaving(false);
     }
-    setDraft(null);
-    setFormError('');
   };
 
   const handleDelete = (entry: ClassLogEntry) => {
@@ -170,9 +192,13 @@ export const ClassLogMain: React.FC = () => {
       }
     }
     if (toDelete.length === 0) toDelete.push(entry);
-    for (const e of toDelete) deleteEntry(e);
-    setConfirmDeleteId(null);
-    setDraft(null);
+    try {
+      deleteEntries(toDelete);
+      setConfirmDeleteId(null);
+      setDraft(null);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : '刪除失敗，請再試一次');
+    }
   };
 
   if (!currentTeacher) {
@@ -315,7 +341,7 @@ export const ClassLogMain: React.FC = () => {
         <ModalShell
           panelClassName="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg"
           scroll="body"
-          maxHeightClassName="max-h-[min(92svh,920px)]"
+          maxHeightClassName="max-h-[min(90dvh,920px)]"
         >
           <div className="shrink-0 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 border-b border-slate-100">
             <h3 className="text-base font-extrabold text-slate-900">教室日誌</h3>
@@ -328,7 +354,7 @@ export const ClassLogMain: React.FC = () => {
               )}
             </p>
           </div>
-          {/* min-h-0 才能在手機 flex 內收縮，否則底欄「截章」會被裁切捲不到 */}
+          {/* min-h-0：Safari 才會讓中間區收縮，底欄「更新並截章」才點得到 */}
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-5 py-4 space-y-4">
             <label className="block text-[11px] font-semibold text-slate-600">
               教學進度（必填）
@@ -377,45 +403,52 @@ export const ClassLogMain: React.FC = () => {
                 <ElectronicStamp
                   stampCaption={STAMP_CAPTION}
                   personName={currentTeacher.name}
-                  size={stampDisplayWidthPx(140)}
+                  size={stampDisplayWidthPx(120)}
                 />
               </div>
             </div>
-            {formError && <p className="text-xs text-rose-700">{formError}</p>}
           </div>
-          <div className="shrink-0 px-4 sm:px-5 py-3 sm:py-4 border-t border-slate-100 bg-white flex flex-wrap items-center gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            {draft.existing && canDeleteClassLogEntry(draft.existing, currentTeacher.id) && (
-              <button
-                type="button"
-                onClick={() => handleDelete(draft.existing!)}
-                className="inline-flex items-center gap-1 min-h-11 px-3 py-2.5 rounded-lg border border-rose-300 text-xs font-bold text-rose-700 hover:bg-rose-50"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {confirmDeleteId === draft.existing.id
-                  ? draft.consecutiveSlots.length > 1
-                    ? '再按一次確認刪除（含相同內容連續節）'
-                    : '再按一次確認刪除'
-                  : '刪除'}
-              </button>
-            )}
-            <div className="ml-auto flex gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft(null);
-                  setConfirmDeleteId(null);
-                }}
-                className="flex-1 sm:flex-none min-h-11 px-3 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                className="flex-[2] sm:flex-none min-h-11 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500 active:bg-indigo-700"
-              >
-                {draft.existing ? '更新並截章' : '送出並截章'}
-              </button>
+          <div className="relative z-20 shrink-0 px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-100 bg-white space-y-2">
+            {formError && <p className="text-xs text-rose-700">{formError}</p>}
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap sm:items-center gap-2">
+              {draft.existing && canDeleteClassLogEntry(draft.existing, currentTeacher.id) && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(draft.existing!)}
+                  className="inline-flex items-center justify-center gap-1 min-h-11 px-3 py-2.5 rounded-lg border border-rose-300 text-xs font-bold text-rose-700 hover:bg-rose-50 touch-manipulation"
+                >
+                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                  {confirmDeleteId === draft.existing.id
+                    ? draft.consecutiveSlots.length > 1
+                      ? '再按確認刪除（含連續節）'
+                      : '再按一次確認刪除'
+                    : '刪除'}
+                </button>
+              )}
+              <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(null);
+                    setConfirmDeleteId(null);
+                  }}
+                  className="flex-1 sm:flex-none min-h-11 px-3 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 touch-manipulation"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex-[2] sm:flex-none min-h-12 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500 active:bg-indigo-700 touch-manipulation disabled:opacity-60"
+                >
+                  {saving
+                    ? '儲存中…'
+                    : draft.existing
+                      ? '更新並截章'
+                      : '送出並截章'}
+                </button>
+              </div>
             </div>
           </div>
         </ModalShell>

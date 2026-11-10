@@ -284,7 +284,7 @@ assert.equal(
 const slot2 = consecutiveDaySlots.find((s) => s.period === 2)!;
 const slot3 = consecutiveDaySlots.find((s) => s.period === 3)!;
 const block234 = findConsecutiveClassLogSlots(consecutiveDaySlots, slot3);
-// 本節已填且連續節皆空：視為先前只填一節，預設不套用
+// 本節已填、連續節尚無獨立紀錄：預設一併套用，更新時也寫入第3節
 assert.equal(
   shouldDefaultApplyConsecutive({
     block: block234,
@@ -294,8 +294,8 @@ assert.equal(
     displayProgress: entryP2.progress,
     displayNote: '',
   }),
-  false,
-  '僅本節有紀錄時預設不勾選一併套用'
+  true,
+  '僅本節有紀錄時仍預設勾選一併套用（可手動取消）'
 );
 // 開空的第3節（鏡射第2節內容）：應預設套用以便寫入整段
 assert.equal(
@@ -309,6 +309,29 @@ assert.equal(
   }),
   true,
   '開尚未寫入的連續節應預設套用'
+);
+// 連續節已有不同進度：不可預設覆寫
+const entryP3Diff: ClassLogEntry = {
+  ...entryP2,
+  id: classLogEntryId({ date: '2026-11-10', period: 3, sessionId: 'c3' }),
+  period: 3,
+  sessionId: 'c3',
+  progress: '另一進度',
+};
+assert.equal(
+  shouldDefaultApplyConsecutive({
+    block: block234,
+    center: slot2,
+    date: '2026-11-10',
+    entriesById: new Map([
+      [entryP2.id, entryP2],
+      [entryP3Diff.id, entryP3Diff],
+    ]),
+    displayProgress: entryP2.progress,
+    displayNote: '',
+  }),
+  false,
+  '連續節進度不同時預設不勾選，避免覆寫'
 );
 
 console.log('regression-class-log: ok');

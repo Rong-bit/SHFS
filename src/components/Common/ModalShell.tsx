@@ -19,6 +19,7 @@ type ModalShellProps = {
 
 /**
  * 統一 Modal 外殼：避免 fixed + flex 垂直置中時，內容超出視窗卻捲不到頂／底。
+ * body 模式另以 row wrapper 避開 Safari「僅 max-height 時 flex-1 不收縮」導致底欄被裁、點擊無反應。
  */
 export const ModalShell: React.FC<ModalShellProps> = ({
   children,
@@ -32,14 +33,21 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     scroll === 'panel'
       ? `${maxHeightClassName} overflow-y-auto overscroll-contain`
       : scroll === 'body'
-        ? // min-h-0：手機 Safari flex 子層才能收縮，否則固定底欄常被裁切
+        ? // min-h-0 + 明確 max-h：讓標題／底欄留在面板內，中間區塊捲動
           `${maxHeightClassName} overflow-hidden flex flex-col min-h-0`
         : 'overflow-visible';
 
+  const panel = <div className={`${panelClassName} ${panelScrollClass}`}>{children}</div>;
+
   return (
     <div className={`fixed inset-0 ${zClassName} overflow-y-auto ${backdropClassName}`}>
-      <div className="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-4 py-4 sm:py-6">
-        <div className={`${panelClassName} ${panelScrollClass}`}>{children}</div>
+      <div className="min-h-full flex items-end sm:items-center justify-center p-3 sm:p-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-6">
+        {scroll === 'body' ? (
+          // Safari：外層改 row flex，max-height 才會約束內層 column flex 的 flex-1 子層
+          <div className="flex w-full max-w-full justify-center min-h-0">{panel}</div>
+        ) : (
+          panel
+        )}
       </div>
     </div>
   );
