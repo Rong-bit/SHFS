@@ -8,7 +8,9 @@ import {
   canDeleteClassLogEntry,
   classLogEntryId,
   ClassLogSlot,
+  findConsecutiveClassLogSlots,
   listClassLogSlotsForTeacher,
+  resolveClassLogDisplayEntry,
 } from '../../utils/classLogSlots';
 import { useClassLogs } from '../../utils/classLogSync';
 import { ModalShell } from '../Common/ModalShell';
@@ -26,6 +28,9 @@ type DraftState = {
   progress: string;
   note: string;
   existing?: ClassLogEntry;
+  /** 同班同科目連續節一併寫入 */
+  applyConsecutive: boolean;
+  consecutiveSlots: ClassLogSlot[];
 };
 
 export const ClassLogMain: React.FC = () => {
@@ -60,19 +65,25 @@ export const ClassLogMain: React.FC = () => {
   }, [entries, date]);
 
   const filledCount = slots.filter((s) =>
-    entriesById.has(classLogEntryId({ date, period: s.period, sessionId: s.sessionId }))
+    resolveClassLogDisplayEntry({ slot: s, date, slots, entriesById })
   ).length;
 
   const openSlot = (slot: ClassLogSlot) => {
     const id = classLogEntryId({ date, period: slot.period, sessionId: slot.sessionId });
     const existing = entriesById.get(id);
+    const display =
+      existing ||
+      resolveClassLogDisplayEntry({ slot, date, slots, entriesById });
+    const consecutiveSlots = findConsecutiveClassLogSlots(slots, slot);
     setFormError('');
     setConfirmDeleteId(null);
     setDraft({
       slot,
-      progress: existing?.progress || '',
-      note: existing?.note || '',
+      progress: display?.progress || '',
+      note: display?.note || '',
       existing,
+      applyConsecutive: consecutiveSlots.length > 1,
+      consecutiveSlots,
     });
   };
 
@@ -84,34 +95,43 @@ export const ClassLogMain: React.FC = () => {
       return;
     }
     const now = new Date().toISOString();
-    const id = classLogEntryId({
-      date,
-      period: draft.slot.period,
-      sessionId: draft.slot.sessionId,
-    });
     const dow = dateToDayOfWeek(date) ?? draft.slot.dayOfWeek;
-    const entry: ClassLogEntry = {
-      id,
-      date,
-      period: draft.slot.period,
-      dayOfWeek: dow,
-      sessionId: draft.slot.sessionId,
-      className: draft.slot.className,
-      subjectName: draft.slot.subjectName,
-      venueName: draft.slot.venueName,
-      originalTeacherId: draft.slot.originalTeacherId,
-      originalTeacherName: draft.slot.originalTeacherName,
-      authorTeacherId: currentTeacher.id,
-      authorTeacherName: currentTeacher.name,
-      isSubstituteFill: draft.slot.isSubstituteFill,
-      progress,
-      note: draft.note.trim() || undefined,
-      stampedAt: now,
-      stampCaption: STAMP_CAPTION,
-      createdAt: draft.existing?.createdAt || now,
-      updatedAt: now,
-    };
-    saveEntry(entry);
+    const note = draft.note.trim() || undefined;
+    const targets =
+      draft.applyConsecutive && draft.consecutiveSlots.length > 1
+        ? draft.consecutiveSlots
+        : [draft.slot];
+
+    for (const target of targets) {
+      const id = classLogEntryId({
+        date,
+        period: target.period,
+        sessionId: target.sessionId,
+      });
+      const prev = entriesById.get(id);
+      const entry: ClassLogEntry = {
+        id,
+        date,
+        period: target.period,
+        dayOfWeek: dow,
+        sessionId: target.sessionId,
+        className: target.className,
+        subjectName: target.subjectName,
+        venueName: target.venueName,
+        originalTeacherId: target.originalTeacherId,
+        originalTeacherName: target.originalTeacherName,
+        authorTeacherId: currentTeacher.id,
+        authorTeacherName: currentTeacher.name,
+        isSubstituteFill: target.isSubstituteFill,
+        progress,
+        note,
+        stampedAt: now,
+        stampCaption: STAMP_CAPTION,
+        createdAt: prev?.createdAt || now,
+        updatedAt: now,
+      };
+      saveEntry(entry);
+    }
     setDraft(null);
     setFormError('');
   };
@@ -194,7 +214,14 @@ export const ClassLogMain: React.FC = () => {
               period: slot.period,
               sessionId: slot.sessionId,
             });
-            const entry = entriesById.get(id);
+            const own = entriesById.get(id);
+            const display = resolveClassLogDisplayEntry({
+              slot,
+              date,
+              slots,
+              entriesById,
+            });
+            const mirrored = Boolean(display && !own);
             return (
               <button
                 key={id}
@@ -214,9 +241,13 @@ export const ClassLogMain: React.FC = () => {
                           代課（原：{slot.originalTeacherName}）
                         </span>
                       )}
-                      {entry ? (
+                      {own ? (
                         <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                           已填
+                        </span>
+                      ) : mirrored ? (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                          同連續節內容
                         </span>
                       ) : (
                         <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
@@ -227,21 +258,21 @@ export const ClassLogMain: React.FC = () => {
                     <p className="mt-1 text-xs text-slate-500">
                       星期{DAY_LABELS[slot.dayOfWeek] || '—'} · {slot.venueName || '未指定場地'}
                     </p>
-                    {entry && (
+                    {display && (
                       <p className="mt-1.5 text-sm text-slate-800 line-clamp-2">
-                        {entry.progress}
+                        {display.progress}
                       </p>
                     )}
                   </div>
-                  {entry && (
+                  {display && (
                     <div className="shrink-0 flex flex-col items-center gap-1">
                       <ElectronicStamp
-                        stampCaption={entry.stampCaption || STAMP_CAPTION}
-                        personName={entry.authorTeacherName}
+                        stampCaption={display.stampCaption || STAMP_CAPTION}
+                        personName={display.authorTeacherName}
                         size={stampDisplayWidthPx(120)}
                       />
                       <span className="text-[10px] text-slate-500">
-                        {entry.stampedAt.replace('T', ' ').slice(0, 16)}
+                        {display.stampedAt.replace('T', ' ').slice(0, 16)}
                       </span>
                     </div>
                   )}
@@ -291,6 +322,25 @@ export const ClassLogMain: React.FC = () => {
                 className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900"
               />
             </label>
+            {draft.consecutiveSlots.length > 1 && (
+              <label className="flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-950">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={draft.applyConsecutive}
+                  onChange={(e) =>
+                    setDraft({ ...draft, applyConsecutive: e.target.checked })
+                  }
+                />
+                <span>
+                  一併套用至連續節次（第
+                  {draft.consecutiveSlots.map((s) => s.period).join('、')}節，同班同科目）
+                  {draft.applyConsecutive
+                    ? '：送出後各節皆寫入相同進度與截章'
+                    : '：僅寫入本節'}
+                </span>
+              </label>
+            )}
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="text-[11px] font-semibold text-slate-600 mb-2">送出後電子截章預覽</p>
               <div className="flex justify-center">

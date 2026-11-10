@@ -1,4 +1,4 @@
-import type { CourseSession, DayOfWeek, SubstituteRequest } from '../types';
+import type { ClassLogEntry, CourseSession, DayOfWeek, SubstituteRequest } from '../types';
 import { dateToDayOfWeek, leaveRangeCoversDate } from './leaveDates';
 
 /** 教室日誌待填／已填對應的一節課 */
@@ -90,4 +90,59 @@ export function canDeleteClassLogEntry(
   teacherId: string | undefined
 ): boolean {
   return Boolean(teacherId && entry.authorTeacherId === teacherId);
+}
+
+function sameClassLogLesson(a: ClassLogSlot, b: ClassLogSlot): boolean {
+  return (
+    a.className === b.className &&
+    a.subjectName === b.subjectName &&
+    a.originalTeacherId === b.originalTeacherId &&
+    a.isSubstituteFill === b.isSubstituteFill
+  );
+}
+
+/**
+ * 同一天、同班同科目（同原任課／代課狀態）且節次相連的課堂區塊（含 center）。
+ * 例：第 2～4 節同班實習 → 填一節可套用整段。
+ */
+export function findConsecutiveClassLogSlots(
+  slots: ClassLogSlot[],
+  center: ClassLogSlot
+): ClassLogSlot[] {
+  const same = slots
+    .filter((s) => sameClassLogLesson(s, center))
+    .sort((a, b) => a.period - b.period || a.sessionId.localeCompare(b.sessionId));
+  if (same.length === 0) return [center];
+
+  const idx = same.findIndex(
+    (s) => s.period === center.period && s.sessionId === center.sessionId
+  );
+  if (idx < 0) return [center];
+
+  let lo = idx;
+  while (lo > 0 && same[lo].period === same[lo - 1].period + 1) lo -= 1;
+  let hi = idx;
+  while (hi < same.length - 1 && same[hi + 1].period === same[hi].period + 1) hi += 1;
+  return same.slice(lo, hi + 1);
+}
+
+/** 列表／開啟表單時：空節可顯示連續區塊內任一已填內容 */
+export function resolveClassLogDisplayEntry(params: {
+  slot: ClassLogSlot;
+  date: string;
+  slots: ClassLogSlot[];
+  entriesById: Map<string, ClassLogEntry>;
+}): ClassLogEntry | undefined {
+  const { slot, date, slots, entriesById } = params;
+  const ownId = classLogEntryId({ date, period: slot.period, sessionId: slot.sessionId });
+  const own = entriesById.get(ownId);
+  if (own) return own;
+
+  const block = findConsecutiveClassLogSlots(slots, slot);
+  for (const s of block) {
+    const id = classLogEntryId({ date, period: s.period, sessionId: s.sessionId });
+    const e = entriesById.get(id);
+    if (e) return e;
+  }
+  return undefined;
 }
