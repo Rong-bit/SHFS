@@ -6,8 +6,12 @@ import { dateToIsoLocal } from '../../utils/holidays';
 import { downloadPatrolTeacherManual } from '../../utils/generateManual';
 import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import {
-  canPerformPatrol,
+  canAccessPatrolPortal,
+  canPerformFullPatrol,
+  canPerformPatrolKind,
+  canRecordPatrolOnDate,
   groupPatrolRooms,
+  isConfiguredExamDay,
   resolvePatrolCheckItems,
   resolvePatrolObservationItems,
 } from '../../utils/patrolConfig';
@@ -64,7 +68,12 @@ export const PatrolMain: React.FC = () => {
     usePatrolRecords();
   const { cases, saveCase, deleteCase, refresh: refreshReviews } = usePatrolReviews();
   const periodDefs = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
-  const [mode, setMode] = useState<PatrolKind>('class');
+  const fullPatrolAllowed = canPerformFullPatrol(currentTeacher);
+  const patrolPortalAllowed = canAccessPatrolPortal(currentTeacher);
+  const examDays = systemConfig.examDays || [];
+  const [mode, setMode] = useState<PatrolKind>(() =>
+    canPerformFullPatrol(currentTeacher) ? 'class' : 'exam'
+  );
   const [date, setDate] = useState(() => dateToIsoLocal(new Date()));
   const [period, setPeriod] = useState<number>(() => currentPeriod(new Date(), periodDefs) ?? 1);
   const [buildingIdx, setBuildingIdx] = useState(0);
@@ -77,7 +86,40 @@ export const PatrolMain: React.FC = () => {
   } | null>(null);
   /** 寄信進行中的 recordId → 世代號；清案／重送時遞增以丟棄過期結果 */
   const notifyGenRef = React.useRef<Map<string, number>>(new Map());
-  const patrolAllowed = canPerformPatrol(currentTeacher);
+  const canRecordToday = canRecordPatrolOnDate({
+    teacher: currentTeacher,
+    kind: mode,
+    isoDate: date,
+    examDays,
+  });
+  const dateIsExamDay = isConfiguredExamDay(date, examDays);
+
+  useEffect(() => {
+    if (!fullPatrolAllowed && mode !== 'exam') setMode('exam');
+  }, [fullPatrolAllowed, mode, currentTeacher?.id]);
+
+  const examDaysKey = useMemo(
+    () =>
+      [...examDays]
+        .map((d) => d.date)
+        .filter(Boolean)
+        .sort()
+        .join(','),
+    [examDays]
+  );
+
+  // 一般教師進入時：若今日非段考日，自動對到最近的段考日（若有設定）
+  useEffect(() => {
+    if (fullPatrolAllowed) return;
+    const sorted = examDaysKey ? examDaysKey.split(',') : [];
+    if (sorted.length === 0) return;
+    if (sorted.includes(date)) return;
+    const today = dateToIsoLocal(new Date());
+    const upcoming = sorted.find((d) => d >= today) || sorted[sorted.length - 1];
+    if (upcoming) setDate(upcoming);
+    // 只在切換身分／段考日清單變更時對齊，避免手動改日期被拉回
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullPatrolAllowed, currentTeacher?.id, examDaysKey]);
 
   const notifyGroups = useMemo(
     () => resolvePatrolNotifyGroups(systemConfig.patrolMailConfig),
@@ -413,14 +455,11 @@ export const PatrolMain: React.FC = () => {
     return <p className="text-sm text-slate-500">請先在上方選擇教師身分。</p>;
   }
 
-  if (!patrolAllowed) {
+  if (!patrolPortalAllowed) {
     return (
       <div className="bg-white border border-amber-200 rounded-2xl px-4 py-8 text-center space-y-2">
         <p className="text-sm font-bold text-amber-950">目前身分無巡堂登錄資格</p>
-        <p className="text-xs text-amber-900">
-          僅師資名冊職稱為「組長」或「主任」者可巡堂；科主任、導師、專任教師、校長不可登錄巡堂。
-          若您實際擔任處室組長／主任，請洽管理員將職稱改為「組長」或「主任」。
-        </p>
+        <p className="text-xs text-amber-900">請先選擇教師身分後再進入巡堂。</p>
       </div>
     );
   }
@@ -445,18 +484,31 @@ export const PatrolMain: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        {MODES.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => setMode(m.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
-              mode === m.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
+        {MODES.map((m) => {
+          const allowed = canPerformPatrolKind(currentTeacher, m.id);
+          return (
+            <button
+              key={m.id}
+              type="button"
+              disabled={!allowed}
+              onClick={() => allowed && setMode(m.id)}
+              title={
+                allowed
+                  ? undefined
+                  : '僅組長／主任可使用此模式；一般教師僅能於段考日做段考巡堂'
+              }
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
+                mode === m.id
+                  ? 'bg-indigo-600 text-white'
+                  : allowed
+                    ? 'bg-white text-slate-600 border border-slate-200'
+                    : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed'
+              }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
         <button
           id="btn-patrol-download-manual"
           type="button"
@@ -469,6 +521,25 @@ export const PatrolMain: React.FC = () => {
         </button>
       </div>
       <p className="text-xs text-slate-500">{MODES.find((m) => m.id === mode)?.hint}</p>
+      {!fullPatrolAllowed && (
+        <p className="text-xs text-sky-900 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
+          您的職稱僅能「段考巡堂」，且須選管理員設定的段考日
+          {examDays.length === 0
+            ? '（目前尚未設定段考日，請洽管理員於「學校行事曆 → 段考日」新增）。'
+            : dateIsExamDay
+              ? '。'
+              : `；目前日期不是段考日，請改選：${examDays
+                  .map((d) => d.date)
+                  .sort()
+                  .slice(0, 5)
+                  .join('、')}${examDays.length > 5 ? '…' : ''}。`}
+        </p>
+      )}
+      {!canRecordToday && fullPatrolAllowed === false && mode === 'exam' && (
+        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+          此日期無法登錄段考巡堂（非段考日或尚未設定段考日）。可瀏覽，但無法點教室登錄。
+        </p>
+      )}
 
       <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3">
         <label className="text-[11px] font-semibold text-slate-600">
@@ -586,8 +657,19 @@ export const PatrolMain: React.FC = () => {
                       <button
                         key={room.id}
                         type="button"
-                        onClick={() => setOpenRoomId(room.id)}
-                        className={`text-left rounded-xl border-2 px-2.5 py-2 min-h-[64px] transition active:scale-[0.98] ${tileClass(room)}`}
+                        disabled={!canRecordToday}
+                        onClick={() => {
+                          if (!canRecordToday) {
+                            window.alert(
+                              '一般教師僅能於段考日登錄段考巡堂。請改選管理員設定的段考日期。'
+                            );
+                            return;
+                          }
+                          setOpenRoomId(room.id);
+                        }}
+                        className={`text-left rounded-xl border-2 px-2.5 py-2 min-h-[64px] transition active:scale-[0.98] ${tileClass(room)} ${
+                          !canRecordToday ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
                       >
                         <div className="text-sm font-extrabold leading-tight">{room.name}</div>
                         {(mode === 'class' || mode === 'exam') && (() => {
