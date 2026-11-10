@@ -7,8 +7,11 @@ import type { CourseSession, DayOfWeek, SubstituteRequest } from '../src/types';
 import {
   canDeleteClassLogEntry,
   classLogEntryId,
+  findConsecutiveClassLogSlots,
   listClassLogSlotsForTeacher,
+  resolveClassLogDisplayEntry,
 } from '../src/utils/classLogSlots';
+import type { ClassLogEntry } from '../src/types';
 
 function session(partial: {
   id: string;
@@ -157,5 +160,108 @@ assert.equal(
 );
 // _class_log 鍵排序在日期之後，不會被巡堂日期區間查詢誤抓
 assert.ok('_class_log' > '2026-12-31');
+
+// —— 連續節次：同班同科目相鄰節合成一塊 ——
+const consecutiveSessions = [
+  session({
+    id: 'c2',
+    period: 2,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  }),
+  session({
+    id: 'c3',
+    period: 3,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  }),
+  session({
+    id: 'c4',
+    period: 4,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  }),
+  session({
+    id: 'c6',
+    period: 6,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  }),
+  session({
+    id: 'other',
+    period: 5,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '國文',
+  }),
+];
+const consecutiveDaySlots = listClassLogSlotsForTeacher({
+  teacherId: 't-sub',
+  isoDate: '2026-11-10',
+  sessions: consecutiveSessions,
+  requests: [],
+});
+const block = findConsecutiveClassLogSlots(
+  consecutiveDaySlots,
+  consecutiveDaySlots.find((s) => s.period === 3)!
+);
+assert.deepEqual(
+  block.map((s) => s.period),
+  [2, 3, 4],
+  '第3節應連到第2～4節；第6節中斷、國文不同科目不併入'
+);
+
+const entryP2: ClassLogEntry = {
+  id: classLogEntryId({ date: '2026-11-10', period: 2, sessionId: 'c2' }),
+  date: '2026-11-10',
+  period: 2,
+  dayOfWeek: tue,
+  sessionId: 'c2',
+  className: '機二忠',
+  subjectName: '實習',
+  venueName: '忠孝301',
+  originalTeacherId: 't-sub',
+  originalTeacherName: '代課乙',
+  authorTeacherId: 't-sub',
+  authorTeacherName: '代課乙',
+  isSubstituteFill: false,
+  progress: '實習進度 A',
+  stampedAt: '2026-11-10T08:00:00.000Z',
+  stampCaption: '教師',
+  createdAt: '2026-11-10T08:00:00.000Z',
+  updatedAt: '2026-11-10T08:00:00.000Z',
+};
+const byId = new Map<string, ClassLogEntry>([[entryP2.id, entryP2]]);
+const mirrored = resolveClassLogDisplayEntry({
+  slot: consecutiveDaySlots.find((s) => s.period === 4)!,
+  date: '2026-11-10',
+  slots: consecutiveDaySlots,
+  entriesById: byId,
+});
+assert.equal(mirrored?.progress, '實習進度 A', '連續未填節應顯示同區塊已填內容');
+assert.equal(
+  resolveClassLogDisplayEntry({
+    slot: consecutiveDaySlots.find((s) => s.period === 6)!,
+    date: '2026-11-10',
+    slots: consecutiveDaySlots,
+    entriesById: byId,
+  }),
+  undefined,
+  '中斷的第6節不應鏡射第2節內容'
+);
 
 console.log('regression-class-log: ok');
