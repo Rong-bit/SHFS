@@ -339,12 +339,17 @@ export const CloudSyncPanel: React.FC = () => {
     "shfs_patrol": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "shfs_class_log": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }`}</pre>
               <span className="block mt-1 text-[11px] text-slate-500">
-                巡堂紀錄與會辦案（路徑 <code>shfs_patrol/…/_review</code>）同在{' '}
-                <code>shfs_patrol</code> 規則下。先填好本頁 Web API 金鑰並測試連線成功後，再把舊的{' '}
+                巡堂（<code>shfs_patrol</code>，會辦在 <code>…/_review</code>）與教室日誌（
+                <code>shfs_class_log</code>）皆需 <code>auth != null</code>
+                。先填好本頁 Web API 金鑰並測試連線成功後，再把舊的{' '}
                 <code>.read/.write: true</code> 改成上面這組，避免同步中斷。
               </span>
             </li>

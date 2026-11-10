@@ -496,6 +496,32 @@ export interface PatrolReviewCase {
   archivedAt?: string;
 }
 
+/** 教室日誌：每節課教學進度＋教師電子截章 */
+export interface ClassLogEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  period: number;
+  dayOfWeek: DayOfWeek;
+  sessionId: string;
+  className: string;
+  subjectName: string;
+  venueName: string;
+  originalTeacherId: string;
+  originalTeacherName: string;
+  /** 實際填寫／截章者（本課或代課） */
+  authorTeacherId: string;
+  authorTeacherName: string;
+  isSubstituteFill: boolean;
+  /** 教學進度（必填） */
+  progress: string;
+  note?: string;
+  stampedAt: string;
+  /** 職名章左欄，如「教師」 */
+  stampCaption: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MonthlyTeacherSettlement {
   teacherId: string;
   teacherName: string;
