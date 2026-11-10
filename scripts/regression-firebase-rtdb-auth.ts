@@ -46,5 +46,13 @@ assert.equal(web.apiKey, 'AAAA');
 assert.equal(web.appId, '1:1:web:abc');
 assert.equal(web.appCheckSiteKey, 'site');
 
+const fromDefault = resolveFirebaseWebConfig({
+  enabled: true,
+  databaseUrl: DEFAULT_DATABASE_URL,
+  schoolKey: 'test-school',
+});
+assert.ok(fromDefault.apiKey.length > 10, '應用應內建預設 Web API 金鑰，教師端才不必手填');
+assert.ok(fromDefault.appId.includes(':web:'), '應用應內建預設 App ID');
+
 resetFirebaseRtdbClientCaches();
 console.log('regression-firebase-rtdb-auth: ok');

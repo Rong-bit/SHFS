@@ -21,7 +21,8 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
   const [schoolKey, setSchoolKey] = useState(cloudSyncSettings.schoolKey || '');
   const initialWeb = resolveFirebaseWebConfig(cloudSyncSettings);
   const [apiKey, setApiKey] = useState(initialWeb.apiKey);
-  const [showApiKey, setShowApiKey] = useState(!initialWeb.apiKey);
+  // 有內建／本機金鑰時預設收合；規則收緊後若連線失敗再展開貼上即可
+  const [showApiKey, setShowApiKey] = useState(false);
   const [msg, setMsg] = useState('');
   const [msgTone, setMsgTone] = useState<'ok' | 'warn' | 'err'>('ok');
   const [saving, setSaving] = useState(false);
@@ -31,7 +32,7 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
       setSchoolKey(cloudSyncSettings.schoolKey || '');
       const web = resolveFirebaseWebConfig(cloudSyncSettings);
       setApiKey(web.apiKey);
-      setShowApiKey(!web.apiKey);
+      setShowApiKey(false);
       setMsg('');
       setMsgTone('ok');
     }
