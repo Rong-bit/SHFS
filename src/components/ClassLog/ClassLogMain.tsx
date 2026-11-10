@@ -32,12 +32,21 @@ type DraftState = {
 
 export const ClassLogMain: React.FC = () => {
   const { sessions, requests, currentTeacher } = useApp();
-  const { entries, pendingCount, loading, error, cloudReady, saveEntry, deleteEntry, refresh } =
-    useClassLogs();
+  const {
+    entries,
+    pendingCount,
+    loading,
+    error,
+    cloudReady,
+    saveEntries,
+    deleteEntries,
+    refresh,
+  } = useClassLogs();
   const [date, setDate] = useState(() => dateToIsoLocal(new Date()));
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void refresh(date, date);
@@ -99,7 +108,7 @@ export const ClassLogMain: React.FC = () => {
     if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    if (!draft || !currentTeacher) return;
+    if (saving || !draft || !currentTeacher) return;
     const progress = draft.progress.trim();
     if (!progress) {
       setFormError('請填寫教學進度');
@@ -113,42 +122,46 @@ export const ClassLogMain: React.FC = () => {
         ? draft.consecutiveSlots
         : [draft.slot];
 
+    const batch: ClassLogEntry[] = targets.map((target) => {
+      const id = classLogEntryId({
+        date,
+        period: target.period,
+        sessionId: target.sessionId,
+      });
+      const prev = entriesById.get(id);
+      return {
+        id,
+        date,
+        period: target.period,
+        dayOfWeek: dow,
+        sessionId: target.sessionId,
+        className: target.className,
+        subjectName: target.subjectName,
+        venueName: target.venueName,
+        originalTeacherId: target.originalTeacherId,
+        originalTeacherName: target.originalTeacherName,
+        authorTeacherId: currentTeacher.id,
+        authorTeacherName: currentTeacher.name,
+        isSubstituteFill: target.isSubstituteFill,
+        progress,
+        note,
+        stampedAt: now,
+        stampCaption: STAMP_CAPTION,
+        createdAt: prev?.createdAt || now,
+        updatedAt: now,
+      };
+    });
+
+    setSaving(true);
     try {
-      for (const target of targets) {
-        const id = classLogEntryId({
-          date,
-          period: target.period,
-          sessionId: target.sessionId,
-        });
-        const prev = entriesById.get(id);
-        const entry: ClassLogEntry = {
-          id,
-          date,
-          period: target.period,
-          dayOfWeek: dow,
-          sessionId: target.sessionId,
-          className: target.className,
-          subjectName: target.subjectName,
-          venueName: target.venueName,
-          originalTeacherId: target.originalTeacherId,
-          originalTeacherName: target.originalTeacherName,
-          authorTeacherId: currentTeacher.id,
-          authorTeacherName: currentTeacher.name,
-          isSubstituteFill: target.isSubstituteFill,
-          progress,
-          note,
-          stampedAt: now,
-          stampCaption: STAMP_CAPTION,
-          createdAt: prev?.createdAt || now,
-          updatedAt: now,
-        };
-        saveEntry(entry);
-      }
+      saveEntries(batch);
       setDraft(null);
       setFormError('');
       setConfirmDeleteId(null);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '儲存失敗，請再試一次');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -179,9 +192,13 @@ export const ClassLogMain: React.FC = () => {
       }
     }
     if (toDelete.length === 0) toDelete.push(entry);
-    for (const e of toDelete) deleteEntry(e);
-    setConfirmDeleteId(null);
-    setDraft(null);
+    try {
+      deleteEntries(toDelete);
+      setConfirmDeleteId(null);
+      setDraft(null);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : '刪除失敗，請再試一次');
+    }
   };
 
   if (!currentTeacher) {
@@ -422,9 +439,14 @@ export const ClassLogMain: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="flex-[2] sm:flex-none min-h-12 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500 active:bg-indigo-700 touch-manipulation"
+                  disabled={saving}
+                  className="flex-[2] sm:flex-none min-h-12 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500 active:bg-indigo-700 touch-manipulation disabled:opacity-60"
                 >
-                  {draft.existing ? '更新並截章' : '送出並截章'}
+                  {saving
+                    ? '儲存中…'
+                    : draft.existing
+                      ? '更新並截章'
+                      : '送出並截章'}
                 </button>
               </div>
             </div>

@@ -39,11 +39,22 @@ const readJson = <T,>(key: string, fallback: T): T => {
 export const loadLocalClassLogs = (): ClassLogEntry[] =>
   readJson<ClassLogEntry[]>(CLASS_LOG_RECORDS_KEY, []);
 
+const writeLocalStorage = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    const quota =
+      err instanceof DOMException &&
+      (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+    throw new Error(quota ? '本機儲存空間不足，無法寫入教室日誌' : '本機儲存失敗，請再試一次');
+  }
+};
+
 const saveLocalClassLogs = (records: ClassLogEntry[]) => {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - LOCAL_RETENTION_DAYS);
   const cutoffIso = dateToIsoLocal(cutoff);
-  localStorage.setItem(
+  writeLocalStorage(
     CLASS_LOG_RECORDS_KEY,
     JSON.stringify(records.filter((r) => r.date >= cutoffIso))
   );
@@ -51,7 +62,7 @@ const saveLocalClassLogs = (records: ClassLogEntry[]) => {
 
 const loadPending = (): PendingOp[] => readJson<PendingOp[]>(CLASS_LOG_PENDING_KEY, []);
 const savePending = (ops: PendingOp[]) =>
-  localStorage.setItem(CLASS_LOG_PENDING_KEY, JSON.stringify(ops));
+  writeLocalStorage(CLASS_LOG_PENDING_KEY, JSON.stringify(ops));
 
 export { classLogEntryId };
 
@@ -188,22 +199,72 @@ export function useClassLogs() {
     };
   }, [flush, cloudReady]);
 
+  /** 連續節一次寫入：單一磁碟／佇列更新，避免中途失敗只存到第 2 節、視窗關不掉 */
+  const saveEntries = useCallback(
+    (records: ClassLogEntry[]) => {
+      if (records.length === 0) return;
+      let nextDisk = loadLocalClassLogs();
+      for (const record of records) nextDisk = upsert(nextDisk, record);
+      saveLocalClassLogs(nextDisk);
+
+      const idSet = new Set(records.map((r) => r.id));
+      setEntries((prev) => {
+        const saved = loadLocalClassLogs();
+        const savedIds = new Set(saved.map((r) => r.id));
+        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && !idSet.has(r.id));
+        return [...olderInMemory, ...saved];
+      });
+
+      const now = Date.now();
+      const pending = loadPending().filter(
+        (op) => !idSet.has(op.op === 'put' ? op.record.id : op.id)
+      );
+      for (const record of records) {
+        recentOpsRef.current.set(record.id, { id: record.id, at: now, record });
+        pending.push({ opId: newOpId(), op: 'put', record });
+      }
+      savePending(pending);
+      setPendingCount(pending.length);
+      void flush();
+    },
+    [flush]
+  );
+
   const saveEntry = useCallback(
     (record: ClassLogEntry) => {
-      const nextDisk = upsert(loadLocalClassLogs(), record);
+      saveEntries([record]);
+    },
+    [saveEntries]
+  );
+
+  const deleteEntries = useCallback(
+    (records: ClassLogEntry[]) => {
+      if (records.length === 0) return;
+      const idSet = new Set(records.map((r) => r.id));
+      const nextDisk = loadLocalClassLogs().filter((r) => !idSet.has(r.id));
       saveLocalClassLogs(nextDisk);
       setEntries((prev) => {
         const saved = loadLocalClassLogs();
         const savedIds = new Set(saved.map((r) => r.id));
-        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
+        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && !idSet.has(r.id));
         return [...olderInMemory, ...saved];
       });
-      recentOpsRef.current.set(record.id, { id: record.id, at: Date.now(), record });
-      savePending([
-        ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
-        { opId: newOpId(), op: 'put', record },
-      ]);
-      setPendingCount(loadPending().length);
+
+      const now = Date.now();
+      const pending = loadPending().filter(
+        (op) => !idSet.has(op.op === 'put' ? op.record.id : op.id)
+      );
+      for (const record of records) {
+        recentOpsRef.current.set(record.id, { id: record.id, at: now });
+        pending.push({
+          opId: newOpId(),
+          op: 'delete',
+          id: record.id,
+          date: record.date,
+        });
+      }
+      savePending(pending);
+      setPendingCount(pending.length);
       void flush();
     },
     [flush]
@@ -211,23 +272,9 @@ export function useClassLogs() {
 
   const deleteEntry = useCallback(
     (record: ClassLogEntry) => {
-      const nextDisk = loadLocalClassLogs().filter((r) => r.id !== record.id);
-      saveLocalClassLogs(nextDisk);
-      setEntries((prev) => {
-        const saved = loadLocalClassLogs();
-        const savedIds = new Set(saved.map((r) => r.id));
-        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
-        return [...olderInMemory, ...saved];
-      });
-      recentOpsRef.current.set(record.id, { id: record.id, at: Date.now() });
-      savePending([
-        ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
-        { opId: newOpId(), op: 'delete', id: record.id, date: record.date },
-      ]);
-      setPendingCount(loadPending().length);
-      void flush();
+      deleteEntries([record]);
     },
-    [flush]
+    [deleteEntries]
   );
 
   const refresh = useCallback(
@@ -271,5 +318,16 @@ export function useClassLogs() {
     [flush]
   );
 
-  return { entries, pendingCount, loading, error, cloudReady, saveEntry, deleteEntry, refresh };
+  return {
+    entries,
+    pendingCount,
+    loading,
+    error,
+    cloudReady,
+    saveEntry,
+    saveEntries,
+    deleteEntry,
+    deleteEntries,
+    refresh,
+  };
 }
