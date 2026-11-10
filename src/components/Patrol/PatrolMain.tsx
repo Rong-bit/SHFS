@@ -448,10 +448,10 @@ export const PatrolMain: React.FC = () => {
           type="button"
           onClick={downloadPatrolTeacherManual}
           className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
-          title="下載巡堂老師使用手冊"
+          title="下載巡堂與會辦作業手冊（含主任／組長核章）"
         >
           <FileText className="w-3.5 h-3.5 text-emerald-600" />
-          巡堂老師手冊
+          巡堂作業手冊
         </button>
       </div>
       <p className="text-xs text-slate-500">{MODES.find((m) => m.id === mode)?.hint}</p>

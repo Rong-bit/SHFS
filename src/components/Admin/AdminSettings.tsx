@@ -1068,10 +1068,10 @@ export const AdminSettings: React.FC = () => {
             id="btn-admin-download-patrol-manual"
             onClick={downloadPatrolTeacherManual}
             className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
-            title="下載巡堂老師使用手冊"
+            title="下載巡堂與會辦作業手冊（含主任／組長核章）"
           >
             <FileText className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden md:inline">巡堂老師手冊</span>
+            <span className="hidden md:inline">巡堂作業手冊</span>
           </button>
 
           {/* Reset Defaults */}
