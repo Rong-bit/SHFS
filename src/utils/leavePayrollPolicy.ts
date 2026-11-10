@@ -17,10 +17,10 @@ export const PERSONAL_LEAVE_PUBLIC_DAY_THRESHOLD = 8;
 /** 病假：連續請假達 3 日（曆日）起改公費派代 */
 export const SICK_LEAVE_CONSECUTIVE_DAY_THRESHOLD = 3;
 
-/** 身心調適假：每學年 21 小時（1 日＝7 小時） */
+/** 身心調適假：每學年 21 小時（1 節＝1 小時；單日最高 7 小時） */
 export const WELLNESS_LEAVE_HOURS_PER_YEAR = 21;
 
-/** 身心調適假：每請假曆日計 7 小時 */
+/** 身心調適假：單日最高時數（全日＝7 小時；得以時計則按節累計） */
 export const WELLNESS_HOURS_PER_LEAVE_DAY = 7;
 
 export type LeaveThresholdConfig = {
@@ -488,54 +488,99 @@ type WellnessLeaveDraft = Pick<
   'leaveDateStart' | 'leaveDateEnd' | 'originalSession' | 'applicantTeacherId'
 >;
 
-/** 學年內身心調適假可計費之請假曆日（去重） */
-function collectWellnessLeaveBillableDates(
+/** slot key：`YYYY-MM-DD|period`（跨班同日同節只計 1 小時） */
+function wellnessLeaveSlotKey(iso: string, period: number): string {
+  return `${iso}|${period}`;
+}
+
+function addWellnessLeaveSlotsFromDraft(
+  draft: WellnessLeaveDraft,
+  academicYear: string | number,
+  slots: Set<string>,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
+): void {
+  if (!draft.leaveDateStart || !draft.originalSession) return;
+  const period = draft.originalSession.period;
+  if (!period) return;
+  const { start, end } = academicYearIsoRange(academicYear);
+  const billable = listBillableLeaveDatesInRange(draft, excludeDates, {
+    ...calendarOpts,
+    // 半日停課依該節判斷；不可用呼叫端固定 period 蓋掉各單自己的節次
+    period,
+  });
+  for (const d of billable) {
+    if (d >= start && d <= end) slots.add(wellnessLeaveSlotKey(d, period));
+  }
+}
+
+/** 學年內身心調適假可計費之請假節次槽位（同日同節去重） */
+function collectWellnessLeaveBillableSlots(
   ctx: LeavePayrollContext,
   teacherId: string,
   excludeDates?: Set<string>,
   calendarOpts?: LeaveBillableOptions
 ): Set<string> {
-  const { start, end } = academicYearIsoRange(ctx.academicYear);
-  const dates = new Set<string>();
-
-  const addFromDraft = (draft: WellnessLeaveDraft) => {
-    if (!draft.leaveDateStart || !draft.originalSession) return;
-    const billable = listBillableLeaveDatesInRange(draft, excludeDates, {
-      ...calendarOpts,
-      period: calendarOpts?.period ?? draft.originalSession.period,
-    });
-    for (const d of billable) {
-      if (d >= start && d <= end) dates.add(d);
-    }
-  };
-
+  const slots = new Set<string>();
   for (const r of ctx.requests) {
     if (r.requestType !== 'substitute' || r.applicantTeacherId !== teacherId) continue;
     if (!requestInContext(r, ctx)) continue;
     if (normalizeLeaveType(r.leaveType, r.reason) !== 'wellness') continue;
-    addFromDraft(r);
+    addWellnessLeaveSlotsFromDraft(r, ctx.academicYear, slots, excludeDates, calendarOpts);
+  }
+  return slots;
+}
+
+function collectDraftWellnessLeaveSlots(
+  drafts: WellnessLeaveDraft[],
+  academicYear: string | number,
+  excludeDates?: Set<string>,
+  calendarOpts?: LeaveBillableOptions
+): Set<string> {
+  const slots = new Set<string>();
+  for (const draft of drafts) {
+    addWellnessLeaveSlotsFromDraft(draft, academicYear, slots, excludeDates, calendarOpts);
+  }
+  return slots;
+}
+
+function datesFromWellnessSlots(slots: Set<string>): Set<string> {
+  const dates = new Set<string>();
+  for (const key of slots) {
+    const iso = key.split('|')[0];
+    if (iso) dates.add(iso);
   }
   return dates;
 }
 
-function countWellnessLeaveDays(
-  ctx: LeavePayrollContext,
-  teacherId: string,
-  excludeDates?: Set<string>,
-  calendarOpts?: LeaveBillableOptions
-): number {
-  return collectWellnessLeaveBillableDates(ctx, teacherId, excludeDates, calendarOpts).size;
+/**
+ * 身心調適假時數：1 節＝1 小時；同日同節（跨班）只計 1；
+ * 單日最高 WELLNESS_HOURS_PER_LEAVE_DAY（全日）。
+ */
+export function wellnessHoursFromSlots(slots: Set<string>): number {
+  const periodsByDate = new Map<string, number>();
+  for (const key of slots) {
+    const [iso] = key.split('|');
+    if (!iso) continue;
+    periodsByDate.set(iso, (periodsByDate.get(iso) ?? 0) + 1);
+  }
+  let hours = 0;
+  for (const periodCount of periodsByDate.values()) {
+    hours += Math.min(WELLNESS_HOURS_PER_LEAVE_DAY, periodCount);
+  }
+  return hours;
 }
 
-/** 身心調適假：學年已用時數（請假曆日 × 7 小時） */
+/** 身心調適假：學年已用時數（1 節＝1 小時；單日最高 7 小時） */
 export function countWellnessHoursInAcademicYear(
   ctx: LeavePayrollContext,
   teacherId: string,
   excludeDates?: Set<string>,
   billableOptions?: LeaveBillableOptions
 ): number {
-  return countWellnessLeaveDays(ctx, teacherId, excludeDates, billableOptions) *
-    WELLNESS_HOURS_PER_LEAVE_DAY;
+  return wellnessHoursFromSlots(
+    collectWellnessLeaveBillableSlots(ctx, teacherId, excludeDates, billableOptions)
+  );
 }
 
 export function estimateWellnessHoursForDraft(
@@ -547,12 +592,9 @@ export function estimateWellnessHoursForDraft(
   excludeDates?: Set<string>,
   billableOptions?: LeaveBillableOptions
 ): number {
-  if (!draft.leaveDateStart) return 0;
-  const { start, end } = academicYearIsoRange(academicYear);
-  const dates = listBillableLeaveDatesInRange(draft, excludeDates, billableOptions).filter(
-    (d) => d >= start && d <= end
-  );
-  return new Set(dates).size * WELLNESS_HOURS_PER_LEAVE_DAY;
+  const slots = new Set<string>();
+  addWellnessLeaveSlotsFromDraft(draft, academicYear, slots, excludeDates, billableOptions);
+  return wellnessHoursFromSlots(slots);
 }
 
 export type WellnessLeaveHoursStatus = {
@@ -567,28 +609,7 @@ export type WellnessLeaveHoursStatus = {
   warningMessage: string | null;
 };
 
-function collectDraftWellnessLeaveDates(
-  drafts: WellnessLeaveDraft[],
-  academicYear: string | number,
-  excludeDates?: Set<string>,
-  calendarOpts?: LeaveBillableOptions
-): Set<string> {
-  const { start, end } = academicYearIsoRange(academicYear);
-  const dates = new Set<string>();
-  for (const draft of drafts) {
-    if (!draft.leaveDateStart || !draft.originalSession) continue;
-    const billable = listBillableLeaveDatesInRange(draft, excludeDates, {
-      ...calendarOpts,
-      period: calendarOpts?.period ?? draft.originalSession.period,
-    });
-    for (const d of billable) {
-      if (d >= start && d <= end) dates.add(d);
-    }
-  }
-  return dates;
-}
-
-/** 身心調適假學年時數（請假曆日 × 7 小時；多節同日只計 1 日） */
+/** 身心調適假學年時數（1 節＝1 小時；單日最高 7；跨班同節只計 1） */
 export function getWellnessLeaveHoursStatus(
   drafts: WellnessLeaveDraft[],
   ctx: LeavePayrollContext,
@@ -598,26 +619,27 @@ export function getWellnessLeaveHoursStatus(
   const applicantId = drafts[0]?.applicantTeacherId;
   if (!applicantId) return null;
 
-  const usedDates = collectWellnessLeaveBillableDates(
+  const usedSlots = collectWellnessLeaveBillableSlots(
     ctx,
     applicantId,
     excludeDates,
     calendarOpts
   );
-  const draftDates = collectDraftWellnessLeaveDates(
+  const draftSlots = collectDraftWellnessLeaveSlots(
     drafts,
     ctx.academicYear,
     excludeDates,
     calendarOpts
   );
+  const allSlots = new Set([...usedSlots, ...draftSlots]);
 
   const limitHours = resolveLeaveThresholds(ctx.leaveThresholds).wellnessLeaveHoursPerYear;
-  const allDates = new Set([...usedDates, ...draftDates]);
-  const usedDays = usedDates.size;
-  const draftDays = draftDates.size;
-  const usedHours = usedDays * WELLNESS_HOURS_PER_LEAVE_DAY;
-  const draftHours = draftDays * WELLNESS_HOURS_PER_LEAVE_DAY;
-  const totalHours = allDates.size * WELLNESS_HOURS_PER_LEAVE_DAY;
+  const usedHours = wellnessHoursFromSlots(usedSlots);
+  const totalHours = wellnessHoursFromSlots(allSlots);
+  // 本次淨增（同日已請過的節次不會再重複加滿）
+  const draftHours = Math.max(0, totalHours - usedHours);
+  const usedDays = datesFromWellnessSlots(usedSlots).size;
+  const draftDays = datesFromWellnessSlots(draftSlots).size;
   const exceeded = totalHours > limitHours;
   const remainingAfterDraft = limitHours - totalHours;
 
@@ -631,7 +653,7 @@ export function getWellnessLeaveHoursStatus(
     remainingAfterDraft,
     exceeded,
     warningMessage: exceeded
-      ? `身心調適假每學年限 ${limitHours} 小時（1 日＝${WELLNESS_HOURS_PER_LEAVE_DAY} 小時）。本學年已用 ${usedHours} 小時，本次 ${draftHours} 小時，合計 ${totalHours} 小時，已超出上限 ${totalHours - limitHours} 小時。`
+      ? `身心調適假每學年限 ${limitHours} 小時（1 節＝1 小時，單日最高 ${WELLNESS_HOURS_PER_LEAVE_DAY} 小時）。本學年已用 ${usedHours} 小時，本次新增 ${draftHours} 小時，合計 ${totalHours} 小時，已超出上限 ${totalHours - limitHours} 小時。`
       : null,
   };
 }
