@@ -12,8 +12,8 @@ export const STAMP_KAI_FONT =
 /** 左職稱／右姓名欄寬比（維持目前職稱字級） */
 const TITLE_SHARE = 4.2;
 const NAME_SHARE = 5.8;
-/** 姓名字級相對戳章內高 */
-const NAME_FONT_RATIO = 0.92;
+/** 姓名字級相對戳章內高（略低於貼滿，避免視覺上被拉高） */
+const NAME_FONT_RATIO = 0.78;
 /** 職稱字級相對戳章內高（上限；會再依欄寬下修） */
 const TITLE_FONT_RATIO_TWO = 0.42;
 const TITLE_FONT_RATIO_ONE = 0.5;
@@ -179,7 +179,7 @@ export const ElectronicStamp: React.FC<ElectronicStampProps> = ({
   const nameChars = Math.max(1, [...name].length);
   const nameAvailW =
     widthPx - borderPx * 2 - innerPadX * 2 - titleBlockW - colGap;
-  // 字級貼齊高度（對齊參考圖）；寬度不足時用 letter-spacing／輕微 scaleX，不先砍字級
+  // 字級略低於內高；寬度不足時用 letter-spacing／輕微 scaleX，不先砍字級
   const nameFontPx = innerH * NAME_FONT_RATIO;
   const nameNaturalW = nameChars * nameFontPx * 0.98;
   const nameScaleX = Math.min(1, nameAvailW / Math.max(nameNaturalW, 1));
