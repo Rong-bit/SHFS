@@ -114,7 +114,7 @@ import { CloudSyncPanel } from './CloudSyncPanel';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
 import { breakdownWeeklyOverloadPeriods, normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
-import { downloadSystemManual } from '../../utils/generateManual';
+import { downloadPatrolTeacherManual, downloadSystemManual } from '../../utils/generateManual';
 import { isPasswordHash } from '../../utils/passwordCrypto';
 import { ModalShell } from '../Common/ModalShell';
 import { DraftNumberInput } from '../Common/DraftNumberInput';
@@ -1063,6 +1063,15 @@ export const AdminSettings: React.FC = () => {
           >
             <FileText className="w-3.5 h-3.5 text-indigo-600" />
             <span className="hidden md:inline">下載說明書</span>
+          </button>
+          <button
+            id="btn-admin-download-patrol-manual"
+            onClick={downloadPatrolTeacherManual}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
+            title="下載巡堂老師使用手冊"
+          >
+            <FileText className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden md:inline">巡堂老師手冊</span>
           </button>
 
           {/* Reset Defaults */}

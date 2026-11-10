@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CloudOff, RefreshCw } from 'lucide-react';
+import { CloudOff, FileText, RefreshCw } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PatrolKind, PatrolNotifyRoles, PatrolRecord, PatrolRoom } from '../../types';
 import { dateToIsoLocal } from '../../utils/holidays';
+import { downloadPatrolTeacherManual } from '../../utils/generateManual';
 import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import {
   groupPatrolRooms,
@@ -429,7 +430,7 @@ export const PatrolMain: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {MODES.map((m) => (
           <button
             key={m.id}
@@ -442,6 +443,16 @@ export const PatrolMain: React.FC = () => {
             {m.label}
           </button>
         ))}
+        <button
+          id="btn-patrol-download-manual"
+          type="button"
+          onClick={downloadPatrolTeacherManual}
+          className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+          title="下載巡堂老師使用手冊"
+        >
+          <FileText className="w-3.5 h-3.5 text-emerald-600" />
+          巡堂老師手冊
+        </button>
       </div>
       <p className="text-xs text-slate-500">{MODES.find((m) => m.id === mode)?.hint}</p>
 
