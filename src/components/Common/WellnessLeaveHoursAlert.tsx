@@ -38,8 +38,8 @@ export function WellnessLeaveHoursAlert({ status, showUsage = true }: Props) {
             </>
           )}
           <span className="text-slate-500">
-            （一天 {WELLNESS_HOURS_PER_LEAVE_DAY} 小時
-            {status.draftDays > 0 && <> · 本次 {status.draftDays} 日</>}
+            （1 節＝1 小時 · 單日最高 {WELLNESS_HOURS_PER_LEAVE_DAY} 小時
+            {status.draftDays > 0 && <> · 本次涵蓋 {status.draftDays} 日</>}
             {status.usedDays > 0 && status.draftDays === 0 && <> · 已請 {status.usedDays} 日</>}
             ）
           </span>
