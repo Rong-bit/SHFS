@@ -140,13 +140,22 @@ assert.equal(canDeleteClassLogEntry({ authorTeacherId: 't-sub' }, 't-sub'), true
 assert.equal(canDeleteClassLogEntry({ authorTeacherId: 't-sub' }, 't-orig'), false);
 assert.equal(canDeleteClassLogEntry({ authorTeacherId: 't-sub' }, undefined), false);
 
-// 日期區間 pull 鍵結構（與 classLogSync 路徑一致）
-const pathParts = ['shfs_class_log', 'schoolHash', '2026-11-01', '2026-11-01_2_s-own'];
-assert.equal(pathParts[0], 'shfs_class_log');
-assert.match(pathParts[2], /^\d{4}-\d{2}-\d{2}$/);
+// 日期區間 pull 鍵結構（與 classLogSync 路徑一致：掛在 shfs_patrol/_class_log）
+const pathParts = [
+  'shfs_patrol',
+  'schoolHash',
+  '_class_log',
+  '2026-11-01',
+  '2026-11-01_2_s-own',
+];
+assert.equal(pathParts[0], 'shfs_patrol');
+assert.equal(pathParts[2], '_class_log');
+assert.match(pathParts[3], /^\d{4}-\d{2}-\d{2}$/);
 assert.equal(
-  pathParts[3],
+  pathParts[4],
   classLogEntryId({ date: '2026-11-01', period: 2, sessionId: 's-own' })
 );
+// _class_log 鍵排序在日期之後，不會被巡堂日期區間查詢誤抓
+assert.ok('_class_log' > '2026-12-31');
 
 console.log('regression-class-log: ok');
