@@ -9,7 +9,7 @@ import { PatrolMain } from '../Patrol/PatrolMain';
 import { PatrolReviewInbox } from '../Patrol/PatrolReviewInbox';
 import { ClassLogMain } from '../ClassLog/ClassLogMain';
 import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
-import { canPerformPatrol } from '../../utils/patrolConfig';
+import { canAccessPatrolPortal } from '../../utils/patrolConfig';
 
 export const TeacherPortalMain: React.FC = () => {
   const { requests, currentTeacher, requestTeacherActionAuth, cloudSyncStatus } = useApp();
@@ -98,8 +98,8 @@ export const TeacherPortalMain: React.FC = () => {
                 setActiveTab('patrol');
                 return;
               }
-              if (!canPerformPatrol(currentTeacher)) {
-                window.alert('僅職稱為「組長」或「主任」者可巡堂登錄；科主任無巡堂資格。');
+              if (!canAccessPatrolPortal(currentTeacher)) {
+                window.alert('請先選擇教師身分。');
                 return;
               }
               requestTeacherActionAuth(currentTeacher.id, () => setActiveTab('patrol'), '巡堂登錄');
@@ -107,15 +107,9 @@ export const TeacherPortalMain: React.FC = () => {
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition ${
               activeTab === 'patrol'
                 ? 'bg-slate-900 text-white shadow-sm'
-                : canPerformPatrol(currentTeacher)
-                  ? 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                  : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
-            title={
-              currentTeacher && !canPerformPatrol(currentTeacher)
-                ? '僅組長／主任可巡堂（科主任無資格）'
-                : undefined
-            }
+            title="一般巡堂僅組長／主任；一般教師可於段考日做段考巡堂"
           >
             <MapPin className="w-4 h-4 text-emerald-400" />
             <span>巡堂</span>

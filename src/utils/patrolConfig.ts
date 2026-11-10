@@ -1,15 +1,84 @@
-import { PatrolCheckItem, PatrolRoom, SystemConfig, TeacherTitle } from '../types';
+import {
+  ExamDay,
+  PatrolCheckItem,
+  PatrolKind,
+  PatrolRoom,
+  SystemConfig,
+  TeacherTitle,
+} from '../types';
 import { normalizeTeacherTitle } from './schoolDepartments';
 
-/** 巡堂登錄資格：僅處室「組長」「主任」；科主任／導師／專任／校長不可 */
-export const PATROL_ELIGIBLE_TITLES: TeacherTitle[] = ['組長', '主任'];
+/** 一般巡堂（課間／室外課／放學）：僅處室「組長」「主任」 */
+export const PATROL_FULL_ELIGIBLE_TITLES: TeacherTitle[] = ['組長', '主任'];
 
-export function canPerformPatrol(
+/** @deprecated 改用 PATROL_FULL_ELIGIBLE_TITLES；保留別名避免舊引用中斷 */
+export const PATROL_ELIGIBLE_TITLES = PATROL_FULL_ELIGIBLE_TITLES;
+
+/** 是否可做課間／室外課／放學巡堂（組長、主任） */
+export function canPerformFullPatrol(
   teacher: { title?: string } | null | undefined
 ): boolean {
   if (!teacher?.title) return false;
-  const title = normalizeTeacherTitle(teacher.title);
-  return PATROL_ELIGIBLE_TITLES.includes(title);
+  return PATROL_FULL_ELIGIBLE_TITLES.includes(normalizeTeacherTitle(teacher.title));
+}
+
+/** 該日是否為管理員設定的段考日 */
+export function isConfiguredExamDay(
+  isoDate: string,
+  examDays: Pick<ExamDay, 'date'>[] | null | undefined
+): boolean {
+  if (!isoDate) return false;
+  return (examDays || []).some((d) => d.date === isoDate);
+}
+
+/**
+ * 是否可進入巡堂分頁：
+ * - 段考巡堂：所有師資名冊教師（實際登錄仍限段考日）
+ * - 其餘模式：僅組長／主任
+ */
+export function canAccessPatrolPortal(
+  teacher: { title?: string } | null | undefined
+): boolean {
+  return Boolean(teacher?.title);
+}
+
+/**
+ * 指定巡堂模式是否可選：
+ * - 段考：所有教師可選（日期另限）
+ * - 課間／室外／放學：僅組長／主任
+ */
+export function canPerformPatrolKind(
+  teacher: { title?: string } | null | undefined,
+  kind: PatrolKind
+): boolean {
+  if (!canAccessPatrolPortal(teacher)) return false;
+  if (kind === 'exam') return true;
+  return canPerformFullPatrol(teacher);
+}
+
+/**
+ * 指定日期是否可實際登錄／截章：
+ * - 一般教師段考巡堂：僅限 systemConfig.examDays
+ * - 組長／主任：不限段考日（各模式依職稱）
+ */
+export function canRecordPatrolOnDate(params: {
+  teacher: { title?: string } | null | undefined;
+  kind: PatrolKind;
+  isoDate: string;
+  examDays?: Pick<ExamDay, 'date'>[] | null;
+}): boolean {
+  const { teacher, kind, isoDate, examDays } = params;
+  if (!canPerformPatrolKind(teacher, kind)) return false;
+  if (kind !== 'exam') return true;
+  if (canPerformFullPatrol(teacher)) return true;
+  return isConfiguredExamDay(isoDate, examDays);
+}
+
+/** @deprecated 請改用 canPerformFullPatrol／canPerformPatrolKind */
+export function canPerformPatrol(
+  teacher: { title?: string } | null | undefined
+): boolean {
+  return canPerformFullPatrol(teacher);
 }
 
 export const DEFAULT_PATROL_CHECK_ITEMS: PatrolCheckItem[] = [
