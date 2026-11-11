@@ -568,6 +568,23 @@ assert.equal(deanStampLayout.stampCaption, '教師兼教務主任');
 const principalStampLayout = stampOfficeAndTitle('principal', '校長核章');
 assert.equal(principalStampLayout.titleLabel, '校長');
 assert.equal(principalStampLayout.stampCaption, '校長', '校長不加「教師兼」');
+const secretaryStampLayout = stampOfficeAndTitle('principal', '校長核章', '秘書');
+assert.equal(secretaryStampLayout.titleLabel, '秘書');
+assert.equal(
+  secretaryStampLayout.stampCaption,
+  '教師兼秘書',
+  '秘書登入不可把戳章回退成校長'
+);
+assert.equal(
+  makeSignOff({
+    role: 'principal',
+    personId: 'sec-1',
+    personName: '秘書甲',
+    action: '校長核章',
+    staffTitle: '秘書',
+  }).stampCaption,
+  '教師兼秘書'
+);
 const subjectTeacherStamp = stampOfficeAndTitle('subject_teacher', '閱畢');
 assert.equal(subjectTeacherStamp.stampCaption, '教師', '任課老師戳章為「教師」＋姓名');
 assert.equal(stampOfficeAndTitle('homeroom', '閱畢').stampCaption, '導師');

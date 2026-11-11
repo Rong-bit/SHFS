@@ -3,10 +3,12 @@ import { RefreshCw, Stamp } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { dateToIsoLocal } from '../../utils/holidays';
 import { patrolKindLabel } from '../../utils/patrolExcel';
+import { isPrincipalOfficeStaff } from '../../utils/academicOfficeStaff';
 import {
   applySignOff,
   makeSignOff,
   PATROL_REVIEW_ROLE_LABELS,
+  stampOfficeAndTitle,
   weekRangeContaining,
 } from '../../utils/patrolReview';
 import { usePatrolReviews } from '../../utils/patrolReviewSync';
@@ -27,9 +29,16 @@ export const PatrolPrincipalWeekly: React.FC = () => {
   const [instruction, setInstruction] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const principalStaff =
-    (currentAcademicStaff?.group === 'principal' ? currentAcademicStaff : null) ||
-    academicStaffList.find((s) => s.group === 'principal') ||
+    (currentAcademicStaff && isPrincipalOfficeStaff(currentAcademicStaff)
+      ? currentAcademicStaff
+      : null) ||
+    academicStaffList.find((s) => isPrincipalOfficeStaff(s)) ||
     null;
+  const stampMeta = stampOfficeAndTitle(
+    'principal',
+    '校長核章',
+    principalStaff?.title || '校長'
+  );
 
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom <= dateTo) void refresh(dateFrom, dateTo);
@@ -171,7 +180,7 @@ export const PatrolPrincipalWeekly: React.FC = () => {
         </div>
         {!principalStaff && (
           <p className="text-sm text-amber-800 px-4 py-3 bg-amber-50 border-b border-amber-100">
-            成員名冊尚無校長室人員，無法核章。請至系統管理員 → 成員名冊新增「校長」。
+            成員名冊尚無校長室人員，無法核章。請至系統管理員 → 成員名冊新增「校長」或「秘書」。
           </p>
         )}
         {list.length === 0 ? (
@@ -209,8 +218,10 @@ export const PatrolPrincipalWeekly: React.FC = () => {
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
-            <h3 className="text-lg font-extrabold">校長每周核章</h3>
-            <p className="text-sm text-slate-600">將對 {selected.size} 案蓋校長核章並留存教務處。</p>
+            <h3 className="text-lg font-extrabold">校長室每周核章</h3>
+            <p className="text-sm text-slate-600">
+              將對 {selected.size} 案以{principalStaff?.title || '校長'}身分核章並留存教務處。
+            </p>
             <label className="block text-[11px] font-semibold text-slate-600">
               指示用語（選填，套用至勾選各案）
               <textarea
@@ -231,13 +242,15 @@ export const PatrolPrincipalWeekly: React.FC = () => {
                 </div>
               )}
               <ElectronicStamp
-                stampCaption="校長"
-                officeLabel="校長室"
-                titleLabel="校長"
+                stampCaption={stampMeta.stampCaption}
+                officeLabel={stampMeta.officeLabel}
+                titleLabel={stampMeta.titleLabel}
                 personName={principalStaff?.name || '校長'}
                 size={stampDisplayWidthPx(STAMP_REMARK_COL_PREVIEW_PX)}
               />
-              <div className="text-sm font-extrabold text-slate-900 tracking-wide">校長核章</div>
+              <div className="text-sm font-extrabold text-slate-900 tracking-wide">
+                {principalStaff?.title || '校長'}核章
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <button

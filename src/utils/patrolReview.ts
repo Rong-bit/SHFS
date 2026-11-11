@@ -12,6 +12,7 @@ import {
   PatrolSignOffAction,
   Teacher,
 } from '../types';
+import { isPrincipalOfficeStaff } from './academicOfficeStaff';
 import { teacherNameMatches } from './schoolDepartments';
 import { lookupTeacherEmail } from './teacherEmailImporter';
 
@@ -255,6 +256,7 @@ export function stampTitleFromStaffTitle(staffTitle?: string | null): string | n
   const t = (staffTitle || '').trim();
   if (!t) return null;
   if (/校長/.test(t)) return '校長';
+  if (/秘書/.test(t)) return '秘書';
   if (/主任/.test(t) && !/科主任/.test(t)) return '主任';
   if (/科主任/.test(t)) return '科主任';
   if (/組長/.test(t)) return '組長';
@@ -283,7 +285,9 @@ export function stampCaptionFromRole(
   const t = (staffTitle || '').trim();
   if (t) {
     // 校長：直接「校長」，不加教師兼
-    if (/校長/.test(t) && !/主任|組長/.test(t)) return '校長';
+    if (/校長/.test(t) && !/主任|組長|秘書/.test(t)) return '校長';
+    // 校長室秘書：依登入職稱刻章，不可回退成「校長」
+    if (/秘書/.test(t)) return '教師兼秘書';
     if (/教務主任/.test(t)) return '教師兼教務主任';
     if (/學務主任/.test(t)) return '教師兼學務主任';
     if (/實習主任/.test(t)) return '教師兼實習主任';
@@ -843,7 +847,16 @@ export function viewerReviewRoles(params: {
     group,
   });
   const group = viewer.staffGroup || 'academic';
-  if (group === 'principal') roles.push('principal');
+  if (
+    group === 'principal' ||
+    (viewer.staffTitle &&
+      isPrincipalOfficeStaff({
+        title: viewer.staffTitle,
+        group: group as AcademicStaff['group'],
+      }))
+  ) {
+    roles.push('principal');
+  }
   if (group === 'student_affairs') {
     // 學務主任只走學務主任角色，勿同時當生輔組（戳章會變生輔組／主任）
     if (viewer.staffTitle && isDeanStudentStaff(stub(viewer.staffTitle, 'student_affairs'))) {
