@@ -67,7 +67,7 @@ export function leaveCalendarColor(leaveType?: LeaveType) {
 export function stripTeacherHonorific(name: string): string {
   return String(name || '')
     .replace(/\s+/g, '')
-    .replace(/(老師|教師|科主任|主任|組長|導師)$/g, '');
+    .replace(/(老師|教師|科主任|主任|組長|導師|秘書)$/g, '');
 }
 
 /** 行事曆用「○○○師」 */

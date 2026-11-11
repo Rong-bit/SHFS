@@ -819,7 +819,7 @@ export const AdminSettings: React.FC = () => {
   const calcTeacherFormBase = (title = teacherFormData.title) => {
     if (title === '主任' || title === '校長') return formConfig.standardBasePeriods.director;
     if (title === '科主任') return formConfig.standardBasePeriods.head;
-    if (title === '組長') return formConfig.standardBasePeriods.sectionChief;
+    if (title === '組長' || title === '秘書') return formConfig.standardBasePeriods.sectionChief;
     if (title === '導師') return formConfig.standardBasePeriods.homeroom;
     return formConfig.standardBasePeriods.fulltime;
   };
@@ -827,7 +827,7 @@ export const AdminSettings: React.FC = () => {
   const defaultDutyForTitle = (title: TeacherTitle) => {
     if (title === '科主任') return 2;
     if (title === '導師') return 1;
-    if (title === '組長' || title === '主任' || title === '校長') return 0;
+    if (title === '組長' || title === '秘書' || title === '主任' || title === '校長') return 0;
     return 0;
   };
 
@@ -3174,7 +3174,7 @@ export const AdminSettings: React.FC = () => {
                   <h3 className="font-bold text-sm">全校教師師資名冊</h3>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  超鐘點依課表「兼課」標記。職稱請用下拉選：導師、組長、科主任、主任、校長、專任教師。欄位較多時可左右滑動。
+                  超鐘點依課表「兼課」標記。職稱請用下拉選：導師、組長、科主任、主任、校長、秘書、專任教師。欄位較多時可左右滑動。
                   巡堂異常會辦給教務主任、教學組長、學務主任、生輔組長時，請至「成員名冊」建立對應身分並填公務信箱；此處師資職稱不作為會辦收件依據。
                 </p>
               </div>
@@ -3794,7 +3794,8 @@ export const AdminSettings: React.FC = () => {
                   </select>
                   {(teacherFormData.title === '校長' ||
                     teacherFormData.title === '主任' ||
-                    teacherFormData.title === '組長') && (
+                    teacherFormData.title === '組長' ||
+                    teacherFormData.title === '秘書') && (
                     <span className="text-[10px] text-amber-700 mt-1 block">
                       此為師資節數／減授用職稱，不會成為巡堂會辦收件人。
                       若要會辦給教務主任、教學組長、學務主任或生輔組長，請另於「成員名冊」依組別建立身分並填公務信箱
@@ -3834,7 +3835,7 @@ export const AdminSettings: React.FC = () => {
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-mono font-bold"
                     required
                   />
-                  <span className="text-[10px] text-slate-500 mt-1 block">導師 1、科主任 2、組長／主任／校長 0；超鐘點依課表「兼課」標記，與減授無關</span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">導師 1、科主任 2、組長／秘書／主任／校長 0；超鐘點依課表「兼課」標記，與減授無關</span>
                 </div>
               </div>
 
@@ -3852,8 +3853,8 @@ export const AdminSettings: React.FC = () => {
                       ? `${teacherFormData.title}基本 ${formConfig.standardBasePeriods.director} 節、減授 0 節`
                       : teacherFormData.title === '科主任'
                         ? `科主任基本 ${formConfig.standardBasePeriods.head} 節、減授 ${defaultDutyForTitle('科主任')} 節`
-                        : teacherFormData.title === '組長'
-                          ? `組長基本 ${formConfig.standardBasePeriods.sectionChief} 節、減授 0 節`
+                        : teacherFormData.title === '組長' || teacherFormData.title === '秘書'
+                          ? `${teacherFormData.title}基本 ${formConfig.standardBasePeriods.sectionChief} 節、減授 0 節`
                           : teacherFormData.title === '導師'
                             ? `導師基本 ${formConfig.standardBasePeriods.homeroom} 節、減授 ${defaultDutyForTitle('導師')} 節`
                             : `專任基本 ${formConfig.standardBasePeriods.fulltime} 節、減授 0 節`}
