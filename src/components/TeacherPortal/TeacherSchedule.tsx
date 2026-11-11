@@ -63,6 +63,10 @@ export const TeacherSchedule: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [passwordSavedNotice, setPasswordSavedNotice] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [mobileDay, setMobileDay] = useState<DayOfWeek>(() => {
+    const today = new Date().getDay();
+    return today >= 1 && today <= 5 ? (today as DayOfWeek) : 1;
+  });
 
   if (!currentTeacher) {
     return (
@@ -180,21 +184,21 @@ export const TeacherSchedule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       
       {/* Teacher Profile & Workload Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="order-2 md:order-1 grid grid-cols-1 md:grid-cols-4 gap-4">
         
         {/* Profile Card */}
         <div className="md:col-span-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-5 text-white shadow-sm border border-slate-700/60 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${currentTeacher.avatarBg || 'from-amber-500 to-amber-700'} flex items-center justify-center font-bold text-lg text-white shadow`}>
+              <div className="flex items-start gap-3 min-w-0">
+                <div className={`w-12 h-12 shrink-0 rounded-xl bg-gradient-to-br ${currentTeacher.avatarBg || 'from-amber-500 to-amber-700'} flex items-center justify-center font-bold text-lg text-white shadow`}>
                   {currentTeacher.name.slice(0, 1)}
                 </div>
-                <div>
-                  <div className="flex items-center space-x-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-bold text-slate-100">{currentTeacher.name}</h2>
                     <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-xs font-semibold">
                       {displayTeacherTitle(currentTeacher)}
@@ -215,7 +219,7 @@ export const TeacherSchedule: React.FC = () => {
                           '設定登入密碼'
                         );
                       }}
-                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-[11px] font-medium flex items-center space-x-1 transition"
+                      className="min-h-11 sm:min-h-0 px-3 sm:px-2 py-2 sm:py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg sm:rounded text-sm sm:text-[11px] font-medium flex items-center space-x-1 transition touch-manipulation"
                       title="修改此教師身分的登入密碼（須先通過身分驗證）"
                     >
                       <KeyRound className="w-3 h-3 text-amber-400" />
@@ -238,7 +242,7 @@ export const TeacherSchedule: React.FC = () => {
                           '編輯聯絡資料'
                         );
                       }}
-                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded text-[11px] font-medium"
+                      className="min-h-11 sm:min-h-0 px-3 sm:px-2 py-2 sm:py-0.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded-lg sm:rounded text-sm sm:text-[11px] font-medium touch-manipulation"
                     >
                       填寫分機 / 信箱
                     </button>
@@ -258,7 +262,7 @@ export const TeacherSchedule: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-700/80">
+          <div className="hidden md:block mt-4 pt-3 border-t border-slate-700/80">
             <span className="text-xs text-slate-400">
               點選課堂可調課／派代；工場名稱可直接下拉改選（匯入後對應用）。也可使用上方「新增調代課申請」。
             </span>
@@ -350,8 +354,8 @@ export const TeacherSchedule: React.FC = () => {
 
       </div>
 
-      {/* Weekly Schedule Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      {/* Weekly Schedule Table：手機先看今天的課，個人資料放下面 */}
+      <div className="order-1 md:order-2 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         
         {/* Table Header / Title */}
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
@@ -360,12 +364,12 @@ export const TeacherSchedule: React.FC = () => {
             <h3 className="font-bold text-base text-slate-900">
               {currentTeacher.name} - 每週課堂總表
             </h3>
-            <span className="text-xs text-slate-500">
+            <span className="hidden sm:inline text-xs text-slate-500">
               (點選課堂直接發起調代課申請)
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="hidden sm:flex flex-wrap items-center gap-3 text-xs">
             <span className="flex items-center space-x-1 text-slate-600">
               <span className="w-3 h-3 rounded bg-amber-100 border border-amber-400"></span>
               <span>專業實習工場課</span>
@@ -382,8 +386,129 @@ export const TeacherSchedule: React.FC = () => {
           </div>
         </div>
 
+        {/* 手機：一次看一天，整列可點 */}
+        <div className="md:hidden p-3 space-y-3">
+          <div className="grid grid-cols-5 gap-1.5">
+            {days.map((d) => {
+              const isToday = new Date().getDay() === d.day;
+              const selected = mobileDay === d.day;
+              return (
+                <button
+                  key={d.day}
+                  type="button"
+                  onClick={() => setMobileDay(d.day)}
+                  className={`min-h-11 rounded-xl text-sm font-extrabold touch-manipulation ${
+                    selected
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-50 text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  {d.name}
+                  {isToday && (
+                    <span className={`block text-[10px] font-bold ${selected ? 'text-amber-300' : 'text-amber-600'}`}>
+                      今天
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-500">點課堂即可申請調課或代課。空堂也可點選移入。</p>
+          <div className="space-y-2">
+            {periodDefinitions.map((pDef) => {
+              const slotSessions = getSessionsAt(mobileDay, pDef.period);
+              const session = slotSessions[0];
+              const crossNames = crossClassNamesInSlot(slotSessions);
+              const showCross = crossNames.length > 1;
+              const classLabel = showCross ? crossNames.join('、') : session?.className;
+              const leaveLabel =
+                slotSessions.map((s) => getLeaveCoverLabel(s)).find(Boolean) || null;
+              const swapLabel = session ? getTemporarySwapLabel(session) : null;
+              const subDuty = !session ? getSubDutyAt(mobileDay, pDef.period) : null;
+              const practical = session ? isPracticalSession(session) : false;
+              return (
+                <div
+                  key={pDef.period}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleCellClick(session)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleCellClick(session);
+                    }
+                  }}
+                  className={`w-full text-left rounded-2xl border px-3 py-3 min-h-[4.5rem] touch-manipulation active:scale-[0.99] transition cursor-pointer ${
+                    leaveLabel
+                      ? 'bg-rose-50 border-rose-300'
+                      : swapLabel
+                        ? 'bg-indigo-50 border-indigo-300'
+                        : subDuty
+                          ? 'bg-indigo-50/80 border-dashed border-indigo-300'
+                          : practical
+                            ? 'bg-amber-50 border-amber-300'
+                            : session
+                              ? 'bg-blue-50/70 border-blue-200'
+                              : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-14 shrink-0 text-center">
+                      <div className="text-sm font-extrabold text-slate-900">{pDef.label}</div>
+                      <div className="text-[10px] text-slate-500 font-mono leading-tight">{pDef.timeRange}</div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {session ? (
+                        <>
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {leaveLabel && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-rose-600 text-white rounded font-bold">請假派代</span>
+                            )}
+                            {!leaveLabel && swapLabel && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-indigo-600 text-white rounded font-bold">同班對調</span>
+                            )}
+                            {showCross && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-sky-600 text-white rounded font-bold">跨班</span>
+                            )}
+                            {practical && !leaveLabel && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-amber-500 text-white rounded font-bold">實習</span>
+                            )}
+                          </div>
+                          <div className="font-extrabold text-slate-900">{classLabel}</div>
+                          <div className="text-sm font-semibold text-slate-800">{session.subjectName}</div>
+                          {(leaveLabel || swapLabel) && (
+                            <div className="text-xs text-slate-600 mt-0.5 line-clamp-2">
+                              {(leaveLabel || swapLabel || '').replace(/^\[請假派代\]\s*/, '').replace(/^\[代課\]\s*/, '')}
+                            </div>
+                          )}
+                          <div
+                            className="mt-2 flex items-center gap-1 text-xs text-slate-600"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <SessionVenueSelect session={session} />
+                          </div>
+                        </>
+                      ) : subDuty ? (
+                        <>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-indigo-600 text-white rounded font-bold">代課任務</span>
+                          <div className="font-extrabold text-slate-900 mt-1">{subDuty.originalSession.className}</div>
+                          <div className="text-sm font-semibold">{subDuty.originalSession.subjectName}</div>
+                          <div className="text-xs text-indigo-700 mt-0.5">原任課 {subDuty.applicantTeacherName}</div>
+                        </>
+                      ) : (
+                        <div className="text-sm font-semibold text-slate-400 py-2">空堂 · 點此移入</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Timetable Matrix */}
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-slate-100/80 text-slate-700 text-xs font-bold divide-x divide-slate-200 border-b border-slate-200">

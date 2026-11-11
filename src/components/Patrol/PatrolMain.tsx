@@ -467,7 +467,7 @@ export const PatrolMain: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {MODES.map((m) => {
           const allowed = canPerformPatrolKind(currentTeacher, m.id);
           return (
@@ -481,7 +481,7 @@ export const PatrolMain: React.FC = () => {
                   ? undefined
                   : '僅組長／主任可使用此模式；一般教師僅能於段考日做段考巡堂'
               }
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
+              className={`min-h-11 px-2 sm:px-4 py-2 rounded-xl text-sm font-bold transition touch-manipulation ${
                 mode === m.id
                   ? 'bg-indigo-600 text-white'
                   : allowed
@@ -497,7 +497,7 @@ export const PatrolMain: React.FC = () => {
           id="btn-patrol-download-manual"
           type="button"
           onClick={downloadPatrolTeacherManual}
-          className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+          className="col-span-2 sm:col-span-1 sm:ml-auto inline-flex items-center justify-center gap-1.5 min-h-11 px-3 py-2 rounded-xl text-sm font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 touch-manipulation"
           title="下載巡堂與會辦作業手冊（含主任／組長核章）"
         >
           <FileText className="w-3.5 h-3.5 text-emerald-600" />
@@ -521,8 +521,8 @@ export const PatrolMain: React.FC = () => {
         </p>
       )}
 
-      <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3">
-        <label className="text-[11px] font-semibold text-slate-600">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3">
+        <label className="text-[11px] font-semibold text-slate-600 col-span-1">
           日期
           <input
             type="date"
@@ -538,7 +538,7 @@ export const PatrolMain: React.FC = () => {
                 ? undefined
                 : '一般教師僅能於今天登錄段考巡堂，不可改選其他日期'
             }
-            className={`mt-1 block border border-slate-300 rounded-lg px-2.5 py-2 text-sm ${
+            className={`mt-1 block w-full min-h-11 border border-slate-300 rounded-lg px-2.5 py-2 text-base sm:text-sm ${
               fullPatrolAllowed
                 ? 'bg-slate-50'
                 : 'bg-slate-100 text-slate-500 cursor-not-allowed'
@@ -551,7 +551,7 @@ export const PatrolMain: React.FC = () => {
             <select
               value={period}
               onChange={(e) => setPeriod(Number(e.target.value))}
-              className="mt-1 block bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+              className="mt-1 block w-full min-h-11 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-base sm:text-sm"
             >
               {periodDefs.map((p) => (
                 <option key={p.period} value={p.period}>
@@ -568,11 +568,11 @@ export const PatrolMain: React.FC = () => {
             setDate(dateToIsoLocal(now));
             setPeriod(currentPeriod(now, periodDefs) ?? period);
           }}
-          className="px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          className="col-span-2 sm:col-span-1 min-h-11 px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 touch-manipulation"
         >
           回到現在
         </button>
-        <div className="ml-auto text-right text-xs text-slate-600 space-y-0.5">
+        <div className="col-span-2 sm:col-span-1 sm:ml-auto text-left sm:text-right text-sm text-slate-600 space-y-0.5">
           <div>
             已巡 <strong className="text-slate-900">{doneCount}</strong> / 應巡{' '}
             <strong className="text-slate-900">{targets.length}</strong> 間
@@ -584,9 +584,10 @@ export const PatrolMain: React.FC = () => {
             type="button"
             title="重新載入其他人的紀錄"
             onClick={() => void refresh(date, date)}
-            className="p-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"
+            className="col-span-2 sm:col-span-1 min-h-11 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 touch-manipulation"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>重新載入</span>
           </button>
         )}
       </div>
@@ -603,7 +604,7 @@ export const PatrolMain: React.FC = () => {
       {notifyMsg && (
         <div
           role="status"
-          className="fixed bottom-4 left-1/2 z-[80] w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 shadow-lg flex items-start justify-between gap-3"
+          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] md:bottom-4 left-1/2 z-[80] w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl border border-indigo-300 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 shadow-lg flex items-start justify-between gap-3"
         >
           <span className="font-semibold leading-snug whitespace-pre-wrap">{notifyMsg}</span>
           <button
@@ -623,7 +624,7 @@ export const PatrolMain: React.FC = () => {
               key={b.building}
               type="button"
               onClick={() => setBuildingIdx(i)}
-              className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border ${
+              className={`shrink-0 min-h-11 px-4 py-2 rounded-xl text-sm font-bold border touch-manipulation ${
                 building?.building === b.building
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-600 border-slate-200'
@@ -661,11 +662,11 @@ export const PatrolMain: React.FC = () => {
                           }
                           setOpenRoomId(room.id);
                         }}
-                        className={`text-left rounded-xl border-2 px-2.5 py-2 min-h-[64px] transition active:scale-[0.98] ${tileClass(room)} ${
+                        className={`text-left rounded-xl border-2 px-2.5 py-2.5 min-h-[76px] transition active:scale-[0.98] touch-manipulation ${tileClass(room)} ${
                           !canRecordToday ? 'opacity-60 cursor-not-allowed' : ''
                         }`}
                       >
-                        <div className="text-sm font-extrabold leading-tight">{room.name}</div>
+                        <div className="text-base font-extrabold leading-tight">{room.name}</div>
                         {(mode === 'class' || mode === 'exam') && (() => {
                           const tutors = tutorNamesForRoom(room);
                           if (tutors.length === 0) return null;

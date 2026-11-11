@@ -14,6 +14,8 @@ interface TeacherSearchComboboxProps {
   variant?: 'dark' | 'light';
   /** 撐滿容器寬度（表單用） */
   fullWidth?: boolean;
+  /** 手機頂欄：較高的點選區 */
+  comfortable?: boolean;
   /** 允許清空已選教師（選填欄位：代導師等） */
   allowClear?: boolean;
   /** 下拉清單「不指定」列文字 */
@@ -29,6 +31,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
   compact = false,
   variant = 'dark',
   fullWidth = false,
+  comfortable = false,
   allowClear = false,
   clearLabel = '不指定（清除）',
 }) => {
@@ -133,12 +136,12 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
       : 'pr-7';
 
   const inputClass = isLight
-    ? `w-full pl-9 ${rightPad} py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
-        fullWidth ? '' : compact ? 'min-w-[160px] max-w-[220px]' : 'min-w-[200px] max-w-[280px]'
-      }`
-    : `w-full pl-8 ${rightPad} py-1 rounded-lg text-xs font-semibold bg-slate-900 text-amber-300 placeholder:text-slate-500 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 transition shadow-inner ${
-        fullWidth ? '' : compact ? 'min-w-[160px] max-w-[220px]' : 'min-w-[200px] max-w-[280px]'
-      }`;
+    ? `w-full pl-9 ${rightPad} rounded-xl font-medium bg-slate-50 text-slate-900 placeholder:text-slate-400 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
+        comfortable ? 'py-2.5 text-base min-h-11' : 'py-2.5 text-xs sm:text-sm'
+      } ${fullWidth ? '' : compact ? 'min-w-[160px] max-w-[220px]' : 'min-w-[200px] max-w-[280px]'}`
+    : `w-full pl-8 ${rightPad} rounded-lg font-semibold bg-slate-900 text-amber-300 placeholder:text-slate-500 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 transition shadow-inner ${
+        comfortable ? 'py-2.5 text-base min-h-11' : 'py-1 text-xs'
+      } ${fullWidth ? '' : compact ? 'min-w-[160px] max-w-[220px]' : 'min-w-[200px] max-w-[280px]'}`;
 
   return (
     <div

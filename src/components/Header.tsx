@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Building2,
   Factory,
+  X,
 } from 'lucide-react';
 import { TeacherSearchCombobox } from './Common/TeacherSearchCombobox';
 import { CloudSyncJoinModal } from './Common/CloudSyncJoinModal';
@@ -116,6 +117,7 @@ export const Header: React.FC = () => {
   const [uiFontScale, setUiFontScale] = useState<UiFontScale>(() => readUiFontScale());
   type OfficeMenuKey = 'academic' | 'internship' | 'general' | 'student_affairs';
   const [openOfficeMenu, setOpenOfficeMenu] = useState<OfficeMenuKey | null>(null);
+  const [mobileRoleOpen, setMobileRoleOpen] = useState(false);
   const academicOfficeBtnRef = useRef<HTMLButtonElement>(null);
   const internshipOfficeBtnRef = useRef<HTMLButtonElement>(null);
   const generalAffairsBtnRef = useRef<HTMLButtonElement>(null);
@@ -150,6 +152,20 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [openOfficeMenu]);
 
+  useEffect(() => {
+    if (!mobileRoleOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onResize = () => {
+      if (window.innerWidth >= 768) setMobileRoleOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('resize', onResize);
+    };
+  }, [mobileRoleOpen]);
+
   const switchSubunit = (subunit: StaffSubunit) => {
     setOpenOfficeMenu(null);
     const members = officeMembers(academicStaffList, subunit);
@@ -174,20 +190,46 @@ export const Header: React.FC = () => {
         : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
     }`;
 
+  const mobileRoleLabel =
+    currentRole === 'teacher'
+      ? '教師端'
+      : currentRole === 'admin'
+        ? '系統管理員'
+        : currentRole === 'principal'
+          ? '校長'
+          : currentSubunit
+            ? subunitLoginLabel(currentSubunit)
+            : '選擇身分';
+
+  const pickMobileRole = (role: UserRole) => {
+    setMobileRoleOpen(false);
+    requestRoleSwitchWithAuth(role);
+  };
+
+  const pickMobileSubunit = (subunit: StaffSubunit) => {
+    setMobileRoleOpen(false);
+    switchSubunit(subunit);
+  };
+
+  const mobileSheetItem = (active: boolean) =>
+    `w-full min-h-12 px-3 rounded-xl flex items-center gap-2 text-left text-base font-bold touch-manipulation ${
+      active ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-100 active:bg-slate-700'
+    }`;
+
   return (
     <>
     <header className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-md print:hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-14 md:h-16 gap-2 min-w-0">
           
           {/* Logo & School Name */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-tr from-amber-500 via-amber-600 to-indigo-600 flex items-center justify-center shadow-inner">
-              <GraduationCap className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-2 md:space-x-3 min-w-0">
+            <div className="w-9 h-9 md:w-10 md:h-10 shrink-0 rounded-lg bg-gradient-to-tr from-amber-500 via-amber-600 to-indigo-600 flex items-center justify-center shadow-inner">
+              <GraduationCap className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-bold text-base tracking-wide text-slate-100">
+            <div className="min-w-0">
+              <div className="flex items-center space-x-2 min-w-0">
+                <span className="font-bold text-sm md:text-base tracking-wide text-slate-100 truncate">
                   {systemConfig.schoolName || '高雄市立中正高工'}
                 </span>
                 <span className="hidden md:inline-block px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full">
@@ -203,7 +245,7 @@ export const Header: React.FC = () => {
           {/* Right Actions: Sync */}
           <div className="flex items-center space-x-2 sm:space-x-3">
             <label
-              className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-300 shrink-0"
+              className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-300 shrink-0 min-h-11"
               title="僅本機畫面字級，不影響列印與 Excel"
             >
               <Type className="w-3.5 h-3.5 text-slate-400" />
@@ -215,7 +257,7 @@ export const Header: React.FC = () => {
                   setUiFontScale(next);
                   persistUiFontScale(next);
                 }}
-                className="bg-slate-900 text-slate-100 font-medium px-1.5 py-1 rounded-md border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-[11px] sm:text-xs"
+                className="bg-slate-900 text-slate-100 font-medium px-1.5 py-1 rounded-md border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 text-[11px] sm:text-xs min-h-11 sm:min-h-0"
               >
                 {UI_FONT_SCALE_OPTIONS.map((opt) => (
                   <option key={opt.id} value={opt.id}>
@@ -228,17 +270,25 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsSyncJoinOpen(true)}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-[11px] sm:text-xs font-bold border border-sky-500/40 transition"
+                className="flex items-center justify-center gap-1 min-h-11 min-w-11 px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-[11px] sm:text-xs font-bold border border-sky-500/40 transition touch-manipulation"
+                aria-label="加入同步"
                 title="教師電腦不必進系統管理員，輸入學校同步密碼即可"
               >
                 <Cloud className="w-3.5 h-3.5" />
-                <span>加入同步</span>
+                <span className="hidden sm:inline">加入同步</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setIsSyncJoinOpen(true)}
-                className={`flex items-center space-x-1 px-2 py-1.5 rounded-lg text-[11px] border ${
+                aria-label={
+                  cloudSyncStatus === 'synced'
+                    ? '已跨電腦同步'
+                    : cloudSyncStatus === 'error'
+                      ? '同步失敗'
+                      : '同步中'
+                }
+                className={`flex items-center justify-center gap-1 min-h-11 min-w-11 px-2 py-1.5 rounded-lg text-[11px] border touch-manipulation ${
                   cloudSyncStatus === 'synced'
                     ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                     : cloudSyncStatus === 'error'
@@ -254,7 +304,7 @@ export const Header: React.FC = () => {
                 ) : (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 )}
-                <span>
+                <span className="hidden sm:inline">
                   {cloudSyncStatus === 'synced' ? '已跨電腦同步' : cloudSyncStatus === 'error' ? '同步失敗' : '同步中'}
                 </span>
               </button>
@@ -266,7 +316,7 @@ export const Header: React.FC = () => {
         <CloudSyncJoinModal isOpen={isSyncJoinOpen} onClose={() => setIsSyncJoinOpen(false)} />
 
         {/* Sub-header Navigation / Role Switcher */}
-        <div className="flex flex-wrap items-center justify-between border-t border-slate-800/80 py-2 gap-2 overflow-visible">
+        <div className="hidden md:flex flex-wrap items-center justify-between border-t border-slate-800/80 py-2 gap-2 overflow-visible">
           {/* Role Navigation Pills（勿加 overflow-x，否則會裁掉處室下拉選單） */}
           <div className="flex flex-wrap items-center gap-1 sm:gap-2">
             <button
@@ -598,8 +648,219 @@ export const Header: React.FC = () => {
             </div>
           )}
         </div>
+
+        <div className="md:hidden border-t border-slate-800/80 py-2 space-y-2">
+          <button
+            type="button"
+            onClick={() => setMobileRoleOpen(true)}
+            className="w-full min-h-12 px-3 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2 text-left touch-manipulation"
+            aria-haspopup="dialog"
+            aria-expanded={mobileRoleOpen}
+          >
+            <span className="text-[11px] text-slate-400 shrink-0">目前身分</span>
+            <span className="flex-1 min-w-0 text-sm font-bold text-amber-300 truncate">
+              {mobileRoleLabel}
+            </span>
+            <span className="text-xs font-bold text-white shrink-0">切換</span>
+            <ChevronDown className="w-4 h-4 text-slate-300 shrink-0" />
+          </button>
+
+          {currentRole === 'teacher' && (
+            <div className="rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-2">
+              <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1">
+                <User className="w-3.5 h-3.5 text-amber-400" />
+                登入教師
+              </p>
+              <TeacherSearchCombobox
+                teachers={teachers}
+                currentTeacherId={currentTeacherId}
+                onSelectTeacher={(tId) => requestTeacherSwitchWithAuth(tId)}
+                placeholder="輸入姓名或科別搜尋..."
+                fullWidth
+                comfortable
+              />
+            </div>
+          )}
+
+          {(currentRole === 'academic' ||
+            currentRole === 'accounting' ||
+            currentRole === 'student_affairs' ||
+            currentRole === 'principal') &&
+            (() => {
+              const sub =
+                currentSubunit ||
+                (currentRole === 'accounting'
+                  ? 'cashier'
+                  : currentRole === 'principal'
+                    ? 'principal'
+                    : currentRole === 'student_affairs'
+                      ? 'student_section'
+                      : 'teaching');
+              const members = officeMembers(academicStaffList, sub);
+              return (
+                <div className="rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-2 space-y-2">
+                  <p className="text-[11px] text-slate-400">{subunitLoginLabel(sub)}</p>
+                  <select
+                    id={`select-header-mobile-${currentRole}-staff`}
+                    value={
+                      members.some((m) => m.id === currentAcademicStaffId)
+                        ? currentAcademicStaffId
+                        : members[0]?.id || ''
+                    }
+                    onChange={(e) =>
+                      requestRoleSwitchWithAuth(currentRole, e.target.value, {
+                        staffSubunit: sub,
+                      })
+                    }
+                    className="w-full min-h-11 bg-slate-900 text-amber-300 font-bold px-3 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  >
+                    {members.length === 0 ? (
+                      <option value="">（名冊尚無此身分）</option>
+                    ) : (
+                      members.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.title})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setIsStaffPasswordOpen(true)}
+                    className="w-full min-h-11 rounded-lg bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 text-sm font-bold flex items-center justify-center gap-1.5 touch-manipulation"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    修改登入密碼
+                  </button>
+                </div>
+              );
+            })()}
+        </div>
       </div>
     </header>
+
+    {mobileRoleOpen && (
+      <div className="md:hidden fixed inset-0 z-[60] flex flex-col justify-end">
+        <button
+          type="button"
+          aria-label="關閉身分選單"
+          className="absolute inset-0 bg-slate-950/70"
+          onClick={() => setMobileRoleOpen(false)}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="切換身分"
+          className="relative max-h-[min(86dvh,640px)] overflow-y-auto overscroll-contain rounded-t-3xl bg-slate-900 text-white border-t border-slate-700 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
+        >
+          <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-600" />
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-extrabold">切換身分</h2>
+            <button
+              type="button"
+              onClick={() => setMobileRoleOpen(false)}
+              className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl text-slate-300 hover:bg-slate-800"
+              aria-label="關閉"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => pickMobileRole('teacher')}
+              className={mobileSheetItem(currentRole === 'teacher')}
+            >
+              <User className="w-5 h-5 shrink-0" />
+              教師端
+            </button>
+
+            {(
+              [
+                {
+                  title: '教務處',
+                  items: [
+                    { subunit: 'academic_dean' as const, label: '教務主任', icon: Landmark },
+                    {
+                      subunit: 'teaching' as const,
+                      label: '教學組',
+                      icon: ClipboardCheck,
+                      badge: pendingCount,
+                    },
+                  ],
+                },
+                {
+                  title: '實習處',
+                  items: [
+                    { subunit: 'internship_dean' as const, label: '實習主任', icon: Landmark },
+                    { subunit: 'internship_section' as const, label: '實習組', icon: Factory },
+                  ],
+                },
+                {
+                  title: '總務處',
+                  items: [
+                    { subunit: 'general_dean' as const, label: '總務主任', icon: Landmark },
+                    { subunit: 'cashier' as const, label: '出納組', icon: Calculator },
+                  ],
+                },
+                {
+                  title: '學務處',
+                  items: [
+                    { subunit: 'student_dean' as const, label: '學務主任', icon: Landmark },
+                    { subunit: 'student_section' as const, label: '生輔組', icon: Shield },
+                  ],
+                },
+              ] as const
+            ).map((office) => (
+              <section key={office.title} className="space-y-2">
+                <p className="text-xs font-bold text-slate-400 px-1">{office.title}</p>
+                {office.items.map((item) => {
+                  const Icon = item.icon;
+                  const badge = 'badge' in item ? item.badge : 0;
+                  return (
+                    <button
+                      key={item.subunit}
+                      type="button"
+                      onClick={() => pickMobileSubunit(item.subunit)}
+                      className={mobileSheetItem(
+                        currentRole === roleForSubunit(item.subunit) &&
+                          currentSubunit === item.subunit
+                      )}
+                    >
+                      <Icon className="w-5 h-5 shrink-0" />
+                      <span className="flex-1">{item.label}</span>
+                      {badge > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-xs font-bold">
+                          {badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </section>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => pickMobileRole('principal')}
+              className={mobileSheetItem(currentRole === 'principal')}
+            >
+              <Landmark className="w-5 h-5 shrink-0" />
+              校長
+            </button>
+            <button
+              type="button"
+              onClick={() => pickMobileRole('admin')}
+              className={mobileSheetItem(currentRole === 'admin')}
+            >
+              <Settings className="w-5 h-5 shrink-0" />
+              系統管理員
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {isStaffPasswordOpen &&
       currentAcademicStaff &&

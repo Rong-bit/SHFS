@@ -552,26 +552,26 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="pt-2 flex items-center justify-between gap-3">
-              <span className="text-[11px] text-slate-500 max-w-[12rem] leading-snug">
+            <div className="pt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-[11px] text-slate-500 leading-snug sm:max-w-[12rem]">
                 取消勾選則每次都要輸入密碼
               </span>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     if (target.onCancel) target.onCancel();
                     onClose();
                   }}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-slate-700"
+                  className="flex-1 sm:flex-none min-h-11 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition border border-slate-700 touch-manipulation"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={isSuccess || isVerifying}
-                  className={`px-5 py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center space-x-1.5 ${
+                  className={`flex-[1.4] sm:flex-none min-h-11 px-5 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition shadow-md flex items-center justify-center gap-1.5 touch-manipulation ${
                     isSuccess
                       ? 'bg-emerald-600 text-white'
                       : 'bg-amber-500 hover:bg-amber-400 text-slate-950 active:scale-95'
