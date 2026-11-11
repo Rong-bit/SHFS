@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, CloudOff, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, BookOpen, CloudOff, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ClassLogEntry } from '../../types';
+import { ClassLogEntry, ClassLogTransfer } from '../../types';
 import { dateToIsoLocal } from '../../utils/holidays';
 import { dateToDayOfWeek } from '../../utils/leaveDates';
 import {
@@ -14,6 +14,8 @@ import {
   shouldDefaultApplyConsecutive,
 } from '../../utils/classLogSlots';
 import { useClassLogs } from '../../utils/classLogSync';
+import { useClassLogTransfers } from '../../utils/classLogTransferSync';
+import { ClassLogTransferDialog } from './ClassLogTransferDialog';
 import { ModalShell } from '../Common/ModalShell';
 import { ElectronicStamp, stampDisplayWidthPx } from '../Common/ElectronicStamp';
 
@@ -23,6 +25,7 @@ const STAMP_CAPTION = '教師';
 type DraftState = {
   slot: ClassLogSlot;
   progress: string;
+  assessment: string;
   note: string;
   existing?: ClassLogEntry;
   /** 同班同科目連續節一併寫入 */
@@ -30,8 +33,13 @@ type DraftState = {
   consecutiveSlots: ClassLogSlot[];
 };
 
+const sameLogBody = (a: ClassLogEntry, b: ClassLogEntry) =>
+  (a.progress || '') === (b.progress || '') &&
+  (a.note || '') === (b.note || '') &&
+  (a.assessment || '') === (b.assessment || '');
+
 export const ClassLogMain: React.FC = () => {
-  const { sessions, requests, currentTeacher } = useApp();
+  const { sessions, requests, currentTeacher, teachers } = useApp();
   const {
     entries,
     pendingCount,
@@ -42,15 +50,27 @@ export const ClassLogMain: React.FC = () => {
     deleteEntries,
     refresh,
   } = useClassLogs();
+  const {
+    transfers,
+    pendingCount: transferPendingCount,
+    error: transferError,
+    saveTransfers,
+    deleteTransfers,
+    refresh: refreshTransfers,
+  } = useClassLogTransfers();
   const [date, setDate] = useState(() => dateToIsoLocal(new Date()));
   const [draft, setDraft] = useState<DraftState | null>(null);
+  const [transferSlot, setTransferSlot] = useState<ClassLogSlot | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmRecallId, setConfirmRecallId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void refresh(date, date);
-  }, [date, refresh]);
+    void refreshTransfers(date, date);
+  }, [date, refresh, refreshTransfers]);
 
   const slots = useMemo(() => {
     if (!currentTeacher) return [];
@@ -59,8 +79,11 @@ export const ClassLogMain: React.FC = () => {
       isoDate: date,
       sessions,
       requests,
+      transfers,
     });
-  }, [currentTeacher, date, sessions, requests]);
+  }, [currentTeacher, date, sessions, requests, transfers]);
+
+  const fillableSlots = useMemo(() => slots.filter((s) => !s.transferredOut), [slots]);
 
   const entriesById = useMemo(() => {
     const map = new Map<string, ClassLogEntry>();
@@ -71,7 +94,7 @@ export const ClassLogMain: React.FC = () => {
   }, [entries, date]);
 
   // 已填只計本節真實寫入，不含「同連續節內容」鏡射
-  const filledCount = slots.filter((s) =>
+  const filledCount = fillableSlots.filter((s) =>
     entriesById.has(classLogEntryId({ date, period: s.period, sessionId: s.sessionId }))
   ).length;
 
@@ -81,14 +104,17 @@ export const ClassLogMain: React.FC = () => {
     const display =
       existing ||
       resolveClassLogDisplayEntry({ slot, date, slots, entriesById });
-    const consecutiveSlots = findConsecutiveClassLogSlots(slots, slot);
+    if (slot.transferredOut) return;
+    const consecutiveSlots = findConsecutiveClassLogSlots(fillableSlots, slot);
     const progress = display?.progress || '';
     const note = display?.note || '';
+    const assessment = display?.assessment || '';
     setFormError('');
     setConfirmDeleteId(null);
     setDraft({
       slot,
       progress,
+      assessment,
       note,
       existing,
       applyConsecutive: shouldDefaultApplyConsecutive({
@@ -98,6 +124,7 @@ export const ClassLogMain: React.FC = () => {
         entriesById,
         displayProgress: progress,
         displayNote: note,
+        displayAssessment: assessment,
       }),
       consecutiveSlots,
     });
@@ -117,6 +144,7 @@ export const ClassLogMain: React.FC = () => {
     const now = new Date().toISOString();
     const dow = dateToDayOfWeek(date) ?? draft.slot.dayOfWeek;
     const note = draft.note.trim() || undefined;
+    const assessment = draft.assessment.trim() || undefined;
     const targets =
       draft.applyConsecutive && draft.consecutiveSlots.length > 1
         ? draft.consecutiveSlots
@@ -144,6 +172,7 @@ export const ClassLogMain: React.FC = () => {
         authorTeacherName: currentTeacher.name,
         isSubstituteFill: target.isSubstituteFill,
         progress,
+        assessment,
         note,
         stampedAt: now,
         stampCaption: STAMP_CAPTION,
@@ -176,18 +205,14 @@ export const ClassLogMain: React.FC = () => {
       draft?.slot ||
       slots.find((s) => s.period === entry.period && s.sessionId === entry.sessionId);
     const block = centerSlot
-      ? findConsecutiveClassLogSlots(slots, centerSlot)
+      ? findConsecutiveClassLogSlots(fillableSlots, centerSlot)
       : [];
     const toDelete: ClassLogEntry[] = [];
     for (const s of block) {
       const id = classLogEntryId({ date, period: s.period, sessionId: s.sessionId });
       const e = entriesById.get(id);
       if (!e || e.authorTeacherId !== entry.authorTeacherId) continue;
-      if (
-        e.id === entry.id ||
-        ((e.progress || '') === (entry.progress || '') &&
-          (e.note || '') === (entry.note || ''))
-      ) {
+      if (e.id === entry.id || sameLogBody(e, entry)) {
         toDelete.push(e);
       }
     }
@@ -198,6 +223,70 @@ export const ClassLogMain: React.FC = () => {
       setDraft(null);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '刪除失敗，請再試一次');
+    }
+  };
+
+  const buildTransfer = (target: ClassLogSlot, toId: string, toName: string, note: string, now: string): ClassLogTransfer => ({
+    id: classLogEntryId({ date, period: target.period, sessionId: target.sessionId }),
+    date,
+    period: target.period,
+    dayOfWeek: target.dayOfWeek,
+    sessionId: target.sessionId,
+    className: target.className,
+    subjectName: target.subjectName,
+    venueName: target.venueName,
+    originalTeacherId: target.originalTeacherId,
+    originalTeacherName: target.originalTeacherName,
+    naturalHolderId: target.naturalHolderId,
+    naturalHolderName: target.naturalHolderName,
+    fromTeacherId: currentTeacher?.id || '',
+    fromTeacherName: currentTeacher?.name || '',
+    toTeacherId: toId,
+    toTeacherName: toName,
+    actorId: currentTeacher?.id || '',
+    actorName: currentTeacher?.name || '',
+    actorKind: 'teacher',
+    note: note.trim() || undefined,
+    createdAt: target.transfer?.createdAt || now,
+    updatedAt: now,
+  });
+
+  const handleTransfer = (toId: string, note: string, applyConsecutive: boolean) => {
+    if (!transferSlot || !currentTeacher) return;
+    const to = teachers.find((t) => t.id === toId);
+    if (!to || to.id === currentTeacher.id) {
+      setActionError('請選擇其他老師');
+      return;
+    }
+    const block = findConsecutiveClassLogSlots(fillableSlots, transferSlot);
+    const targets = applyConsecutive && block.length > 1 ? block : [transferSlot];
+    const now = new Date().toISOString();
+    const back = targets.filter((target) => target.naturalHolderId === to.id);
+    const onward = targets.filter((target) => target.naturalHolderId !== to.id);
+    try {
+      deleteTransfers(back.flatMap((target) => (target.transfer ? [target.transfer] : [])));
+      if (onward.length > 0) {
+        saveTransfers(onward.map((target) => buildTransfer(target, to.id, to.name, note, now)));
+      }
+      setTransferSlot(null);
+      setActionError('');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '轉移失敗，請再試一次');
+    }
+  };
+
+  const handleRecall = (slot: ClassLogSlot) => {
+    if (!slot.transfer) return;
+    if (confirmRecallId !== slot.transfer.id) {
+      setConfirmRecallId(slot.transfer.id);
+      return;
+    }
+    try {
+      deleteTransfers([slot.transfer]);
+      setConfirmRecallId(null);
+      setActionError('');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '收回失敗，請再試一次');
     }
   };
 
@@ -222,17 +311,22 @@ export const ClassLogMain: React.FC = () => {
           />
         </label>
         <div className="text-xs text-slate-600 pb-2">
-          應填 <span className="font-bold text-slate-900">{slots.length}</span> 節 · 已填{' '}
+          應填 <span className="font-bold text-slate-900">{fillableSlots.length}</span> 節 · 已填{' '}
           <span className="font-bold text-emerald-700">{filledCount}</span>
-          {pendingCount > 0 && (
-            <span className="ml-2 text-amber-700">待上傳 {pendingCount} 筆</span>
+          {(pendingCount > 0 || transferPendingCount > 0) && (
+            <span className="ml-2 text-amber-700">
+              待上傳 {pendingCount + transferPendingCount} 筆
+            </span>
           )}
         </div>
         <div className="ml-auto flex gap-2">
           {cloudReady && (
             <button
               type="button"
-              onClick={() => void refresh(date, date)}
+              onClick={() => {
+                void refresh(date, date);
+                void refreshTransfers(date, date);
+              }}
               className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -248,9 +342,11 @@ export const ClassLogMain: React.FC = () => {
           這台電腦尚未加入學校同步，日誌只存在本機；教學組看不到。
         </p>
       )}
-      {error && (
+      {(error || transferError || actionError) && (
         <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
-          {error}
+          {[error, transferError, actionError]
+            .filter((msg, i, arr) => msg && arr.indexOf(msg) === i)
+            .join(' ')}
         </p>
       )}
 
@@ -258,7 +354,7 @@ export const ClassLogMain: React.FC = () => {
         <div className="bg-white border border-slate-200 rounded-2xl px-4 py-10 text-center text-sm text-slate-500">
           {dateToDayOfWeek(date) == null
             ? '週末無課表課堂，無需填寫教室日誌。'
-            : '本日沒有您的授課或核准代課課堂。'}
+            : '本日沒有您的授課、代課或轉入的課堂。'}
         </div>
       ) : (
         <div className="space-y-2">
@@ -275,63 +371,115 @@ export const ClassLogMain: React.FC = () => {
               slots,
               entriesById,
             });
-            const mirrored = Boolean(display && !own);
+            const mirrored = Boolean(display && !own && !slot.transferredOut);
+            const recallLabel = slot.transferredIn ? '退回' : '收回';
             return (
-              <button
+              <div
                 key={id}
-                type="button"
-                onClick={() => openSlot(slot)}
-                className="w-full text-left bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 rounded-2xl px-4 py-3 min-h-[4.5rem] transition touch-manipulation active:bg-indigo-50"
+                className={`bg-white border rounded-2xl ${
+                  slot.transferredOut ? 'border-slate-200 bg-slate-50' : 'border-slate-200'
+                }`}
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1 text-sm font-extrabold text-slate-900">
-                        <BookOpen className="w-4 h-4 text-indigo-500" />
-                        第{slot.period}節 · {slot.className} · {slot.subjectName}
-                      </span>
-                      {slot.isSubstituteFill && (
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                          代課（原：{slot.originalTeacherName}）
+                <button
+                  type="button"
+                  onClick={() => openSlot(slot)}
+                  disabled={slot.transferredOut}
+                  className="w-full text-left px-4 py-3 min-h-[4.5rem] transition disabled:cursor-default enabled:hover:border-indigo-300 enabled:hover:bg-indigo-50/40 touch-manipulation active:bg-indigo-50"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 text-sm font-extrabold text-slate-900">
+                          <BookOpen className="w-4 h-4 text-indigo-500" />
+                          第{slot.period}節 · {slot.className} · {slot.subjectName}
                         </span>
+                        {slot.isSubstituteFill && !slot.transferredIn && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                            代課（原：{slot.originalTeacherName}）
+                          </span>
+                        )}
+                        {slot.transferredIn && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900">
+                            {slot.transfer?.actorKind === 'academic' ? '教學組轉入' : '同事轉入'}
+                            （{slot.transfer?.fromTeacherName}）
+                          </span>
+                        )}
+                        {slot.transferredOut && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                            已轉給 {slot.holderTeacherName}
+                          </span>
+                        )}
+                        {!slot.transferredOut &&
+                          (own ? (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              已填
+                            </span>
+                          ) : mirrored ? (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                              同連續節內容
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                              未填
+                            </span>
+                          ))}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        星期{DAY_LABELS[slot.dayOfWeek] || '—'} · {slot.venueName || '未指定場地'}
+                      </p>
+                      {slot.transfer?.note && (
+                        <p className="mt-1 text-xs text-slate-500">轉移備註：{slot.transfer.note}</p>
                       )}
-                      {own ? (
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                          已填
-                        </span>
-                      ) : mirrored ? (
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
-                          同連續節內容
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                          未填
-                        </span>
+                      {!slot.transferredOut && display && (
+                        <p className="mt-1.5 text-sm text-slate-800 line-clamp-2">{display.progress}</p>
+                      )}
+                      {!slot.transferredOut && display?.assessment && (
+                        <p className="mt-1 text-xs text-indigo-800 line-clamp-2">
+                          測驗／作業：{display.assessment}
+                        </p>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      星期{DAY_LABELS[slot.dayOfWeek] || '—'} · {slot.venueName || '未指定場地'}
-                    </p>
-                    {display && (
-                      <p className="mt-1.5 text-sm text-slate-800 line-clamp-2">
-                        {display.progress}
-                      </p>
+                    {!slot.transferredOut && display && (
+                      <div className="shrink-0 flex flex-col items-center gap-1">
+                        <ElectronicStamp
+                          stampCaption={display.stampCaption || STAMP_CAPTION}
+                          personName={display.authorTeacherName}
+                          size={stampDisplayWidthPx(120)}
+                        />
+                        <span className="text-[10px] text-slate-500">
+                          {display.stampedAt.replace('T', ' ').slice(0, 16)}
+                        </span>
+                      </div>
                     )}
                   </div>
-                  {display && (
-                    <div className="shrink-0 flex flex-col items-center gap-1">
-                      <ElectronicStamp
-                        stampCaption={display.stampCaption || STAMP_CAPTION}
-                        personName={display.authorTeacherName}
-                        size={stampDisplayWidthPx(120)}
-                      />
-                      <span className="text-[10px] text-slate-500">
-                        {display.stampedAt.replace('T', ' ').slice(0, 16)}
-                      </span>
-                    </div>
+                </button>
+                <div className="px-4 pb-3 flex flex-wrap gap-2">
+                  {!slot.transferredOut && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmRecallId(null);
+                        setActionError('');
+                        setTransferSlot(slot);
+                      }}
+                      className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-indigo-200 text-xs font-bold text-indigo-800 hover:bg-indigo-50 touch-manipulation"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                      轉給其他老師
+                    </button>
+                  )}
+                  {slot.transfer && (slot.transferredOut || slot.transferredIn) && (
+                    <button
+                      type="button"
+                      onClick={() => handleRecall(slot)}
+                      className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 touch-manipulation"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                      {confirmRecallId === slot.transfer.id ? `再按一次${recallLabel}` : recallLabel}
+                    </button>
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -352,6 +500,11 @@ export const ClassLogMain: React.FC = () => {
                   （代課，原任課：{draft.slot.originalTeacherName}）
                 </span>
               )}
+              {draft.slot.transferredIn && (
+                <span className="ml-1 text-indigo-800">
+                  （由{draft.slot.transfer?.fromTeacherName}轉入）
+                </span>
+              )}
             </p>
           </div>
           {/* min-h-0：Safari 才會讓中間區收縮，底欄「更新並截章」才點得到 */}
@@ -366,6 +519,16 @@ export const ClassLogMain: React.FC = () => {
                 }}
                 rows={3}
                 placeholder="例：完成第三章第 2 節習題講解"
+                className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-base sm:text-sm text-slate-900"
+              />
+            </label>
+            <label className="block text-[11px] font-semibold text-slate-600">
+              測驗或作業（選填）
+              <textarea
+                value={draft.assessment}
+                onChange={(e) => setDraft({ ...draft, assessment: e.target.value })}
+                rows={3}
+                placeholder="例：小考第三章；習題 1～5，下週一繳交"
                 className="mt-1 w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-base sm:text-sm text-slate-900"
               />
             </label>
@@ -392,7 +555,7 @@ export const ClassLogMain: React.FC = () => {
                   一併套用至連續節次（第
                   {draft.consecutiveSlots.map((s) => s.period).join('、')}節，同班同科目）
                   {draft.applyConsecutive
-                    ? '：送出後各節皆寫入相同進度與截章'
+                    ? '：送出後各節皆寫入相同進度、測驗或作業與截章'
                     : '：僅寫入本節'}
                 </span>
               </label>
@@ -452,6 +615,23 @@ export const ClassLogMain: React.FC = () => {
             </div>
           </div>
         </ModalShell>
+      )}
+
+      {transferSlot && (
+        <ClassLogTransferDialog
+          detail={`${date} 第${transferSlot.period}節 · ${transferSlot.className} · ${transferSlot.subjectName}`}
+          teachers={teachers}
+          excludeIds={[currentTeacher.id]}
+          consecutivePeriods={findConsecutiveClassLogSlots(fillableSlots, transferSlot).map(
+            (s) => s.period
+          )}
+          submitError={actionError}
+          onClose={() => {
+            setTransferSlot(null);
+            setActionError('');
+          }}
+          onConfirm={handleTransfer}
+        />
       )}
     </div>
   );

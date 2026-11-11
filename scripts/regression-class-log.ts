@@ -3,7 +3,7 @@
  * 執行：npx tsx scripts/regression-class-log.ts
  */
 import assert from 'node:assert/strict';
-import type { CourseSession, DayOfWeek, SubstituteRequest } from '../src/types';
+import type { ClassLogTransfer, CourseSession, DayOfWeek, SubstituteRequest } from '../src/types';
 import {
   canDeleteClassLogEntry,
   classLogEntryId,
@@ -357,5 +357,215 @@ assert.deepEqual(
   '佇列過長只留尾端'
 );
 assert.deepEqual(trimPendingOps([1, 2], 5), [1, 2], '未超限不修剪');
+
+// —— 填寫責任轉移 ——
+function transfer(partial: Partial<ClassLogTransfer> & Pick<ClassLogTransfer, 'toTeacherId' | 'toTeacherName' | 'sessionId' | 'period'>): ClassLogTransfer {
+  const id = classLogEntryId({
+    date: '2026-11-10',
+    period: partial.period,
+    sessionId: partial.sessionId,
+  });
+  return {
+    id,
+    date: '2026-11-10',
+    period: partial.period,
+    dayOfWeek: tue,
+    sessionId: partial.sessionId,
+    className: '機二忠',
+    subjectName: '實習',
+    venueName: '忠孝301',
+    originalTeacherId: 't-sub',
+    originalTeacherName: '代課乙',
+    naturalHolderId: 't-sub',
+    naturalHolderName: '代課乙',
+    fromTeacherId: 't-sub',
+    fromTeacherName: '代課乙',
+    toTeacherId: partial.toTeacherId,
+    toTeacherName: partial.toTeacherName,
+    actorId: 't-sub',
+    actorName: '代課乙',
+    actorKind: 'teacher',
+    createdAt: '2026-11-10T01:00:00.000Z',
+    updatedAt: '2026-11-10T01:00:00.000Z',
+    ...partial,
+  };
+}
+
+const xferSessions = [
+  session({
+    id: 'c2',
+    period: 2,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  }),
+  session({
+    id: 'c3',
+    period: 3,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  }),
+  session({
+    id: 'c4',
+    period: 4,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  }),
+];
+const moved = transfer({
+  sessionId: 'c3',
+  period: 3,
+  toTeacherId: 't-orig',
+  toTeacherName: '原任甲',
+});
+const giverSlots = listClassLogSlotsForTeacher({
+  teacherId: 't-sub',
+  isoDate: '2026-11-10',
+  sessions: xferSessions,
+  requests: [],
+  transfers: [moved],
+});
+const receiverSlots = listClassLogSlotsForTeacher({
+  teacherId: 't-orig',
+  isoDate: '2026-11-10',
+  sessions: xferSessions,
+  requests: [],
+  transfers: [moved],
+});
+assert.equal(
+  giverSlots.find((s) => s.sessionId === 'c3')?.transferredOut,
+  true,
+  '轉出者該節應標成已轉出'
+);
+assert.equal(
+  receiverSlots.find((s) => s.sessionId === 'c3')?.transferredIn,
+  true,
+  '轉入者應看到這一節'
+);
+assert.equal(receiverSlots.filter((s) => s.transferredIn).length, 1);
+
+const withSub = listClassLogSlotsForTeacher({
+  teacherId: 't-cover',
+  isoDate: '2026-11-10',
+  sessions: xferSessions,
+  requests: [
+    {
+      ...approvedSub,
+      substituteTeacherId: 't-cover',
+      substituteTeacherName: '正式代課',
+      originalSession: xferSessions[1],
+    },
+  ],
+  transfers: [moved],
+});
+assert.equal(
+  withSub.find((s) => s.sessionId === 'c3')?.transferredOut,
+  false,
+  '已核准代課者應接手，不被先前轉給別人的紀錄蓋過'
+);
+assert.equal(
+  listClassLogSlotsForTeacher({
+    teacherId: 't-orig',
+    isoDate: '2026-11-10',
+    sessions: xferSessions,
+    requests: [
+      {
+        ...approvedSub,
+        substituteTeacherId: 't-cover',
+        substituteTeacherName: '正式代課',
+        originalSession: xferSessions[1],
+      },
+    ],
+    transfers: [moved],
+  }).some((s) => s.sessionId === 'c3'),
+  false,
+  '舊的轉入者在改派代課後不應再看到這一節'
+);
+
+const stillMoved = transfer({
+  sessionId: 'c3',
+  period: 3,
+  naturalHolderId: 't-cover',
+  naturalHolderName: '正式代課',
+  toTeacherId: 't-orig',
+  toTeacherName: '原任甲',
+});
+assert.equal(
+  listClassLogSlotsForTeacher({
+    teacherId: 't-cover',
+    isoDate: '2026-11-10',
+    sessions: xferSessions,
+    requests: [
+      {
+        ...approvedSub,
+        substituteTeacherId: 't-cover',
+        substituteTeacherName: '正式代課',
+        originalSession: xferSessions[1],
+      },
+    ],
+    transfers: [stillMoved],
+  }).find((s) => s.sessionId === 'c3')?.transferredOut,
+  true,
+  '代課者自己再轉出時仍然有效'
+);
+
+const gapSlots = listClassLogSlotsForTeacher({
+  teacherId: 't-sub',
+  isoDate: '2026-11-10',
+  sessions: xferSessions,
+  requests: [],
+  transfers: [moved],
+});
+assert.equal(
+  resolveClassLogDisplayEntry({
+    slot: gapSlots.find((s) => s.period === 4)!,
+    date: '2026-11-10',
+    slots: gapSlots,
+    entriesById: new Map([
+      [
+        classLogEntryId({ date: '2026-11-10', period: 2, sessionId: 'c2' }),
+        { ...entryP2, subjectName: '實習' },
+      ],
+    ]),
+  }),
+  undefined,
+  '中間節已轉出時，左右節不應再鏡射同一段進度'
+);
+
+assert.equal(
+  shouldDefaultApplyConsecutive({
+    block: block234,
+    center: slot2,
+    date: '2026-11-10',
+    entriesById: new Map([
+      [entryP2.id, { ...entryP2, assessment: '小考' }],
+      [
+        classLogEntryId({ date: '2026-11-10', period: 3, sessionId: 'c3' }),
+        {
+          ...entryP2,
+          id: classLogEntryId({ date: '2026-11-10', period: 3, sessionId: 'c3' }),
+          period: 3,
+          sessionId: 'c3',
+          assessment: '作業',
+        },
+      ],
+    ]),
+    displayProgress: entryP2.progress,
+    displayNote: '',
+    displayAssessment: '小考',
+  }),
+  false,
+  '連續節的測驗或作業不同時，不預設覆寫'
+);
+
+assert.ok('_class_log_xfer' > '2026-12-31', '轉移鍵不可被巡堂日期查詢掃到');
 
 console.log('regression-class-log: ok');

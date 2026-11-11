@@ -1,4 +1,10 @@
-import type { ClassLogEntry, CourseSession, DayOfWeek, SubstituteRequest } from '../types';
+import type {
+  ClassLogEntry,
+  ClassLogTransfer,
+  CourseSession,
+  DayOfWeek,
+  SubstituteRequest,
+} from '../types';
 import { dateToDayOfWeek, leaveRangeCoversDate } from './leaveDates';
 
 /** 教室日誌待填／已填對應的一節課 */
@@ -12,6 +18,17 @@ export type ClassLogSlot = {
   originalTeacherId: string;
   originalTeacherName: string;
   isSubstituteFill: boolean;
+  /** 目前應填者（有轉移時為被轉入的老師） */
+  holderTeacherId?: string;
+  holderTeacherName?: string;
+  /** 課表或已核准代課決定的應填者 */
+  naturalHolderId?: string;
+  naturalHolderName?: string;
+  transfer?: ClassLogTransfer;
+  /** 應填責任已轉出，本人不必再填 */
+  transferredOut?: boolean;
+  /** 由同事或教學組轉入 */
+  transferredIn?: boolean;
 };
 
 /** 穩定鍵：同日同節同課堂只一筆（代課覆寫同一 id） */
@@ -37,13 +54,13 @@ function slotFromSession(session: CourseSession, isSubstituteFill: boolean): Cla
   };
 }
 
-/** 該課堂於指定日是否已被核准派代（有代課者）涵蓋 */
-export function isSessionCoveredByApprovedSubstitute(
+/** 該日已核准、且指定了代課者的請假派代（沒有則 undefined） */
+export function findApprovedSubstituteForSession(
   session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'className'>,
   isoDate: string,
   requests: SubstituteRequest[]
-): boolean {
-  return requests.some((r) => {
+): SubstituteRequest | undefined {
+  return requests.find((r) => {
     if (r.status !== 'approved' || r.requestType !== 'substitute') return false;
     if (!r.substituteTeacherId) return false;
     if (!leaveRangeCoversDate(r.leaveDateStart, r.leaveDateEnd, isoDate)) return false;
@@ -59,6 +76,80 @@ export function isSessionCoveredByApprovedSubstitute(
   });
 }
 
+/** 該課堂於指定日是否已被核准派代（有代課者）涵蓋 */
+export function isSessionCoveredByApprovedSubstitute(
+  session: Pick<CourseSession, 'id' | 'dayOfWeek' | 'period' | 'teacherId' | 'className'>,
+  isoDate: string,
+  requests: SubstituteRequest[]
+): boolean {
+  return Boolean(findApprovedSubstituteForSession(session, isoDate, requests));
+}
+
+export type ClassLogDuty = {
+  slot: ClassLogSlot;
+  naturalHolderId: string;
+  naturalHolderName: string;
+  holderTeacherId: string;
+  holderTeacherName: string;
+  transfer?: ClassLogTransfer;
+};
+
+/** 指定日期全校應填課堂（含轉移後的應填者） */
+export function listClassLogDutiesForDate(params: {
+  isoDate: string;
+  sessions: CourseSession[];
+  requests: SubstituteRequest[];
+  transfers?: ClassLogTransfer[];
+}): ClassLogDuty[] {
+  const { isoDate, sessions, requests, transfers = [] } = params;
+  const dow = dateToDayOfWeek(isoDate);
+  if (dow == null) return [];
+
+  const transferById = new Map(
+    transfers.filter((t) => t.date === isoDate).map((t) => [t.id, t])
+  );
+  const duties: ClassLogDuty[] = [];
+
+  for (const session of sessions) {
+    if (session.dayOfWeek !== dow) continue;
+    const sub = findApprovedSubstituteForSession(session, isoDate, requests);
+    const slot: ClassLogSlot = sub
+      ? {
+          ...slotFromSession(session, true),
+          originalTeacherId: sub.applicantTeacherId || session.teacherId,
+          originalTeacherName: sub.applicantTeacherName || session.teacherName,
+        }
+      : slotFromSession(session, false);
+    const naturalHolderId = sub?.substituteTeacherId || session.teacherId;
+    const naturalHolderName = sub?.substituteTeacherName || session.teacherName;
+    const stored = transferById.get(
+      classLogEntryId({ date: isoDate, period: session.period, sessionId: session.id })
+    );
+    // 轉回原應填者、或該日已改派給另一位核准代課者時，舊轉移不再生效
+    const transfer =
+      stored &&
+      stored.toTeacherId !== naturalHolderId &&
+      (!stored.naturalHolderId || stored.naturalHolderId === naturalHolderId)
+        ? stored
+        : undefined;
+    duties.push({
+      slot,
+      naturalHolderId,
+      naturalHolderName,
+      holderTeacherId: transfer?.toTeacherId || naturalHolderId,
+      holderTeacherName: transfer?.toTeacherName || naturalHolderName,
+      transfer,
+    });
+  }
+
+  return duties.sort(
+    (a, b) =>
+      a.slot.period - b.slot.period ||
+      a.slot.className.localeCompare(b.slot.className, 'zh-Hant') ||
+      a.slot.subjectName.localeCompare(b.slot.subjectName, 'zh-Hant')
+  );
+}
+
 /**
  * 指定日期、指定教師應填的課堂：
  * - 本人課表該星期的課（當日已核准派代涵蓋者除外，避免與代課者搶同一筆）
@@ -69,42 +160,29 @@ export function listClassLogSlotsForTeacher(params: {
   isoDate: string;
   sessions: CourseSession[];
   requests: SubstituteRequest[];
+  transfers?: ClassLogTransfer[];
 }): ClassLogSlot[] {
-  const { teacherId, isoDate, sessions, requests } = params;
-  const dow = dateToDayOfWeek(isoDate);
-  if (dow == null) return [];
-
-  const byKey = new Map<string, ClassLogSlot>();
-
-  for (const s of sessions) {
-    if (s.teacherId !== teacherId || s.dayOfWeek !== dow) continue;
-    if (isSessionCoveredByApprovedSubstitute(s, isoDate, requests)) continue;
-    const key = `${s.period}|${s.id}`;
-    byKey.set(key, slotFromSession(s, false));
-  }
-
-  for (const r of requests) {
-    if (r.status !== 'approved' || r.requestType !== 'substitute') continue;
-    if (r.substituteTeacherId !== teacherId) continue;
-    if (!leaveRangeCoversDate(r.leaveDateStart, r.leaveDateEnd, isoDate)) continue;
-    const orig = r.originalSession;
-    if (!orig) continue;
-    if (orig.dayOfWeek !== dow) continue;
-    const key = `${orig.period}|${orig.id}`;
-    // 代課優先覆寫同一節（本日實際上課者為代課）
-    byKey.set(key, {
-      ...slotFromSession(orig, true),
-      originalTeacherId: r.applicantTeacherId || orig.teacherId,
-      originalTeacherName: r.applicantTeacherName || orig.teacherName,
-    });
-  }
-
-  return [...byKey.values()].sort(
-    (a, b) =>
-      a.period - b.period ||
-      a.className.localeCompare(b.className, 'zh-Hant') ||
-      a.subjectName.localeCompare(b.subjectName, 'zh-Hant')
-  );
+  const { teacherId } = params;
+  return listClassLogDutiesForDate(params).flatMap((duty) => {
+    const mine = duty.holderTeacherId === teacherId;
+    const gaveAway =
+      duty.naturalHolderId === teacherId && duty.holderTeacherId !== teacherId;
+    if (!mine && !gaveAway) return [];
+    return [
+      {
+        ...duty.slot,
+        holderTeacherId: duty.holderTeacherId,
+        holderTeacherName: duty.holderTeacherName,
+        naturalHolderId: duty.naturalHolderId,
+        naturalHolderName: duty.naturalHolderName,
+        transfer: duty.transfer,
+        transferredIn: Boolean(
+          duty.transfer && mine && duty.naturalHolderId !== teacherId
+        ),
+        transferredOut: gaveAway,
+      },
+    ];
+  });
 }
 
 /** 僅作者可刪（教學組彙整不提供刪除） */
@@ -161,7 +239,11 @@ export function resolveClassLogDisplayEntry(params: {
   const own = entriesById.get(ownId);
   if (own) return own;
 
-  const block = findConsecutiveClassLogSlots(slots, slot);
+  // 已轉出的節不該把左右兩節連成同一段，否則中間空缺仍會鏡射進度
+  const block = findConsecutiveClassLogSlots(
+    slots.filter((s) => !s.transferredOut),
+    slot
+  );
   for (const s of block) {
     const id = classLogEntryId({ date, period: s.period, sessionId: s.sessionId });
     const e = entriesById.get(id);
@@ -184,8 +266,10 @@ export function shouldDefaultApplyConsecutive(params: {
   entriesById: Map<string, ClassLogEntry>;
   displayProgress: string;
   displayNote: string;
+  displayAssessment?: string;
 }): boolean {
-  const { block, center, date, entriesById, displayProgress, displayNote } = params;
+  const { block, center, date, entriesById, displayProgress, displayNote, displayAssessment } =
+    params;
   if (block.length <= 1) return false;
 
   for (const s of block) {
@@ -196,7 +280,8 @@ export function shouldDefaultApplyConsecutive(params: {
     if (!e) continue;
     if (
       (e.progress || '') !== (displayProgress || '') ||
-      (e.note || '') !== (displayNote || '')
+      (e.note || '') !== (displayNote || '') ||
+      (e.assessment || '') !== (displayAssessment || '')
     ) {
       return false;
     }
