@@ -4,6 +4,11 @@ import {
   slotOccurrenceCountsInMonth,
 } from './calendarSettlement';
 import {
+  countCombinedLeavePeriods,
+  ExcludeDates,
+  LeaveBillableOptions,
+} from './leaveDates';
+import {
   isCounselingSlot as isCounselingSlotConfigured,
   isDaytimeSlot as isDaytimeSlotConfigured,
   resolvePeriodConfig,
@@ -241,14 +246,21 @@ export function markCombinedSlotConcurrent(sessions: CourseSession[]): CourseSes
   });
 }
 
-/** 一批請假單的節數：跨班同一節顯示「1 節（2 班）」 */
+/** 一批請假單的節數：跨班同一節顯示「1 節（2 班）」；有請假起迄時含區間內重複星期 */
 export function formatCombinedLeaveCount(
-  items: Array<{ originalSession?: { dayOfWeek: number; period: number } | null }>
+  items: Array<{
+    leaveDateStart?: string;
+    leaveDateEnd?: string;
+    originalSession?: { dayOfWeek: number; period: number } | null;
+  }>,
+  excludeDates?: ExcludeDates,
+  billableOptions?: LeaveBillableOptions
 ): string {
   const sessions = items.flatMap((item) => (item.originalSession ? [item.originalSession] : []));
   const slots = countDistinctDayPeriods(sessions);
-  const count = Math.max(slots, items.length);
-  if (slots > 0 && items.length > slots) return `${slots} 節（${items.length} 班）`;
+  const periods = countCombinedLeavePeriods(items, excludeDates, billableOptions);
+  const count = Math.max(periods, slots > 0 ? periods : items.length);
+  if (slots > 0 && items.length > slots) return `${count} 節（${items.length} 班）`;
   return `${count} 節`;
 }
 

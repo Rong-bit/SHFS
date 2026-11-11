@@ -2831,7 +2831,17 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         batchSelectedSessions.length > 1
                           ? `${dayNames[selectedOriginalSession.dayOfWeek]} ${formatPeriodsLabel(
                               batchSelectedSessions.map((s) => s.period)
-                            )}（共 ${formatCombinedLeaveCount(batchSelectedSessions.map((s) => ({ originalSession: s })))}）`
+                            )}（共 ${formatCombinedLeaveCount(
+                              batchSelectedSessions.map((s) => ({
+                                originalSession: s,
+                                leaveDateStart: leaveDateStart || undefined,
+                                leaveDateEnd:
+                                  leaveDateMode === 'range'
+                                    ? leaveDateEnd || leaveDateStart || undefined
+                                    : leaveDateStart || undefined,
+                              })),
+                              holidaySet
+                            )}）`
                           : `${dayNames[selectedOriginalSession.dayOfWeek]} 第${selectedOriginalSession.period}節 (${selectedOriginalSession.venueName})`)}
                     </div>
                   </div>
@@ -3148,7 +3158,14 @@ export const StaffDispatchWorkbench: React.FC = () => {
                           const d = resolveDisplayClassSubject(r, items);
                           return { dayOfWeek: d.dayOfWeek, period: d.period };
                         }),
-                        dayNames
+                        dayNames,
+                        req.requestType === 'substitute'
+                          ? {
+                              leaveDateStart: req.leaveDateStart,
+                              leaveDateEnd: req.leaveDateEnd,
+                              excludeDates: holidaySet,
+                            }
+                          : undefined
                       );
                       const subNames = [
                         ...new Set(
@@ -3221,7 +3238,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                             {req.requestNumber}
                             {(items.length > 1 || isSameNumberSplit) && (
                               <div className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">
-                                {items.length > 1 ? formatCombinedLeaveCount(items) : null}
+                                {items.length > 1
+                                  ? formatCombinedLeaveCount(items, holidaySet)
+                                  : null}
                                 {items.length > 1 && isSameNumberSplit ? ' · ' : null}
                                 {isSameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : null}
                               </div>
@@ -3406,7 +3425,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                           )
                                         : [req];
                                       const ok = window.confirm(
-                                        `此申請將整批一次核定（${formatCombinedLeaveCount(pendingItems)}）。確定？`
+                                        `此申請將整批一次核定（${formatCombinedLeaveCount(pendingItems, holidaySet)}）。確定？`
                                       );
                                       if (!ok) return;
                                     }

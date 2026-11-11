@@ -330,12 +330,70 @@ export function leaveMatchesSearchDate(
   return false;
 }
 
+/**
+ * 一批請假單實際應派／應計的節數：
+ * - 同一星期同一節只算一次（跨班合授不因班數加總）
+ * - 有請假起迄時，依區間內相符星期次數加總（例：週二 2 節＋週五 2 節，請 11/10～11/17 → 6 節）
+ * - 無請假日期的舊案，每一星期節次仍以 1 節計
+ */
+export function countCombinedLeavePeriods(
+  items: Array<{
+    leaveDateStart?: string;
+    leaveDateEnd?: string;
+    originalSession?: { dayOfWeek: number; period: number } | null;
+  }>,
+  excludeDates?: ExcludeDates,
+  billableOptions?: LeaveBillableOptions
+): number {
+  const bySlot = new Map<
+    string,
+    {
+      leaveDateStart?: string;
+      leaveDateEnd?: string;
+      originalSession: { dayOfWeek: number; period: number };
+    }
+  >();
+  for (const item of items) {
+    const session = item.originalSession;
+    if (!session || !Number.isFinite(session.dayOfWeek) || !Number.isFinite(session.period)) {
+      continue;
+    }
+    const key = `${session.dayOfWeek}-${session.period}`;
+    if (bySlot.has(key)) continue;
+    bySlot.set(key, {
+      leaveDateStart: item.leaveDateStart,
+      leaveDateEnd: item.leaveDateEnd,
+      originalSession: session,
+    });
+  }
+  if (bySlot.size === 0) return Math.max(0, items.length);
+
+  let total = 0;
+  for (const item of bySlot.values()) {
+    total += countLeaveSubstitutePeriods(item, excludeDates, {
+      period: billableOptions?.period ?? item.originalSession.period,
+      temporaryMoves: billableOptions?.temporaryMoves,
+      partialStops: billableOptions?.partialStops,
+      weeksInMonth: billableOptions?.weeksInMonth,
+    });
+  }
+  return total;
+}
+
+type LeavePeriodCountRequest = {
+  leaveDateStart?: string;
+  leaveDateEnd?: string;
+  originalSession?: { dayOfWeek: number; period?: number } | null;
+};
+
 /** 請假派代結算節數：無日期舊案若該結算月該星期仍有上課日算 1，皆放假則 0；有日期則算區間內相符星期數（放假日不計） */
 export function countLeaveSubstitutePeriods(
-  request: Pick<SubstituteRequest, 'leaveDateStart' | 'leaveDateEnd' | 'originalSession'>,
+  request: LeavePeriodCountRequest,
   excludeDates?: ExcludeDates,
   options?: { settlementMonth?: number; settlementYear?: number } & LeaveBillableOptions
 ): number {
+  const dayOfWeek = request.originalSession?.dayOfWeek;
+  if (dayOfWeek == null) return 0;
   const billableOptions: LeaveBillableOptions = {
     period: options?.period ?? request.originalSession?.period,
     temporaryMoves: options?.temporaryMoves,
@@ -352,7 +410,7 @@ export function countLeaveSubstitutePeriods(
     const n = countMatchingWeekdays(
       start,
       end,
-      request.originalSession.dayOfWeek,
+      dayOfWeek as DayOfWeek,
       excludeDates,
       billableOptions
     );
@@ -362,7 +420,7 @@ export function countLeaveSubstitutePeriods(
   const n = countMatchingWeekdays(
     request.leaveDateStart,
     end,
-    request.originalSession.dayOfWeek,
+    dayOfWeek as DayOfWeek,
     excludeDates,
     billableOptions
   );
