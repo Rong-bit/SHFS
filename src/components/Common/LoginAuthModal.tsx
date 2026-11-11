@@ -11,6 +11,7 @@ import {
 } from '../../utils/localAuthTrust';
 import { ModalShell } from './ModalShell';
 import {
+  isPrincipalOfficeStaff,
   officeMembers,
   resolveStaffSubunit,
   subunitLoginLabel,
@@ -216,7 +217,9 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
         break;
       }
       case 'principal': {
-        const pStaff = academicStaffList.find((s) => s.id === selectedStaffId && s.group === 'principal');
+        const pStaff = academicStaffList.find(
+          (s) => s.id === selectedStaffId && isPrincipalOfficeStaff(s)
+        );
         targetTitle = pStaff ? pStaff.name : '校長';
         targetSubtitle = pStaff
           ? `${pStaff.title} · ${pStaff.responsibleScope}`
@@ -283,9 +286,11 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
       }
     }
     if (target.type === 'role' && target.targetRole === 'principal') {
-      const has = academicStaffList.some((s) => s.id === selectedStaffId && s.group === 'principal');
+      const has = academicStaffList.some(
+        (s) => s.id === selectedStaffId && isPrincipalOfficeStaff(s)
+      );
       if (!has) {
-        setErrorMsg('請先於成員名冊新增校長室人員後再登入');
+        setErrorMsg('請先於成員名冊新增校長室人員（校長或秘書）後再登入');
         return;
       }
     }

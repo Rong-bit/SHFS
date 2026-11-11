@@ -57,6 +57,16 @@ export function isStudentSectionStaff(staff: Pick<AcademicStaff, 'title'>): bool
   return t.includes('生輔');
 }
 
+/** 校長室人員：校長或秘書（相容僅寫職稱、未寫 group 的舊資料） */
+export function isPrincipalOfficeStaff(
+  staff: Pick<AcademicStaff, 'title' | 'group'>
+): boolean {
+  if ((staff.group || '') === 'principal') return true;
+  const t = titleOf(staff);
+  if (t === '秘書' || t.includes('秘書')) return true;
+  return /校長/.test(t) && !/主任|組長/.test(t);
+}
+
 export function resolveStaffSubunit(
   staff: Pick<AcademicStaff, 'title' | 'group'> | null | undefined,
   role?: UserRole | null
@@ -75,7 +85,7 @@ export function resolveStaffSubunit(
   if (isStudentSectionStaff(staff) || (staff.group || '') === 'student_affairs') {
     return isStudentAffairsDeanStaff(staff) ? 'student_dean' : 'student_section';
   }
-  if ((staff.group || '') === 'principal' || role === 'principal') return 'principal';
+  if (isPrincipalOfficeStaff(staff) || role === 'principal') return 'principal';
 
   // academic 組但職稱未辨識時，預設教學組（相容舊資料）
   if ((staff.group || 'academic') === 'academic') return 'teaching';
@@ -134,7 +144,7 @@ export function officeMembers(list: AcademicStaff[], subunit: StaffSubunit): Aca
         (s) => (s.group || '') === 'student_affairs' && isStudentSectionStaff(s)
       );
     case 'principal':
-      return list.filter((s) => (s.group || '') === 'principal');
+      return list.filter(isPrincipalOfficeStaff);
     default:
       return [];
   }

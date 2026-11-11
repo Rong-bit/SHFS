@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  isPrincipalOfficeStaff,
   isTeachingAffairsWorkbenchStaff,
   officeMembers,
   officeNavActive,
@@ -57,6 +58,29 @@ assert.ok(
     'principal'
   ).some((s) => s.title === '秘書'),
   '校長室登入名單應含秘書'
+);
+// 僅寫職稱、未寫 group 時仍應進校長室登入名單
+assert.ok(
+  isPrincipalOfficeStaff({ title: '秘書', group: 'academic' as any }),
+  '職稱秘書即使 group 誤標也應視為校長室'
+);
+assert.ok(
+  officeMembers(
+    [
+      {
+        id: 'sec-legacy',
+        name: '舊秘書',
+        title: '秘書',
+        badge: '校長室',
+        email: '',
+        phone: '',
+        responsibleScope: '文書',
+        group: 'academic',
+      },
+    ],
+    'principal'
+  ).some((s) => s.id === 'sec-legacy'),
+  '舊資料秘書仍應出現在校長室登入名單'
 );
 
 assert.equal(roleForSubunit('internship_dean'), 'academic');
