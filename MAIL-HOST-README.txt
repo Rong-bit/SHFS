@@ -7,17 +7,16 @@ RECOMMENDED: download the portable Windows zip from GitHub Actions
 
 Then:
   1. Unzip
-  2. Double-click start.bat  (or SHFSMailHost.exe)
+  2. Double-click start.bat
   3. Open http://localhost:3000
   4. Keep the window open
 
 No npm / no Python / no git pull needed on the PC that only sends mail.
 
 ------------------------------------------------
-Alternative (developers): build from source on Windows
+Alternative (developers): build from source
   npm ci
-  npm run build
-  python -m pip install pyinstaller
+  npm run build:portable
   python scripts/build_portable_mail_host.py
   Output: release\SHFS-MailHost\
 

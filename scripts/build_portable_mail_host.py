@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build a portable Windows mail-host folder (and optional .exe).
+Build a portable Windows mail-host folder (start.bat only).
 
 Output:
   release/SHFS-MailHost/
     start.bat
-    SHFSMailHost.exe   (if PyInstaller available on Windows)
     node/node.exe
     dist/...
 
-Usage (on Windows, after npm run build):
+Usage (after npm run build / build:portable):
   python scripts/build_portable_mail_host.py
 """
 
@@ -149,7 +148,7 @@ def write_package_info(out: Path, server_size: int) -> None:
     (out / "PACKAGE.txt").write_text(
         "SHFS Mail Host (portable)\r\n"
         "=========================\r\n"
-        "start.bat / SHFSMailHost.exe\r\n"
+        "start.bat only (no Python / no .exe)\r\n"
         "Open http://localhost:3000\r\n"
         "\r\n"
         "server.cjs must be ~1.5MB+ (express bundled).\r\n"
@@ -169,52 +168,6 @@ def copy_dist(out: Path) -> None:
     shutil.copytree(ROOT / "dist", dest)
 
 
-def try_pyinstaller(out: Path) -> Path | None:
-    if not sys.platform.startswith("win"):
-        print("Skip PyInstaller exe (not Windows)")
-        return None
-    try:
-        import PyInstaller  # noqa: F401
-    except ImportError:
-        print("PyInstaller not installed; skip exe (zip/folder still OK)")
-        return None
-
-    runtime = ROOT / "scripts" / "mail_host_runtime.py"
-    work = out / "_pyi"
-    if work.exists():
-        shutil.rmtree(work)
-    work.mkdir(parents=True, exist_ok=True)
-
-    # Windows PyInstaller: --add-data "src;dest"  /  --add-binary "src;destDir"
-    sep = ";" if sys.platform.startswith("win") else ":"
-    cmd = [
-        sys.executable,
-        "-m",
-        "PyInstaller",
-        "--noconfirm",
-        "--clean",
-        "--onefile",
-        "--console",
-        "--name",
-        "SHFSMailHost",
-        "--distpath",
-        str(out),
-        "--workpath",
-        str(work / "work"),
-        "--specpath",
-        str(work),
-        "--add-data",
-        "%s%sdist" % (out / "dist", sep),
-        "--add-binary",
-        "%s%snode" % (out / "node" / "node.exe", sep),
-        str(runtime),
-    ]
-    print(">>", " ".join(cmd), flush=True)
-    subprocess.run(cmd, cwd=str(ROOT), check=True)
-    exe = out / "SHFSMailHost.exe"
-    return exe if exe.is_file() else None
-
-
 def main() -> int:
     print("ROOT=", ROOT)
     ensure_dist()
@@ -231,33 +184,27 @@ def main() -> int:
     readme.write_text(
         "SHFS Mail Host (portable)\r\n"
         "=========================\r\n"
-        "1. Double-click start.bat  (or SHFSMailHost.exe if present)\r\n"
+        "1. Double-click start.bat\r\n"
         "2. Keep the window open\r\n"
         "3. This PC: http://localhost:3000\r\n"
         "4. Others: use the LAN URL printed after start\r\n"
         "   (e.g. http://192.168.x.x:3000)\r\n"
         "5. Do not use github.io for sending mail\r\n"
-        "6. server.cjs should be about 1.5MB+ (see PACKAGE.txt)\r\n",
+        "6. server.cjs should be about 1.5MB+ (see PACKAGE.txt)\r\n"
+        "7. No Python needed on this PC\r\n",
         encoding="ascii",
         newline="\r\n",
     )
 
-    exe = try_pyinstaller(OUT)
     # zip the folder
     zip_base = ROOT / "release" / "SHFS-MailHost-Windows"
     if zip_base.with_suffix(".zip").exists():
         zip_base.with_suffix(".zip").unlink()
-    # exclude pyinstaller work dir from zip
-    work = OUT / "_pyi"
-    if work.exists():
-        shutil.rmtree(work)
     shutil.make_archive(str(zip_base), "zip", root_dir=str(OUT.parent), base_dir=OUT.name)
     print("")
     print("DONE")
     print("Folder:", OUT)
     print("Zip:   ", zip_base.with_suffix(".zip"))
-    if exe:
-        print("Exe:   ", exe)
     return 0
 
 
