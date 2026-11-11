@@ -343,8 +343,9 @@ export const CloudSyncPanel: React.FC = () => {
   }
 }`}</pre>
               <span className="block mt-1 text-[11px] text-slate-500">
-                巡堂、會辦（<code>shfs_patrol/…/_review</code>）與教室日誌（
-                <code>shfs_patrol/…/_class_log</code>）皆在 <code>shfs_patrol</code> 規則下，需{' '}
+                巡堂、會辦（<code>shfs_patrol/…/_review</code>）、教室日誌（
+                <code>shfs_patrol/…/_class_log</code>）與日誌轉移（
+                <code>shfs_patrol/…/_class_log_xfer</code>）皆在 <code>shfs_patrol</code> 規則下，需{' '}
                 <code>auth != null</code>
                 。先填好本頁 Web API 金鑰並測試連線成功後，再把舊的{' '}
                 <code>.read/.write: true</code> 改成上面這組，避免同步中斷。

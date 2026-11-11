@@ -514,10 +514,37 @@ export interface ClassLogEntry {
   isSubstituteFill: boolean;
   /** 教學進度（必填） */
   progress: string;
+  /** 測驗或作業（選填） */
+  assessment?: string;
   note?: string;
   stampedAt: string;
   /** 職名章左欄，如「教師」 */
   stampCaption: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 把某一日、某一節教室日誌的填寫責任轉給其他教師 */
+export interface ClassLogTransfer {
+  id: string;
+  date: string;
+  period: number;
+  dayOfWeek: DayOfWeek;
+  sessionId: string;
+  className: string;
+  subjectName: string;
+  venueName: string;
+  originalTeacherId: string;
+  originalTeacherName: string;
+  /** 轉出當下的應填者 */
+  fromTeacherId: string;
+  fromTeacherName: string;
+  toTeacherId: string;
+  toTeacherName: string;
+  actorId: string;
+  actorName: string;
+  actorKind: 'teacher' | 'academic';
+  note?: string;
   createdAt: string;
   updatedAt: string;
 }
