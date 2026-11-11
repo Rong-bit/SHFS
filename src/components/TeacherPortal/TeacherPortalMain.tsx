@@ -40,7 +40,7 @@ export const TeacherPortalMain: React.FC = () => {
   ).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full min-w-0 overflow-x-clip">
       {cloudSyncStatus === 'off' && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2.5 sm:px-4 sm:py-3">
           <p className="text-sm text-sky-950 leading-snug">

@@ -466,7 +466,7 @@ export const PatrolMain: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-full min-w-0 overflow-x-clip">
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {MODES.map((m) => {
           const allowed = canPerformPatrolKind(currentTeacher, m.id);
@@ -521,7 +521,7 @@ export const PatrolMain: React.FC = () => {
         </p>
       )}
 
-      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3 min-w-0 max-w-full">
         <label className="text-[11px] font-semibold text-slate-600 col-span-1">
           日期
           <input
@@ -618,7 +618,7 @@ export const PatrolMain: React.FC = () => {
       )}
 
       {grouped.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto overscroll-x-contain max-w-full pb-1 [-webkit-overflow-scrolling:touch]">
           {grouped.map((b, i) => (
             <button
               key={b.building}
@@ -637,13 +637,17 @@ export const PatrolMain: React.FC = () => {
       )}
 
       {building && (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="bg-slate-900 text-white text-sm font-bold px-4 py-2">{building.building}</div>
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden max-w-full">
+          <div className="bg-slate-900 text-white text-sm font-bold px-4 py-2 truncate">
+            {building.building}
+          </div>
           <div className="divide-y divide-slate-100">
             {building.floors.map((f) => (
-              <div key={f.floor} className="flex gap-2 p-2 sm:p-3">
-                <div className="w-12 shrink-0 text-sm font-extrabold text-slate-500 pt-2">{f.floor}</div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 flex-1">
+              <div key={f.floor} className="flex gap-2 p-2 sm:p-3 min-w-0">
+                <div className="w-10 sm:w-12 shrink-0 text-sm font-extrabold text-slate-500 pt-2">
+                  {f.floor}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 flex-1 min-w-0">
                   {f.rooms.map((room) => {
                     const o = occupancy.get(room.id);
                     const recs = recordsByRoom.get(room.id) || [];
@@ -662,28 +666,32 @@ export const PatrolMain: React.FC = () => {
                           }
                           setOpenRoomId(room.id);
                         }}
-                        className={`text-left rounded-xl border-2 px-2.5 py-2.5 min-h-[76px] transition active:scale-[0.98] touch-manipulation ${tileClass(room)} ${
+                        className={`text-left rounded-xl border-2 px-2.5 py-2.5 min-h-[76px] min-w-0 overflow-hidden transition active:scale-[0.98] touch-manipulation ${tileClass(room)} ${
                           !canRecordToday ? 'opacity-60 cursor-not-allowed' : ''
                         }`}
                       >
-                        <div className="text-base font-extrabold leading-tight">{room.name}</div>
+                        <div className="text-base font-extrabold leading-tight break-words">
+                          {room.name}
+                        </div>
                         {(mode === 'class' || mode === 'exam') && (() => {
                           const tutors = tutorNamesForRoom(room);
                           if (tutors.length === 0) return null;
                           return (
-                            <div className="text-[11px] font-bold text-slate-800 mt-0.5 leading-snug">
+                            <div className="text-[11px] font-bold text-slate-800 mt-0.5 leading-snug break-words line-clamp-2">
                               導師：{tutors.join('、')}
                             </div>
                           );
                         })()}
                         {usesOccupancy && (
-                          <div className="text-[11px] leading-snug mt-0.5 line-clamp-2">
+                          <div className="text-[11px] leading-snug mt-0.5 line-clamp-2 break-words">
                             {occupancySummary(o)}
                             {o?.away?.isOutdoor ? '（室外）' : ''}
                           </div>
                         )}
                         {mode === 'exam' && room.homeroomClass && (
-                          <div className="text-[11px] leading-snug mt-0.5">{room.homeroomClass}</div>
+                          <div className="text-[11px] leading-snug mt-0.5 break-words line-clamp-2">
+                            {room.homeroomClass}
+                          </div>
                         )}
                         {recs.length > 0 && (
                           <div className="text-[10px] font-bold mt-0.5">
