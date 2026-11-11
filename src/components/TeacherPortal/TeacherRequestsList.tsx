@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { nonTeachingDateSet } from '../../utils/holidays';
-import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { countCombinedLeavePeriods, formatLeaveDateLabel } from '../../utils/leaveDates';
 import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import { formatDayPeriodSummary } from '../../utils/periodLabels';
 import { formatCombinedLeaveCount } from '../../utils/schoolDepartments';
@@ -231,6 +231,12 @@ export const TeacherRequestsList: React.FC = () => {
               ),
             ];
             const primaryDisplay = resolveDisplayClassSubject(req, items);
+            const leavePeriodCount =
+              req.requestType === 'substitute'
+                ? countCombinedLeavePeriods(items, holidaySet)
+                : items.length;
+            const showLeavePeriodCount =
+              items.length > 1 || leavePeriodCount > items.length;
             const periodSummary = formatDayPeriodSummary(
               items.map((r) => {
                 const d = resolveDisplayClassSubject(r, items);
@@ -242,8 +248,9 @@ export const TeacherRequestsList: React.FC = () => {
                     leaveDateStart: req.leaveDateStart,
                     leaveDateEnd: req.leaveDateEnd,
                     excludeDates: holidaySet,
+                    withTotal: showLeavePeriodCount,
                   }
-                : undefined
+                : { withTotal: items.length > 1 }
             );
             const subNames = [
               ...new Set(
@@ -285,10 +292,12 @@ export const TeacherRequestsList: React.FC = () => {
                   <span className="font-mono font-bold text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200">
                     {req.requestNumber}
                   </span>
-                  {(items.length > 1 || sameNumberSplit) && (
+                  {(showLeavePeriodCount || sameNumberSplit) && (
                     <span className="text-[11px] text-slate-500 font-semibold">
-                      {items.length > 1 ? formatCombinedLeaveCount(items, holidaySet) : ''}
-                      {items.length > 1 && sameNumberSplit ? ' · ' : ''}
+                      {showLeavePeriodCount
+                        ? formatCombinedLeaveCount(items, holidaySet)
+                        : ''}
+                      {showLeavePeriodCount && sameNumberSplit ? ' · ' : ''}
                       {sameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : ''}
                     </span>
                   )}

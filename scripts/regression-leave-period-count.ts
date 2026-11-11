@@ -82,6 +82,23 @@ assert.equal(
   '週二 第1～2節；週五 第3～4節 · 共 6 節'
 );
 
+// 單節跨兩週：也要顯示共 2 節，不可只顯示課表格子 1 節
+const singleAcrossWeeks = [items[0]];
+assert.equal(countCombinedLeavePeriods(singleAcrossWeeks), 2);
+assert.equal(formatCombinedLeaveCount(singleAcrossWeeks), '2 節');
+assert.equal(
+  formatDayPeriodSummary(
+    [{ dayOfWeek: 2, period: 1 }],
+    undefined,
+    {
+      leaveDateStart: '2026-11-10',
+      leaveDateEnd: '2026-11-17',
+      withTotal: true,
+    }
+  ),
+  '週二 第1節 · 共 2 節'
+);
+
 // 無請假日期：維持每週課表格數
 const legacy = items.map((r) => ({
   ...r,

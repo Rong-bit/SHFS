@@ -107,6 +107,19 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
               : undefined) ||
             subunitMembers[0]?.id ||
             '';
+        } else if (roleGroup === 'principal') {
+          const principalMembers = officeMembers(academicStaffList, 'principal');
+          initialStaffId =
+            (target.academicStaffId &&
+            principalMembers.some((s) => s.id === target.academicStaffId)
+              ? target.academicStaffId
+              : undefined) ||
+            (currentAcademicStaffId &&
+            principalMembers.some((s) => s.id === currentAcademicStaffId)
+              ? currentAcademicStaffId
+              : undefined) ||
+            principalMembers[0]?.id ||
+            '';
         } else {
           initialStaffId =
             target.academicStaffId ||
