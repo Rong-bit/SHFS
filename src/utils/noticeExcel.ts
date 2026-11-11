@@ -87,7 +87,7 @@ const thinBorder: Partial<ExcelJS.Borders> = {
 function stripTeacherTitle(name?: string): string {
   return (name || '')
     .replace(/\s+/g, '')
-    .replace(/(科主任|主任|組長|導師|老師)$/g, '');
+    .replace(/(科主任|主任|組長|導師|秘書|老師)$/g, '');
 }
 
 /** 種類：代課／調課／對調 */
