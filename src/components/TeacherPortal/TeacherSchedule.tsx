@@ -420,6 +420,13 @@ export const TeacherSchedule: React.FC = () => {
               const session = slotSessions[0];
               const crossNames = crossClassNamesInSlot(slotSessions);
               const showCross = crossNames.length > 1;
+              const concurrentPool = showCross
+                ? slotSessions.filter((s) => crossNames.includes(s.className))
+                : session
+                  ? [session]
+                  : [];
+              const showConcurrent = concurrentPool.some((s) => s.isConcurrent);
+              const homeroom = session ? isHomeroomTeacherSlot(session, systemConfig) : false;
               const classLabel = showCross ? crossNames.join('、') : session?.className;
               const leaveLabel =
                 slotSessions.map((s) => getLeaveCoverLabel(s)).find(Boolean) || null;
@@ -433,6 +440,7 @@ export const TeacherSchedule: React.FC = () => {
                   tabIndex={0}
                   onClick={() => handleCellClick(session)}
                   onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       handleCellClick(session);
@@ -470,6 +478,12 @@ export const TeacherSchedule: React.FC = () => {
                             {showCross && (
                               <span className="text-[10px] px-1.5 py-0.5 bg-sky-600 text-white rounded font-bold">跨班</span>
                             )}
+                            {homeroom && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-600 text-white rounded font-bold">班會</span>
+                            )}
+                            {showConcurrent && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-violet-600 text-white rounded font-bold">兼課</span>
+                            )}
                             {practical && !leaveLabel && (
                               <span className="text-[10px] px-1.5 py-0.5 bg-amber-500 text-white rounded font-bold">實習</span>
                             )}
@@ -484,6 +498,7 @@ export const TeacherSchedule: React.FC = () => {
                           <div
                             className="mt-2 flex items-center gap-1 text-xs text-slate-600"
                             onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
                           >
                             <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <SessionVenueSelect session={session} />
