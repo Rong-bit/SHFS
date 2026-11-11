@@ -38,6 +38,7 @@ import {
 import { WellnessLeaveHoursAlert } from '../Common/WellnessLeaveHoursAlert';
 import { resolveOriginalSession, isPlaceholderSession } from '../../utils/resolveOriginalSession';
 import {
+  countCombinedLeavePeriods,
   countMatchingWeekdays,
   dateToDayOfWeek,
   formatLeaveDateLabel,
@@ -3153,6 +3154,12 @@ export const StaffDispatchWorkbench: React.FC = () => {
                         ),
                       ];
                       const primaryDisplay = resolveDisplayClassSubject(req, items);
+                      const leavePeriodCount =
+                        req.requestType === 'substitute'
+                          ? countCombinedLeavePeriods(items, holidaySet)
+                          : items.length;
+                      const showLeavePeriodCount =
+                        items.length > 1 || leavePeriodCount > items.length;
                       const periodSummary = formatDayPeriodSummary(
                         items.map((r) => {
                           const d = resolveDisplayClassSubject(r, items);
@@ -3164,8 +3171,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
                               leaveDateStart: req.leaveDateStart,
                               leaveDateEnd: req.leaveDateEnd,
                               excludeDates: holidaySet,
+                              withTotal: showLeavePeriodCount,
                             }
-                          : undefined
+                          : { withTotal: items.length > 1 }
                       );
                       const subNames = [
                         ...new Set(
@@ -3236,13 +3244,17 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3 font-mono font-bold text-indigo-900">
                             {req.requestNumber}
-                            {(items.length > 1 || isSameNumberSplit) && (
+                            {(showLeavePeriodCount || isSameNumberSplit) && (
                               <div className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">
-                                {items.length > 1
+                                {showLeavePeriodCount
                                   ? formatCombinedLeaveCount(items, holidaySet)
                                   : null}
-                                {items.length > 1 && isSameNumberSplit ? ' · ' : null}
-                                {isSameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : null}
+                                {showLeavePeriodCount && isSameNumberSplit ? ' · ' : null}
+                                {isSameNumberSplit
+                                  ? '同號分張'
+                                  : items.length > 1
+                                    ? '同號'
+                                    : null}
                               </div>
                             )}
                           </td>
@@ -3259,7 +3271,8 @@ export const StaffDispatchWorkbench: React.FC = () => {
                                   {primaryDisplay.className} 《{primaryDisplay.subjectName}》
                                 </div>
                                 <div className="text-[11px] text-slate-500 mt-0.5">
-                                  {dayNames[primaryDisplay.dayOfWeek]} 第{primaryDisplay.period}節
+                                  {periodSummary ||
+                                    `${dayNames[primaryDisplay.dayOfWeek]} 第${primaryDisplay.period}節`}
                                 </div>
                               </>
                             ) : (

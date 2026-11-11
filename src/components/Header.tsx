@@ -203,6 +203,10 @@ export const Header: React.FC = () => {
 
   const pickMobileRole = (role: UserRole) => {
     setMobileRoleOpen(false);
+    if (role === 'principal') {
+      requestRoleSwitchWithAuth(role, undefined, { staffSubunit: 'principal' });
+      return;
+    }
     requestRoleSwitchWithAuth(role);
   };
 
@@ -526,7 +530,11 @@ export const Header: React.FC = () => {
 
             <button
               id="nav-role-principal"
-              onClick={() => requestRoleSwitchWithAuth('principal')}
+              onClick={() =>
+                requestRoleSwitchWithAuth('principal', undefined, {
+                  staffSubunit: 'principal',
+                })
+              }
               className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 currentRole === 'principal'
                   ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'

@@ -65,6 +65,15 @@ assert.ok(
   '職稱秘書即使 group 誤標也應視為校長室'
 );
 assert.ok(
+  isPrincipalOfficeStaff({ title: '教師兼秘書', group: 'academic' as any }),
+  '職稱含秘書字樣即使 group 誤標也應視為校長室'
+);
+assert.equal(
+  resolveStaffSubunit({ title: '教師兼秘書', group: 'academic' as any }, 'principal'),
+  'principal',
+  '教師兼秘書切校長室應對齊 principal 分層'
+);
+assert.ok(
   officeMembers(
     [
       {

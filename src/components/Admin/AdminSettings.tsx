@@ -23,6 +23,7 @@ import {
   resolvePeriodTimeRanges,
 } from '../../utils/periodConfig';
 import { resolveHomeroomSlot } from '../../utils/schoolDepartments';
+import { isPrincipalOfficeStaff } from '../../utils/academicOfficeStaff';
 import {
   applySchoolLevelPreset,
   normalizeSchoolLevel,
@@ -257,7 +258,7 @@ function resolveStaffFormOffice(staff: {
   if ((staff.group || '') === 'student_affairs' || /學務主任|生輔/.test(t)) return 'student_affairs';
   if (
     (staff.group || '') === 'principal' ||
-    t === '秘書' ||
+    t.includes('秘書') ||
     (/校長/.test(t) && !/主任|組長/.test(t))
   ) {
     return 'principal';
@@ -896,6 +897,7 @@ export const AdminSettings: React.FC = () => {
   const handleOpenEditStaff = (staff: AcademicStaff) => {
     setEditingStaff(staff);
     const existingEmail = normalizeSchoolEmail(staff.email);
+    const office = resolveStaffFormOffice(staff);
     setStaffFormData({
       name: staff.name,
       title: staff.title,
@@ -904,7 +906,8 @@ export const AdminSettings: React.FC = () => {
       phone: staff.phone,
       avatarBg: staff.avatarBg || 'from-indigo-600 to-indigo-800',
       responsibleScope: staff.responsibleScope,
-      group: staff.group || 'academic',
+      // 依職稱回推處室，修正舊資料秘書誤標為 academic 等
+      group: STAFF_OFFICE_STORAGE_GROUP[office],
     });
     setIsStaffModalOpen(true);
   };
@@ -926,6 +929,9 @@ export const AdminSettings: React.FC = () => {
           })
         : formEmail || lookupTeacherEmail(teachers, name) || '';
 
+    const office = resolveStaffFormOffice(staffFormData);
+    const group = STAFF_OFFICE_STORAGE_GROUP[office];
+
     if (editingStaff) {
       updateAcademicStaff(editingStaff.id, {
         name,
@@ -935,7 +941,7 @@ export const AdminSettings: React.FC = () => {
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
-        group: staffFormData.group || 'academic',
+        group,
       });
     } else {
       addAcademicStaff({
@@ -946,7 +952,7 @@ export const AdminSettings: React.FC = () => {
         phone: staffFormData.phone || '分機 210',
         avatarBg: staffFormData.avatarBg,
         responsibleScope: staffFormData.responsibleScope,
-        group: staffFormData.group || 'academic',
+        group,
       });
     }
     setIsStaffModalOpen(false);
@@ -3370,7 +3376,13 @@ export const AdminSettings: React.FC = () => {
             { grp: 'student_affairs' as const, label: '學務處（學務主任／生輔組）', dot: 'bg-sky-500' },
             { grp: 'principal' as const, label: '校長室', dot: 'bg-slate-600' },
           ]).map(({ grp, label: groupLabel, dot }) => {
-            const members = academicStaffList.filter((s) => (s.group || 'academic') === grp);
+            const members = academicStaffList.filter((s) => {
+              if (grp === 'principal') return isPrincipalOfficeStaff(s);
+              if (grp === 'academic') {
+                return (s.group || 'academic') === 'academic' && !isPrincipalOfficeStaff(s);
+              }
+              return (s.group || 'academic') === grp;
+            });
             return (
               <div key={grp} className="space-y-3">
                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">

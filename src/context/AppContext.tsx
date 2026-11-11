@@ -48,6 +48,7 @@ import {
 } from '../utils/cloudSync';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from '../utils/patrolSync';
 import {
+  isPrincipalOfficeStaff,
   officeMembers,
   resolveStaffSubunit,
   type StaffSubunit,
@@ -568,6 +569,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (staffSubunit) {
         // 有指定處室分層時，只在該分層找人；不可回落到其他組（例如點實習主任卻落到教務主任）
         resolvedStaffId = officeMembers(academicStaffListRef.current, staffSubunit)[0]?.id;
+      } else if (groupForRole === 'principal') {
+        // 秘書可能僅職稱正確、group 誤標；不可只靠 storage group 對齊
+        const current = academicStaffListRef.current.find((s) => s.id === currentAcademicStaffId);
+        resolvedStaffId =
+          (current && isPrincipalOfficeStaff(current) ? current.id : undefined) ||
+          academicStaffListRef.current.find((s) => isPrincipalOfficeStaff(s))?.id;
       } else {
         const currentInGroup =
           (academicStaffListRef.current.find((s) => s.id === currentAcademicStaffId)?.group ||
@@ -1329,6 +1336,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (currentRole !== 'student_affairs' && currentRole !== 'principal') return;
     const current = academicStaffList.find((s) => s.id === currentAcademicStaffId);
+    if (currentRole === 'principal') {
+      // 秘書可能只有職稱、group 誤標；不可因此被切回第一位「校長」
+      if (current && isPrincipalOfficeStaff(current)) return;
+      const first = academicStaffList.find((s) => isPrincipalOfficeStaff(s));
+      if (first && first.id !== currentAcademicStaffId) {
+        setCurrentAcademicStaffId(first.id);
+      }
+      return;
+    }
     if (current && current.group === currentRole) return;
     const first = academicStaffList.find((s) => s.group === currentRole);
     if (first && first.id !== currentAcademicStaffId) {

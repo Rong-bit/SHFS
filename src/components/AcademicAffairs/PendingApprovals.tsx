@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
 import { nonTeachingDateSet } from '../../utils/holidays';
-import { formatLeaveDateLabel } from '../../utils/leaveDates';
+import { countLeaveSubstitutePeriods, formatLeaveDateLabel } from '../../utils/leaveDates';
 import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
 import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/actingHomeroomPayrollRegister';
@@ -256,6 +256,10 @@ export const PendingApprovals: React.FC = () => {
                     </div>
                     {(() => {
                       const d = resolveDisplayClassSubject(req);
+                      const leaveSlots =
+                        req.requestType === 'substitute'
+                          ? countLeaveSubstitutePeriods(req, holidaySet)
+                          : 1;
                       return (
                         <>
                           <div className="font-bold text-slate-900 text-sm">
@@ -263,6 +267,7 @@ export const PendingApprovals: React.FC = () => {
                           </div>
                           <div className="text-slate-600 mt-1">
                             {dayNames[d.dayOfWeek]} {getPeriodLabel(d.period)}
+                            {leaveSlots > 1 ? ` · 共 ${leaveSlots} 節` : ''}
                           </div>
                         </>
                       );
