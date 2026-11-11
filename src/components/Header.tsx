@@ -129,6 +129,29 @@ export const Header: React.FC = () => {
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
   const currentSubunit = resolveStaffSubunit(currentAcademicStaff, currentRole);
+  const mobileStaffSub: StaffSubunit | null =
+    currentRole === 'academic' ||
+    currentRole === 'accounting' ||
+    currentRole === 'student_affairs' ||
+    currentRole === 'principal'
+      ? currentSubunit ||
+        (currentRole === 'accounting'
+          ? 'cashier'
+          : currentRole === 'principal'
+            ? 'principal'
+            : currentRole === 'student_affairs'
+              ? 'student_section'
+              : 'teaching')
+      : null;
+  const mobileStaffMembers = mobileStaffSub
+    ? officeMembers(academicStaffList, mobileStaffSub)
+    : [];
+  const mobileTeacherName =
+    (teachers.find((t) => t.id === currentTeacherId) || teachers[0])?.name || '';
+  const mobileStaffName =
+    currentAcademicStaff?.name ||
+    academicStaffList.find((s) => s.id === currentAcademicStaffId)?.name ||
+    '';
 
   useEffect(() => {
     if (!openOfficeMenu) return;
@@ -190,7 +213,7 @@ export const Header: React.FC = () => {
         : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
     }`;
 
-  const mobileRoleLabel =
+  const mobileRoleBase =
     currentRole === 'teacher'
       ? '教師端'
       : currentRole === 'admin'
@@ -200,6 +223,9 @@ export const Header: React.FC = () => {
           : currentSubunit
             ? subunitLoginLabel(currentSubunit)
             : '選擇身分';
+  const mobileRoleName =
+    currentRole === 'teacher' ? mobileTeacherName : currentRole === 'admin' ? '' : mobileStaffName;
+  const mobileRoleLabel = mobileRoleName ? `${mobileRoleBase} · ${mobileRoleName}` : mobileRoleBase;
 
   const pickMobileRole = (role: UserRole) => {
     setMobileRoleOpen(false);
@@ -657,11 +683,11 @@ export const Header: React.FC = () => {
           )}
         </div>
 
-        <div className="md:hidden border-t border-slate-800/80 py-2 space-y-2">
+        <div className="md:hidden border-t border-slate-800/80 py-1.5">
           <button
             type="button"
             onClick={() => setMobileRoleOpen(true)}
-            className="w-full min-h-12 px-3 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2 text-left touch-manipulation"
+            className="w-full min-h-11 px-3 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2 text-left touch-manipulation"
             aria-haspopup="dialog"
             aria-expanded={mobileRoleOpen}
           >
@@ -672,77 +698,6 @@ export const Header: React.FC = () => {
             <span className="text-xs font-bold text-white shrink-0">切換</span>
             <ChevronDown className="w-4 h-4 text-slate-300 shrink-0" />
           </button>
-
-          {currentRole === 'teacher' && (
-            <div className="rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-2">
-              <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1">
-                <User className="w-3.5 h-3.5 text-amber-400" />
-                登入教師
-              </p>
-              <TeacherSearchCombobox
-                teachers={teachers}
-                currentTeacherId={currentTeacherId}
-                onSelectTeacher={(tId) => requestTeacherSwitchWithAuth(tId)}
-                placeholder="輸入姓名或科別搜尋..."
-                fullWidth
-                comfortable
-              />
-            </div>
-          )}
-
-          {(currentRole === 'academic' ||
-            currentRole === 'accounting' ||
-            currentRole === 'student_affairs' ||
-            currentRole === 'principal') &&
-            (() => {
-              const sub =
-                currentSubunit ||
-                (currentRole === 'accounting'
-                  ? 'cashier'
-                  : currentRole === 'principal'
-                    ? 'principal'
-                    : currentRole === 'student_affairs'
-                      ? 'student_section'
-                      : 'teaching');
-              const members = officeMembers(academicStaffList, sub);
-              return (
-                <div className="rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-2 space-y-2">
-                  <p className="text-[11px] text-slate-400">{subunitLoginLabel(sub)}</p>
-                  <select
-                    id={`select-header-mobile-${currentRole}-staff`}
-                    value={
-                      members.some((m) => m.id === currentAcademicStaffId)
-                        ? currentAcademicStaffId
-                        : members[0]?.id || ''
-                    }
-                    onChange={(e) =>
-                      requestRoleSwitchWithAuth(currentRole, e.target.value, {
-                        staffSubunit: sub,
-                      })
-                    }
-                    className="w-full min-h-11 bg-slate-900 text-amber-300 font-bold px-3 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  >
-                    {members.length === 0 ? (
-                      <option value="">（名冊尚無此身分）</option>
-                    ) : (
-                      members.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.title})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setIsStaffPasswordOpen(true)}
-                    className="w-full min-h-11 rounded-lg bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 text-sm font-bold flex items-center justify-center gap-1.5 touch-manipulation"
-                  >
-                    <KeyRound className="w-4 h-4" />
-                    修改登入密碼
-                  </button>
-                </div>
-              );
-            })()}
         </div>
       </div>
     </header>
@@ -773,6 +728,73 @@ export const Header: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
           </div>
+
+          {(currentRole === 'teacher' || mobileStaffSub) && (
+            <div className="mb-3 rounded-xl border border-slate-700 bg-slate-800/80 px-2.5 py-2 space-y-2">
+              {currentRole === 'teacher' ? (
+                <>
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <User className="w-3.5 h-3.5 text-amber-400" />
+                    登入教師
+                  </p>
+                  <TeacherSearchCombobox
+                    teachers={teachers}
+                    currentTeacherId={currentTeacherId}
+                    onSelectTeacher={(tId) => {
+                      setMobileRoleOpen(false);
+                      requestTeacherSwitchWithAuth(tId);
+                    }}
+                    placeholder="輸入姓名或科別搜尋..."
+                    fullWidth
+                    comfortable
+                    listInFlow
+                  />
+                </>
+              ) : (
+                mobileStaffSub && (
+                  <>
+                    <p className="text-[11px] text-slate-400">{subunitLoginLabel(mobileStaffSub)}</p>
+                    <select
+                      id={`select-header-mobile-${currentRole}-staff`}
+                      value={
+                        mobileStaffMembers.some((m) => m.id === currentAcademicStaffId)
+                          ? currentAcademicStaffId
+                          : mobileStaffMembers[0]?.id || ''
+                      }
+                      onChange={(e) => {
+                        setMobileRoleOpen(false);
+                        requestRoleSwitchWithAuth(currentRole, e.target.value, {
+                          staffSubunit: mobileStaffSub,
+                        });
+                      }}
+                      className="w-full min-h-11 bg-slate-900 text-amber-300 font-bold px-3 py-2 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    >
+                      {mobileStaffMembers.length === 0 ? (
+                        <option value="">（名冊尚無此身分）</option>
+                      ) : (
+                        mobileStaffMembers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.title})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileRoleOpen(false);
+                        setIsStaffPasswordOpen(true);
+                      }}
+                      className="w-full min-h-11 rounded-lg bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 text-sm font-bold flex items-center justify-center gap-1.5 touch-manipulation"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                      修改登入密碼
+                    </button>
+                  </>
+                )
+              )}
+            </div>
+          )}
 
           <div className="space-y-4">
             <button

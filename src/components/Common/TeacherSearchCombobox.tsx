@@ -16,6 +16,8 @@ interface TeacherSearchComboboxProps {
   fullWidth?: boolean;
   /** 手機頂欄：較高的點選區 */
   comfortable?: boolean;
+  /** 清單跟在輸入框下方，避免被捲動容器裁切 */
+  listInFlow?: boolean;
   /** 允許清空已選教師（選填欄位：代導師等） */
   allowClear?: boolean;
   /** 下拉清單「不指定」列文字 */
@@ -32,6 +34,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
   variant = 'dark',
   fullWidth = false,
   comfortable = false,
+  listInFlow = false,
   allowClear = false,
   clearLabel = '不指定（清除）',
 }) => {
@@ -237,9 +240,9 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
 
       {isOpen && (
         <div
-          className={`absolute left-0 z-50 mt-1 ${
+          className={`${listInFlow ? 'relative' : 'absolute left-0 z-50'} mt-1 ${
             fullWidth ? 'w-full' : 'w-72'
-          } max-h-72 overflow-y-auto rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${
+          } max-h-60 overflow-y-auto rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${
             isLight
               ? 'bg-white border border-slate-200'
               : 'bg-slate-900 border border-slate-700'
