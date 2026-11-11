@@ -527,7 +527,9 @@ export const TeacherSchedule: React.FC = () => {
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-slate-100/80 text-slate-700 text-xs font-bold divide-x divide-slate-200 border-b border-slate-200">
-                <th className="p-3 w-28 text-center bg-slate-200/60">節次 / 時間</th>
+                <th className="p-3 w-40 min-w-[9.5rem] whitespace-nowrap text-center bg-slate-200/60">
+                  節次 / 時間
+                </th>
                 {days.map((d) => (
                   <th key={d.day} className="p-3 text-center w-1/5">
                     {d.name}
@@ -551,9 +553,9 @@ export const TeacherSchedule: React.FC = () => {
 
                     <tr className="divide-x divide-slate-200 hover:bg-slate-50/50 transition">
                       {/* Period Header Column */}
-                      <td className="p-2.5 text-center bg-slate-50/80">
-                        <div className="font-bold text-slate-800">{pDef.label}</div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      <td className="p-2.5 w-40 min-w-[9.5rem] text-center bg-slate-50/80 align-middle">
+                        <div className="font-bold text-slate-800 whitespace-nowrap">{pDef.label}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">
                           {pDef.timeRange}
                         </div>
                       </td>
