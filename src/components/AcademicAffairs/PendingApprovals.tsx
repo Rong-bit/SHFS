@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
+import { nonTeachingDateSet } from '../../utils/holidays';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { buildPeriodDefinitions, isCounselingPeriod } from '../../utils/periodConfig';
 import { formatTemporarySwapEffectLabel } from '../../utils/temporarySwap';
@@ -38,6 +39,10 @@ export const PendingApprovals: React.FC = () => {
     systemConfig,
   } = useApp();
   const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
+  const holidaySet = useMemo(
+    () => nonTeachingDateSet(systemConfig.nonTeachingDays),
+    [systemConfig.nonTeachingDays]
+  );
   const [filter, setFilter] = useState<'pending' | 'all' | 'approved' | 'rejected'>('pending');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('時段衝堂或請假附件不全');
@@ -86,7 +91,7 @@ export const PendingApprovals: React.FC = () => {
         ? requests.filter((r) => r.batchGroupId === req.batchGroupId && r.status === 'pending')
         : [req];
       const ok = window.confirm(
-        `此申請將整批一次核准（${formatCombinedLeaveCount(pendingItems)}）。確定？`
+        `此申請將整批一次核准（${formatCombinedLeaveCount(pendingItems, holidaySet)}）。確定？`
       );
       if (!ok) return;
     }

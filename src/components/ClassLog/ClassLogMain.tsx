@@ -293,7 +293,7 @@ export const ClassLogMain: React.FC = () => {
   if (!currentTeacher) {
     return (
       <p className="text-sm text-slate-600 bg-white border border-slate-200 rounded-2xl px-4 py-6">
-        請先在右上角選擇教師身分後再填寫教室日誌。
+        請先在頁面上方選擇教師身分後再填寫教室日誌。
       </p>
     );
   }
@@ -301,13 +301,13 @@ export const ClassLogMain: React.FC = () => {
   return (
     <div className="space-y-5">
       <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-end gap-3">
-        <label className="text-[11px] font-semibold text-slate-600">
+        <label className="text-[11px] font-semibold text-slate-600 w-full sm:w-auto">
           日期
           <input
             type="date"
             value={date}
             onChange={(e) => e.target.value && setDate(e.target.value)}
-            className="mt-1 block bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
+            className="mt-1 block w-full sm:w-auto min-h-11 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-base sm:text-sm"
           />
         </label>
         <div className="text-xs text-slate-600 pb-2">
@@ -384,7 +384,7 @@ export const ClassLogMain: React.FC = () => {
                   type="button"
                   onClick={() => openSlot(slot)}
                   disabled={slot.transferredOut}
-                  className="w-full text-left px-4 py-3 transition disabled:cursor-default enabled:hover:bg-indigo-50/40 touch-manipulation"
+                  className="w-full text-left px-4 py-3 min-h-[4.5rem] transition disabled:cursor-default enabled:hover:border-indigo-300 enabled:hover:bg-indigo-50/40 touch-manipulation active:bg-indigo-50"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>

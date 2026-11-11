@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubstituteRequest } from '../../types';
+import { nonTeachingDateSet } from '../../utils/holidays';
 import { formatLeaveDateLabel } from '../../utils/leaveDates';
 import { buildPeriodDefinitions } from '../../utils/periodConfig';
 import { formatDayPeriodSummary } from '../../utils/periodLabels';
@@ -37,6 +38,10 @@ export const TeacherRequestsList: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [exportingNotices, setExportingNotices] = useState(false);
   const periodDefinitions = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
+  const holidaySet = useMemo(
+    () => nonTeachingDateSet(systemConfig.nonTeachingDays),
+    [systemConfig.nonTeachingDays]
+  );
 
   const myRequests = useMemo(
     () => requests.filter((r) => r.applicantTeacherId === currentTeacher?.id),
@@ -231,7 +236,14 @@ export const TeacherRequestsList: React.FC = () => {
                 const d = resolveDisplayClassSubject(r, items);
                 return { dayOfWeek: d.dayOfWeek, period: d.period };
               }),
-              dayNames
+              dayNames,
+              req.requestType === 'substitute'
+                ? {
+                    leaveDateStart: req.leaveDateStart,
+                    leaveDateEnd: req.leaveDateEnd,
+                    excludeDates: holidaySet,
+                  }
+                : undefined
             );
             const subNames = [
               ...new Set(
@@ -275,7 +287,7 @@ export const TeacherRequestsList: React.FC = () => {
                   </span>
                   {(items.length > 1 || sameNumberSplit) && (
                     <span className="text-[11px] text-slate-500 font-semibold">
-                      {items.length > 1 ? formatCombinedLeaveCount(items) : ''}
+                      {items.length > 1 ? formatCombinedLeaveCount(items, holidaySet) : ''}
                       {items.length > 1 && sameNumberSplit ? ' · ' : ''}
                       {sameNumberSplit ? '同號分張' : items.length > 1 ? '同號' : ''}
                     </span>

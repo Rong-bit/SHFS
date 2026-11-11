@@ -396,7 +396,10 @@ export const SchoolTimetableMatrix: React.FC = () => {
         </div>
 
         {/* Matrix Grid */}
-        <div className="overflow-x-auto">
+        <p className="md:hidden px-4 py-2 text-xs text-slate-500 bg-slate-50 border-b border-slate-200">
+          左右滑動可看整週課表
+        </p>
+        <div className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-slate-100 text-slate-700 text-xs font-bold divide-x divide-slate-200 border-b border-slate-200">
