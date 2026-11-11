@@ -1,3 +1,9 @@
+import {
+  countCombinedLeavePeriods,
+  ExcludeDates,
+  LeaveBillableOptions,
+} from './leaveDates';
+
 /** 連續用起迄；有缺口列「第2、3、5、7節」 */
 export function formatPeriodsLabel(periods: number[]): string {
   const uniq = [...new Set(periods.filter((p) => Number.isFinite(p)))].sort((a, b) => a - b);
@@ -37,7 +43,14 @@ const DEFAULT_DAY_NAMES = ['', '週一', '週二', '週三', '週四', '週五',
 export function formatDayPeriodSummary(
   sessions: Array<{ dayOfWeek: number; period: number }>,
   dayNames: string[] = DEFAULT_DAY_NAMES,
-  options?: { withTotal?: boolean }
+  options?: {
+    withTotal?: boolean;
+    /** 有請假起迄時，「共 N 節」改算區間內實際應派次數 */
+    leaveDateStart?: string;
+    leaveDateEnd?: string;
+    excludeDates?: ExcludeDates;
+    billableOptions?: LeaveBillableOptions;
+  }
 ): string {
   const byDay = new Map<number, number[]>();
   for (const s of sessions) {
@@ -54,8 +67,20 @@ export function formatDayPeriodSummary(
   });
   const body = parts.join('；');
   if (options?.withTotal === false) return body;
-  const slots = new Set(sessions.map((s) => `${s.dayOfWeek}-${s.period}`)).size;
-  return `${body} · 共 ${slots} 節`;
+  const weeklySlots = new Set(sessions.map((s) => `${s.dayOfWeek}-${s.period}`)).size;
+  const total =
+    options?.leaveDateStart
+      ? countCombinedLeavePeriods(
+          sessions.map((s) => ({
+            leaveDateStart: options.leaveDateStart,
+            leaveDateEnd: options.leaveDateEnd,
+            originalSession: s,
+          })),
+          options.excludeDates,
+          options.billableOptions
+        )
+      : weeklySlots;
+  return `${body} · 共 ${total} 節`;
 }
 
 export type AffectedSessionSlice = {
