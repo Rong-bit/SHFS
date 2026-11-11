@@ -398,3 +398,77 @@ export async function sendPatrolMailTest(params: {
     return { ok: false, sent: 0, failed: [{ email, error: hint }], skippedNoEmail: 0, error: hint };
   }
 }
+
+/** 沿用巡堂 SMTP／寄信 API，寄出一封學校通知（教室日誌補件等） */
+export async function sendSchoolMail(params: {
+  mailConfig: PatrolMailConfig;
+  to: string[];
+  subject: string;
+  text: string;
+  html?: string;
+  schoolName?: string;
+}): Promise<PatrolNotifyResult> {
+  const { mailConfig, schoolName } = params;
+  if (!isPatrolMailConfigured(mailConfig)) {
+    return { ok: false, sent: 0, failed: [], skippedNoEmail: 0, error: '尚未啟用或設定 SMTP' };
+  }
+  const unique = [...new Set(params.to.map((e) => (e || '').trim()).filter((e) => e.includes('@')))];
+  if (unique.length === 0) {
+    return { ok: false, sent: 0, failed: [], skippedNoEmail: 0, error: '沒有有效收件信箱' };
+  }
+  try {
+    const res = await fetch(resolvePatrolNotifyApiUrl(mailConfig), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...notifyAuthHeaders(mailConfig) },
+      body: JSON.stringify({
+        smtp: {
+          host: mailConfig.host,
+          port: mailConfig.port,
+          secure: mailConfig.secure,
+          user: mailConfig.user,
+          pass: mailConfig.pass,
+          fromName: mailConfig.fromName || schoolName || '',
+          fromEmail: mailConfig.fromEmail,
+        },
+        to: unique,
+        subject: params.subject,
+        text: params.text,
+        html: params.html,
+        token: (mailConfig.notifyApiToken || '').trim() || undefined,
+      }),
+    });
+    const { json, parseError } = await readPatrolNotifyResponse(res);
+    if (parseError) {
+      return {
+        ok: false,
+        sent: 0,
+        failed: unique.map((email) => ({ email, error: parseError })),
+        skippedNoEmail: 0,
+        error: parseError,
+      };
+    }
+    if (!res.ok) {
+      const err = json.error || json.message || `HTTP ${res.status}`;
+      return {
+        ok: false,
+        sent: 0,
+        failed: unique.map((email) => ({ email, error: err })),
+        skippedNoEmail: 0,
+        error: err,
+      };
+    }
+    return { ...json, skippedNoEmail: json.skippedNoEmail ?? 0 };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '寄信失敗';
+    const hint = /Failed to fetch|NetworkError|Load failed/i.test(msg)
+      ? `${msg}（請確認寄信 API 根網址可連線，且伺服器已允許跨域）`
+      : msg;
+    return {
+      ok: false,
+      sent: 0,
+      failed: unique.map((email) => ({ email, error: hint })),
+      skippedNoEmail: 0,
+      error: hint,
+    };
+  }
+}

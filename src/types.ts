@@ -555,6 +555,52 @@ export interface ClassLogTransfer {
   updatedAt: string;
 }
 
+/** 教室日誌週彙整核章身分：教學組長、教務主任各自一章 */
+export type ClassLogReviewRole = 'teaching_leader' | 'academic_dean';
+
+/** 教學組長或教務主任退回某一節（未填或內容不完整） */
+export interface ClassLogReturn {
+  id: string;
+  date: string;
+  period: number;
+  dayOfWeek: DayOfWeek;
+  sessionId: string;
+  className: string;
+  subjectName: string;
+  holderTeacherId: string;
+  holderTeacherName: string;
+  reason: string;
+  actorId: string;
+  actorName: string;
+  actorTitle: string;
+  actorRole: ClassLogReviewRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 班級週彙整上的一枚核章 */
+export interface ClassLogWeekSignOff {
+  role: ClassLogReviewRole;
+  personId: string;
+  personName: string;
+  title: string;
+  stampCaption: string;
+  stampedAt: string;
+}
+
+/** 一週、一個班級一份彙整；教學組長與教務主任各核一章 */
+export interface ClassLogWeekReview {
+  id: string;
+  /** 週一，雲端依此分日存放 */
+  date: string;
+  weekStart: string;
+  weekEnd: string;
+  className: string;
+  signOffs: ClassLogWeekSignOff[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MonthlyTeacherSettlement {
   teacherId: string;
   teacherName: string;
