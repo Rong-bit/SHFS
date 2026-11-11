@@ -117,6 +117,7 @@ import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadPatrolTeacherManual, downloadSystemManual } from '../../utils/generateManual';
 import { isPasswordHash } from '../../utils/passwordCrypto';
 import { ModalShell } from '../Common/ModalShell';
+import { MobileDock } from '../Common/MobileDock';
 import { DraftNumberInput } from '../Common/DraftNumberInput';
 
 type AdminTab =
@@ -740,7 +741,7 @@ export const AdminSettings: React.FC = () => {
 
   const activeGroup = groupOfTab(activeTab);
   const subTabClass = (on: boolean) =>
-    `flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+    `shrink-0 min-h-11 md:min-h-0 flex items-center space-x-2 px-3.5 py-2 md:py-1.5 rounded-lg text-sm md:text-xs font-bold transition touch-manipulation ${
       on
         ? 'bg-indigo-600 text-white shadow-sm'
         : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
@@ -1099,7 +1100,10 @@ export const AdminSettings: React.FC = () => {
 
       {/* 大類 → 子分頁，避免七個按鈕擠成一排 */}
       <div className="space-y-3 border-b border-slate-200 pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="md:hidden text-base font-extrabold text-slate-900">
+          {ADMIN_GROUPS.find((group) => group.id === activeGroup)?.label}
+        </p>
+        <div className="hidden md:flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             {ADMIN_GROUPS.map((group) => {
               const selected = activeGroup === group.id;
@@ -1142,7 +1146,7 @@ export const AdminSettings: React.FC = () => {
         </div>
 
         {activeGroup === 'params' && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
             <button
               id="tab-admin-config"
               type="button"
@@ -1174,7 +1178,7 @@ export const AdminSettings: React.FC = () => {
         )}
 
         {activeGroup === 'venues' && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
             <button
               id="tab-admin-venues"
               type="button"
@@ -1197,7 +1201,7 @@ export const AdminSettings: React.FC = () => {
         )}
 
         {activeGroup === 'roster' && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
             <button
               id="tab-admin-teachers"
               type="button"
@@ -1220,7 +1224,7 @@ export const AdminSettings: React.FC = () => {
         )}
 
         {activeGroup === 'data' && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
             <button
               id="tab-admin-schedules"
               type="button"
@@ -1243,7 +1247,7 @@ export const AdminSettings: React.FC = () => {
         )}
 
         {activeGroup === 'ops' && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
             <button
               id="tab-admin-security"
               type="button"
@@ -1283,6 +1287,40 @@ export const AdminSettings: React.FC = () => {
           </div>
         )}
       </div>
+
+      <MobileDock
+        items={ADMIN_GROUPS.map((group) => {
+          const GroupIcon =
+            group.id === 'params'
+              ? Settings
+              : group.id === 'venues'
+                ? Building2
+                : group.id === 'roster'
+                  ? Users
+                  : group.id === 'data'
+                    ? Cloud
+                    : ShieldCheck;
+          const short =
+            group.id === 'params'
+              ? '參數'
+              : group.id === 'venues'
+                ? '場地'
+                : group.id === 'roster'
+                  ? '名冊'
+                  : group.id === 'data'
+                    ? '課表'
+                    : '維護';
+          return {
+            id: group.id,
+            label: short,
+            icon: <GroupIcon className="w-4 h-4" />,
+            active: activeGroup === group.id,
+            onClick: () => {
+              if (activeGroup !== group.id) setActiveTab(group.tabs[0]);
+            },
+          };
+        })}
+      />
 
       {/* TAB: 鐘點費率標準 */}
       {activeTab === 'config' && (

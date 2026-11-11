@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ClipboardList, Stamp } from 'lucide-react';
+import { MobileDock } from '../Common/MobileDock';
 import { useApp } from '../../context/AppContext';
 import { readPatrolReviewFocusId } from '../../utils/patrolDeepLink';
 import { PatrolPrincipalWeekly } from './PatrolPrincipalWeekly';
@@ -23,7 +24,10 @@ export const PatrolAffairsMain: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+      <h2 className="md:hidden text-lg font-extrabold text-slate-900">
+        {tab === 'weekly' && isPrincipal ? '校長每周彙整核章' : '巡堂會辦'}
+      </h2>
+      <div className="hidden md:flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         <button
           type="button"
           onClick={() => setTab('inbox')}
@@ -60,6 +64,27 @@ export const PatrolAffairsMain: React.FC = () => {
         />
       )}
       {tab === 'weekly' && isPrincipal && <PatrolPrincipalWeekly />}
+
+      {isPrincipal && (
+        <MobileDock
+          items={[
+            {
+              id: 'inbox',
+              label: '會辦',
+              icon: <ClipboardList className="w-4 h-4" />,
+              active: tab === 'inbox',
+              onClick: () => setTab('inbox'),
+            },
+            {
+              id: 'weekly',
+              label: '週彙整',
+              icon: <Stamp className="w-4 h-4" />,
+              active: tab === 'weekly',
+              onClick: () => setTab('weekly'),
+            },
+          ]}
+        />
+      )}
     </div>
   );
 };

@@ -17,6 +17,7 @@ import {
   MapPin,
   UserCheck,
 } from 'lucide-react';
+import { MobileDock } from '../Common/MobileDock';
 
 export const AcademicAffairsMain: React.FC = () => {
   const { requests } = useApp();
@@ -41,7 +42,7 @@ export const AcademicAffairsMain: React.FC = () => {
     <div className="space-y-6">
       
       {/* Tab Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+      <div className="hidden md:flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           
           <button
@@ -151,6 +152,61 @@ export const AcademicAffairsMain: React.FC = () => {
         <PatrolReviewInbox mode="staff" focusCaseId={focusCaseId} />
       )}
       {activeTab === 'class-log' && <ClassLogReport />}
+
+      <MobileDock
+        items={[
+          {
+            id: 'dispatch',
+            label: '派代',
+            icon: <UserCheck className="w-4 h-4" />,
+            active: activeTab === 'dispatch',
+            onClick: () => setActiveTab('dispatch'),
+          },
+          {
+            id: 'approvals',
+            label: '審核',
+            icon: <ClipboardCheck className="w-4 h-4" />,
+            active: activeTab === 'approvals',
+            onClick: () => setActiveTab('approvals'),
+            badge: pendingCount,
+          },
+          {
+            id: 'matrix',
+            label: '總表',
+            icon: <Grid className="w-4 h-4" />,
+            active: activeTab === 'matrix',
+            onClick: () => setActiveTab('matrix'),
+          },
+          {
+            id: 'leave-calendar',
+            label: '請假',
+            icon: <CalendarDays className="w-4 h-4" />,
+            active: activeTab === 'leave-calendar',
+            onClick: () => setActiveTab('leave-calendar'),
+          },
+          {
+            id: 'patrol',
+            label: '巡堂',
+            icon: <MapPin className="w-4 h-4" />,
+            active: activeTab === 'patrol',
+            onClick: () => setActiveTab('patrol'),
+          },
+          {
+            id: 'patrol-review',
+            label: '會辦',
+            icon: <ClipboardList className="w-4 h-4" />,
+            active: activeTab === 'patrol-review',
+            onClick: () => setActiveTab('patrol-review'),
+          },
+          {
+            id: 'class-log',
+            label: '日誌',
+            icon: <BookOpen className="w-4 h-4" />,
+            active: activeTab === 'class-log',
+            onClick: () => setActiveTab('class-log'),
+          },
+        ]}
+      />
 
     </div>
   );
