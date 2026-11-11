@@ -467,7 +467,9 @@ export const LoginAuthModal: React.FC<LoginAuthModalProps> = ({
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
                             staff.title.includes('組長')
                               ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30'
-                              : 'bg-slate-700 text-slate-300 border border-slate-600'
+                              : staff.title.includes('秘書')
+                                ? 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
+                                : 'bg-slate-700 text-slate-300 border border-slate-600'
                           }`}>
                             {staff.title}
                           </span>

@@ -200,6 +200,10 @@ const STAFF_TITLE_PRESETS: Record<string, { badge: string; responsibleScope: str
     badge: '每周彙整 · 核章指示',
     responsibleScope: '巡堂異常每周彙整核章與指示用語',
   },
+  秘書: {
+    badge: '校長室 · 文書與彙整協辦',
+    responsibleScope: '校長室文書、巡堂異常每周彙整協辦與聯繫',
+  },
 };
 
 /**
@@ -220,7 +224,7 @@ const STAFF_OFFICE_TITLE_OPTIONS: Record<StaffFormOffice, string[]> = {
   general: ['總務主任'],
   accounting: ['出納組長', '出納組組員'],
   student_affairs: ['學務主任', '生輔組長'],
-  principal: ['校長'],
+  principal: ['校長', '秘書'],
 };
 
 const STAFF_OFFICE_STORAGE_GROUP: Record<StaffFormOffice, AcademicStaffGroup> = {
@@ -251,7 +255,11 @@ function resolveStaffFormOffice(staff: {
   if (/總務主任/.test(t)) return 'general';
   if ((staff.group || '') === 'accounting' || /出納/.test(t)) return 'accounting';
   if ((staff.group || '') === 'student_affairs' || /學務主任|生輔/.test(t)) return 'student_affairs';
-  if ((staff.group || '') === 'principal' || (/校長/.test(t) && !/主任|組長/.test(t))) {
+  if (
+    (staff.group || '') === 'principal' ||
+    t === '秘書' ||
+    (/校長/.test(t) && !/主任|組長/.test(t))
+  ) {
     return 'principal';
   }
   return 'academic';
