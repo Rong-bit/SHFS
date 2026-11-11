@@ -310,18 +310,24 @@ export const PatrolMain: React.FC = () => {
           wantedDean && !hasDean
             ? '；成員名冊找不到教務主任（請確認職稱為「教務主任」且處室為教務處）'
             : '';
+        const failDetail =
+          result.error ||
+          result.failed.map((f) => f.error).find(Boolean) ||
+          '';
+        const failHint = failDetail ? `：${failDetail}` : '';
         if (result.ok) {
           setNotifyMsg(`已寄出異常會辦通知（${result.sent} 封）${noMailHint}${deanHint}`);
         } else if (result.sent > 0) {
           setNotifyMsg(
-            `已寄出 ${result.sent} 封，部分失敗可於下次更新時重試${noMailHint}${deanHint}`
+            `已寄出 ${result.sent} 封，部分失敗可於下次更新時重試${failHint}${noMailHint}${deanHint}`
           );
         } else {
-          setNotifyMsg('會辦案已建立，但寄信失敗');
+          setNotifyMsg(`會辦案已建立，但寄信失敗${failHint}`);
         }
-      } catch {
+      } catch (err) {
         if (notifyGenRef.current.get(record.id) === gen) {
-          setNotifyMsg('會辦案已建立，但寄信發生錯誤');
+          const detail = err instanceof Error && err.message ? `：${err.message}` : '';
+          setNotifyMsg(`會辦案已建立，但寄信發生錯誤${detail}`);
         }
       }
     } else {
