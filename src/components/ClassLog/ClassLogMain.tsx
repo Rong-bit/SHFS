@@ -15,6 +15,12 @@ import {
 } from '../../utils/classLogSlots';
 import { useClassLogs } from '../../utils/classLogSync';
 import { useClassLogTransfers } from '../../utils/classLogTransferSync';
+import { useClassLogReturns } from '../../utils/classLogReviewSync';
+import {
+  CLASS_LOG_REVIEW_ROLE_LABEL,
+  classLogDutyStatus,
+  returnClearedByResubmit,
+} from '../../utils/classLogReview';
 import { ClassLogTransferDialog } from './ClassLogTransferDialog';
 import { ModalShell } from '../Common/ModalShell';
 import { ElectronicStamp, stampDisplayWidthPx } from '../Common/ElectronicStamp';
@@ -58,6 +64,12 @@ export const ClassLogMain: React.FC = () => {
     deleteTransfers,
     refresh: refreshTransfers,
   } = useClassLogTransfers();
+  const {
+    records: returns,
+    error: returnError,
+    deleteRecords: deleteReturns,
+    refresh: refreshReturns,
+  } = useClassLogReturns();
   const [date, setDate] = useState(() => dateToIsoLocal(new Date()));
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [transferSlot, setTransferSlot] = useState<ClassLogSlot | null>(null);
@@ -70,7 +82,8 @@ export const ClassLogMain: React.FC = () => {
   useEffect(() => {
     void refresh(date, date);
     void refreshTransfers(date, date);
-  }, [date, refresh, refreshTransfers]);
+    void refreshReturns(date, date);
+  }, [date, refresh, refreshTransfers, refreshReturns]);
 
   const slots = useMemo(() => {
     if (!currentTeacher) return [];
@@ -92,6 +105,14 @@ export const ClassLogMain: React.FC = () => {
     }
     return map;
   }, [entries, date]);
+
+  const returnsById = useMemo(() => {
+    const map = new Map<string, (typeof returns)[number]>();
+    for (const item of returns) {
+      if (item.date === date) map.set(item.id, item);
+    }
+    return map;
+  }, [returns, date]);
 
   // 已填只計本節真實寫入，不含「同連續節內容」鏡射
   const filledCount = fillableSlots.filter((s) =>
@@ -150,6 +171,25 @@ export const ClassLogMain: React.FC = () => {
         ? draft.consecutiveSlots
         : [draft.slot];
 
+    const blocked = targets.some((target) => {
+      const id = classLogEntryId({
+        date,
+        period: target.period,
+        sessionId: target.sessionId,
+      });
+      if (!returnsById.has(id)) return false;
+      return !returnClearedByResubmit({
+        previous: entriesById.get(id),
+        nextProgress: progress,
+        nextAssessment: assessment,
+        nextNote: note,
+      });
+    });
+    if (blocked) {
+      setFormError('退回尚未解除。請依原因修改教學內容後再送出；與退回前相同或仍然過短不會解除。');
+      return;
+    }
+
     const batch: ClassLogEntry[] = targets.map((target) => {
       const id = classLogEntryId({
         date,
@@ -184,6 +224,19 @@ export const ClassLogMain: React.FC = () => {
     setSaving(true);
     try {
       saveEntries(batch);
+      const cleared = returns.filter((item) =>
+        batch.some(
+          (entry) =>
+            entry.id === item.id &&
+            returnClearedByResubmit({
+              previous: entriesById.get(entry.id),
+              nextProgress: entry.progress,
+              nextAssessment: entry.assessment,
+              nextNote: entry.note,
+            })
+        )
+      );
+      if (cleared.length > 0) deleteReturns(cleared);
       setDraft(null);
       setFormError('');
       setConfirmDeleteId(null);
@@ -290,6 +343,16 @@ export const ClassLogMain: React.FC = () => {
     }
   };
 
+  const draftReturn = draft
+    ? returnsById.get(
+        classLogEntryId({
+          date,
+          period: draft.slot.period,
+          sessionId: draft.slot.sessionId,
+        })
+      )
+    : undefined;
+
   if (!currentTeacher) {
     return (
       <p className="text-sm text-slate-600 bg-white border border-slate-200 rounded-2xl px-4 py-6">
@@ -326,6 +389,7 @@ export const ClassLogMain: React.FC = () => {
               onClick={() => {
                 void refresh(date, date);
                 void refreshTransfers(date, date);
+                void refreshReturns(date, date);
               }}
               className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
@@ -342,9 +406,9 @@ export const ClassLogMain: React.FC = () => {
           這台電腦尚未加入學校同步，日誌只存在本機；教學組看不到。
         </p>
       )}
-      {(error || transferError || actionError) && (
+      {(error || transferError || returnError || actionError) && (
         <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
-          {[error, transferError, actionError]
+          {[error, transferError, returnError, actionError]
             .filter((msg, i, arr) => msg && arr.indexOf(msg) === i)
             .join(' ')}
         </p>
@@ -372,6 +436,8 @@ export const ClassLogMain: React.FC = () => {
               entriesById,
             });
             const mirrored = Boolean(display && !own && !slot.transferredOut);
+            const returned = returnsById.get(id);
+            const reviewStatus = classLogDutyStatus({ entry: own, returned });
             const recallLabel = slot.transferredIn ? '退回' : '收回';
             return (
               <div
@@ -409,6 +475,16 @@ export const ClassLogMain: React.FC = () => {
                             已轉給 {slot.holderTeacherName}
                           </span>
                         )}
+                        {!slot.transferredOut && reviewStatus === 'returned' && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                            已退回
+                          </span>
+                        )}
+                        {!slot.transferredOut && reviewStatus === 'incomplete' && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                            內容不完整
+                          </span>
+                        )}
                         {!slot.transferredOut &&
                           (own ? (
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
@@ -429,6 +505,12 @@ export const ClassLogMain: React.FC = () => {
                       </p>
                       {slot.transfer?.note && (
                         <p className="mt-1 text-xs text-slate-500">轉移備註：{slot.transfer.note}</p>
+                      )}
+                      {!slot.transferredOut && returned && reviewStatus === 'returned' && (
+                        <p className="mt-1 text-xs text-rose-800">
+                          {CLASS_LOG_REVIEW_ROLE_LABEL[returned.actorRole]} {returned.actorName} 退回：
+                          {returned.reason}
+                        </p>
                       )}
                       {!slot.transferredOut && display && (
                         <p className="mt-1.5 text-sm text-slate-800 line-clamp-2">{display.progress}</p>
@@ -509,6 +591,13 @@ export const ClassLogMain: React.FC = () => {
           </div>
           {/* min-h-0：Safari 才會讓中間區收縮，底欄「更新並截章」才點得到 */}
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-5 py-4 space-y-4">
+            {draftReturn && (
+              <p className="text-xs text-rose-900 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                {CLASS_LOG_REVIEW_ROLE_LABEL[draftReturn.actorRole]} {draftReturn.actorName} 退回：
+                {draftReturn.reason}
+                。請修改教學內容後再送出，與退回前相同不會解除。
+              </p>
+            )}
             <label className="block text-[11px] font-semibold text-slate-600">
               教學進度（必填）
               <textarea

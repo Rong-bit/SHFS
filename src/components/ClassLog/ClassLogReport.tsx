@@ -14,6 +14,7 @@ import {
 import { useClassLogs } from '../../utils/classLogSync';
 import { useClassLogTransfers } from '../../utils/classLogTransferSync';
 import { ClassLogTransferDialog } from './ClassLogTransferDialog';
+import { ClassLogWeekReviewPanel } from './ClassLogWeekReviewPanel';
 import {
   ElectronicStamp,
   stampDisplayWidthPx,
@@ -177,6 +178,8 @@ export const ClassLogReport: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      <ClassLogWeekReviewPanel />
+
       <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-end gap-3">
         <label className="text-[11px] font-semibold text-slate-600">
           起日
