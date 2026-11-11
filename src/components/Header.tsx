@@ -218,10 +218,10 @@ export const Header: React.FC = () => {
       ? '教師端'
       : currentRole === 'admin'
         ? '系統管理員'
-        : currentRole === 'principal'
-          ? '校長'
-          : currentSubunit
-            ? subunitLoginLabel(currentSubunit)
+        : currentSubunit
+          ? subunitLoginLabel(currentSubunit)
+          : currentRole === 'principal'
+            ? '校長室'
             : '選擇身分';
   const mobileRoleName =
     currentRole === 'teacher' ? mobileTeacherName : currentRole === 'admin' ? '' : mobileStaffName;
@@ -762,8 +762,10 @@ export const Header: React.FC = () => {
                           : mobileStaffMembers[0]?.id || ''
                       }
                       onChange={(e) => {
+                        const nextId = e.target.value;
+                        if (!nextId) return;
                         setMobileRoleOpen(false);
-                        requestRoleSwitchWithAuth(currentRole, e.target.value, {
+                        requestRoleSwitchWithAuth(currentRole, nextId, {
                           staffSubunit: mobileStaffSub,
                         });
                       }}
@@ -779,17 +781,16 @@ export const Header: React.FC = () => {
                         ))
                       )}
                     </select>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileRoleOpen(false);
-                        setIsStaffPasswordOpen(true);
-                      }}
-                      className="w-full min-h-11 rounded-lg bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 text-sm font-bold flex items-center justify-center gap-1.5 touch-manipulation"
-                    >
-                      <KeyRound className="w-4 h-4" />
-                      修改登入密碼
-                    </button>
+                    {currentAcademicStaff && (
+                      <button
+                        type="button"
+                        onClick={() => setIsStaffPasswordOpen(true)}
+                        className="w-full min-h-11 rounded-lg bg-slate-900 hover:bg-slate-700 text-amber-300 border border-slate-700 text-sm font-bold flex items-center justify-center gap-1.5 touch-manipulation"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                        修改登入密碼
+                      </button>
+                    )}
                   </>
                 )
               )}
@@ -911,7 +912,11 @@ export const Header: React.FC = () => {
               : '行政'
           }
           onSave={(pw) => updateAcademicStaffPassword(currentAcademicStaff.id, pw)}
-          onClose={() => setIsStaffPasswordOpen(false)}
+          onClose={() => {
+            setIsStaffPasswordOpen(false);
+            // 密碼視窗若從手機「切換」開啟，關閉時再收起底層選單，避免同一次點擊點穿到下方「教師端」
+            setMobileRoleOpen(false);
+          }}
         />
       )}
     </>

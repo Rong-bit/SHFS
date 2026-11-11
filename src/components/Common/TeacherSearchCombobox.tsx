@@ -242,7 +242,7 @@ export const TeacherSearchCombobox: React.FC<TeacherSearchComboboxProps> = ({
         <div
           className={`${listInFlow ? 'relative' : 'absolute left-0 z-50'} mt-1 ${
             fullWidth ? 'w-full' : 'w-72'
-          } max-h-60 overflow-y-auto rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${
+          } ${listInFlow ? 'max-h-60' : 'max-h-72'} overflow-y-auto rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${
             isLight
               ? 'bg-white border border-slate-200'
               : 'bg-slate-900 border border-slate-700'
