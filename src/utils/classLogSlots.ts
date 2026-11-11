@@ -122,9 +122,16 @@ export function listClassLogDutiesForDate(params: {
       : slotFromSession(session, false);
     const naturalHolderId = sub?.substituteTeacherId || session.teacherId;
     const naturalHolderName = sub?.substituteTeacherName || session.teacherName;
-    const transfer = transferById.get(
+    const stored = transferById.get(
       classLogEntryId({ date: isoDate, period: session.period, sessionId: session.id })
     );
+    // 轉回原應填者、或該日已改派給另一位核准代課者時，舊轉移不再生效
+    const transfer =
+      stored &&
+      stored.toTeacherId !== naturalHolderId &&
+      (!stored.naturalHolderId || stored.naturalHolderId === naturalHolderId)
+        ? stored
+        : undefined;
     duties.push({
       slot,
       naturalHolderId,
@@ -232,7 +239,11 @@ export function resolveClassLogDisplayEntry(params: {
   const own = entriesById.get(ownId);
   if (own) return own;
 
-  const block = findConsecutiveClassLogSlots(slots, slot);
+  // 已轉出的節不該把左右兩節連成同一段，否則中間空缺仍會鏡射進度
+  const block = findConsecutiveClassLogSlots(
+    slots.filter((s) => !s.transferredOut),
+    slot
+  );
   for (const s of block) {
     const id = classLogEntryId({ date, period: s.period, sessionId: s.sessionId });
     const e = entriesById.get(id);

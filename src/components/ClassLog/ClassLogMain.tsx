@@ -52,6 +52,7 @@ export const ClassLogMain: React.FC = () => {
   } = useClassLogs();
   const {
     transfers,
+    pendingCount: transferPendingCount,
     error: transferError,
     saveTransfers,
     deleteTransfers,
@@ -63,6 +64,7 @@ export const ClassLogMain: React.FC = () => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmRecallId, setConfirmRecallId] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -235,6 +237,8 @@ export const ClassLogMain: React.FC = () => {
     venueName: target.venueName,
     originalTeacherId: target.originalTeacherId,
     originalTeacherName: target.originalTeacherName,
+    naturalHolderId: target.naturalHolderId,
+    naturalHolderName: target.naturalHolderName,
     fromTeacherId: currentTeacher?.id || '',
     fromTeacherName: currentTeacher?.name || '',
     toTeacherId: toId,
@@ -251,26 +255,23 @@ export const ClassLogMain: React.FC = () => {
     if (!transferSlot || !currentTeacher) return;
     const to = teachers.find((t) => t.id === toId);
     if (!to || to.id === currentTeacher.id) {
-      setFormError('請選擇其他老師');
+      setActionError('請選擇其他老師');
       return;
     }
     const block = findConsecutiveClassLogSlots(fillableSlots, transferSlot);
     const targets = applyConsecutive && block.length > 1 ? block : [transferSlot];
     const now = new Date().toISOString();
+    const back = targets.filter((target) => target.naturalHolderId === to.id);
+    const onward = targets.filter((target) => target.naturalHolderId !== to.id);
     try {
-      if (targets.every((target) => target.naturalHolderId === to.id)) {
-        deleteTransfers(
-          targets.flatMap((target) => (target.transfer ? [target.transfer] : []))
-        );
-        setTransferSlot(null);
-        setFormError('');
-        return;
+      deleteTransfers(back.flatMap((target) => (target.transfer ? [target.transfer] : [])));
+      if (onward.length > 0) {
+        saveTransfers(onward.map((target) => buildTransfer(target, to.id, to.name, note, now)));
       }
-      saveTransfers(targets.map((target) => buildTransfer(target, to.id, to.name, note, now)));
       setTransferSlot(null);
-      setFormError('');
+      setActionError('');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '轉移失敗，請再試一次');
+      setActionError(err instanceof Error ? err.message : '轉移失敗，請再試一次');
     }
   };
 
@@ -283,8 +284,9 @@ export const ClassLogMain: React.FC = () => {
     try {
       deleteTransfers([slot.transfer]);
       setConfirmRecallId(null);
+      setActionError('');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '收回失敗，請再試一次');
+      setActionError(err instanceof Error ? err.message : '收回失敗，請再試一次');
     }
   };
 
@@ -311,15 +313,20 @@ export const ClassLogMain: React.FC = () => {
         <div className="text-xs text-slate-600 pb-2">
           應填 <span className="font-bold text-slate-900">{fillableSlots.length}</span> 節 · 已填{' '}
           <span className="font-bold text-emerald-700">{filledCount}</span>
-          {pendingCount > 0 && (
-            <span className="ml-2 text-amber-700">待上傳 {pendingCount} 筆</span>
+          {(pendingCount > 0 || transferPendingCount > 0) && (
+            <span className="ml-2 text-amber-700">
+              待上傳 {pendingCount + transferPendingCount} 筆
+            </span>
           )}
         </div>
         <div className="ml-auto flex gap-2">
           {cloudReady && (
             <button
               type="button"
-              onClick={() => void refresh(date, date)}
+              onClick={() => {
+                void refresh(date, date);
+                void refreshTransfers(date, date);
+              }}
               className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -335,9 +342,11 @@ export const ClassLogMain: React.FC = () => {
           這台電腦尚未加入學校同步，日誌只存在本機；教學組看不到。
         </p>
       )}
-      {(error || transferError) && (
+      {(error || transferError || actionError) && (
         <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
-          {error || transferError}
+          {[error, transferError, actionError]
+            .filter((msg, i, arr) => msg && arr.indexOf(msg) === i)
+            .join(' ')}
         </p>
       )}
 
@@ -450,6 +459,7 @@ export const ClassLogMain: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setConfirmRecallId(null);
+                        setActionError('');
                         setTransferSlot(slot);
                       }}
                       className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-indigo-200 text-xs font-bold text-indigo-800 hover:bg-indigo-50 touch-manipulation"
@@ -615,7 +625,11 @@ export const ClassLogMain: React.FC = () => {
           consecutivePeriods={findConsecutiveClassLogSlots(fillableSlots, transferSlot).map(
             (s) => s.period
           )}
-          onClose={() => setTransferSlot(null)}
+          submitError={actionError}
+          onClose={() => {
+            setTransferSlot(null);
+            setActionError('');
+          }}
           onConfirm={handleTransfer}
         />
       )}

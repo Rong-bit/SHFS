@@ -12,6 +12,7 @@ import {
 } from './cloudSync';
 import { rtdbFetch } from './firebaseRtdbClient';
 import { classLogEntryId } from './classLogSlots';
+import { freeSiblingLocalCaches, isLocalStorageQuotaError } from './classLogSync';
 
 export const CLASS_LOG_XFER_KEY = 'voc_class_log_xfer_v1';
 export const CLASS_LOG_XFER_PENDING_KEY = 'voc_class_log_xfer_pending_v1';
@@ -37,14 +38,33 @@ const readJson = <T,>(key: string, fallback: T): T => {
 export const loadLocalClassLogTransfers = (): ClassLogTransfer[] =>
   readJson<ClassLogTransfer[]>(CLASS_LOG_XFER_KEY, []);
 
+const QUOTA_HINT =
+  '本機儲存空間不足。請加入學校同步後再轉移，或清除此網站資料後再試。';
+
+const writeLocalItem = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    if (!isLocalStorageQuotaError(err)) throw new Error('本機儲存失敗，請再試一次');
+    freeSiblingLocalCaches(7);
+    try {
+      localStorage.removeItem(key);
+      localStorage.setItem(key, value);
+    } catch (retryErr) {
+      if (isLocalStorageQuotaError(retryErr)) throw new Error(QUOTA_HINT);
+      throw new Error('本機儲存失敗，請再試一次');
+    }
+  }
+};
+
 const saveLocal = (records: ClassLogTransfer[]) => {
-  localStorage.setItem(CLASS_LOG_XFER_KEY, JSON.stringify(records));
+  writeLocalItem(CLASS_LOG_XFER_KEY, JSON.stringify(records));
 };
 
 const loadPending = (): PendingOp[] => readJson<PendingOp[]>(CLASS_LOG_XFER_PENDING_KEY, []);
 
 const savePending = (ops: PendingOp[]) => {
-  localStorage.setItem(CLASS_LOG_XFER_PENDING_KEY, JSON.stringify(ops));
+  writeLocalItem(CLASS_LOG_XFER_PENDING_KEY, JSON.stringify(ops));
 };
 
 /** 與教室日誌同一穩定鍵：同日同節同課堂只保留一筆轉移 */
@@ -243,7 +263,11 @@ export function useClassLogTransfers() {
           ...Array.from(puts.values()).filter((r) => r.date >= dateFrom && r.date <= dateTo),
         ];
         const next = [...outside, ...inside];
-        saveLocal(next);
+        try {
+          saveLocal(next);
+        } catch {
+          // 本機寫不進時仍更新畫面；雲端資料以記憶體為準
+        }
         setTransfers(next);
         if (loadPending().length === 0) setError('');
       } catch (err) {

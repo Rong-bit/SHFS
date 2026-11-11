@@ -42,6 +42,7 @@ export const ClassLogReport: React.FC = () => {
   const [onlySubstitute, setOnlySubstitute] = useState(false);
   const [transferDuty, setTransferDuty] = useState<ClassLogDuty | null>(null);
   const [confirmRecallId, setConfirmRecallId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     if (!dateFrom || !dateTo || dateFrom > dateTo) return;
@@ -102,8 +103,13 @@ export const ClassLogReport: React.FC = () => {
       setConfirmRecallId(duty.transfer.id);
       return;
     }
-    deleteTransfers([duty.transfer]);
-    setConfirmRecallId(null);
+    try {
+      deleteTransfers([duty.transfer]);
+      setConfirmRecallId(null);
+      setActionError('');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '收回失敗，請再試一次');
+    }
   };
 
   const confirmDutyTransfer = (toId: string, note: string, applyConsecutive: boolean) => {
@@ -127,14 +133,11 @@ export const ClassLogReport: React.FC = () => {
           )
         : [transferDuty];
     const now = new Date().toISOString();
-    if (targets.every((duty) => duty.naturalHolderId === to.id)) {
-      deleteTransfers(targets.flatMap((duty) => (duty.transfer ? [duty.transfer] : [])));
-      setTransferDuty(null);
-      return;
-    }
     const actorId = currentAcademicStaff?.id || 'academic';
     const actorName = currentAcademicStaff?.name || '教學組';
-    const records: ClassLogTransfer[] = targets.map((duty) => ({
+    const back = targets.filter((duty) => duty.naturalHolderId === to.id);
+    const onward = targets.filter((duty) => duty.naturalHolderId !== to.id);
+    const records: ClassLogTransfer[] = onward.map((duty) => ({
       id: classLogEntryId({
         date: dutyDate,
         period: duty.slot.period,
@@ -149,6 +152,8 @@ export const ClassLogReport: React.FC = () => {
       venueName: duty.slot.venueName,
       originalTeacherId: duty.slot.originalTeacherId,
       originalTeacherName: duty.slot.originalTeacherName,
+      naturalHolderId: duty.naturalHolderId,
+      naturalHolderName: duty.naturalHolderName,
       fromTeacherId: duty.holderTeacherId,
       fromTeacherName: duty.holderTeacherName,
       toTeacherId: to.id,
@@ -160,8 +165,14 @@ export const ClassLogReport: React.FC = () => {
       createdAt: duty.transfer?.createdAt || now,
       updatedAt: now,
     }));
-    saveTransfers(records);
-    setTransferDuty(null);
+    try {
+      deleteTransfers(back.flatMap((duty) => (duty.transfer ? [duty.transfer] : [])));
+      if (records.length > 0) saveTransfers(records);
+      setTransferDuty(null);
+      setActionError('');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '轉移失敗，請再試一次');
+    }
   };
 
   return (
@@ -221,7 +232,13 @@ export const ClassLogReport: React.FC = () => {
           {cloudReady && (
             <button
               type="button"
-              onClick={() => void refresh(dateFrom, dateTo)}
+              onClick={() => {
+                if (!dateFrom || !dateTo || dateFrom > dateTo) return;
+                const from = dutyDate < dateFrom ? dutyDate : dateFrom;
+                const to = dutyDate > dateTo ? dutyDate : dateTo;
+                void refresh(from, to);
+                void refreshTransfers(from, to);
+              }}
               className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -251,9 +268,11 @@ export const ClassLogReport: React.FC = () => {
           這台電腦尚未加入學校同步，只看得到本機教室日誌。
         </p>
       )}
-      {(error || transferError) && (
+      {(error || transferError || actionError) && (
         <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
-          {[error, transferError].filter((msg, i, arr) => msg && arr.indexOf(msg) === i).join(' ')}
+          {[error, transferError, actionError]
+            .filter((msg, i, arr) => msg && arr.indexOf(msg) === i)
+            .join(' ')}
         </p>
       )}
 
@@ -322,7 +341,10 @@ export const ClassLogReport: React.FC = () => {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setTransferDuty(duty)}
+                      onClick={() => {
+                        setActionError('');
+                        setTransferDuty(duty);
+                      }}
                       className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-indigo-200 text-xs font-bold text-indigo-800 hover:bg-indigo-50 touch-manipulation"
                     >
                       <ArrowRightLeft className="w-3.5 h-3.5" />
@@ -434,7 +456,11 @@ export const ClassLogReport: React.FC = () => {
               .map((d) => d.slot),
             transferDuty.slot
           ).map((s) => s.period)}
-          onClose={() => setTransferDuty(null)}
+          submitError={actionError}
+          onClose={() => {
+            setTransferDuty(null);
+            setActionError('');
+          }}
           onConfirm={confirmDutyTransfer}
         />
       )}

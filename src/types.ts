@@ -539,6 +539,12 @@ export interface ClassLogTransfer {
   /** 轉出當下的應填者 */
   fromTeacherId: string;
   fromTeacherName: string;
+  /**
+   * 建立轉移時，課表或已核准代課決定的應填者。
+   * 之後若該日改派代課，應填者變了，這筆轉移就不再生效。
+   */
+  naturalHolderId?: string;
+  naturalHolderName?: string;
   toTeacherId: string;
   toTeacherName: string;
   actorId: string;

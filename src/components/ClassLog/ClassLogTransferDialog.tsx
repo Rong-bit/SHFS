@@ -12,6 +12,8 @@ type ClassLogTransferDialogProps = {
   consecutivePeriods?: number[];
   onClose: () => void;
   onConfirm: (teacherId: string, note: string, applyConsecutive: boolean) => void;
+  /** 送出後由外層帶回的失敗原因（選人以外的錯誤） */
+  submitError?: string;
 };
 
 /** 把這一節（或連續節）的教室日誌填寫責任轉給其他老師 */
@@ -22,6 +24,7 @@ export const ClassLogTransferDialog: React.FC<ClassLogTransferDialogProps> = ({
   consecutivePeriods = [],
   onClose,
   onConfirm,
+  submitError = '',
 }) => {
   const [teacherId, setTeacherId] = useState('');
   const [note, setNote] = useState('');
@@ -87,7 +90,9 @@ export const ClassLogTransferDialog: React.FC<ClassLogTransferDialogProps> = ({
             </span>
           </label>
         )}
-        {error && <p className="text-xs text-rose-700">{error}</p>}
+        {(error || submitError) && (
+          <p className="text-xs text-rose-700">{error || submitError}</p>
+        )}
       </div>
       <div className="relative z-20 shrink-0 px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-100 bg-white flex gap-2">
         <button
