@@ -38,6 +38,26 @@ expectSub('出納組長', 'accounting', 'cashier');
 expectSub('學務主任', 'student_affairs', 'student_dean');
 expectSub('生輔組長', 'student_affairs', 'student_section');
 expectSub('校長', 'principal', 'principal');
+expectSub('秘書', 'principal', 'principal');
+assert.ok(
+  officeMembers(
+    [
+      ...list,
+      {
+        id: 'sec-1',
+        name: '校長室秘書',
+        title: '秘書',
+        badge: '校長室',
+        email: '',
+        phone: '',
+        responsibleScope: '文書',
+        group: 'principal',
+      },
+    ],
+    'principal'
+  ).some((s) => s.title === '秘書'),
+  '校長室登入名單應含秘書'
+);
 
 assert.equal(roleForSubunit('internship_dean'), 'academic');
 assert.equal(roleForSubunit('general_dean'), 'academic');
