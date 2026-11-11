@@ -90,8 +90,17 @@ export function eachSchoolDate(weekStart: string, weekEnd: string): string[] {
   return out;
 }
 
+/** Firebase 鍵不可含 . # $ [ ]；班級名先編碼，避免「機二.忠」與「機二-忠」撞 id */
 export function classLogWeekReviewId(weekStart: string, className: string): string {
-  return `${weekStart}__${className}`.replace(/[.#$/[\]\s]/g, '-');
+  const safeClass = encodeURIComponent(className)
+    .replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/\./g, '%2E');
+  return `${weekStart}__${safeClass}`;
+}
+
+/** 班級課堂都填齊後才可核章（與「彙整完後」流程一致） */
+export function canStampClassLogWeek(pendingCount: number): boolean {
+  return pendingCount <= 0;
 }
 
 export function formatSchoolWeekLabel(weekStart: string, weekEnd: string): string {

@@ -80,8 +80,9 @@ function createDatedRecordHook<T extends DatedRecord>(opts: {
   const pushRecord = async (settings: CloudSyncSettings, record: T) => {
     const base = await remoteBase(settings);
     const envelope = await encryptJson(settings.schoolKey, record);
+    // 與教室日誌本體相同：date／id 已是 Firebase 安全鍵，不再二次 encode
     const res = await rtdbFetch(
-      `${base}/${encodeURIComponent(record.date)}/${encodeURIComponent(record.id)}.json`,
+      `${base}/${record.date}/${record.id}.json`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -95,7 +96,7 @@ function createDatedRecordHook<T extends DatedRecord>(opts: {
   const deleteRemote = async (settings: CloudSyncSettings, date: string, id: string) => {
     const base = await remoteBase(settings);
     const res = await rtdbFetch(
-      `${base}/${encodeURIComponent(date)}/${encodeURIComponent(id)}.json`,
+      `${base}/${date}/${id}.json`,
       { method: 'DELETE' },
       rtdbConfig(settings)
     );

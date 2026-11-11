@@ -15,6 +15,7 @@ import {
   buildClassLogReminderEmail,
   buildClassLogReturn,
   buildClassLogSignOff,
+  canStampClassLogWeek,
   classLogContentIssue,
   classLogDutyStatus,
   classLogReviewRole,
@@ -59,9 +60,22 @@ assert.deepEqual(shiftSchoolWeek(week.weekStart, 1), {
   weekEnd: '2026-11-20',
 });
 assert.equal(
-  classLogWeekReviewId('2026-11-09', '機二 忠'),
-  '2026-11-09__機二-忠'
+  classLogWeekReviewId('2026-11-09', '機二忠'),
+  `2026-11-09__${encodeURIComponent('機二忠')}`
 );
+assert.notEqual(
+  classLogWeekReviewId('2026-11-09', '機二.忠'),
+  classLogWeekReviewId('2026-11-09', '機二-忠'),
+  '班級名含點與含連字號不可撞 id'
+);
+assert.notEqual(
+  classLogWeekReviewId('2026-11-09', '機二 忠'),
+  classLogWeekReviewId('2026-11-09', '機二忠'),
+  '有空白與無空白不可撞 id'
+);
+assert.equal(canStampClassLogWeek(0), true);
+assert.equal(canStampClassLogWeek(1), false);
+assert.equal(canStampClassLogWeek(3), false);
 
 const leader = buildClassLogSignOff(staff('教學組長', 'leader', '陳雅筑'), 'teaching_leader', '2026-11-13T01:00:00.000Z');
 const dean = buildClassLogSignOff(staff('教務主任', 'dean', '吳教務'), 'academic_dean', '2026-11-13T02:00:00.000Z');

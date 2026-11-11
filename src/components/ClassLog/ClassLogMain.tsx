@@ -177,7 +177,14 @@ export const ClassLogMain: React.FC = () => {
         period: target.period,
         sessionId: target.sessionId,
       });
-      if (!returnsById.has(id)) return false;
+      const returned = returnsById.get(id);
+      if (!returned) return false;
+      // 內容已比退回更新且完整時，殘留退回紀錄不應再擋送出
+      if (
+        classLogDutyStatus({ entry: entriesById.get(id), returned }) === 'complete'
+      ) {
+        return false;
+      }
       return !returnClearedByResubmit({
         previous: entriesById.get(id),
         nextProgress: progress,
@@ -224,18 +231,27 @@ export const ClassLogMain: React.FC = () => {
     setSaving(true);
     try {
       saveEntries(batch);
-      const cleared = returns.filter((item) =>
-        batch.some(
-          (entry) =>
-            entry.id === item.id &&
-            returnClearedByResubmit({
-              previous: entriesById.get(entry.id),
-              nextProgress: entry.progress,
-              nextAssessment: entry.assessment,
-              nextNote: entry.note,
-            })
-        )
-      );
+      const cleared = returns.filter((item) => {
+        const entry = batch.find((e) => e.id === item.id);
+        if (!entry) return false;
+        if (
+          returnClearedByResubmit({
+            previous: entriesById.get(entry.id),
+            nextProgress: entry.progress,
+            nextAssessment: entry.assessment,
+            nextNote: entry.note,
+          })
+        ) {
+          return true;
+        }
+        // 日誌已寫入成功但上次刪退回失敗留下的殘留
+        return (
+          classLogDutyStatus({
+            entry: entriesById.get(item.id),
+            returned: item,
+          }) === 'complete'
+        );
+      });
       if (cleared.length > 0) deleteReturns(cleared);
       setDraft(null);
       setFormError('');
@@ -343,15 +359,22 @@ export const ClassLogMain: React.FC = () => {
     }
   };
 
-  const draftReturn = draft
-    ? returnsById.get(
-        classLogEntryId({
-          date,
-          period: draft.slot.period,
-          sessionId: draft.slot.sessionId,
-        })
-      )
-    : undefined;
+  const draftReturnId = draft
+    ? classLogEntryId({
+        date,
+        period: draft.slot.period,
+        sessionId: draft.slot.sessionId,
+      })
+    : '';
+  const draftReturnRaw = draftReturnId ? returnsById.get(draftReturnId) : undefined;
+  const draftReturn =
+    draftReturnRaw &&
+    classLogDutyStatus({
+      entry: entriesById.get(draftReturnId),
+      returned: draftReturnRaw,
+    }) === 'returned'
+      ? draftReturnRaw
+      : undefined;
 
   if (!currentTeacher) {
     return (
@@ -486,6 +509,7 @@ export const ClassLogMain: React.FC = () => {
                           </span>
                         )}
                         {!slot.transferredOut &&
+                          reviewStatus !== 'returned' &&
                           (own ? (
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
                               已填

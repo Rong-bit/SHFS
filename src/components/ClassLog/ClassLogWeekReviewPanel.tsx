@@ -8,6 +8,7 @@ import {
   buildClassLogReturn,
   buildClassLogSignOff,
   canClassLogReview,
+  canStampClassLogWeek,
   classLogGapLabel,
   classLogReviewRole,
   CLASS_LOG_REVIEW_ROLE_LABEL,
@@ -134,8 +135,12 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
     void refreshReturns(weekStart, weekEnd);
   };
 
-  const stampClass = (className: string) => {
+  const stampClass = (className: string, pendingCount: number) => {
     if (!currentAcademicStaff || !role) return;
+    if (!canStampClassLogWeek(pendingCount)) {
+      setActionError('此班本週尚有未填、內容不完整或已退回的課堂，請先補齊或退回後再核章。');
+      return;
+    }
     const now = new Date().toISOString();
     const signOff = buildClassLogSignOff(currentAcademicStaff, role, now);
     const next = applyClassLogWeekSignOff(reviewMap.get(className), signOff, {
@@ -156,7 +161,7 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
     if (!currentAcademicStaff || !role) return;
     const now = new Date().toISOString();
     const targets = visibleClasses.filter((c) => {
-      if (c.pendingCount > 0) return false;
+      if (!canStampClassLogWeek(c.pendingCount)) return false;
       const state = weekStampState(reviewMap.get(c.className));
       return role === 'teaching_leader' ? !state.leader : !state.dean;
     });
@@ -457,6 +462,7 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
               : klass.rows;
             const mineStamped =
               role === 'teaching_leader' ? Boolean(stamps.leader) : role === 'academic_dean' ? Boolean(stamps.dean) : false;
+            const stampReady = canStampClassLogWeek(klass.pendingCount);
             return (
               <details key={klass.className} className="rounded-xl border border-slate-200">
                 <summary className="cursor-pointer px-3 py-3 text-sm font-bold text-slate-900">
@@ -470,25 +476,30 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
                   </span>
                 </summary>
                 <div className="px-3 pb-3 space-y-3">
+                  {!stampReady && canReview && (
+                    <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      本班尚有未完成課堂，須先補齊或退回後才能核章。
+                    </p>
+                  )}
                   <div className="flex flex-wrap items-end gap-4">
                     <StampBox
                       label="教學組長"
                       signOff={stamps.leader}
-                      canStamp={role === 'teaching_leader'}
+                      canStamp={role === 'teaching_leader' && stampReady}
                       stamped={Boolean(stamps.leader)}
-                      onStamp={() => stampClass(klass.className)}
+                      onStamp={() => stampClass(klass.className, klass.pendingCount)}
                     />
                     <StampBox
                       label="教務主任"
                       signOff={stamps.dean}
-                      canStamp={role === 'academic_dean'}
+                      canStamp={role === 'academic_dean' && stampReady}
                       stamped={Boolean(stamps.dean)}
-                      onStamp={() => stampClass(klass.className)}
+                      onStamp={() => stampClass(klass.className, klass.pendingCount)}
                     />
-                    {canReview && mineStamped && (
+                    {canReview && mineStamped && stampReady && (
                       <button
                         type="button"
-                        onClick={() => stampClass(klass.className)}
+                        onClick={() => stampClass(klass.className, klass.pendingCount)}
                         className="text-xs font-bold text-slate-600 underline min-h-11"
                       >
                         更新我的核章時間

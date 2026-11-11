@@ -1,11 +1,24 @@
 import { STORAGE_KEYS } from '../context/AppContext';
 import { clearLocalAuthTrust } from './localAuthTrust';
 import { isPasswordHash } from './passwordCrypto';
+import { CLASS_LOG_RECORDS_KEY } from './classLogSync';
+import {
+  CLASS_LOG_RETURN_KEY,
+  CLASS_LOG_WEEK_KEY,
+} from './classLogReviewSync';
+import { CLASS_LOG_XFER_KEY } from './classLogTransferSync';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from './patrolSync';
 import { PATROL_REVIEW_KEY, PATROL_REVIEW_PENDING_KEY } from './patrolReviewSync';
 
 /** 不在 STORAGE_KEYS 的本機資料；還原時舊備份沒有這些欄位就保留現有資料 */
-const EXTRA_BACKUP_KEYS = [PATROL_RECORDS_KEY, PATROL_REVIEW_KEY];
+const EXTRA_BACKUP_KEYS = [
+  PATROL_RECORDS_KEY,
+  PATROL_REVIEW_KEY,
+  CLASS_LOG_RECORDS_KEY,
+  CLASS_LOG_XFER_KEY,
+  CLASS_LOG_WEEK_KEY,
+  CLASS_LOG_RETURN_KEY,
+];
 
 export const BACKUP_APP_ID = 'SHFS';
 export const BACKUP_VERSION = 2;
