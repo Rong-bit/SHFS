@@ -23,7 +23,7 @@ export const PatrolAffairsMain: React.FC = () => {
   }, [currentRole, isPrincipal, focusCaseId]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full min-w-0 overflow-x-clip">
       <h2 className="md:hidden text-lg font-extrabold text-slate-900">
         {tab === 'weekly' && isPrincipal ? '校長每周彙整核章' : '巡堂會辦'}
       </h2>

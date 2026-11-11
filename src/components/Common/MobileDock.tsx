@@ -40,7 +40,7 @@ export const MobileDock: React.FC<{ items: MobileDockItem[] }> = ({ items }) => 
             data-dock-id={item.id}
             onClick={item.onClick}
             aria-current={item.active ? 'page' : undefined}
-            className={`relative flex min-h-14 min-w-[4.75rem] flex-1 flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-[11px] font-bold touch-manipulation active:bg-slate-100 ${
+            className={`relative flex min-h-14 min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 px-1.5 py-1.5 text-[11px] font-bold touch-manipulation active:bg-slate-100 ${
               item.active ? 'text-slate-950' : 'text-slate-500'
             }`}
           >

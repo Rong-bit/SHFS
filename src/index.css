@@ -15,9 +15,16 @@ html {
   font-size: var(--ui-font-size);
 }
 
-/* 手機：避免整頁橫向溢出，輸入框維持 16px 以免點選時畫面被放大 */
+/* 手機：避免整頁橫向溢出／手滑帶動左右移；輸入框維持 16px 以免點選時畫面被放大 */
 @media screen and (max-width: 767px) {
+  html,
   body {
+    overflow-x: clip;
+    overscroll-behavior-x: none;
+  }
+
+  #root {
+    max-width: 100%;
     overflow-x: clip;
   }
 

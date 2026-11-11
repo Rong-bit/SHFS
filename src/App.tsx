@@ -48,7 +48,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div className="min-h-screen max-w-full overflow-x-clip bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
       
       {/* Universal Top Bar & Role Navigation */}
       <Header />
@@ -75,7 +75,7 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-x-clip">
         {currentRole === 'teacher' && <TeacherPortalMain />}
         {currentRole === 'academic' && <AcademicAffairsMain />}
         {currentRole === 'accounting' && <AccountingSettlement />}
