@@ -515,11 +515,6 @@ export const PatrolMain: React.FC = () => {
               : '；今天不是段考日，非段考時期無法登錄。'}
         </p>
       )}
-      {!canRecordToday && fullPatrolAllowed === false && mode === 'exam' && (
-        <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-          非段考日（或尚未設定段考日）無法登錄段考巡堂。可瀏覽畫面，但無法點教室登錄。
-        </p>
-      )}
 
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3 min-w-0 max-w-full">
         <label className="text-[11px] font-semibold text-slate-600 min-w-0 w-full sm:w-44 sm:shrink-0">
