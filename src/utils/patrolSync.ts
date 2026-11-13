@@ -11,12 +11,19 @@ import {
   resolveFirebaseWebConfig,
 } from './cloudSync';
 import { rtdbFetch } from './firebaseRtdbClient';
-import { dateToIsoLocal } from './holidays';
+import {
+  explainStorageError,
+  isLocalStorageQuotaError,
+  persistDatedRecords,
+  persistTextAttempts,
+  siblingCacheKeys,
+  trimPendingOps,
+} from './localStorageQuota';
 
 export const PATROL_RECORDS_KEY = 'voc_patrol_records_v1';
 export const PATROL_PENDING_KEY = 'voc_patrol_pending_v1';
-/** 本機只保留近期紀錄，避免 localStorage 爆量；較舊的仍可由雲端查詢 */
-const LOCAL_RETENTION_DAYS = 400;
+/** 手機 Safari 約 5MB。本機只留近期，較舊的仍可由雲端查詢 */
+export const PATROL_RETENTION_DAYS = [60, 30, 14, 7, 3] as const;
 
 type PendingOp = { opId: string } & (
   | { op: 'put'; record: PatrolRecord }
@@ -38,18 +45,32 @@ const readJson = <T,>(key: string, fallback: T): T => {
 
 export const loadLocalPatrolRecords = (): PatrolRecord[] => readJson<PatrolRecord[]>(PATROL_RECORDS_KEY, []);
 
-const saveLocalPatrolRecords = (records: PatrolRecord[]) => {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - LOCAL_RETENTION_DAYS);
-  const cutoffIso = dateToIsoLocal(cutoff);
-  localStorage.setItem(
-    PATROL_RECORDS_KEY,
-    JSON.stringify(records.filter((r) => r.date >= cutoffIso))
-  );
-};
+const saveLocalPatrolRecords = (records: PatrolRecord[]) =>
+  persistDatedRecords(localStorage, PATROL_RECORDS_KEY, records, {
+    retentionDays: PATROL_RETENTION_DAYS,
+    siblingKeys: siblingCacheKeys([PATROL_RECORDS_KEY]),
+  });
 
-const loadPending = (): PendingOp[] => readJson<PendingOp[]>(PATROL_PENDING_KEY, []);
-const savePending = (ops: PendingOp[]) => localStorage.setItem(PATROL_PENDING_KEY, JSON.stringify(ops));
+/** 磁碟寫不進時改記在記憶體，避免用舊佇列把已上傳的再送一次 */
+let memoryPending: PendingOp[] | null = null;
+
+const loadPending = (): PendingOp[] =>
+  memoryPending ?? readJson<PendingOp[]>(PATROL_PENDING_KEY, []);
+
+const savePending = (ops: PendingOp[]) => {
+  const attempts = [ops, trimPendingOps(ops, 40), trimPendingOps(ops, 10), trimPendingOps(ops, 1)].map(
+    (candidate) => JSON.stringify(candidate)
+  );
+  try {
+    persistTextAttempts(localStorage, PATROL_PENDING_KEY, attempts, {
+      siblingKeys: siblingCacheKeys([PATROL_PENDING_KEY]),
+    });
+    memoryPending = null;
+  } catch (err) {
+    if (!isLocalStorageQuotaError(err)) throw err;
+    memoryPending = ops;
+  }
+};
 
 /** 同一人同日同類同節同教室只留一筆，重送即更新 */
 export const patrolRecordId = (params: {
@@ -167,7 +188,7 @@ export function usePatrolRecords() {
       }
       setError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '巡堂紀錄上傳失敗');
+      setError(explainStorageError(err, '巡堂紀錄上傳失敗'));
     } finally {
       flushingRef.current = false;
       setPendingCount(loadPending().length);
@@ -188,13 +209,19 @@ export function usePatrolRecords() {
   const saveRecord = useCallback(
     (record: PatrolRecord) => {
       const nextDisk = upsert(loadLocalPatrolRecords(), record);
-      saveLocalPatrolRecords(nextDisk);
+      let persisted: PatrolRecord[] | null = null;
+      try {
+        persisted = saveLocalPatrolRecords(nextDisk);
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
+      }
+      const saved = persisted ?? nextDisk;
       // 磁碟只留近期；畫面上若已用 refresh 拉回較舊資料，勿被此次寫入沖掉
       setRecords((prev) => {
-        const saved = loadLocalPatrolRecords();
         const savedIds = new Set(saved.map((r) => r.id));
         const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
-        return [...olderInMemory, ...saved];
+        const withRecord = savedIds.has(record.id) ? saved : [...saved, record];
+        return [...olderInMemory, ...withRecord];
       });
       recentOpsRef.current.set(record.id, { id: record.id, at: Date.now(), record });
       savePending([
@@ -210,9 +237,14 @@ export function usePatrolRecords() {
   const deleteRecord = useCallback(
     (record: PatrolRecord) => {
       const nextDisk = loadLocalPatrolRecords().filter((r) => r.id !== record.id);
-      saveLocalPatrolRecords(nextDisk);
+      let persisted: PatrolRecord[] | null = null;
+      try {
+        persisted = saveLocalPatrolRecords(nextDisk);
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
+      }
+      const saved = (persisted ?? nextDisk).filter((r) => r.id !== record.id);
       setRecords((prev) => {
-        const saved = loadLocalPatrolRecords();
         const savedIds = new Set(saved.map((r) => r.id));
         const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
         return [...olderInMemory, ...saved];
@@ -256,11 +288,15 @@ export function usePatrolRecords() {
           ...Array.from(puts.values()).filter((r) => r.date >= dateFrom && r.date <= dateTo),
         ];
         const next = [...outside, ...inside];
-        saveLocalPatrolRecords(next);
+        try {
+          saveLocalPatrolRecords(next);
+        } catch (err) {
+          if (!isLocalStorageQuotaError(err)) throw err;
+        }
         setRecords(next);
         setError('');
       } catch (err) {
-        setError(err instanceof Error ? err.message : '巡堂紀錄讀取失敗');
+        setError(explainStorageError(err, '巡堂紀錄讀取失敗'));
       } finally {
         setLoading(false);
       }
