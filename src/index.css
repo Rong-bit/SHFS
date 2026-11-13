@@ -32,6 +32,19 @@ html {
   select,
   textarea {
     font-size: 16px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /*
+   * iOS Safari 的日期欄位依「2026年11月13日」這類在地化文字計算最小寬度，
+   * 並排時會畫出格子、蓋到旁邊的節次。強制文字縮在欄位內。
+   */
+  input[type='date']::-webkit-date-and-time-value,
+  input[type='time']::-webkit-date-and-time-value,
+  input[type='datetime-local']::-webkit-date-and-time-value {
+    min-width: 0;
+    text-align: start;
   }
 }
 
