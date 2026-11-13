@@ -521,8 +521,8 @@ export const PatrolMain: React.FC = () => {
         </p>
       )}
 
-      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3 min-w-0 max-w-full">
-        <label className="text-[11px] font-semibold text-slate-600 col-span-1">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 bg-white border border-slate-200 rounded-2xl p-3 min-w-0 max-w-full">
+        <label className="text-[11px] font-semibold text-slate-600 min-w-0 w-full sm:w-44 sm:shrink-0">
           日期
           <input
             type="date"
@@ -538,7 +538,7 @@ export const PatrolMain: React.FC = () => {
                 ? undefined
                 : '一般教師僅能於今天登錄段考巡堂，不可改選其他日期'
             }
-            className={`mt-1 block w-full min-h-11 border border-slate-300 rounded-lg px-2.5 py-2 text-base sm:text-sm ${
+            className={`mt-1 block w-full min-w-0 max-w-full min-h-11 border border-slate-300 rounded-lg px-2.5 py-2 text-base sm:text-sm ${
               fullPatrolAllowed
                 ? 'bg-slate-50'
                 : 'bg-slate-100 text-slate-500 cursor-not-allowed'
@@ -546,12 +546,12 @@ export const PatrolMain: React.FC = () => {
           />
         </label>
         {usesPeriod && (
-          <label className="text-[11px] font-semibold text-slate-600">
+          <label className="text-[11px] font-semibold text-slate-600 min-w-0 w-full sm:w-64 sm:shrink-0">
             節次
             <select
               value={period}
               onChange={(e) => setPeriod(Number(e.target.value))}
-              className="mt-1 block w-full min-h-11 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-base sm:text-sm"
+              className="mt-1 block w-full min-w-0 max-w-full min-h-11 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-base sm:text-sm"
             >
               {periodDefs.map((p) => (
                 <option key={p.period} value={p.period}>
@@ -568,11 +568,11 @@ export const PatrolMain: React.FC = () => {
             setDate(dateToIsoLocal(now));
             setPeriod(currentPeriod(now, periodDefs) ?? period);
           }}
-          className="col-span-2 sm:col-span-1 min-h-11 px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 touch-manipulation"
+          className="w-full sm:w-auto shrink-0 min-h-11 px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 touch-manipulation"
         >
           回到現在
         </button>
-        <div className="col-span-2 sm:col-span-1 sm:ml-auto text-left sm:text-right text-sm text-slate-600 space-y-0.5">
+        <div className="w-full sm:w-auto sm:ml-auto text-left sm:text-right text-sm text-slate-600 space-y-0.5">
           <div>
             已巡 <strong className="text-slate-900">{doneCount}</strong> / 應巡{' '}
             <strong className="text-slate-900">{targets.length}</strong> 間
@@ -584,7 +584,7 @@ export const PatrolMain: React.FC = () => {
             type="button"
             title="重新載入其他人的紀錄"
             onClick={() => void refresh(date, date)}
-            className="col-span-2 sm:col-span-1 min-h-11 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 touch-manipulation"
+            className="w-full sm:w-auto shrink-0 min-h-11 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-50 touch-manipulation"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>重新載入</span>
