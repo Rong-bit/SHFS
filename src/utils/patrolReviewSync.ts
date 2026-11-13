@@ -11,11 +11,23 @@ import {
   resolveFirebaseWebConfig,
 } from './cloudSync';
 import { rtdbFetch } from './firebaseRtdbClient';
-import { dateToIsoLocal } from './holidays';
+import {
+  explainStorageError,
+  isLocalStorageQuotaError,
+  persistDatedRecords,
+  persistTextAttempts,
+  siblingCacheKeys,
+  trimPendingOps,
+} from './localStorageQuota';
 
 export const PATROL_REVIEW_KEY = 'voc_patrol_review_v1';
 export const PATROL_REVIEW_PENDING_KEY = 'voc_patrol_review_pending_v1';
-const LOCAL_RETENTION_DAYS = 400;
+/**
+ * 手機 Safari 同一個網站大約只有 5MB。
+ * 會辦若在本機留 400 天，開啟頁面重寫暫存就會丟出
+ * "The quota has been exceeded."。改留近期，較舊的向雲端查。
+ */
+export const PATROL_REVIEW_RETENTION_DAYS = [60, 30, 14, 7, 3] as const;
 
 type PendingOp = { opId: string } & (
   | { op: 'put'; record: PatrolReviewCase }
@@ -38,36 +50,69 @@ const readJson = <T,>(key: string, fallback: T): T => {
 export const loadLocalPatrolReviews = (): PatrolReviewCase[] =>
   readJson<PatrolReviewCase[]>(PATROL_REVIEW_KEY, []);
 
-const saveLocalPatrolReviews = (records: PatrolReviewCase[]) => {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - LOCAL_RETENTION_DAYS);
-  const cutoffIso = dateToIsoLocal(cutoff);
-  localStorage.setItem(
-    PATROL_REVIEW_KEY,
-    JSON.stringify(records.filter((r) => r.date >= cutoffIso))
+const saveLocalPatrolReviews = (records: PatrolReviewCase[]) =>
+  persistDatedRecords(localStorage, PATROL_REVIEW_KEY, records, {
+    retentionDays: PATROL_REVIEW_RETENTION_DAYS,
+    siblingKeys: siblingCacheKeys([PATROL_REVIEW_KEY]),
+  });
+
+/**
+ * 磁碟寫不進時改記在記憶體。
+ * 若仍合併舊的磁碟佇列，已上傳的操作會被舊檔加回來再送一次。
+ */
+let memoryPending: PendingOp[] | null = null;
+
+const loadPending = (): PendingOp[] =>
+  memoryPending ?? readJson<PendingOp[]>(PATROL_REVIEW_PENDING_KEY, []);
+
+const savePending = (ops: PendingOp[]) => {
+  const attempts = [ops, trimPendingOps(ops, 40), trimPendingOps(ops, 10), trimPendingOps(ops, 1)].map(
+    (candidate) => JSON.stringify(candidate)
   );
+  try {
+    persistTextAttempts(localStorage, PATROL_REVIEW_PENDING_KEY, attempts, {
+      siblingKeys: siblingCacheKeys([PATROL_REVIEW_PENDING_KEY]),
+    });
+    memoryPending = null;
+  } catch (err) {
+    if (!isLocalStorageQuotaError(err)) throw err;
+    memoryPending = ops;
+  }
 };
 
-const loadPending = (): PendingOp[] => readJson<PendingOp[]>(PATROL_REVIEW_PENDING_KEY, []);
-const savePending = (ops: PendingOp[]) =>
-  localStorage.setItem(PATROL_REVIEW_PENDING_KEY, JSON.stringify(ops));
+const readPendingSnapshot = (): { raw: string | null; ops: PendingOp[] } => {
+  if (memoryPending) return { raw: null, ops: memoryPending };
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(PATROL_REVIEW_PENDING_KEY);
+  } catch (err) {
+    if (!isLocalStorageQuotaError(err)) throw err;
+    return { raw: null, ops: [] };
+  }
+  if (!raw) return { raw: null, ops: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    return { raw, ops: Array.isArray(parsed) ? (parsed as PendingOp[]) : [] };
+  } catch {
+    return { raw, ops: [] };
+  }
+};
 
 /** 以 raw 字串 CAS 寫入 pending，降低並發 saveCase 互蓋 */
 const mutatePending = (mutator: (ops: PendingOp[]) => PendingOp[]) => {
   for (let i = 0; i < 8; i++) {
-    const before = localStorage.getItem(PATROL_REVIEW_PENDING_KEY);
-    let current: PendingOp[] = [];
-    if (before) {
+    const before = readPendingSnapshot();
+    const next = mutator(before.ops);
+    if (!memoryPending) {
+      let currentRaw: string | null = null;
       try {
-        const parsed = JSON.parse(before);
-        current = Array.isArray(parsed) ? (parsed as PendingOp[]) : [];
-      } catch {
-        current = [];
+        currentRaw = localStorage.getItem(PATROL_REVIEW_PENDING_KEY);
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
       }
+      if (currentRaw !== before.raw) continue;
     }
-    const next = mutator(current);
-    if (localStorage.getItem(PATROL_REVIEW_PENDING_KEY) !== before) continue;
-    localStorage.setItem(PATROL_REVIEW_PENDING_KEY, JSON.stringify(next));
+    savePending(next);
     return;
   }
   savePending(mutator(loadPending()));
@@ -232,7 +277,7 @@ export function usePatrolReviews() {
       }
       setError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '巡堂會辦上傳失敗');
+      setError(explainStorageError(err, '巡堂會辦上傳失敗'));
     } finally {
       flushingRef.current = false;
       setPendingCount(loadPending().length);
@@ -256,12 +301,18 @@ export function usePatrolReviews() {
     (record: PatrolReviewCase) => {
       const nextDisk = upsertMerged(loadLocalPatrolReviews(), record);
       const savedRecord = nextDisk.find((r) => r.id === record.id) || record;
-      saveLocalPatrolReviews(nextDisk);
+      let persisted: PatrolReviewCase[] | null = null;
+      try {
+        persisted = saveLocalPatrolReviews(nextDisk);
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
+      }
+      const saved = persisted ?? nextDisk;
       setCases((prev) => {
-        const saved = loadLocalPatrolReviews();
         const savedIds = new Set(saved.map((r) => r.id));
         const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
-        return [...olderInMemory, ...saved];
+        const withRecord = savedIds.has(savedRecord.id) ? saved : [...saved, savedRecord];
+        return [...olderInMemory, ...withRecord];
       });
       recentOpsRef.current.set(record.id, {
         id: record.id,
@@ -288,9 +339,14 @@ export function usePatrolReviews() {
   const deleteCase = useCallback(
     (record: PatrolReviewCase) => {
       const nextDisk = loadLocalPatrolReviews().filter((r) => r.id !== record.id);
-      saveLocalPatrolReviews(nextDisk);
+      let persisted: PatrolReviewCase[] | null = null;
+      try {
+        persisted = saveLocalPatrolReviews(nextDisk);
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
+      }
+      const saved = (persisted ?? nextDisk).filter((r) => r.id !== record.id);
       setCases((prev) => {
-        const saved = loadLocalPatrolReviews();
         const savedIds = new Set(saved.map((r) => r.id));
         const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
         return [...olderInMemory, ...saved];
@@ -345,11 +401,16 @@ export function usePatrolReviews() {
           inside.push(r);
         }
         const next = [...outside, ...inside];
-        saveLocalPatrolReviews(next);
+        try {
+          saveLocalPatrolReviews(next);
+        } catch (err) {
+          // 本機寫不進時仍更新畫面，避免手機配額錯誤蓋掉已讀到的會辦
+          if (!isLocalStorageQuotaError(err)) throw err;
+        }
         setCases(next);
         setError('');
       } catch (err) {
-        setError(err instanceof Error ? err.message : '巡堂會辦讀取失敗');
+        setError(explainStorageError(err, '巡堂會辦讀取失敗'));
       } finally {
         setLoading(false);
       }

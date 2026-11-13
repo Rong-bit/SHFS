@@ -13,6 +13,15 @@ import {
 import { rtdbFetch } from './firebaseRtdbClient';
 import { dateToIsoLocal } from './holidays';
 import { classLogEntryId } from './classLogSlots';
+import {
+  isLocalStorageQuotaError,
+  relieveDatedCaches,
+  retainDatedRecords,
+  trimPendingOps,
+  writeItemFreeingKey,
+} from './localStorageQuota';
+
+export { isLocalStorageQuotaError, trimPendingOps };
 
 export const CLASS_LOG_RECORDS_KEY = 'voc_class_log_v1';
 export const CLASS_LOG_PENDING_KEY = 'voc_class_log_pending_v1';
@@ -20,7 +29,6 @@ export const CLASS_LOG_PENDING_KEY = 'voc_class_log_pending_v1';
 export const LOCAL_RETENTION_DAYS = 60;
 /** 配額不足時依序縮短保留天數再重試 */
 export const LOCAL_RETENTION_FALLBACK_DAYS = [60, 30, 14, 7, 3] as const;
-const PENDING_MAX_OPS = 80;
 
 /** 可縮減的其他本機快取（與教室日誌共用 origin 配額；手機 Safari 約 5MB） */
 const SIBLING_CACHE_KEYS = [
@@ -51,60 +59,21 @@ const readJson = <T,>(key: string, fallback: T): T => {
 export const loadLocalClassLogs = (): ClassLogEntry[] =>
   readJson<ClassLogEntry[]>(CLASS_LOG_RECORDS_KEY, []);
 
-export function isLocalStorageQuotaError(err: unknown): boolean {
-  if (!err || typeof err !== 'object') return false;
-  const e = err as { name?: string; code?: number; message?: string };
-  if (
-    e.name === 'QuotaExceededError' ||
-    e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-    e.code === 22 ||
-    e.code === 1014
-  ) {
-    return true;
-  }
-  // 部分 WebKit／嵌入式瀏覽器不以 DOMException 拋出
-  const msg = String(e.message || err);
-  return /quota|儲存空間|exceeded/i.test(msg);
-}
-
 /** 依保留天數過濾本機教室日誌（供寫入與測試） */
 export function retainClassLogEntries(
   records: ClassLogEntry[],
   keepDays: number,
   todayIso = dateToIsoLocal(new Date())
 ): ClassLogEntry[] {
-  const cutoff = new Date(`${todayIso}T12:00:00`);
-  cutoff.setDate(cutoff.getDate() - keepDays);
-  const cutoffIso = dateToIsoLocal(cutoff);
-  return records.filter((r) => r.date >= cutoffIso);
-}
-
-/** 上傳佇列過長時只留最近幾筆，優先保留較新 op */
-export function trimPendingOps<T>(ops: T[], maxOps = PENDING_MAX_OPS): T[] {
-  if (ops.length <= maxOps) return ops;
-  return ops.slice(ops.length - maxOps);
+  return retainDatedRecords(records, keepDays, todayIso);
 }
 
 const QUOTA_HINT =
   '本機儲存空間不足。已改嘗試精簡快取；若仍失敗請清除此網站資料，或確認已加入學校同步後再試。';
 
-const trySetItem = (key: string, value: string) => {
-  localStorage.setItem(key, value);
-};
-
 /** 先寫入；若配額不足則刪舊鍵後再寫（Safari 常需先 remove 才釋放） */
 const setItemFreeingKey = (key: string, value: string) => {
-  try {
-    trySetItem(key, value);
-  } catch (err) {
-    if (!isLocalStorageQuotaError(err)) throw err;
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // ignore
-    }
-    trySetItem(key, value);
-  }
+  writeItemFreeingKey(localStorage, key, value);
 };
 
 /**
@@ -112,45 +81,7 @@ const setItemFreeingKey = (key: string, value: string) => {
  * 巡堂本機紀錄可再從雲端載入；不碰課表／申請等核心資料。
  */
 export function freeSiblingLocalCaches(keepDays = 7): void {
-  const todayIso = dateToIsoLocal(new Date());
-  const cutoff = new Date(`${todayIso}T12:00:00`);
-  cutoff.setDate(cutoff.getDate() - keepDays);
-  const cutoffIso = dateToIsoLocal(cutoff);
-
-  for (const key of SIBLING_CACHE_KEYS) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      // pending 佇列過大直接清掉（未上傳的會再由使用者重送／雲端為準）
-      if (key.endsWith('_pending_v1') && raw.length > 20_000) {
-        localStorage.removeItem(key);
-        continue;
-      }
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) continue;
-      if (key.endsWith('_pending_v1')) {
-        const trimmed = trimPendingOps(parsed, 10);
-        if (trimmed.length < parsed.length) {
-          localStorage.removeItem(key);
-          localStorage.setItem(key, JSON.stringify(trimmed));
-        }
-        continue;
-      }
-      const next = parsed.filter(
-        (r: { date?: string }) => typeof r?.date === 'string' && r.date >= cutoffIso
-      );
-      if (next.length < parsed.length || raw.length > 200_000) {
-        localStorage.removeItem(key);
-        localStorage.setItem(key, JSON.stringify(next));
-      }
-    } catch {
-      try {
-        localStorage.removeItem(key);
-      } catch {
-        // ignore
-      }
-    }
-  }
+  relieveDatedCaches(localStorage, SIBLING_CACHE_KEYS, keepDays);
 }
 
 const saveLocalClassLogs = (records: ClassLogEntry[]): ClassLogEntry[] => {
