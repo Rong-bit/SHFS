@@ -1,7 +1,11 @@
 import type ExcelJS from 'exceljs';
 import type { CounselingPayrollPage } from './counselingPayrollRegister';
 import type { OverloadPayrollPage } from './overloadPayrollRegister';
-import { isBlankPayrollRow } from './overloadPayrollRegister';
+import {
+  estimatePayrollRowUnits,
+  isBlankPayrollRow,
+  PAYROLL_REMARKS_COL_WIDTH,
+} from './overloadPayrollRegister';
 import type { SubstitutePayrollPage } from './substitutePayrollRegister';
 import type { ActingHomeroomPayrollPage } from './actingHomeroomPayrollRegister';
 
@@ -127,10 +131,11 @@ function addHeaderRow(ws: ExcelJS.Worksheet, headers: string[]): number {
 function addDataRow(
   ws: ExcelJS.Worksheet,
   values: CellValue[],
-  opts?: { blank?: boolean; amountCol?: number }
+  opts?: { blank?: boolean; amountCol?: number; heightUnits?: number }
 ) {
   const row = ws.addRow(values);
-  row.height = opts?.blank ? 12 : 14;
+  const units = Math.max(1, opts?.heightUnits ?? 1);
+  row.height = opts?.blank ? 12 : Math.max(14, 14 * units);
   row.eachCell((cell, colNumber) => {
     const isAmount = opts?.amountCol === colNumber && typeof cell.value === 'number';
     const isRemarks = colNumber === values.length;
@@ -327,7 +332,10 @@ export async function exportOverloadPayrollExcel(
           r.amount,
           r.remarks,
         ],
-        { amountCol: 8 }
+        {
+          amountCol: 8,
+          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.overload),
+        }
       );
     });
     const st = page.subtotal;
@@ -400,7 +408,10 @@ export async function exportSubstitutePayrollExcel(
       addDataRow(
         ws,
         [r.salaryCode || '—', r.teacherName, r.substitutePeriods, r.ratePerPeriod, r.amount, r.remarks],
-        { amountCol: 5 }
+        {
+          amountCol: 5,
+          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.substitute),
+        }
       );
     });
     const subtotalRow = addTotalRow(
@@ -482,7 +493,10 @@ export async function exportCounselingPayrollExcel(
           r.amount,
           r.remarks,
         ],
-        { amountCol: 9 }
+        {
+          amountCol: 9,
+          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.counseling),
+        }
       );
     });
     const subtotalRow = addTotalRow(
@@ -563,7 +577,10 @@ export async function exportActingHomeroomPayrollExcel(
       addDataRow(
         ws,
         [r.salaryCode || '—', r.teacherName, r.actingDays, r.dailyRate, r.amount, r.remarks],
-        { amountCol: 5 }
+        {
+          amountCol: 5,
+          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.actingHomeroom),
+        }
       );
     });
     const subtotalRow = addTotalRow(
