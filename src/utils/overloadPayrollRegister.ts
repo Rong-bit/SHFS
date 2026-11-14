@@ -35,6 +35,12 @@ export const PAYROLL_ROWS_LAST_PAGE = 41;
 /** 單列備註最多佔幾個列高單位（避免一人吃掉整頁） */
 export const PAYROLL_MAX_ROW_UNITS = 8;
 
+/**
+ * Excel 欄寬對「微軟正黑體 11pt＋儲存格內距／框線」偏樂觀，
+ * 實際可容字元約為此比例；低估會導致列高仍像固定、文字被裁切。
+ */
+export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 0.72;
+
 /** 各清冊 Excel 備註欄寬（對齊 payrollRegisterExcel colWidths 末欄） */
 export const PAYROLL_REMARKS_COL_WIDTH = {
   overload: 35,
@@ -74,15 +80,21 @@ export function payrollRemarkTextWidth(text: string): number {
 
 /**
  * 依備註長度估算列高單位（至少 1；上限 PAYROLL_MAX_ROW_UNITS）。
- * remarksColWidth 為 Excel 備註欄字元寬。
+ * remarksColWidth 為 Excel 備註欄字元寬；會再乘 WRAP_WIDTH_FACTOR 對齊實際換行。
  */
 export function estimatePayrollRowUnits(
   remarks: string,
   remarksColWidth: number,
   maxUnits = PAYROLL_MAX_ROW_UNITS
 ): number {
-  const col = Math.max(1, remarksColWidth);
-  const lines = Math.max(1, Math.ceil(payrollRemarkTextWidth(remarks || '') / col));
+  const col = Math.max(1, remarksColWidth * PAYROLL_REMARKS_WRAP_WIDTH_FACTOR);
+  const text = remarks || '';
+  if (!text.trim()) return 1;
+  // 含換行時逐段累加預估行數
+  let lines = 0;
+  for (const part of text.split(/\r?\n/)) {
+    lines += Math.max(1, Math.ceil(payrollRemarkTextWidth(part) / col));
+  }
   return Math.min(Math.max(1, lines), Math.max(1, maxUnits));
 }
 
