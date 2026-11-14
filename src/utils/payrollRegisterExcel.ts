@@ -135,7 +135,9 @@ function addDataRow(
 ) {
   const row = ws.addRow(values);
   const units = Math.max(1, opts?.heightUnits ?? 1);
-  row.height = opts?.blank ? 12 : Math.max(14, 14 * units);
+  // 每單位約一行；略高於 14pt，避免 11pt 換行＋垂直置中被裁切
+  const ptPerUnit = 16;
+  row.height = opts?.blank ? 12 : Math.max(ptPerUnit, ptPerUnit * units);
   row.eachCell((cell, colNumber) => {
     const isAmount = opts?.amountCol === colNumber && typeof cell.value === 'number';
     const isRemarks = colNumber === values.length;
@@ -147,6 +149,10 @@ function addDataRow(
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false };
     }
   });
+  // 樣式寫入後再確認列高（避免部分環境覆寫）
+  if (!opts?.blank) {
+    row.height = Math.max(ptPerUnit, ptPerUnit * units);
+  }
   return row.number;
 }
 
