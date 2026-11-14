@@ -1,7 +1,7 @@
 /**
  * 印領清冊：備註動態列高單位分頁。
  * 短備註每頁最多 PAYROLL_ROWS_PER_PAGE 人；畫面／列印不補空白列；
- * Excel 另以 padPayrollPageRowsForExcel 補滿。
+ * Excel 以 padPayrollPageRowsForExcel 補滿至頁底。
  * 執行：npx tsx scripts/regression-payroll-page-units.ts
  */
 import assert from 'node:assert/strict';
@@ -9,8 +9,10 @@ import {
   estimatePayrollExcelRowHeightPt,
   estimatePayrollRowUnits,
   isBlankPayrollRow,
+  padPayrollPageRowsForExcel,
   paginatePayrollByUnits,
   PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT,
+  PAYROLL_EXCEL_PT_PER_LINE,
   PAYROLL_EXCEL_WRAP_WIDTH_FACTOR,
   PAYROLL_MAX_ROW_UNITS,
   PAYROLL_REMARKS_COL_WIDTH,
@@ -52,7 +54,7 @@ function run() {
   assert.equal(shortSlices[0].paddedRows.length, PAYROLL_ROWS_PER_PAGE, '畫面列不補空白');
   assert.equal(realPeople(shortSlices[1].paddedRows), PAYROLL_ROWS_PER_PAGE);
 
-  // 末頁容量：單頁、畫面／Excel 皆不補空白
+  // 末頁容量：畫面不補空白；Excel 另補至 lastPageUnits
   const lastPageRows = Array.from({ length: PAYROLL_ROWS_LAST_PAGE }, (_, i) => makeRow(i, '短'));
   const lastSlices = paginatePayrollByUnits(lastPageRows, (r) => r.remarks, blank, colWidth);
   assert.equal(lastSlices.length, 1);
@@ -61,6 +63,9 @@ function run() {
   const few = Array.from({ length: 5 }, (_, i) => makeRow(i, '短'));
   const fewSlices = paginatePayrollByUnits(few, (r) => r.remarks, blank, colWidth);
   assert.equal(fewSlices[0].paddedRows.length, 5);
+  const fewExcel = padPayrollPageRowsForExcel(fewSlices[0].rows, blank, colWidth, true);
+  assert.equal(fewExcel.length, PAYROLL_ROWS_LAST_PAGE, 'Excel 不滿頁應補空白列');
+  assert.ok(fewExcel.some((r) => isBlankPayrollRow(r.teacherId)));
 
   // 長備註：每人多單位 → 一頁人數 < 容量，真實列單位總和 ≤ 容量
   const longRemark = '全'.repeat(colWidth + 1);
@@ -75,7 +80,7 @@ function run() {
   assert.equal(longUnits, expectedLongUnits, `長備註單位應為 ${expectedLongUnits}`);
   assert.ok(longUnits > 1, `長備註應 >1 單位（實際 ${longUnits}）`);
 
-  // Excel 列高係數較寬：同備註估出行數應 ≤ 分頁係數，避免上下留白過大
+  // Excel 換行係數 ≥ 分頁係數 → 估出行數 ≤ 分頁（再另加 1 行緩衝於列高）
   const excelLines = estimatePayrollRowUnits(
     longRemark,
     colWidth,
@@ -86,7 +91,8 @@ function run() {
   const sampleRemark =
     '11/2代林怡君公假兼課1節(第1節)；11/3代林怡君公假兼課1節(第3節)；11/4代林怡君公假兼課1節(第5節)；11/5代林怡君公假兼課1節(第7節)';
   const samplePt = estimatePayrollExcelRowHeightPt(sampleRemark, colWidth);
-  assert.ok(samplePt <= 14 * 6, `四段備註列高不宜虛高（實際 ${samplePt}）`);
+  assert.ok(samplePt >= PAYROLL_EXCEL_PT_PER_LINE * 3, `四段備註列高應夠顯示（實際 ${samplePt}）`);
+  assert.ok(samplePt <= PAYROLL_EXCEL_PT_PER_LINE * 8, `四段備註列高不宜過度虛高（實際 ${samplePt}）`);
   const longRows = Array.from({ length: 30 }, (_, i) => makeRow(i, longRemark));
   const longSlices = paginatePayrollByUnits(longRows, (r) => r.remarks, blank, colWidth);
   assert.ok(longSlices.length >= 2, '長備註應拆成多頁');

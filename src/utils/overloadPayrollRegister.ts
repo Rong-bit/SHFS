@@ -44,12 +44,13 @@ export const PAYROLL_MAX_ROW_UNITS = PAYROLL_ROWS_PER_PAGE;
 export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 0.72;
 
 /**
- * Excel 列高用：較接近實際欄寬，避免列高虛高、備註上下留白過大。
+ * Excel 列高用：略小於 1，讓換行估多一點，避免列印預覽裁切備註。
+ * （過低會虛高留白；過高會裁字）
  */
-export const PAYROLL_EXCEL_WRAP_WIDTH_FACTOR = 0.95;
+export const PAYROLL_EXCEL_WRAP_WIDTH_FACTOR = 0.8;
 
-/** Excel 每行備註約略高度（字級 11pt） */
-export const PAYROLL_EXCEL_PT_PER_LINE = 14;
+/** Excel 每行備註約略高度（字級 11pt＋換行間距） */
+export const PAYROLL_EXCEL_PT_PER_LINE = 16;
 
 /** Excel 列高上限（point）；超過會被 Excel 截斷 */
 export const PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT = 409;
@@ -122,16 +123,18 @@ export function estimatePayrollExcelRowHeightPt(
   remarksColWidth: number,
   ptPerUnit = PAYROLL_EXCEL_PT_PER_LINE
 ): number {
-  const units = estimatePayrollRowUnits(
+  const rawUnits = estimatePayrollRowUnits(
     remarks,
     remarksColWidth,
     Number.POSITIVE_INFINITY,
     PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
   );
-  // 行數極多時略降每行 pt，在 409 上限內盡量顯示完整（字級 11pt，每行至少 12pt）
+  // 多留 1 行緩衝，避免 fitToWidth／字型量測誤差裁切最後一行
+  const units = Math.max(1, rawUnits + (rawUnits > 1 ? 1 : 0));
+  // 行數極多時略降每行 pt，在 409 上限內盡量顯示完整
   let pt = ptPerUnit;
   if (units * pt > PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT) {
-    pt = Math.max(12, Math.floor(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT / units));
+    pt = Math.max(13, Math.floor(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT / units));
   }
   return Math.min(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT, Math.max(pt, pt * units));
 }
@@ -222,7 +225,7 @@ export function paginatePayrollByUnits<T>(
   }));
 }
 
-/** （保留）依單位補空白列；畫面／列印／Excel 目前皆不補空白，改以 flex／接續小計 */
+/** Excel：依本頁已用單位補空白列，使小計接近 A4 頁底（畫面／列印仍不補） */
 export function padPayrollPageRowsForExcel<T extends { remarks: string }>(
   rows: T[],
   createBlank: (index: number) => T,
