@@ -44,22 +44,15 @@ export const PAYROLL_MAX_ROW_UNITS = PAYROLL_ROWS_PER_PAGE;
 export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 0.72;
 
 /**
- * Excel 列高用：接近實際欄寬，避免每位老師備註下方留白過大。
+ * Excel 列高用：略小於 1，讓換行估多一點，避免備註高度不夠被裁切。
  */
-export const PAYROLL_EXCEL_WRAP_WIDTH_FACTOR = 0.92;
+export const PAYROLL_EXCEL_WRAP_WIDTH_FACTOR = 0.85;
 
-/** Excel 每行備註約略高度（字級 11pt） */
-export const PAYROLL_EXCEL_PT_PER_LINE = 13.5;
+/** Excel 每行備註約略高度（字級 11pt＋行距） */
+export const PAYROLL_EXCEL_PT_PER_LINE = 15;
 
 /** Excel 列高上限（point）；超過會被 Excel 截斷 */
 export const PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT = 409;
-
-/**
- * Excel 單頁「資料＋空白補列」目標高度（point）。
- * 搭配標題／表頭／小計後約填滿 A4；末頁較短以預留合計＋簽核。
- */
-export const PAYROLL_EXCEL_PAGE_DATA_PT = 640;
-export const PAYROLL_EXCEL_LAST_PAGE_DATA_PT = 520;
 
 /** 各清冊 Excel 備註欄寬（對齊 payrollRegisterExcel colWidths 末欄） */
 export const PAYROLL_REMARKS_COL_WIDTH = {
@@ -129,18 +122,20 @@ export function estimatePayrollExcelRowHeightPt(
   remarksColWidth: number,
   ptPerUnit = PAYROLL_EXCEL_PT_PER_LINE
 ): number {
-  const units = estimatePayrollRowUnits(
+  const rawUnits = estimatePayrollRowUnits(
     remarks,
     remarksColWidth,
     Number.POSITIVE_INFINITY,
     PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
   );
+  // 多行備註略加半行緩衝，避免 fitToWidth／字型量測誤差裁切
+  const units = rawUnits > 1 ? rawUnits + 0.5 : rawUnits;
   // 行數極多時略降每行 pt，在 409 上限內盡量顯示完整
   let pt = ptPerUnit;
   if (units * pt > PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT) {
     pt = Math.max(12, Math.floor(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT / units));
   }
-  return Math.min(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT, Math.max(pt, pt * units));
+  return Math.min(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT, Math.max(pt, Math.round(pt * units)));
 }
 
 export function padPayrollRowsToPage<T>(
@@ -221,15 +216,14 @@ export function paginatePayrollByUnits<T>(
     pages.push({ real: current, used });
   }
 
-  // 畫面／列印不補空白列（避免動態列高＋空白列把小計擠出 A4）；
-  // Excel 匯出再以 padPayrollRowsToUnits 補滿。
+  // 畫面／列印／Excel 皆不補空白資料列（避免看起來像空資料，也避免擠出小計）。
   return pages.map((p) => ({
     rows: p.real,
     paddedRows: p.real,
   }));
 }
 
-/** Excel：依本頁已用單位補空白列，使小計接近 A4 頁底（畫面／列印仍不補） */
+/** 依本頁已用單位補空白列（輔助／回歸用；實際匯出不再補空白資料列） */
 export function padPayrollPageRowsForExcel<T extends { remarks: string }>(
   rows: T[],
   createBlank: (index: number) => T,
