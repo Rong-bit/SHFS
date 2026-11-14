@@ -15,6 +15,7 @@ import {
   paginateActingHomeroomPayroll,
   type ActingHomeroomPayrollTotals,
 } from '../../utils/actingHomeroomPayrollRegister';
+import { formatExportError } from '../../utils/downloadBlob';
 import { exportActingHomeroomPayrollExcel } from '../../utils/payrollRegisterExcel';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
 import { PayrollRegisterPrintStyles, CELL_CENTER, CELL_LEFT } from './PayrollRegisterPrintStyles';
@@ -95,14 +96,18 @@ export const ActingHomeroomPayrollRegisterModal: React.FC<
 
   const handleExportExcel = async () => {
     if (pages.length === 0) return;
-    await exportActingHomeroomPayrollExcel(
-      title,
-      monthRangeLabel,
-      pages,
-      grandTotal,
-      grandTotalRateLabel,
-      `${systemConfig.schoolName}_${rocYear}年${month}月_代導師減授鐘點費印領清冊.xlsx`
-    );
+    try {
+      await exportActingHomeroomPayrollExcel(
+        title,
+        monthRangeLabel,
+        pages,
+        grandTotal,
+        grandTotalRateLabel,
+        `${systemConfig.schoolName}_${rocYear}年${month}月_代導師減授鐘點費印領清冊.xlsx`
+      );
+    } catch (err) {
+      window.alert(formatExportError(err));
+    }
   };
 
   return (

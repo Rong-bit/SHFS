@@ -15,6 +15,7 @@ import {
   paginateOverloadPayroll,
   type OverloadPayrollTotals,
 } from '../../utils/overloadPayrollRegister';
+import { formatExportError } from '../../utils/downloadBlob';
 import { exportOverloadPayrollExcel } from '../../utils/payrollRegisterExcel';
 import {
   countTeachersByFund,
@@ -115,14 +116,18 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
 
   const handleExportExcel = async () => {
     if (pages.length === 0) return;
-    await exportOverloadPayrollExcel(
-      title,
-      monthRangeLabel,
-      weekRound,
-      pages,
-      grandTotal,
-      `${systemConfig.schoolName}_${rocYear}年${month}月_兼課鐘點費印領清冊${fileFundSuffix}.xlsx`
-    );
+    try {
+      await exportOverloadPayrollExcel(
+        title,
+        monthRangeLabel,
+        weekRound,
+        pages,
+        grandTotal,
+        `${systemConfig.schoolName}_${rocYear}年${month}月_兼課鐘點費印領清冊${fileFundSuffix}.xlsx`
+      );
+    } catch (err) {
+      window.alert(formatExportError(err));
+    }
   };
 
   return (
