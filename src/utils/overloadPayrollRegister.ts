@@ -32,14 +32,20 @@ export const PAYROLL_ROWS_PER_PAGE = 40;
  */
 export const PAYROLL_ROWS_LAST_PAGE = 37;
 
-/** 單列備註最多佔幾個列高單位（避免一人吃掉整頁） */
-export const PAYROLL_MAX_ROW_UNITS = 8;
+/**
+ * 分頁時單列最多佔幾個列高單位（可佔滿一頁，避免一人跨兩頁邏輯頁）。
+ * Excel 列高另用不封頂估算（僅受 Excel 列高上限約束）。
+ */
+export const PAYROLL_MAX_ROW_UNITS = PAYROLL_ROWS_PER_PAGE;
 
 /**
  * Excel 欄寬對「微軟正黑體 11pt＋儲存格內距／框線」偏樂觀，
- * 實際可容字元約為此比例；低估會導致列高仍像固定、文字被裁切。
+ * 實際可容字元約為此比例；低估會導致列高不夠、文字被裁切。
  */
-export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 0.72;
+export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 0.6;
+
+/** Excel 列高上限（point）；超過會被 Excel 截斷 */
+export const PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT = 409;
 
 /** 各清冊 Excel 備註欄寬（對齊 payrollRegisterExcel colWidths 末欄） */
 export const PAYROLL_REMARKS_COL_WIDTH = {
@@ -79,8 +85,9 @@ export function payrollRemarkTextWidth(text: string): number {
 }
 
 /**
- * 依備註長度估算列高單位（至少 1；上限 PAYROLL_MAX_ROW_UNITS）。
+ * 依備註長度估算列高單位（至少 1）。
  * remarksColWidth 為 Excel 備註欄字元寬；會再乘 WRAP_WIDTH_FACTOR 對齊實際換行。
+ * maxUnits 預設為分頁上限；傳 Infinity 則不封頂（供 Excel 列高）。
  */
 export function estimatePayrollRowUnits(
   remarks: string,
@@ -95,7 +102,25 @@ export function estimatePayrollRowUnits(
   for (const part of text.split(/\r?\n/)) {
     lines += Math.max(1, Math.ceil(payrollRemarkTextWidth(part) / col));
   }
-  return Math.min(Math.max(1, lines), Math.max(1, maxUnits));
+  const capped = Number.isFinite(maxUnits)
+    ? Math.min(Math.max(1, lines), Math.max(1, maxUnits))
+    : Math.max(1, lines);
+  return capped;
+}
+
+/** Excel 資料列高（point）：不套分頁單位上限，僅受 Excel 409pt 限制 */
+export function estimatePayrollExcelRowHeightPt(
+  remarks: string,
+  remarksColWidth: number,
+  ptPerUnit = 18
+): number {
+  const units = estimatePayrollRowUnits(remarks, remarksColWidth, Number.POSITIVE_INFINITY);
+  // 行數極多時略降每行 pt，在 409 上限內盡量顯示完整（字級 11pt，每行至少 13pt）
+  let pt = ptPerUnit;
+  if (units * pt > PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT) {
+    pt = Math.max(13, Math.floor(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT / units));
+  }
+  return Math.min(PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT, Math.max(pt, pt * units));
 }
 
 export function padPayrollRowsToPage<T>(
