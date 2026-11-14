@@ -197,8 +197,7 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   }
 
   .payroll-register-print-table tbody tr:not(.payroll-register-blank-row):not(.font-bold) td {
-    height: 4.9mm;
-    max-height: 4.9mm;
+    min-height: 4.9mm;
     font-size: 8pt;
     line-height: 1.1;
   }

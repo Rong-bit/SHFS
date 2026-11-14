@@ -20,16 +20,28 @@ import { SCHOOL_FUND_NAME, splitConcurrentByFunding } from './concurrentFunding'
 import type { Teacher } from '../types';
 
 /**
- * 中間頁資料列（含空白補列）；非末頁小計後換頁。
- * Excel／畫面／列印共用；44 為 A4 實測（緊湊列高）可容納量。
+ * 中間頁「列高單位」容量（含空白補列）；非末頁小計後換頁。
+ * Excel／畫面／列印共用。短備註＝1 單位時等同舊版每頁 44 列；
+ * 長備註佔多單位，一頁人數會少於 44，但總單位仍 ≤ 44。
  */
 export const PAYROLL_ROWS_PER_PAGE = 44;
 
 /**
- * 末頁空白補列上限（實際資料列仍最多 44）。
- * 略少補幾列以預留合計＋簽核；不另拆頁。
+ * 末頁單位容量上限（實際資料仍可佔滿一頁單位）。
+ * 略少以預留合計＋簽核；不另拆頁。
  */
 export const PAYROLL_ROWS_LAST_PAGE = 41;
+
+/** 單列備註最多佔幾個列高單位（避免一人吃掉整頁） */
+export const PAYROLL_MAX_ROW_UNITS = 8;
+
+/** 各清冊 Excel 備註欄寬（對齊 payrollRegisterExcel colWidths 末欄） */
+export const PAYROLL_REMARKS_COL_WIDTH = {
+  overload: 35,
+  substitute: 58,
+  counseling: 52,
+  actingHomeroom: 58,
+} as const;
 
 /** 空白列（補滿一頁用，不計入小計） */
 export function isBlankPayrollRow(teacherId: string): boolean {
@@ -51,6 +63,29 @@ export function createBlankOverloadRow(index: number): OverloadPayrollRow {
   };
 }
 
+/** 備註顯示寬度：全形／CJK ≈ 2、半形 ≈ 1（對齊 Excel 字寬估算） */
+export function payrollRemarkTextWidth(text: string): number {
+  let w = 0;
+  for (const ch of text || '') {
+    w += (ch.codePointAt(0) || 0) > 0xff ? 2 : 1;
+  }
+  return w;
+}
+
+/**
+ * 依備註長度估算列高單位（至少 1；上限 PAYROLL_MAX_ROW_UNITS）。
+ * remarksColWidth 為 Excel 備註欄字元寬。
+ */
+export function estimatePayrollRowUnits(
+  remarks: string,
+  remarksColWidth: number,
+  maxUnits = PAYROLL_MAX_ROW_UNITS
+): number {
+  const col = Math.max(1, remarksColWidth);
+  const lines = Math.max(1, Math.ceil(payrollRemarkTextWidth(remarks || '') / col));
+  return Math.min(Math.max(1, lines), Math.max(1, maxUnits));
+}
+
 export function padPayrollRowsToPage<T>(
   rows: T[],
   createBlank: (index: number) => T,
@@ -63,6 +98,81 @@ export function padPayrollRowsToPage<T>(
     out.push(createBlank(i++));
   }
   return out;
+}
+
+/** 以列高單位補空白列至 targetUnits（空白列各佔 1 單位） */
+export function padPayrollRowsToUnits<T>(
+  rows: T[],
+  createBlank: (index: number) => T,
+  targetUnits: number,
+  getUnits: (row: T) => number
+): T[] {
+  const out = [...rows];
+  let used = out.reduce((sum, r) => sum + Math.max(1, getUnits(r)), 0);
+  let i = 0;
+  while (used < targetUnits) {
+    out.push(createBlank(i++));
+    used += 1;
+  }
+  return out;
+}
+
+export type PayrollUnitPageSlice<T> = {
+  rows: T[];
+  /** 含空白補列後的完整頁列 */
+  paddedRows: T[];
+};
+
+/**
+ * 依備註列高單位打包分頁；末頁用較少單位預留合計＋簽核。
+ * getRemarks 取備註字串；createBlank 產生空白列。
+ */
+export function paginatePayrollByUnits<T>(
+  rows: T[],
+  getRemarks: (row: T) => string,
+  createBlank: (index: number) => T,
+  remarksColWidth: number,
+  opts?: {
+    pageUnits?: number;
+    lastPageUnits?: number;
+    maxRowUnits?: number;
+  }
+): PayrollUnitPageSlice<T>[] {
+  const pageUnits = opts?.pageUnits ?? PAYROLL_ROWS_PER_PAGE;
+  const lastPageUnits = opts?.lastPageUnits ?? PAYROLL_ROWS_LAST_PAGE;
+  const maxRowUnits = opts?.maxRowUnits ?? PAYROLL_MAX_ROW_UNITS;
+  const unitsOf = (row: T) =>
+    estimatePayrollRowUnits(getRemarks(row), remarksColWidth, maxRowUnits);
+
+  if (rows.length === 0) return [];
+
+  const pages: { real: T[]; used: number }[] = [];
+  let current: T[] = [];
+  let used = 0;
+
+  for (const row of rows) {
+    const u = unitsOf(row);
+    if (current.length > 0 && used + u > pageUnits) {
+      pages.push({ real: current, used });
+      current = [row];
+      used = u;
+    } else {
+      current.push(row);
+      used += u;
+    }
+  }
+  if (current.length > 0) {
+    pages.push({ real: current, used });
+  }
+
+  return pages.map((p, idx) => {
+    const isLast = idx === pages.length - 1;
+    const target = isLast ? lastPageUnits : pageUnits;
+    return {
+      rows: p.real,
+      paddedRows: padPayrollRowsToUnits(p.real, createBlank, target, unitsOf),
+    };
+  });
 }
 
 export type OverloadPayrollRow = {
@@ -326,16 +436,16 @@ export function paginateOverloadPayroll(rows: OverloadPayrollRow[]): {
     return { pages: [], grandTotal };
   }
 
-  const pages: OverloadPayrollPage[] = [];
-  for (let i = 0; i < rows.length; i += PAYROLL_ROWS_PER_PAGE) {
-    const slice = rows.slice(i, i + PAYROLL_ROWS_PER_PAGE);
-    const isLastPage = i + PAYROLL_ROWS_PER_PAGE >= rows.length;
-    const padSize = isLastPage ? PAYROLL_ROWS_LAST_PAGE : PAYROLL_ROWS_PER_PAGE;
-    pages.push({
-      pageIndex: pages.length + 1,
-      rows: padPayrollRowsToPage(slice, createBlankOverloadRow, padSize),
-      subtotal: sumTotals(slice),
-    });
-  }
+  const slices = paginatePayrollByUnits(
+    rows,
+    (r) => r.remarks,
+    createBlankOverloadRow,
+    PAYROLL_REMARKS_COL_WIDTH.overload
+  );
+  const pages: OverloadPayrollPage[] = slices.map((slice, idx) => ({
+    pageIndex: idx + 1,
+    rows: slice.paddedRows,
+    subtotal: sumTotals(slice.rows),
+  }));
   return { pages, grandTotal };
 }
