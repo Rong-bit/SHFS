@@ -1,15 +1,18 @@
 /**
  * 印領清冊：備註動態列高單位分頁。
- * 短備註每頁 44 人；長備註人數變少但單位 ≤44；極端備註單人成頁且單位封頂。
+ * 短備註每頁最多 PAYROLL_ROWS_PER_PAGE 人；畫面／列印不補空白列；
+ * Excel 另以 padPayrollPageRowsForExcel 補滿。
  * 執行：npx tsx scripts/regression-payroll-page-units.ts
  */
 import assert from 'node:assert/strict';
 import {
   estimatePayrollRowUnits,
   isBlankPayrollRow,
+  padPayrollPageRowsForExcel,
   paginatePayrollByUnits,
   PAYROLL_MAX_ROW_UNITS,
   PAYROLL_REMARKS_COL_WIDTH,
+  PAYROLL_REMARKS_WRAP_WIDTH_FACTOR,
   PAYROLL_ROWS_LAST_PAGE,
   PAYROLL_ROWS_PER_PAGE,
   payrollRemarkTextWidth,
@@ -38,28 +41,45 @@ function realPeople(rows: Row[]): number {
 }
 
 function run() {
-  // 短備註：中間頁每頁 44 人／44 單位；88 人 → 兩頁各 44
-  const shortRows = Array.from({ length: 88 }, (_, i) => makeRow(i, '短'));
+  // 短備註：中間頁每頁容量人；畫面列不補空白
+  const shortRows = Array.from({ length: PAYROLL_ROWS_PER_PAGE * 2 }, (_, i) => makeRow(i, '短'));
   const shortSlices = paginatePayrollByUnits(shortRows, (r) => r.remarks, blank, colWidth);
-  assert.equal(shortSlices.length, 2, '88 短備註應分兩頁');
+  assert.equal(shortSlices.length, 2, '兩倍容量短備註應分兩頁');
   assert.equal(realPeople(shortSlices[0].paddedRows), PAYROLL_ROWS_PER_PAGE);
   assert.equal(pageRealUnits(shortSlices[0].rows), PAYROLL_ROWS_PER_PAGE);
+  assert.equal(shortSlices[0].paddedRows.length, PAYROLL_ROWS_PER_PAGE, '畫面列不補空白');
   assert.equal(realPeople(shortSlices[1].paddedRows), PAYROLL_ROWS_PER_PAGE);
-  assert.equal(shortSlices[1].paddedRows.length, PAYROLL_ROWS_PER_PAGE);
 
-  // 恰好末頁容量：單頁並補空白至 lastPageUnits
-  const fortyOne = Array.from({ length: PAYROLL_ROWS_LAST_PAGE }, (_, i) => makeRow(i, '短'));
-  const fortyOneSlices = paginatePayrollByUnits(fortyOne, (r) => r.remarks, blank, colWidth);
-  assert.equal(fortyOneSlices.length, 1);
-  assert.equal(fortyOneSlices[0].paddedRows.length, PAYROLL_ROWS_LAST_PAGE);
+  // 末頁容量：單頁、畫面不補空白；Excel 補至 lastPageUnits
+  const lastPageRows = Array.from({ length: PAYROLL_ROWS_LAST_PAGE }, (_, i) => makeRow(i, '短'));
+  const lastSlices = paginatePayrollByUnits(lastPageRows, (r) => r.remarks, blank, colWidth);
+  assert.equal(lastSlices.length, 1);
+  assert.equal(lastSlices[0].paddedRows.length, PAYROLL_ROWS_LAST_PAGE);
+  const excelPadded = padPayrollPageRowsForExcel(
+    lastSlices[0].rows,
+    blank,
+    colWidth,
+    true
+  );
+  assert.equal(excelPadded.length, PAYROLL_ROWS_LAST_PAGE);
 
-  // 長備註：每人多單位 → 一頁人數 < 44，真實列單位總和 ≤ 44
-  // CJK 寬度 2：超過一欄寬度的字數 → 至少 2 單位
+  // 不滿一頁：Excel 才補空白
+  const few = Array.from({ length: 5 }, (_, i) => makeRow(i, '短'));
+  const fewSlices = paginatePayrollByUnits(few, (r) => r.remarks, blank, colWidth);
+  assert.equal(fewSlices[0].paddedRows.length, 5);
+  const fewExcel = padPayrollPageRowsForExcel(fewSlices[0].rows, blank, colWidth, true);
+  assert.equal(fewExcel.length, PAYROLL_ROWS_LAST_PAGE);
+  assert.ok(fewExcel.some((r) => isBlankPayrollRow(r.teacherId)));
+
+  // 長備註：每人多單位 → 一頁人數 < 容量，真實列單位總和 ≤ 容量
   const longRemark = '全'.repeat(colWidth + 1);
   const longUnits = estimatePayrollRowUnits(longRemark, colWidth);
   const expectedLongUnits = Math.min(
     PAYROLL_MAX_ROW_UNITS,
-    Math.max(1, Math.ceil(payrollRemarkTextWidth(longRemark) / colWidth))
+    Math.max(
+      1,
+      Math.ceil(payrollRemarkTextWidth(longRemark) / (colWidth * PAYROLL_REMARKS_WRAP_WIDTH_FACTOR))
+    )
   );
   assert.equal(longUnits, expectedLongUnits, `長備註單位應為 ${expectedLongUnits}`);
   assert.ok(longUnits > 1, `長備註應 >1 單位（實際 ${longUnits}）`);
@@ -69,7 +89,8 @@ function run() {
   for (const slice of longSlices) {
     const used = pageRealUnits(slice.rows);
     assert.ok(used <= PAYROLL_ROWS_PER_PAGE, `頁單位 ${used} 應 ≤ ${PAYROLL_ROWS_PER_PAGE}`);
-    assert.ok(realPeople(slice.paddedRows) < PAYROLL_ROWS_PER_PAGE, '長備註頁人數應少於 44');
+    assert.ok(realPeople(slice.paddedRows) < PAYROLL_ROWS_PER_PAGE, '長備註頁人數應少於容量');
+    assert.equal(slice.paddedRows.length, slice.rows.length, '畫面列不補空白');
   }
 
   // 極端備註：單位封頂；空間不足時單獨成頁
@@ -77,7 +98,6 @@ function run() {
   const capped = estimatePayrollRowUnits(extreme, colWidth);
   assert.equal(capped, PAYROLL_MAX_ROW_UNITS, '極端備註應封頂 PAYROLL_MAX_ROW_UNITS');
 
-  // 多一短列使剩餘 < capped → 極端列換頁且該頁僅一人
   const fillers = Array.from({ length: PAYROLL_ROWS_PER_PAGE - capped + 1 }, (_, i) =>
     makeRow(100 + i, '短')
   );

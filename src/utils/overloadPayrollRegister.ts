@@ -20,17 +20,17 @@ import { SCHOOL_FUND_NAME, splitConcurrentByFunding } from './concurrentFunding'
 import type { Teacher } from '../types';
 
 /**
- * 中間頁「列高單位」容量（含空白補列）；非末頁小計後換頁。
- * Excel／畫面／列印共用。短備註＝1 單位時等同舊版每頁 44 列；
- * 長備註佔多單位，一頁人數會少於 44，但總單位仍 ≤ 44。
+ * 中間頁「列高單位」容量；非末頁小計後換頁。
+ * 畫面／列印以 flex 把小計貼齊 A4 頁底（不再靠空白列硬撐）。
+ * Excel 匯出時另以空白列補滿單位。略小於舊版 44，預留標題／表頭／小計與估算誤差。
  */
-export const PAYROLL_ROWS_PER_PAGE = 44;
+export const PAYROLL_ROWS_PER_PAGE = 40;
 
 /**
- * 末頁單位容量上限（實際資料仍可佔滿一頁單位）。
+ * 末頁單位容量上限。
  * 略少以預留合計＋簽核；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 41;
+export const PAYROLL_ROWS_LAST_PAGE = 37;
 
 /** 單列備註最多佔幾個列高單位（避免一人吃掉整頁） */
 export const PAYROLL_MAX_ROW_UNITS = 8;
@@ -142,7 +142,7 @@ export type PayrollUnitPageSlice<T> = {
 export function paginatePayrollByUnits<T>(
   rows: T[],
   getRemarks: (row: T) => string,
-  createBlank: (index: number) => T,
+  _createBlank: (index: number) => T,
   remarksColWidth: number,
   opts?: {
     pageUnits?: number;
@@ -151,7 +151,6 @@ export function paginatePayrollByUnits<T>(
   }
 ): PayrollUnitPageSlice<T>[] {
   const pageUnits = opts?.pageUnits ?? PAYROLL_ROWS_PER_PAGE;
-  const lastPageUnits = opts?.lastPageUnits ?? PAYROLL_ROWS_LAST_PAGE;
   const maxRowUnits = opts?.maxRowUnits ?? PAYROLL_MAX_ROW_UNITS;
   const unitsOf = (row: T) =>
     estimatePayrollRowUnits(getRemarks(row), remarksColWidth, maxRowUnits);
@@ -177,14 +176,32 @@ export function paginatePayrollByUnits<T>(
     pages.push({ real: current, used });
   }
 
-  return pages.map((p, idx) => {
-    const isLast = idx === pages.length - 1;
-    const target = isLast ? lastPageUnits : pageUnits;
-    return {
-      rows: p.real,
-      paddedRows: padPayrollRowsToUnits(p.real, createBlank, target, unitsOf),
-    };
-  });
+  // 畫面／列印不補空白列（避免動態列高＋空白列把小計擠出 A4）；
+  // Excel 匯出再以 padPayrollRowsToUnits 補滿。
+  return pages.map((p) => ({
+    rows: p.real,
+    paddedRows: p.real,
+  }));
+}
+
+/** Excel：依本頁已用單位補空白列，使小計列視覺上接近頁底 */
+export function padPayrollPageRowsForExcel<T extends { remarks: string }>(
+  rows: T[],
+  createBlank: (index: number) => T,
+  remarksColWidth: number,
+  isLastPage: boolean,
+  opts?: { pageUnits?: number; lastPageUnits?: number; maxRowUnits?: number }
+): T[] {
+  const pageUnits = opts?.pageUnits ?? PAYROLL_ROWS_PER_PAGE;
+  const lastPageUnits = opts?.lastPageUnits ?? PAYROLL_ROWS_LAST_PAGE;
+  const maxRowUnits = opts?.maxRowUnits ?? PAYROLL_MAX_ROW_UNITS;
+  const target = isLastPage ? lastPageUnits : pageUnits;
+  return padPayrollRowsToUnits(
+    rows,
+    createBlank,
+    target,
+    (r) => estimatePayrollRowUnits(r.remarks, remarksColWidth, maxRowUnits)
+  );
 }
 
 export type OverloadPayrollRow = {
