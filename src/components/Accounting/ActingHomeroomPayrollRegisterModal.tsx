@@ -201,11 +201,9 @@ export const ActingHomeroomPayrollRegisterModal: React.FC<
                           style={CELL_CENTER}
                         >
                           備註
-                          {pageIdx === 0 && (
-                            <div className="font-normal text-[10px] mt-0.5 leading-tight">
-                              {monthRangeLabel}
-                            </div>
-                          )}
+                          <div className="font-normal text-[10px] mt-0.5 leading-tight">
+                            {monthRangeLabel}
+                          </div>
                         </th>
                       </tr>
                     </thead>

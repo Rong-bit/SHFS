@@ -224,9 +224,7 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
                         <th className="border border-slate-400 px-2 py-1.5" style={CELL_CENTER}>實發金額</th>
                         <th className="border border-slate-400 px-2 py-1.5 payroll-register-remarks-col" style={CELL_CENTER}>
                           備註
-                          {pageIdx === 0 && (
-                            <div className="font-normal text-[10px] mt-0.5 leading-tight">{monthRangeLabel}</div>
-                          )}
+                          <div className="font-normal text-[10px] mt-0.5 leading-tight">{monthRangeLabel}</div>
                         </th>
                       </tr>
                     </thead>
