@@ -6,10 +6,12 @@
  */
 import assert from 'node:assert/strict';
 import {
+  estimatePayrollExcelRowHeightPt,
   estimatePayrollRowUnits,
   isBlankPayrollRow,
   padPayrollPageRowsForExcel,
   paginatePayrollByUnits,
+  PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT,
   PAYROLL_MAX_ROW_UNITS,
   PAYROLL_REMARKS_COL_WIDTH,
   PAYROLL_REMARKS_WRAP_WIDTH_FACTOR,
@@ -93,10 +95,18 @@ function run() {
     assert.equal(slice.paddedRows.length, slice.rows.length, '畫面列不補空白');
   }
 
-  // 極端備註：單位封頂；空間不足時單獨成頁
+  // 極端備註：分頁單位封頂為一頁容量；空間不足時單獨成頁
   const extreme = '極'.repeat(Math.ceil((colWidth * (PAYROLL_MAX_ROW_UNITS + 5)) / 2));
   const capped = estimatePayrollRowUnits(extreme, colWidth);
-  assert.equal(capped, PAYROLL_MAX_ROW_UNITS, '極端備註應封頂 PAYROLL_MAX_ROW_UNITS');
+  assert.equal(capped, PAYROLL_MAX_ROW_UNITS, '分頁極端備註應封頂 PAYROLL_MAX_ROW_UNITS');
+
+  // Excel 列高不套分頁上限（僅受 409pt 限制），長備註應明顯高於短備註
+  const excelShort = estimatePayrollExcelRowHeightPt('短', colWidth);
+  const excelLong = estimatePayrollExcelRowHeightPt(extreme, colWidth);
+  assert.ok(excelLong > excelShort * 5, `Excel 長備註列高應明顯較高（${excelLong} vs ${excelShort}）`);
+  assert.ok(excelLong <= PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT);
+  const uncappedUnits = estimatePayrollRowUnits(extreme, colWidth, Number.POSITIVE_INFINITY);
+  assert.ok(uncappedUnits > PAYROLL_MAX_ROW_UNITS, '不封頂單位應超過分頁上限');
 
   const fillers = Array.from({ length: PAYROLL_ROWS_PER_PAGE - capped + 1 }, (_, i) =>
     makeRow(100 + i, '短')

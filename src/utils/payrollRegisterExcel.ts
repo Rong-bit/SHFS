@@ -3,7 +3,7 @@ import type { CounselingPayrollPage } from './counselingPayrollRegister';
 import type { OverloadPayrollPage } from './overloadPayrollRegister';
 import {
   createBlankOverloadRow,
-  estimatePayrollRowUnits,
+  estimatePayrollExcelRowHeightPt,
   isBlankPayrollRow,
   padPayrollPageRowsForExcel,
   PAYROLL_REMARKS_COL_WIDTH,
@@ -133,13 +133,11 @@ function addHeaderRow(ws: ExcelJS.Worksheet, headers: string[]): number {
 function addDataRow(
   ws: ExcelJS.Worksheet,
   values: CellValue[],
-  opts?: { blank?: boolean; amountCol?: number; heightUnits?: number }
+  opts?: { blank?: boolean; amountCol?: number; heightPt?: number }
 ) {
   const row = ws.addRow(values);
-  const units = Math.max(1, opts?.heightUnits ?? 1);
-  // 每單位約一行；略高於 14pt，避免 11pt 換行＋垂直置中被裁切
-  const ptPerUnit = 16;
-  row.height = opts?.blank ? 12 : Math.max(ptPerUnit, ptPerUnit * units);
+  const heightPt = opts?.blank ? 12 : Math.max(18, opts?.heightPt ?? 18);
+  row.height = heightPt;
   row.eachCell((cell, colNumber) => {
     const isAmount = opts?.amountCol === colNumber && typeof cell.value === 'number';
     const isRemarks = colNumber === values.length;
@@ -153,7 +151,7 @@ function addDataRow(
   });
   // 樣式寫入後再確認列高（避免部分環境覆寫）
   if (!opts?.blank) {
-    row.height = Math.max(ptPerUnit, ptPerUnit * units);
+    row.height = heightPt;
   }
   return row.number;
 }
@@ -348,7 +346,7 @@ export async function exportOverloadPayrollExcel(
         ],
         {
           amountCol: 8,
-          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.overload),
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.overload),
         }
       );
     });
@@ -438,7 +436,7 @@ export async function exportSubstitutePayrollExcel(
         [r.salaryCode || '—', r.teacherName, r.substitutePeriods, r.ratePerPeriod, r.amount, r.remarks],
         {
           amountCol: 5,
-          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.substitute),
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.substitute),
         }
       );
     });
@@ -541,7 +539,7 @@ export async function exportCounselingPayrollExcel(
         ],
         {
           amountCol: 9,
-          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.counseling),
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.counseling),
         }
       );
     });
@@ -639,7 +637,7 @@ export async function exportActingHomeroomPayrollExcel(
         [r.salaryCode || '—', r.teacherName, r.actingDays, r.dailyRate, r.amount, r.remarks],
         {
           amountCol: 5,
-          heightUnits: estimatePayrollRowUnits(r.remarks, PAYROLL_REMARKS_COL_WIDTH.actingHomeroom),
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.actingHomeroom),
         }
       );
     });
