@@ -7,7 +7,17 @@ import React from 'react';
  * 改以 display:none 把非清冊節點移出列印流。
  */
 export const PAYROLL_REGISTER_PRINT_CSS = `
-/* 畫面預覽：空白補列短列高；儲存格強制置中（備註資料列靠左） */
+/* 畫面預覽：儲存格強制置中（備註資料列靠左）；頁面以 flex 將小計貼底 */
+.payroll-register-print-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 287mm;
+}
+
+.payroll-register-print-page-footer {
+  margin-top: auto;
+}
+
 .payroll-register-print-table th,
 .payroll-register-print-table td {
   text-align: center !important;
@@ -130,19 +140,29 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: block !important;
   }
 
-  /* 對齊 Excel horizontalCentered：整頁內容區塊在 A4 上左右置中 */
+  /* 對齊 Excel horizontalCentered：整頁內容區塊在 A4 上左右置中。
+   * A4 高 297mm、@page margin 5mm → 可用約 287mm；flex 將小計／簽核貼齊頁底。 */
   .payroll-register-print-page {
     position: relative !important;
     width: 200mm !important;
     max-width: 100% !important;
-    min-height: 0 !important;
-    height: auto !important;
+    min-height: 287mm !important;
+    height: 287mm !important;
+    max-height: 287mm !important;
     padding: 0 !important;
     margin: 0 auto !important;
     box-shadow: none !important;
     border: none !important;
-    overflow: visible !important;
-    display: block !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .payroll-register-print-page-footer {
+    margin-top: auto !important;
+    flex-shrink: 0 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   /* 非末頁：整頁區塊結束後強制換頁（勿用 height:0 元素，瀏覽器會忽略） */
@@ -256,14 +276,11 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     text-align: center !important;
   }
 
-  /* 末頁：小計／合計／簽核同頁 */
-  .payroll-register-print-page--last .payroll-register-print-table tbody tr:nth-last-child(-n+2),
+  /* 末頁：小計／合計／簽核同頁（footer 內） */
+  .payroll-register-print-page--last .payroll-register-print-page-footer,
   .payroll-register-print-page--last .payroll-register-print-footer {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-  }
-
-  .payroll-register-print-page--last .payroll-register-print-footer {
     break-before: avoid !important;
     page-break-before: avoid !important;
   }

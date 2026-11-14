@@ -244,57 +244,73 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
                       </tr>
                     </thead>
                     <tbody>
-                      {page.rows.map((row, rowIdx) => {
-                        const blank = isBlankPayrollRow(row.teacherId);
-                        return (
+                      {page.rows
+                        .filter((row) => !isBlankPayrollRow(row.teacherId))
+                        .map((row, rowIdx) => (
                           <tr
                             key={`${page.pageIndex}-${row.teacherId}-${rowIdx}`}
-                            className={`hover:bg-slate-50/50 ${blank ? 'payroll-register-blank-row' : ''}`}
+                            className="hover:bg-slate-50/50"
                           >
                             <td className="border border-slate-300 px-2 py-1 font-mono" style={CELL_CENTER}>
-                              {blank ? '\u00a0' : row.salaryCode || '—'}
+                              {row.salaryCode || '—'}
                             </td>
                             <td className="border border-slate-300 px-2 py-1 font-medium" style={CELL_CENTER}>
-                              {blank ? '' : row.teacherName}
+                              {row.teacherName}
                             </td>
                             <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
-                              {blank ? '' : row.weeklyConcurrent || ''}
+                              {row.weeklyConcurrent || ''}
                             </td>
                             <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
-                              {blank ? '' : row.baseMonthlyConcurrent || ''}
+                              {row.baseMonthlyConcurrent || ''}
                             </td>
                             <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
-                              {blank ? '' : row.addConcurrent || ''}
+                              {row.addConcurrent || ''}
                             </td>
                             <td className="border border-slate-300 px-2 py-1" style={CELL_CENTER}>
-                              {blank ? '' : row.subtractConcurrent || ''}
+                              {row.subtractConcurrent || ''}
                             </td>
                             <td className="border border-slate-300 px-2 py-1 font-semibold" style={CELL_CENTER}>
-                              {blank ? '' : row.actualConcurrent || ''}
+                              {row.actualConcurrent || ''}
                             </td>
                             <td className="border border-slate-300 px-2 py-1 font-mono" style={CELL_CENTER}>
-                              {blank ? '' : row.amount.toLocaleString()}
+                              {row.amount.toLocaleString()}
                             </td>
                             <td
                               className="border border-slate-300 px-2 py-1 text-[10px] leading-snug payroll-register-remarks-col"
                               style={CELL_LEFT}
                             >
-                              {blank ? '' : row.remarks}
+                              {row.remarks}
                             </td>
                           </tr>
-                        );
-                      })}
-                      <TotalsCells
-                        totals={page.subtotal}
-                        label="小計"
-                        pageLabel={`${page.pageIndex} of ${totalPages}`}
-                      />
-                      {pageIdx === pages.length - 1 && (
-                        <TotalsCells totals={grandTotal} label="合計" />
-                      )}
+                        ))}
                     </tbody>
                   </table>
-                  {pageIdx === pages.length - 1 && <PayrollRegisterSignatureBlock />}
+                  <div className="payroll-register-print-page-footer">
+                    <table className="payroll-register-print-table payroll-register-overload-table w-full border-collapse text-xs">
+                      <colgroup>
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '6.5%' }} />
+                        <col style={{ width: '8.6%' }} />
+                        <col style={{ width: '6.5%' }} />
+                        <col style={{ width: '6.5%' }} />
+                        <col style={{ width: '6.5%' }} />
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '35%' }} />
+                      </colgroup>
+                      <tbody>
+                        <TotalsCells
+                          totals={page.subtotal}
+                          label="小計"
+                          pageLabel={`${page.pageIndex} of ${totalPages}`}
+                        />
+                        {pageIdx === pages.length - 1 && (
+                          <TotalsCells totals={grandTotal} label="合計" />
+                        )}
+                      </tbody>
+                    </table>
+                    {pageIdx === pages.length - 1 && <PayrollRegisterSignatureBlock />}
+                  </div>
                 </div>
                 {/* 非末頁：畫面顯示換頁分隔；列印靠 page--break-after */}
                 {pageIdx < pages.length - 1 && (
