@@ -19,6 +19,7 @@ import {
   paginateCounselingPayroll,
   type CounselingPayrollTotals,
 } from '../../utils/counselingPayrollRegister';
+import { formatExportError } from '../../utils/downloadBlob';
 import { exportCounselingPayrollExcel } from '../../utils/payrollRegisterExcel';
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
 import { PayrollRegisterPrintStyles, CELL_CENTER, CELL_LEFT } from './PayrollRegisterPrintStyles';
@@ -127,15 +128,19 @@ export const CounselingPayrollRegisterModal: React.FC<CounselingPayrollRegisterM
 
   const handleExportExcel = async () => {
     if (pages.length === 0) return;
-    await exportCounselingPayrollExcel(
-      title,
-      monthRangeLabel,
-      weekRound,
-      pages,
-      grandTotal,
-      grandTotalRateLabel,
-      `${systemConfig.schoolName}_${rocYear}年${month}月_輔導課鐘點費印領清冊.xlsx`
-    );
+    try {
+      await exportCounselingPayrollExcel(
+        title,
+        monthRangeLabel,
+        weekRound,
+        pages,
+        grandTotal,
+        grandTotalRateLabel,
+        `${systemConfig.schoolName}_${rocYear}年${month}月_輔導課鐘點費印領清冊.xlsx`
+      );
+    } catch (err) {
+      window.alert(formatExportError(err));
+    }
   };
 
   return (

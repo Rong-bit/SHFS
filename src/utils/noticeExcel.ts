@@ -1,4 +1,4 @@
-import type ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import type { CourseSession, SubstituteRequest } from '../types';
 import {
   buildNoticeDocument,
@@ -9,6 +9,7 @@ import {
   resolveNoticeIssueDate,
   type NoticeDocument,
 } from './noticeDocument';
+import { downloadBlobFile } from './downloadBlob';
 
 /** 通知單清冊欄位（一列＝一節課程） */
 export const NOTICE_ROSTER_HEADERS = [
@@ -70,11 +71,6 @@ export function toNoticeRosterPeriod(period: string | number | undefined | null)
   if (period === '' || period === null || period === undefined) return '';
   const n = typeof period === 'number' ? period : Number(String(period).trim());
   return Number.isFinite(n) ? n : '';
-}
-
-async function loadExcelJS(): Promise<typeof ExcelJS> {
-  const mod = await import('exceljs');
-  return (mod as { default?: typeof ExcelJS }).default ?? (mod as typeof ExcelJS);
 }
 
 const thinBorder: Partial<ExcelJS.Borders> = {
@@ -235,12 +231,7 @@ async function downloadWorkbook(workbook: ExcelJS.Workbook, fileName: string) {
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlobFile(blob, fileName);
 }
 
 export function noticeExcelFileName(schoolName: string, doc?: NoticeDocument): string {
@@ -262,7 +253,6 @@ export async function buildNoticeWorkbook(
   schoolName: string,
   _options?: { includeIndex?: boolean }
 ): Promise<ExcelJS.Workbook> {
-  const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = schoolName || '教務系統';
   const rosterRows = buildNoticeRosterRows(docs);

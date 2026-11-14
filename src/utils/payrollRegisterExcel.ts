@@ -1,4 +1,4 @@
-import type ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import type { CounselingPayrollPage } from './counselingPayrollRegister';
 import type { OverloadPayrollPage } from './overloadPayrollRegister';
 import {
@@ -10,13 +10,9 @@ import {
 } from './overloadPayrollRegister';
 import type { SubstitutePayrollPage } from './substitutePayrollRegister';
 import type { ActingHomeroomPayrollPage } from './actingHomeroomPayrollRegister';
+import { downloadBlobFile } from './downloadBlob';
 
 type CellValue = string | number;
-
-async function loadExcelJS(): Promise<typeof ExcelJS> {
-  const mod = await import('exceljs');
-  return (mod as { default?: typeof ExcelJS }).default ?? (mod as typeof ExcelJS);
-}
 
 const thinBorder: Partial<ExcelJS.Borders> = {
   top: { style: 'thin', color: { argb: 'FF334155' } },
@@ -74,12 +70,7 @@ async function downloadWorkbook(workbook: ExcelJS.Workbook, fileName: string) {
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlobFile(blob, fileName);
 }
 
 function setupSheet(ws: ExcelJS.Worksheet, colCount: number, colWidths: number[]) {
@@ -299,7 +290,6 @@ export async function exportOverloadPayrollExcel(
   grandTotal: OverloadPayrollPage['subtotal'],
   fileName: string
 ) {
-  const ExcelJS = await loadExcelJS();
   const headers = [
     '薪資編號',
     '教師姓名',
@@ -401,7 +391,6 @@ export async function exportSubstitutePayrollExcel(
   grandTotalRateLabel: string,
   fileName: string
 ) {
-  const ExcelJS = await loadExcelJS();
   const headers = ['薪資編號', '教師姓名', '代課節數', '每節金額', '實發金額', `備註 ${monthRangeLabel}`];
   const colCount = headers.length;
   const wb = new ExcelJS.Workbook();
@@ -478,7 +467,6 @@ export async function exportCounselingPayrollExcel(
   grandTotalRateLabel: string,
   fileName: string
 ) {
-  const ExcelJS = await loadExcelJS();
   const headers = [
     '薪資編號',
     '教師姓名',
@@ -595,7 +583,6 @@ export async function exportActingHomeroomPayrollExcel(
   grandTotalRateLabel: string,
   fileName: string
 ) {
-  const ExcelJS = await loadExcelJS();
   const headers = [
     '薪資編號',
     '教師姓名',
