@@ -1,7 +1,6 @@
 /**
  * 印領清冊：備註動態列高單位分頁。
- * 短備註每頁最多 PAYROLL_ROWS_PER_PAGE 人；畫面／列印不補空白列；
- * Excel 匯出另以 point 目標高度補空白列（見 payrollRegisterExcel）。
+ * 短備註每頁最多 PAYROLL_ROWS_PER_PAGE 人；畫面／列印／Excel 皆不補空白資料列。
  * 執行：npx tsx scripts/regression-payroll-page-units.ts
  */
 import assert from 'node:assert/strict';
@@ -11,9 +10,7 @@ import {
   isBlankPayrollRow,
   padPayrollPageRowsForExcel,
   paginatePayrollByUnits,
-  PAYROLL_EXCEL_LAST_PAGE_DATA_PT,
   PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT,
-  PAYROLL_EXCEL_PAGE_DATA_PT,
   PAYROLL_EXCEL_PT_PER_LINE,
   PAYROLL_EXCEL_WRAP_WIDTH_FACTOR,
   PAYROLL_MAX_ROW_UNITS,
@@ -56,7 +53,7 @@ function run() {
   assert.equal(shortSlices[0].paddedRows.length, PAYROLL_ROWS_PER_PAGE, '畫面列不補空白');
   assert.equal(realPeople(shortSlices[1].paddedRows), PAYROLL_ROWS_PER_PAGE);
 
-  // 末頁容量：畫面不補空白；Excel 另補至 lastPageUnits
+  // 末頁容量：畫面不補空白
   const lastPageRows = Array.from({ length: PAYROLL_ROWS_LAST_PAGE }, (_, i) => makeRow(i, '短'));
   const lastSlices = paginatePayrollByUnits(lastPageRows, (r) => r.remarks, blank, colWidth);
   assert.equal(lastSlices.length, 1);
@@ -65,8 +62,9 @@ function run() {
   const few = Array.from({ length: 5 }, (_, i) => makeRow(i, '短'));
   const fewSlices = paginatePayrollByUnits(few, (r) => r.remarks, blank, colWidth);
   assert.equal(fewSlices[0].paddedRows.length, 5);
+  // 輔助函式仍可依單位補列；實際 Excel 匯出已不再補空白資料列
   const fewExcel = padPayrollPageRowsForExcel(fewSlices[0].rows, blank, colWidth, true);
-  assert.equal(fewExcel.length, PAYROLL_ROWS_LAST_PAGE, 'Excel 不滿頁應補空白列');
+  assert.equal(fewExcel.length, PAYROLL_ROWS_LAST_PAGE, '單位補列輔助應可補至末頁容量');
   assert.ok(fewExcel.some((r) => isBlankPayrollRow(r.teacherId)));
 
   // 長備註：每人多單位 → 一頁人數 < 容量，真實列單位總和 ≤ 容量
@@ -82,7 +80,7 @@ function run() {
   assert.equal(longUnits, expectedLongUnits, `長備註單位應為 ${expectedLongUnits}`);
   assert.ok(longUnits > 1, `長備註應 >1 單位（實際 ${longUnits}）`);
 
-  // Excel 換行係數 ≥ 分頁係數 → 估出行數 ≤ 分頁（不再額外 +1 緩衝）
+  // Excel 換行係數 ≥ 分頁係數 → 估出行數 ≤ 分頁；多行另加半行緩衝
   const excelLines = estimatePayrollRowUnits(
     longRemark,
     colWidth,
@@ -99,10 +97,10 @@ function run() {
     PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
   );
   const samplePt = estimatePayrollExcelRowHeightPt(sampleRemark, colWidth);
-  assert.equal(samplePt, sampleLines * PAYROLL_EXCEL_PT_PER_LINE, '列高應等於行數×每行 pt（無額外緩衝）');
+  const expectedSamplePt = Math.round((sampleLines + (sampleLines > 1 ? 0.5 : 0)) * PAYROLL_EXCEL_PT_PER_LINE);
+  assert.equal(samplePt, expectedSamplePt, '多行備註列高應含半行緩衝');
   assert.ok(samplePt >= PAYROLL_EXCEL_PT_PER_LINE * 2, `四段備註列高應夠顯示（實際 ${samplePt}）`);
-  assert.ok(samplePt <= PAYROLL_EXCEL_PT_PER_LINE * 6, `四段備註列高不宜過度虛高（實際 ${samplePt}）`);
-  assert.ok(PAYROLL_EXCEL_PAGE_DATA_PT > PAYROLL_EXCEL_LAST_PAGE_DATA_PT, '一般頁資料區目標應高於末頁');
+  assert.ok(samplePt <= PAYROLL_EXCEL_PT_PER_LINE * 7, `四段備註列高不宜過度虛高（實際 ${samplePt}）`);
   const longRows = Array.from({ length: 30 }, (_, i) => makeRow(i, longRemark));
   const longSlices = paginatePayrollByUnits(longRows, (r) => r.remarks, blank, colWidth);
   assert.ok(longSlices.length >= 2, '長備註應拆成多頁');
