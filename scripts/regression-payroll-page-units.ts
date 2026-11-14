@@ -1,7 +1,7 @@
 /**
  * 印領清冊：備註動態列高單位分頁。
  * 短備註每頁最多 PAYROLL_ROWS_PER_PAGE 人；畫面／列印不補空白列；
- * Excel 以 padPayrollPageRowsForExcel 補滿至頁底。
+ * Excel 匯出另以 point 目標高度補空白列（見 payrollRegisterExcel）。
  * 執行：npx tsx scripts/regression-payroll-page-units.ts
  */
 import assert from 'node:assert/strict';
@@ -11,7 +11,9 @@ import {
   isBlankPayrollRow,
   padPayrollPageRowsForExcel,
   paginatePayrollByUnits,
+  PAYROLL_EXCEL_LAST_PAGE_DATA_PT,
   PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT,
+  PAYROLL_EXCEL_PAGE_DATA_PT,
   PAYROLL_EXCEL_PT_PER_LINE,
   PAYROLL_EXCEL_WRAP_WIDTH_FACTOR,
   PAYROLL_MAX_ROW_UNITS,
@@ -80,7 +82,7 @@ function run() {
   assert.equal(longUnits, expectedLongUnits, `長備註單位應為 ${expectedLongUnits}`);
   assert.ok(longUnits > 1, `長備註應 >1 單位（實際 ${longUnits}）`);
 
-  // Excel 換行係數 ≥ 分頁係數 → 估出行數 ≤ 分頁（再另加 1 行緩衝於列高）
+  // Excel 換行係數 ≥ 分頁係數 → 估出行數 ≤ 分頁（不再額外 +1 緩衝）
   const excelLines = estimatePayrollRowUnits(
     longRemark,
     colWidth,
@@ -90,9 +92,17 @@ function run() {
   assert.ok(excelLines <= longUnits, `Excel 行數 ${excelLines} 應 ≤ 分頁 ${longUnits}`);
   const sampleRemark =
     '11/2代林怡君公假兼課1節(第1節)；11/3代林怡君公假兼課1節(第3節)；11/4代林怡君公假兼課1節(第5節)；11/5代林怡君公假兼課1節(第7節)';
+  const sampleLines = estimatePayrollRowUnits(
+    sampleRemark,
+    colWidth,
+    Number.POSITIVE_INFINITY,
+    PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
+  );
   const samplePt = estimatePayrollExcelRowHeightPt(sampleRemark, colWidth);
-  assert.ok(samplePt >= PAYROLL_EXCEL_PT_PER_LINE * 3, `四段備註列高應夠顯示（實際 ${samplePt}）`);
-  assert.ok(samplePt <= PAYROLL_EXCEL_PT_PER_LINE * 8, `四段備註列高不宜過度虛高（實際 ${samplePt}）`);
+  assert.equal(samplePt, sampleLines * PAYROLL_EXCEL_PT_PER_LINE, '列高應等於行數×每行 pt（無額外緩衝）');
+  assert.ok(samplePt >= PAYROLL_EXCEL_PT_PER_LINE * 2, `四段備註列高應夠顯示（實際 ${samplePt}）`);
+  assert.ok(samplePt <= PAYROLL_EXCEL_PT_PER_LINE * 6, `四段備註列高不宜過度虛高（實際 ${samplePt}）`);
+  assert.ok(PAYROLL_EXCEL_PAGE_DATA_PT > PAYROLL_EXCEL_LAST_PAGE_DATA_PT, '一般頁資料區目標應高於末頁');
   const longRows = Array.from({ length: 30 }, (_, i) => makeRow(i, longRemark));
   const longSlices = paginatePayrollByUnits(longRows, (r) => r.remarks, blank, colWidth);
   assert.ok(longSlices.length >= 2, '長備註應拆成多頁');
