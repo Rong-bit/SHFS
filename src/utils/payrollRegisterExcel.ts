@@ -2,8 +2,10 @@ import ExcelJS from 'exceljs';
 import type { CounselingPayrollPage } from './counselingPayrollRegister';
 import type { OverloadPayrollPage } from './overloadPayrollRegister';
 import {
+  createBlankOverloadRow,
   estimatePayrollExcelRowHeightPt,
   isBlankPayrollRow,
+  padPayrollPageRowsForExcel,
   PAYROLL_EXCEL_PT_PER_LINE,
   PAYROLL_REMARKS_COL_WIDTH,
 } from './overloadPayrollRegister';
@@ -319,28 +321,36 @@ export async function exportOverloadPayrollExcel(
   pages.forEach((page, idx) => {
     addTitleRow(ws, title, colCount);
     addHeaderRow(ws, headers);
-    page.rows
-      .filter((r) => !isBlankPayrollRow(r.teacherId))
-      .forEach((r) => {
-        addDataRow(
-          ws,
-          [
-            r.salaryCode || '—',
-            r.teacherName,
-            r.weeklyConcurrent || '',
-            r.baseMonthlyConcurrent,
-            r.addConcurrent || '',
-            r.subtractConcurrent || '',
-            r.actualConcurrent,
-            r.amount,
-            r.remarks,
-          ],
-          {
-            amountCol: 8,
-            heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.overload),
-          }
-        );
-      });
+    const excelRows = padPayrollPageRowsForExcel(
+      page.rows.filter((r) => !isBlankPayrollRow(r.teacherId)),
+      createBlankOverloadRow,
+      PAYROLL_REMARKS_COL_WIDTH.overload,
+      idx === pages.length - 1
+    );
+    excelRows.forEach((r) => {
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
+        return;
+      }
+      addDataRow(
+        ws,
+        [
+          r.salaryCode || '—',
+          r.teacherName,
+          r.weeklyConcurrent || '',
+          r.baseMonthlyConcurrent,
+          r.addConcurrent || '',
+          r.subtractConcurrent || '',
+          r.actualConcurrent,
+          r.amount,
+          r.remarks,
+        ],
+        {
+          amountCol: 8,
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.overload),
+        }
+      );
+    });
     const st = page.subtotal;
     const subtotalRow = addTotalRow(
       ws,
@@ -402,18 +412,34 @@ export async function exportSubstitutePayrollExcel(
   pages.forEach((page, idx) => {
     addTitleRow(ws, title, colCount);
     addHeaderRow(ws, headers);
-    page.rows
-      .filter((r) => !isBlankPayrollRow(r.teacherId))
-      .forEach((r) => {
-        addDataRow(
-          ws,
-          [r.salaryCode || '—', r.teacherName, r.substitutePeriods, r.ratePerPeriod, r.amount, r.remarks],
-          {
-            amountCol: 5,
-            heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.substitute),
-          }
-        );
-      });
+    const excelRows = padPayrollPageRowsForExcel(
+      page.rows.filter((r) => !isBlankPayrollRow(r.teacherId)),
+      (i) => ({
+        teacherId: `__blank-${i}`,
+        salaryCode: '',
+        teacherName: '',
+        substitutePeriods: 0,
+        ratePerPeriod: 0,
+        amount: 0,
+        remarks: '',
+      }),
+      PAYROLL_REMARKS_COL_WIDTH.substitute,
+      idx === pages.length - 1
+    );
+    excelRows.forEach((r) => {
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
+        return;
+      }
+      addDataRow(
+        ws,
+        [r.salaryCode || '—', r.teacherName, r.substitutePeriods, r.ratePerPeriod, r.amount, r.remarks],
+        {
+          amountCol: 5,
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.substitute),
+        }
+      );
+    });
     const subtotalRow = addTotalRow(
       ws,
       [
@@ -473,29 +499,49 @@ export async function exportCounselingPayrollExcel(
   pages.forEach((page, idx) => {
     addTitleRow(ws, title, colCount);
     addHeaderRow(ws, headers);
-    page.rows
-      .filter((r) => !isBlankPayrollRow(r.teacherId))
-      .forEach((r) => {
-        addDataRow(
-          ws,
-          [
-            r.salaryCode || '—',
-            r.teacherName,
-            r.weeklyHours || '',
-            r.baseMonthlyHours,
-            r.addPeriods || '',
-            r.subtractPeriods || '',
-            r.actualPeriods,
-            r.ratePerPeriod,
-            r.amount,
-            r.remarks,
-          ],
-          {
-            amountCol: 9,
-            heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.counseling),
-          }
-        );
-      });
+    const excelRows = padPayrollPageRowsForExcel(
+      page.rows.filter((r) => !isBlankPayrollRow(r.teacherId)),
+      (i) => ({
+        teacherId: `__blank-${i}`,
+        salaryCode: '',
+        teacherName: '',
+        weeklyHours: 0,
+        baseMonthlyHours: 0,
+        addPeriods: 0,
+        subtractPeriods: 0,
+        actualPeriods: 0,
+        ratePerPeriod: 0,
+        amount: 0,
+        remarks: '',
+      }),
+      PAYROLL_REMARKS_COL_WIDTH.counseling,
+      idx === pages.length - 1
+    );
+    excelRows.forEach((r) => {
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
+        return;
+      }
+      addDataRow(
+        ws,
+        [
+          r.salaryCode || '—',
+          r.teacherName,
+          r.weeklyHours || '',
+          r.baseMonthlyHours,
+          r.addPeriods || '',
+          r.subtractPeriods || '',
+          r.actualPeriods,
+          r.ratePerPeriod,
+          r.amount,
+          r.remarks,
+        ],
+        {
+          amountCol: 9,
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.counseling),
+        }
+      );
+    });
     const subtotalRow = addTotalRow(
       ws,
       [
@@ -565,18 +611,34 @@ export async function exportActingHomeroomPayrollExcel(
   pages.forEach((page, idx) => {
     addTitleRow(ws, title, colCount);
     addHeaderRow(ws, headers);
-    page.rows
-      .filter((r) => !isBlankPayrollRow(r.teacherId))
-      .forEach((r) => {
-        addDataRow(
-          ws,
-          [r.salaryCode || '—', r.teacherName, r.actingDays, r.dailyRate, r.amount, r.remarks],
-          {
-            amountCol: 5,
-            heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.actingHomeroom),
-          }
-        );
-      });
+    const excelRows = padPayrollPageRowsForExcel(
+      page.rows.filter((r) => !isBlankPayrollRow(r.teacherId)),
+      (i) => ({
+        teacherId: `__blank-${i}`,
+        salaryCode: '',
+        teacherName: '',
+        actingDays: 0,
+        dailyRate: 0,
+        amount: 0,
+        remarks: '',
+      }),
+      PAYROLL_REMARKS_COL_WIDTH.actingHomeroom,
+      idx === pages.length - 1
+    );
+    excelRows.forEach((r) => {
+      if (isBlankPayrollRow(r.teacherId)) {
+        addDataRow(ws, Array(colCount).fill(''), { blank: true });
+        return;
+      }
+      addDataRow(
+        ws,
+        [r.salaryCode || '—', r.teacherName, r.actingDays, r.dailyRate, r.amount, r.remarks],
+        {
+          amountCol: 5,
+          heightPt: estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.actingHomeroom),
+        }
+      );
+    });
     const subtotalRow = addTotalRow(
       ws,
       [
