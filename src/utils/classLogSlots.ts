@@ -6,6 +6,7 @@ import type {
   SubstituteRequest,
   SystemConfig,
 } from '../types';
+import { dateToIsoLocal } from './holidays';
 import { dateToDayOfWeek, leaveRangeCoversDate } from './leaveDates';
 import { isAfternoonPeriod, isCounselingPeriod } from './periodConfig';
 
@@ -329,4 +330,89 @@ export function shouldDefaultApplyConsecutive(params: {
   }
 
   return true;
+}
+
+/** 含起迄日的平日（週一～五）清單 */
+export function eachWeekdayIso(dateFrom: string, dateTo: string): string[] {
+  if (!dateFrom || !dateTo || dateFrom > dateTo) return [];
+  const out: string[] = [];
+  const cursor = new Date(dateFrom.replace(/-/g, '/') + ' 12:00:00');
+  const end = new Date(dateTo.replace(/-/g, '/') + ' 12:00:00');
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(end.getTime())) return [];
+  while (cursor <= end) {
+    const iso = dateToIsoLocal(cursor);
+    if (dateToDayOfWeek(iso) != null) out.push(iso);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+
+export type ClassLogMissingDuty = {
+  date: string;
+  duty: ClassLogDuty;
+};
+
+/**
+ * 指定教師在日期區間內、課表應填但尚無教室日誌存檔的課堂。
+ * 供日誌查詢標出缺漏節次（例如只鏡射未送出的第 4、5 節）。
+ */
+export function listMissingClassLogDuties(params: {
+  dateFrom: string;
+  dateTo: string;
+  teacherId: string;
+  sessions: CourseSession[];
+  requests: SubstituteRequest[];
+  transfers?: ClassLogTransfer[];
+  entries: Pick<ClassLogEntry, 'id' | 'date' | 'period' | 'sessionId'>[];
+  classQuery?: string;
+  onlySubstitute?: boolean;
+}): ClassLogMissingDuty[] {
+  const {
+    dateFrom,
+    dateTo,
+    teacherId,
+    sessions,
+    requests,
+    transfers = [],
+    entries,
+    classQuery = '',
+    onlySubstitute = false,
+  } = params;
+  if (!teacherId || teacherId === 'all') return [];
+  const q = classQuery.trim();
+  const entryIds = new Set(entries.map((e) => e.id));
+  const missing: ClassLogMissingDuty[] = [];
+
+  for (const isoDate of eachWeekdayIso(dateFrom, dateTo)) {
+    const duties = listClassLogDutiesForDate({
+      isoDate,
+      sessions,
+      requests,
+      transfers,
+    }).filter((d) => d.holderTeacherId === teacherId);
+    for (const duty of duties) {
+      if (onlySubstitute && !duty.slot.isSubstituteFill) continue;
+      if (
+        q &&
+        !duty.slot.className.includes(q) &&
+        !duty.slot.subjectName.includes(q)
+      ) {
+        continue;
+      }
+      const id = classLogEntryId({
+        date: isoDate,
+        period: duty.slot.period,
+        sessionId: duty.slot.sessionId,
+      });
+      if (entryIds.has(id)) continue;
+      missing.push({ date: isoDate, duty });
+    }
+  }
+
+  return missing.sort(
+    (a, b) =>
+      b.date.localeCompare(a.date) ||
+      b.duty.slot.period - a.duty.slot.period ||
+      a.duty.slot.className.localeCompare(b.duty.slot.className, 'zh-Hant')
+  );
 }

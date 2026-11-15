@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ClassLogTransfer } from '../../types';
+import { ClassLogEntry, ClassLogTransfer } from '../../types';
 import { dateToIsoLocal } from '../../utils/holidays';
 import { dateToDayOfWeek } from '../../utils/leaveDates';
 import { exportClassLogEntries } from '../../utils/classLogExcel';
@@ -19,6 +19,7 @@ import {
   ClassLogDuty,
   findConsecutiveClassLogSlots,
   listClassLogDutiesForDate,
+  listMissingClassLogDuties,
 } from '../../utils/classLogSlots';
 import { useClassLogs } from '../../utils/classLogSync';
 import { useClassLogTransfers } from '../../utils/classLogTransferSync';
@@ -64,6 +65,7 @@ export const ClassLogReport: React.FC = () => {
   const [teacherId, setTeacherId] = useState('all');
   const [classQuery, setClassQuery] = useState('');
   const [onlySubstitute, setOnlySubstitute] = useState(false);
+  const [showMissing, setShowMissing] = useState(true);
   const [transferDuty, setTransferDuty] = useState<ClassLogDuty | null>(null);
   const [confirmRecallId, setConfirmRecallId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
@@ -103,6 +105,60 @@ export const ClassLogReport: React.FC = () => {
   }, [entries, dateFrom, dateTo, teacherId, classQuery, onlySubstitute]);
 
   const substituteCount = filtered.filter((e) => e.isSubstituteFill).length;
+
+  const missingDuties = useMemo(() => {
+    if (!showMissing || teacherId === 'all') return [];
+    return listMissingClassLogDuties({
+      dateFrom,
+      dateTo,
+      teacherId,
+      sessions,
+      requests,
+      transfers,
+      entries,
+      classQuery,
+      onlySubstitute,
+    });
+  }, [
+    showMissing,
+    teacherId,
+    dateFrom,
+    dateTo,
+    sessions,
+    requests,
+    transfers,
+    entries,
+    classQuery,
+    onlySubstitute,
+  ]);
+
+  type QueryRow =
+    | { kind: 'entry'; entry: ClassLogEntry }
+    | { kind: 'missing'; date: string; duty: ClassLogDuty };
+
+  const queryRows = useMemo((): QueryRow[] => {
+    const rows: QueryRow[] = [
+      ...filtered.map((entry) => ({ kind: 'entry' as const, entry })),
+      ...missingDuties.map((m) => ({
+        kind: 'missing' as const,
+        date: m.date,
+        duty: m.duty,
+      })),
+    ];
+    return rows.sort((a, b) => {
+      const dateA = a.kind === 'entry' ? a.entry.date : a.date;
+      const dateB = b.kind === 'entry' ? b.entry.date : b.date;
+      const periodA = a.kind === 'entry' ? a.entry.period : a.duty.slot.period;
+      const periodB = b.kind === 'entry' ? b.entry.period : b.duty.slot.period;
+      const classA = a.kind === 'entry' ? a.entry.className : a.duty.slot.className;
+      const classB = b.kind === 'entry' ? b.entry.className : b.duty.slot.className;
+      return (
+        dateB.localeCompare(dateA) ||
+        periodB - periodA ||
+        classA.localeCompare(classB, 'zh-Hant')
+      );
+    });
+  }, [filtered, missingDuties]);
 
   const duties = useMemo(() => {
     const q = classQuery.trim();
@@ -281,6 +337,20 @@ export const ClassLogReport: React.FC = () => {
               />
               只看代課填寫
             </label>
+            <label
+              className={`flex items-center gap-1.5 text-xs pb-2 ${
+                teacherId === 'all' ? 'text-slate-400' : 'text-slate-700'
+              }`}
+              title={teacherId === 'all' ? '請先選擇教師，才可比對課表應填缺漏' : undefined}
+            >
+              <input
+                type="checkbox"
+                checked={showMissing && teacherId !== 'all'}
+                disabled={teacherId === 'all'}
+                onChange={(e) => setShowMissing(e.target.checked)}
+              />
+              顯示應填未填
+            </label>
             <div className="ml-auto flex gap-2">
               {cloudReady && (
                 <button
@@ -329,10 +399,16 @@ export const ClassLogReport: React.FC = () => {
             </p>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
-              <div className="text-xs text-slate-500">紀錄筆數</div>
+              <div className="text-xs text-slate-500">已填紀錄</div>
               <div className="text-2xl font-extrabold text-slate-900">{filtered.length}</div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4">
+              <div className="text-xs text-slate-500">應填未填</div>
+              <div className="text-2xl font-extrabold text-rose-700">
+                {teacherId === 'all' ? '—' : missingDuties.length}
+              </div>
             </div>
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
               <div className="text-xs text-slate-500">代課填寫</div>
@@ -346,9 +422,16 @@ export const ClassLogReport: React.FC = () => {
             </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {teacherId === 'all' && (
+            <p className="text-xs text-slate-500">
+              提示：先選擇教師並勾選「顯示應填未填」，即可對照課表找出尚未存檔的節次（例如第 4、5 節只有預覽、未送出）。
+            </p>
+          )}
+
+          {queryRows.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl px-4 py-10 text-center text-sm text-slate-500">
-              此條件尚無教室日誌。
+              此條件尚無教室日誌
+              {teacherId !== 'all' && showMissing ? '，課表亦無應填缺漏。' : '。'}
             </div>
           ) : (
             <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
@@ -364,54 +447,92 @@ export const ClassLogReport: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((e) => (
-                      <tr key={e.id} className="border-t border-slate-100 align-top">
-                        <td className="px-3 py-3 whitespace-nowrap">
-                          <div className="font-semibold text-slate-900">{e.date}</div>
-                          <div className="text-xs text-slate-500">第{e.period}節</div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="font-semibold text-slate-900">{e.className}</div>
-                          <div className="text-xs text-slate-600">{e.subjectName}</div>
-                          {e.isSubstituteFill && (
-                            <div className="mt-1 text-[11px] font-bold text-amber-800">
-                              代課（原：{e.originalTeacherName}）
+                    {queryRows.map((row) =>
+                      row.kind === 'entry' ? (
+                        <tr key={row.entry.id} className="border-t border-slate-100 align-top">
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <div className="font-semibold text-slate-900">{row.entry.date}</div>
+                            <div className="text-xs text-slate-500">第{row.entry.period}節</div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="font-semibold text-slate-900">{row.entry.className}</div>
+                            <div className="text-xs text-slate-600">{row.entry.subjectName}</div>
+                            {row.entry.isSubstituteFill && (
+                              <div className="mt-1 text-[11px] font-bold text-amber-800">
+                                代課（原：{row.entry.originalTeacherName}）
+                              </div>
+                            )}
+                            {!row.entry.isSubstituteFill &&
+                              row.entry.authorTeacherId !== row.entry.originalTeacherId && (
+                                <div className="mt-1 text-[11px] font-bold text-indigo-800">
+                                  代填（原：{row.entry.originalTeacherName}）
+                                </div>
+                              )}
+                          </td>
+                          <td className="px-3 py-3 max-w-xs">
+                            <p className="text-slate-800 whitespace-pre-wrap">{row.entry.progress}</p>
+                            {row.entry.assessment && (
+                              <p className="mt-1 text-xs text-indigo-800 whitespace-pre-wrap">
+                                測驗／作業：{row.entry.assessment}
+                              </p>
+                            )}
+                            {row.entry.note && (
+                              <p className="mt-1 text-xs text-slate-500">備註：{row.entry.note}</p>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap text-slate-800">
+                            {row.entry.authorTeacherName}
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex flex-col items-center gap-1">
+                              <ElectronicStamp
+                                stampCaption={row.entry.stampCaption || '教師'}
+                                personName={row.entry.authorTeacherName}
+                                size={stampDisplayWidthPx(110)}
+                              />
+                              <span className="text-[10px] text-slate-500">
+                                {row.entry.stampedAt.replace('T', ' ').slice(0, 16)}
+                              </span>
                             </div>
-                          )}
-                          {!e.isSubstituteFill && e.authorTeacherId !== e.originalTeacherId && (
-                            <div className="mt-1 text-[11px] font-bold text-indigo-800">
-                              代填（原：{e.originalTeacherName}）
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr
+                          key={`missing-${row.date}-${row.duty.slot.period}-${row.duty.slot.sessionId}`}
+                          className="border-t border-rose-100 bg-rose-50/40 align-top"
+                        >
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <div className="font-semibold text-slate-900">{row.date}</div>
+                            <div className="text-xs text-slate-500">第{row.duty.slot.period}節</div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="font-semibold text-slate-900">
+                              {row.duty.slot.className}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 max-w-xs">
-                          <p className="text-slate-800 whitespace-pre-wrap">{e.progress}</p>
-                          {e.assessment && (
-                            <p className="mt-1 text-xs text-indigo-800 whitespace-pre-wrap">
-                              測驗／作業：{e.assessment}
+                            <div className="text-xs text-slate-600">{row.duty.slot.subjectName}</div>
+                            {row.duty.slot.isSubstituteFill && (
+                              <div className="mt-1 text-[11px] font-bold text-amber-800">
+                                代課（原：{row.duty.slot.originalTeacherName}）
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 max-w-xs">
+                            <p className="text-sm font-semibold text-rose-800">尚未填寫（課表應填）</p>
+                            <p className="mt-1 text-xs text-slate-600">
+                              請該教師於「教室日誌」開啟本節並送出；若只看到連續節預覽，尚須各自截章才會出現於此。
                             </p>
-                          )}
-                          {e.note && (
-                            <p className="mt-1 text-xs text-slate-500">備註：{e.note}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 whitespace-nowrap text-slate-800">
-                          {e.authorTeacherName}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex flex-col items-center gap-1">
-                            <ElectronicStamp
-                              stampCaption={e.stampCaption || '教師'}
-                              personName={e.authorTeacherName}
-                              size={stampDisplayWidthPx(110)}
-                            />
-                            <span className="text-[10px] text-slate-500">
-                              {e.stampedAt.replace('T', ' ').slice(0, 16)}
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap text-slate-800">
+                            {row.duty.holderTeacherName}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                              缺漏
                             </span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
                 </table>
               </div>

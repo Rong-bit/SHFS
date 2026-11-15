@@ -8,8 +8,10 @@ import {
   canDeleteClassLogEntry,
   canJoinClassLogConsecutivePeriods,
   classLogEntryId,
+  eachWeekdayIso,
   findConsecutiveClassLogSlots,
   listClassLogSlotsForTeacher,
+  listMissingClassLogDuties,
   resolveClassLogDisplayEntry,
   shouldDefaultApplyConsecutive,
 } from '../src/utils/classLogSlots';
@@ -640,5 +642,78 @@ assert.equal(
 );
 
 assert.ok('_class_log_xfer' > '2026-12-31', '轉移鍵不可被巡堂日期查詢掃到');
+
+assert.deepEqual(eachWeekdayIso('2026-11-13', '2026-11-13'), ['2026-11-13']);
+assert.deepEqual(eachWeekdayIso('2026-11-14', '2026-11-15'), []); // 六、日
+
+// 日誌查詢：已填 1～3，應標出缺漏 4（同班同科目連堂）
+const sevenDaySessions = [1, 2, 3, 4, 5, 6, 7].map((period) =>
+  session({
+    id: `d-${period}`,
+    period,
+    dayOfWeek: 5, // 2026-11-13 週五
+    teacherId: 't-huang',
+    teacherName: '黃俊榮',
+    className: period <= 3 || period === 4 ? '電機三忠' : period === 5 || period === 6 ? '電機三忠' : '電機二孝',
+    subjectName:
+      period <= 4 ? '電工機械實習' : period <= 6 ? '電力電子實習' : '電工機械',
+  })
+);
+const saved123: ClassLogEntry[] = [1, 2, 3].map((period) => ({
+  id: classLogEntryId({ date: '2026-11-13', period, sessionId: `d-${period}` }),
+  date: '2026-11-13',
+  period,
+  dayOfWeek: 5,
+  sessionId: `d-${period}`,
+  className: '電機三忠',
+  subjectName: '電工機械實習',
+  venueName: '忠孝301',
+  originalTeacherId: 't-huang',
+  originalTeacherName: '黃俊榮',
+  authorTeacherId: 't-huang',
+  authorTeacherName: '黃俊榮',
+  isSubstituteFill: false,
+  progress: '試運轉與送電',
+  stampedAt: '2026-11-13T03:04:00.000Z',
+  stampCaption: '教師',
+  createdAt: '2026-11-13T03:04:00.000Z',
+  updatedAt: '2026-11-13T03:04:00.000Z',
+}));
+const saved6: ClassLogEntry = {
+  ...saved123[0],
+  id: classLogEntryId({ date: '2026-11-13', period: 6, sessionId: 'd-6' }),
+  period: 6,
+  sessionId: 'd-6',
+  subjectName: '電力電子實習',
+  stampedAt: '2026-11-13T03:06:00.000Z',
+  createdAt: '2026-11-13T03:06:00.000Z',
+  updatedAt: '2026-11-13T03:06:00.000Z',
+};
+const saved7: ClassLogEntry = {
+  ...saved123[0],
+  id: classLogEntryId({ date: '2026-11-13', period: 7, sessionId: 'd-7' }),
+  period: 7,
+  sessionId: 'd-7',
+  className: '電機二孝',
+  subjectName: '電工機械',
+  progress: '考試',
+  assessment: '測驗第六章',
+  stampedAt: '2026-11-13T03:07:00.000Z',
+  createdAt: '2026-11-13T03:07:00.000Z',
+  updatedAt: '2026-11-13T03:07:00.000Z',
+};
+const gaps = listMissingClassLogDuties({
+  dateFrom: '2026-11-13',
+  dateTo: '2026-11-13',
+  teacherId: 't-huang',
+  sessions: sevenDaySessions,
+  requests: [],
+  entries: [...saved123, saved6, saved7],
+});
+assert.deepEqual(
+  gaps.map((g) => g.duty.slot.period).sort((a, b) => a - b),
+  [4, 5],
+  '對照截圖情境：應標出第 4、5 節尚未存檔'
+);
 
 console.log('regression-class-log: ok');
