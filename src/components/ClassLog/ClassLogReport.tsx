@@ -31,6 +31,7 @@ import {
   ElectronicStamp,
   stampDisplayWidthPx,
 } from '../Common/ElectronicStamp';
+import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 
 type ClassLogReportTab =
   | ClassLogWeekReviewView
@@ -246,20 +247,20 @@ export const ClassLogReport: React.FC = () => {
                 className="mt-1 block bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
               />
             </label>
-            <label className="text-[11px] font-semibold text-slate-600">
+            <label className="text-[11px] font-semibold text-slate-600 min-w-[12rem]">
               教師
-              <select
-                value={teacherId}
-                onChange={(e) => setTeacherId(e.target.value)}
-                className="mt-1 block bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm min-w-[8rem]"
-              >
-                <option value="all">全部</option>
-                {teacherOptions.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <TeacherSearchCombobox
+                  teachers={teacherOptions}
+                  currentTeacherId={teacherId === 'all' ? '' : teacherId}
+                  onSelectTeacher={(id) => setTeacherId(id || 'all')}
+                  placeholder="輸入姓名或科別搜尋，或點選…"
+                  variant="light"
+                  fullWidth
+                  allowClear
+                  clearLabel="全部教師"
+                />
+              </div>
             </label>
             <label className="text-[11px] font-semibold text-slate-600">
               班級／科目
