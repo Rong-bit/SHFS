@@ -14,6 +14,7 @@ import {
   isBlankPayrollRow,
   paginateOverloadPayroll,
   paginateOverloadPayrollByHeights,
+  paginateOverloadPayrollForExcel,
   type OverloadPayrollTotals,
 } from '../../utils/overloadPayrollRegister';
 import { formatExportError } from '../../utils/downloadBlob';
@@ -121,6 +122,8 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
   const pages = measured?.pages ?? fallback.pages;
   const grandTotal = measured?.grandTotal ?? fallback.grandTotal;
   const totalPages = Math.max(pages.length, 1);
+  // Excel 不可沿用瀏覽器實測分頁：表頭加高／列高不同會讓小計溢到下一頁
+  const excelPack = React.useMemo(() => paginateOverloadPayrollForExcel(rows), [rows]);
 
   const fundSuffix = hasExternalFunds ? `（${activeFund}經費）` : '';
   const fileFundSuffix = hasExternalFunds
@@ -134,14 +137,14 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
     );
 
   const handleExportExcel = async () => {
-    if (pages.length === 0) return;
+    if (excelPack.pages.length === 0) return;
     try {
       await exportOverloadPayrollExcel(
         title,
         monthRangeLabel,
         weekRound,
-        pages,
-        grandTotal,
+        excelPack.pages,
+        excelPack.grandTotal,
         `${systemConfig.schoolName}_${rocYear}年${month}月_兼課鐘點費印領清冊${fileFundSuffix}.xlsx`
       );
     } catch (err) {
