@@ -301,7 +301,7 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
         : '班級彙整核章';
   const viewHint =
     view === 'teachers'
-      ? '含本週未填寫、內容不完整，或已被退回、尚未改寫重送的應填老師；可勾選後寄通知。'
+      ? '含本週未填寫、內容不完整，或已被退回、尚未改寫重送的應填老師；可勾選後寄通知。課表「未指派教師」的課堂不會列出。'
       : view === 'gaps'
         ? '只列仍有缺漏（未填、不完整或已退回）的班級，方便逐班退回或補核。'
         : '以班級彙整週一至週五的教室日誌。教學組長與教務主任可各自核章；已填齊的班級可一次核章。';
