@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRightLeft, CloudOff, Download, RefreshCw, Undo2 } from 'lucide-react';
+import { ArrowRightLeft, ChevronLeft, ChevronRight, CloudOff, Download, RefreshCw, Undo2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ClassLogTransfer } from '../../types';
 import { dateToIsoLocal } from '../../utils/holidays';
@@ -19,6 +19,9 @@ import {
   ElectronicStamp,
   stampDisplayWidthPx,
 } from '../Common/ElectronicStamp';
+
+/** 日誌查詢表每頁筆數，避免區間內紀錄把畫面拉過長 */
+const ENTRIES_PER_PAGE = 20;
 
 const firstOfMonth = () => {
   const d = new Date();
@@ -41,6 +44,7 @@ export const ClassLogReport: React.FC = () => {
   const [teacherId, setTeacherId] = useState('all');
   const [classQuery, setClassQuery] = useState('');
   const [onlySubstitute, setOnlySubstitute] = useState(false);
+  const [entryPage, setEntryPage] = useState(1);
   const [transferDuty, setTransferDuty] = useState<ClassLogDuty | null>(null);
   const [confirmRecallId, setConfirmRecallId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
@@ -80,6 +84,24 @@ export const ClassLogReport: React.FC = () => {
   }, [entries, dateFrom, dateTo, teacherId, classQuery, onlySubstitute]);
 
   const substituteCount = filtered.filter((e) => e.isSubstituteFill).length;
+
+  const entryPageCount = Math.max(1, Math.ceil(filtered.length / ENTRIES_PER_PAGE));
+  const safeEntryPage = Math.min(entryPage, entryPageCount);
+  const pagedEntries = filtered.slice(
+    (safeEntryPage - 1) * ENTRIES_PER_PAGE,
+    safeEntryPage * ENTRIES_PER_PAGE
+  );
+  const entryRangeStart =
+    filtered.length === 0 ? 0 : (safeEntryPage - 1) * ENTRIES_PER_PAGE + 1;
+  const entryRangeEnd = Math.min(safeEntryPage * ENTRIES_PER_PAGE, filtered.length);
+
+  useEffect(() => {
+    setEntryPage(1);
+  }, [dateFrom, dateTo, teacherId, classQuery, onlySubstitute]);
+
+  useEffect(() => {
+    if (entryPage > entryPageCount) setEntryPage(entryPageCount);
+  }, [entryPage, entryPageCount]);
 
   const duties = useMemo(() => {
     const q = classQuery.trim();
@@ -389,7 +411,7 @@ export const ClassLogReport: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e) => (
+                {pagedEntries.map((e) => (
                   <tr key={e.id} className="border-t border-slate-100 align-top">
                     <td className="px-3 py-3 whitespace-nowrap">
                       <div className="font-semibold text-slate-900">{e.date}</div>
@@ -440,6 +462,34 @@ export const ClassLogReport: React.FC = () => {
               </tbody>
             </table>
           </div>
+          {entryPageCount > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 border-t border-slate-100 bg-slate-50/60">
+              <p className="text-xs text-slate-500">
+                顯示第 {entryRangeStart}–{entryRangeEnd} 筆／共 {filtered.length} 筆
+                （第 {safeEntryPage}/{entryPageCount} 頁）
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="上一頁日誌"
+                  disabled={safeEntryPage <= 1}
+                  onClick={() => setEntryPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-slate-300 text-slate-700 hover:bg-white disabled:opacity-40"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="下一頁日誌"
+                  disabled={safeEntryPage >= entryPageCount}
+                  onClick={() => setEntryPage((p) => Math.min(entryPageCount, p + 1))}
+                  className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-slate-300 text-slate-700 hover:bg-white disabled:opacity-40"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

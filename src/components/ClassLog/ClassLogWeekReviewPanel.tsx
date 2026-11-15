@@ -32,6 +32,9 @@ import { ModalShell } from '../Common/ModalShell';
 
 const DAY_LABELS = ['', '一', '二', '三', '四', '五'] as const;
 
+/** 班級彙整每頁班級數，避免一週全校展開過長 */
+const CLASSES_PER_PAGE = 5;
+
 const RETURN_PRESETS = [
   '尚未填寫教學內容，請補登並截章',
   '教學內容過短或不完整，請補寫實際進度後再送出',
@@ -65,6 +68,7 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
 
   const [week, setWeek] = useState(() => schoolWeekOf(dateToIsoLocal(new Date())));
   const [onlyPending, setOnlyPending] = useState(false);
+  const [classPage, setClassPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [returning, setReturning] = useState<ClassLogWeekDuty | null>(null);
   const [reason, setReason] = useState('');
@@ -126,6 +130,24 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
   const visibleClasses = onlyPending
     ? classes.filter((c) => c.pendingCount > 0)
     : classes;
+
+  const classPageCount = Math.max(1, Math.ceil(visibleClasses.length / CLASSES_PER_PAGE));
+  const safeClassPage = Math.min(classPage, classPageCount);
+  const pagedClasses = visibleClasses.slice(
+    (safeClassPage - 1) * CLASSES_PER_PAGE,
+    safeClassPage * CLASSES_PER_PAGE
+  );
+  const classRangeStart =
+    visibleClasses.length === 0 ? 0 : (safeClassPage - 1) * CLASSES_PER_PAGE + 1;
+  const classRangeEnd = Math.min(safeClassPage * CLASSES_PER_PAGE, visibleClasses.length);
+
+  useEffect(() => {
+    setClassPage(1);
+  }, [weekStart, onlyPending]);
+
+  useEffect(() => {
+    if (classPage > classPageCount) setClassPage(classPageCount);
+  }, [classPage, classPageCount]);
 
   const reload = () => {
     void refreshEntries(weekStart, weekEnd);
@@ -449,7 +471,7 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
         </p>
       ) : (
         <div className="space-y-3">
-          {visibleClasses.map((klass) => {
+          {pagedClasses.map((klass) => {
             const review = reviewMap.get(klass.className);
             const stamps = weekStampState(review);
             const shown = onlyPending
@@ -560,6 +582,34 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
               </details>
             );
           })}
+          {classPageCount > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <p className="text-xs text-slate-500">
+                顯示第 {classRangeStart}–{classRangeEnd} 班／共 {visibleClasses.length} 班
+                （第 {safeClassPage}/{classPageCount} 頁）
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="上一頁班級"
+                  disabled={safeClassPage <= 1}
+                  onClick={() => setClassPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="下一頁班級"
+                  disabled={safeClassPage >= classPageCount}
+                  onClick={() => setClassPage((p) => Math.min(classPageCount, p + 1))}
+                  className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
