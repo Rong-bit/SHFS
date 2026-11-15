@@ -62,6 +62,57 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   border-top: 1px dashed #cbd5e1;
 }
 
+/* 離屏量測探針：字級／欄寬對齊 @media print，供實測列高分頁 */
+.payroll-register-measure-probe {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 200mm;
+  visibility: hidden;
+  pointer-events: none;
+}
+.payroll-register-measure-title {
+  font-size: 11pt;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 auto 1.5mm auto;
+}
+.payroll-register-measure-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 8pt;
+  line-height: 1.1;
+}
+.payroll-register-measure-table th,
+.payroll-register-measure-table td {
+  border: 1px solid #334155;
+  padding: 0 2px;
+  vertical-align: middle;
+  text-align: center;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.payroll-register-measure-table th {
+  height: 8mm;
+  padding: 1px 2px;
+}
+.payroll-register-measure-table td.payroll-register-remarks-col {
+  text-align: left;
+  font-size: 7.5pt;
+  line-height: 1.1;
+  word-break: break-all;
+  white-space: normal;
+}
+.payroll-register-measure-footer {
+  font-size: 8pt;
+}
+.payroll-register-measure-footer td {
+  height: 5.6mm;
+  padding: 1px 2px;
+  font-weight: 700;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -172,11 +223,15 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: none !important;
   }
 
+  .payroll-register-measure-probe {
+    display: none !important;
+  }
+
   .payroll-register-print-watermark {
     display: none !important;
   }
 
-  /* 列高對齊 Excel（資料列 14pt≈4.9mm、空白列 12pt≈4.2mm） */
+  /* 列高：實測短列約 3.5mm（勿再寫 4.9mm，會讓分頁估算偏保守） */
   .payroll-register-print-table {
     display: table !important;
     width: 100% !important;
@@ -214,17 +269,17 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
   }
 
   .payroll-register-print-table tbody tr:not(.payroll-register-blank-row):not(.font-bold) td {
-    min-height: 4.9mm;
+    min-height: 3.5mm;
     font-size: 8pt;
     line-height: 1.1;
   }
 
   .payroll-register-print-table tr.payroll-register-blank-row td {
-    height: 4.2mm;
-    max-height: 4.2mm;
+    height: 3.5mm;
+    max-height: 3.5mm;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
-    line-height: 4.2mm;
+    line-height: 3.5mm;
     white-space: nowrap;
     font-size: 8pt;
   }
