@@ -32,9 +32,6 @@ import { ModalShell } from '../Common/ModalShell';
 
 const DAY_LABELS = ['', '一', '二', '三', '四', '五'] as const;
 
-/** 班級彙整每頁班級數，避免一週全校展開過長 */
-const CLASSES_PER_PAGE = 5;
-
 const RETURN_PRESETS = [
   '尚未填寫教學內容，請補登並截章',
   '教學內容過短或不完整，請補寫實際進度後再送出',
@@ -47,7 +44,14 @@ const statusClass: Record<string, string> = {
   returned: 'bg-rose-100 text-rose-800',
 };
 
-export const ClassLogWeekReviewPanel: React.FC = () => {
+/** 教室日誌彙整週核章區的內容分頁 */
+export type ClassLogWeekReviewView = 'teachers' | 'gaps' | 'classes';
+
+type ClassLogWeekReviewPanelProps = {
+  view: ClassLogWeekReviewView;
+};
+
+export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = ({ view }) => {
   const { teachers, sessions, requests, currentAcademicStaff, systemConfig } = useApp();
   const { entries, refresh: refreshEntries, loading: entriesLoading } = useClassLogs();
   const { transfers, refresh: refreshTransfers } = useClassLogTransfers();
@@ -67,8 +71,6 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
   } = useClassLogReturns();
 
   const [week, setWeek] = useState(() => schoolWeekOf(dateToIsoLocal(new Date())));
-  const [onlyPending, setOnlyPending] = useState(false);
-  const [classPage, setClassPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [returning, setReturning] = useState<ClassLogWeekDuty | null>(null);
   const [reason, setReason] = useState('');
@@ -120,34 +122,16 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
     [reviews, weekStart]
   );
   const pendingKey = pendingTeachers.map((t) => t.teacherId).join('|');
+  const gapClasses = useMemo(
+    () => classes.filter((c) => c.pendingCount > 0),
+    [classes]
+  );
 
   useEffect(() => {
     setSelectedIds(pendingTeachers.map((t) => t.teacherId));
     // 週次或未完成名單變了就重選，避免寄到上一週的人
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingKey, weekStart]);
-
-  const visibleClasses = onlyPending
-    ? classes.filter((c) => c.pendingCount > 0)
-    : classes;
-
-  const classPageCount = Math.max(1, Math.ceil(visibleClasses.length / CLASSES_PER_PAGE));
-  const safeClassPage = Math.min(classPage, classPageCount);
-  const pagedClasses = visibleClasses.slice(
-    (safeClassPage - 1) * CLASSES_PER_PAGE,
-    safeClassPage * CLASSES_PER_PAGE
-  );
-  const classRangeStart =
-    visibleClasses.length === 0 ? 0 : (safeClassPage - 1) * CLASSES_PER_PAGE + 1;
-  const classRangeEnd = Math.min(safeClassPage * CLASSES_PER_PAGE, visibleClasses.length);
-
-  useEffect(() => {
-    setClassPage(1);
-  }, [weekStart, onlyPending]);
-
-  useEffect(() => {
-    if (classPage > classPageCount) setClassPage(classPageCount);
-  }, [classPage, classPageCount]);
 
   const reload = () => {
     void refreshEntries(weekStart, weekEnd);
@@ -177,7 +161,7 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
   const stampReadyClasses = () => {
     if (!currentAcademicStaff || !role) return;
     const now = new Date().toISOString();
-    const targets = visibleClasses.filter((c) => {
+    const targets = classes.filter((c) => {
       if (c.pendingCount > 0) return false;
       const state = weekStampState(reviewMap.get(c.className));
       return role === 'teaching_leader' ? !state.leader : !state.dean;
@@ -302,20 +286,32 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
   };
 
   const myLabel = role ? CLASS_LOG_REVIEW_ROLE_LABEL[role] : '';
-  const readyToBatch = visibleClasses.filter((c) => {
+  const readyToBatch = classes.filter((c) => {
     if (c.pendingCount > 0 || !role) return false;
     const state = weekStampState(reviewMap.get(c.className));
     return role === 'teaching_leader' ? !state.leader : !state.dean;
   }).length;
 
+  const listClasses = view === 'gaps' ? gapClasses : classes;
+  const viewTitle =
+    view === 'teachers'
+      ? '尚未完成核章的老師'
+      : view === 'gaps'
+        ? '缺漏的班級'
+        : '班級彙整核章';
+  const viewHint =
+    view === 'teachers'
+      ? '含本週未填寫、內容不完整，或已被退回、尚未改寫重送的應填老師；可勾選後寄通知。'
+      : view === 'gaps'
+        ? '只列仍有缺漏（未填、不完整或已退回）的班級，方便逐班退回或補核。'
+        : '以班級彙整週一至週五的教室日誌。教學組長與教務主任可各自核章；已填齊的班級可一次核章。';
+
   return (
     <section id="class-log-week-review" className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-sm font-extrabold text-slate-900">本週班級彙整核章</h3>
-          <p className="mt-1 text-xs text-slate-500 max-w-2xl">
-            以班級彙整週一至週五的教室日誌。教學組長與教務主任可各自核章；內容未填或寫得不完整時，兩種身分都可以退回。
-          </p>
+          <h3 className="text-sm font-extrabold text-slate-900">{viewTitle}</h3>
+          <p className="mt-1 text-xs text-slate-500 max-w-2xl">{viewHint}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -358,7 +354,7 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
       <p className="text-sm font-bold text-slate-800">
         {formatSchoolWeekLabel(weekStart, weekEnd)}
         <span className="ml-2 text-xs font-semibold text-slate-500">
-          {classes.length} 班 · 未完成 {pendingTeachers.length} 位老師
+          {classes.length} 班 · 缺漏 {gapClasses.length} 班 · 未完成 {pendingTeachers.length} 位老師
         </span>
       </p>
 
@@ -373,244 +369,214 @@ export const ClassLogWeekReviewPanel: React.FC = () => {
         </p>
       )}
 
-      <div id="class-log-pending-teachers" className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h4 className="text-sm font-extrabold text-slate-900">尚未完成核章的老師</h4>
-            <p className="mt-1 text-xs text-slate-500">
-              含本週未填寫、內容不完整，或已被退回、尚未改寫重送的應填老師。
-            </p>
-          </div>
-          <label className="flex items-center gap-1.5 text-xs text-slate-700">
-            <input
-              id="class-log-only-pending"
-              type="checkbox"
-              checked={onlyPending}
-              onChange={(e) => setOnlyPending(e.target.checked)}
-            />
-            班級彙整只看這些老師的課
-          </label>
-        </div>
-        {pendingTeachers.length === 0 ? (
-          <p className="text-sm text-slate-500">本週應填課堂都已完成。</p>
-        ) : (
-          <ul className="space-y-2">
-            {pendingTeachers.map((teacher) => (
-              <li key={teacher.teacherId} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={selectedIds.includes(teacher.teacherId)}
-                    onChange={(e) =>
-                      setSelectedIds((prev) =>
-                        e.target.checked
-                          ? [...prev, teacher.teacherId]
-                          : prev.filter((id) => id !== teacher.teacherId)
-                      )
-                    }
-                  />
-                  <span>
-                    <span className="font-bold text-slate-900">{teacher.teacherName}</span>
-                    <span className="ml-2 text-xs text-slate-500">
-                      {teacher.gaps.length} 節
-                      {teacher.email ? ` · ${teacher.email}` : ' · 名冊沒有信箱'}
-                    </span>
-                    <span className="block text-xs text-slate-600 mt-0.5">
-                      {teacher.gaps
-                        .slice(0, 3)
-                        .map(
-                          (g) =>
-                            `${g.date.slice(5)} 第${g.duty.slot.period}節 ${g.duty.slot.className}（${classLogGapLabel(g.status)}）`
+      {view === 'teachers' && (
+        <div id="class-log-pending-teachers" className="space-y-3">
+          {pendingTeachers.length === 0 ? (
+            <p className="text-sm text-slate-500">本週應填課堂都已完成。</p>
+          ) : (
+            <ul className="space-y-2">
+              {pendingTeachers.map((teacher) => (
+                <li key={teacher.teacherId} className="bg-slate-50 rounded-lg border border-slate-200 px-3 py-2">
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={selectedIds.includes(teacher.teacherId)}
+                      onChange={(e) =>
+                        setSelectedIds((prev) =>
+                          e.target.checked
+                            ? [...prev, teacher.teacherId]
+                            : prev.filter((id) => id !== teacher.teacherId)
                         )
-                        .join('、')}
-                      {teacher.gaps.length > 3 ? ` 等 ${teacher.gaps.length} 節` : ''}
+                      }
+                    />
+                    <span>
+                      <span className="font-bold text-slate-900">{teacher.teacherName}</span>
+                      <span className="ml-2 text-xs text-slate-500">
+                        {teacher.gaps.length} 節
+                        {teacher.email ? ` · ${teacher.email}` : ' · 名冊沒有信箱'}
+                      </span>
+                      <span className="block text-xs text-slate-600 mt-0.5">
+                        {teacher.gaps
+                          .slice(0, 3)
+                          .map(
+                            (g) =>
+                              `${g.date.slice(5)} 第${g.duty.slot.period}節 ${g.duty.slot.className}（${classLogGapLabel(g.status)}）`
+                          )
+                          .join('、')}
+                        {teacher.gaps.length > 3 ? ` 等 ${teacher.gaps.length} 節` : ''}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            id="class-log-send-reminder"
-            disabled={!canReview || !mailReady || sending || pendingTeachers.length === 0}
-            onClick={() => void sendReminders()}
-            className="inline-flex items-center gap-1 min-h-11 px-3 rounded-lg bg-indigo-700 text-white text-xs font-bold hover:bg-indigo-600 disabled:opacity-50"
-          >
-            <Mail className="w-3.5 h-3.5" />
-            {sending ? '寄送中…' : '寄通知給勾選的老師'}
-          </button>
-          {!mailReady && (
-            <span className="text-xs text-slate-500">尚未啟用巡堂寄信 SMTP，無法寄通知。</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
           )}
-          {mailNote && <span className="text-xs text-slate-700">{mailNote}</span>}
-        </div>
-      </div>
-
-      {canReview && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            id="class-log-batch-stamp"
-            disabled={readyToBatch === 0}
-            onClick={stampReadyClasses}
-            className="inline-flex items-center min-h-11 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 disabled:opacity-50"
-          >
-            以{myLabel}一次核章（已填齊 {readyToBatch} 班）
-          </button>
-          <span className="text-xs text-slate-500">還有缺漏的班級請逐班核章，或先退回。</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              id="class-log-send-reminder"
+              disabled={!canReview || !mailReady || sending || pendingTeachers.length === 0}
+              onClick={() => void sendReminders()}
+              className="inline-flex items-center gap-1 min-h-11 px-3 rounded-lg bg-indigo-700 text-white text-xs font-bold hover:bg-indigo-600 disabled:opacity-50"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              {sending ? '寄送中…' : '寄通知給勾選的老師'}
+            </button>
+            {!mailReady && (
+              <span className="text-xs text-slate-500">尚未啟用巡堂寄信 SMTP，無法寄通知。</span>
+            )}
+            {mailNote && <span className="text-xs text-slate-700">{mailNote}</span>}
+          </div>
         </div>
       )}
 
-      {visibleClasses.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          {classes.length === 0 ? '這一週沒有課表課堂。' : '目前篩選沒有未完成的班級。'}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {pagedClasses.map((klass) => {
-            const review = reviewMap.get(klass.className);
-            const stamps = weekStampState(review);
-            const shown = onlyPending
-              ? klass.rows.filter((r) => r.status !== 'complete')
-              : klass.rows;
-            const mineStamped =
-              role === 'teaching_leader' ? Boolean(stamps.leader) : role === 'academic_dean' ? Boolean(stamps.dean) : false;
-            return (
-              <details key={klass.className} className="rounded-xl border border-slate-200">
-                <summary className="cursor-pointer px-3 py-3 text-sm font-bold text-slate-900">
-                  {klass.className}
-                  <span className="ml-2 text-xs font-semibold text-slate-500">
-                    已完成 {klass.rows.length - klass.pendingCount}/{klass.rows.length}
-                    {' · '}
-                    教學組長{stamps.leader ? '已核' : '未核'}
-                    {' · '}
-                    教務主任{stamps.dean ? '已核' : '未核'}
-                  </span>
-                </summary>
-                <div className="px-3 pb-3 space-y-3">
-                  <div className="flex flex-wrap items-end gap-4">
-                    <StampBox
-                      label="教學組長"
-                      signOff={stamps.leader}
-                      canStamp={role === 'teaching_leader'}
-                      stamped={Boolean(stamps.leader)}
-                      onStamp={() => stampClass(klass.className)}
-                    />
-                    <StampBox
-                      label="教務主任"
-                      signOff={stamps.dean}
-                      canStamp={role === 'academic_dean'}
-                      stamped={Boolean(stamps.dean)}
-                      onStamp={() => stampClass(klass.className)}
-                    />
-                    {canReview && mineStamped && (
-                      <button
-                        type="button"
-                        onClick={() => stampClass(klass.className)}
-                        className="text-xs font-bold text-slate-600 underline min-h-11"
-                      >
-                        更新我的核章時間
-                      </button>
-                    )}
-                  </div>
-                  <ul className="divide-y divide-slate-100 border border-slate-100 rounded-xl">
-                    {shown.map((row) => {
-                      const dow = dateToDayOfWeek(row.date);
-                      const returnId = row.returned?.id;
-                      return (
-                        <li
-                          key={`${row.date}-${row.duty.slot.period}-${row.duty.slot.sessionId}`}
-                          className="px-3 py-3 flex flex-col sm:flex-row sm:items-start gap-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-bold text-slate-900">
-                              {row.date.slice(5)}
-                              {dow ? `（${DAY_LABELS[dow]}）` : ''} 第{row.duty.slot.period}節 ·{' '}
-                              {row.duty.slot.subjectName}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              應填 {row.duty.holderTeacherName}
-                              {row.entry ? ` · 填寫 ${row.entry.authorTeacherName}` : ''}
-                            </div>
-                            {row.entry?.progress && (
-                              <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">
-                                {row.entry.progress}
-                              </p>
-                            )}
-                            {row.status === 'returned' && row.returned && (
-                              <p className="mt-1 text-xs text-rose-800">
-                                {CLASS_LOG_REVIEW_ROLE_LABEL[row.returned.actorRole]}{' '}
-                                {row.returned.actorName} 退回：{row.returned.reason}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusClass[row.status]}`}
-                            >
-                              {classLogGapLabel(row.status)}
-                            </span>
-                            {canReview && (
-                              <button
-                                type="button"
-                                onClick={() => openReturn(row)}
-                                className="inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-rose-200 text-xs font-bold text-rose-800 hover:bg-rose-50"
-                              >
-                                {row.returned ? '修改退回' : '退回'}
-                              </button>
-                            )}
-                            {canReview && row.returned && (
-                              <button
-                                type="button"
-                                onClick={() => cancelReturn(row)}
-                                className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                              >
-                                <Undo2 className="w-3.5 h-3.5" />
-                                {confirmCancelId === returnId ? '再按一次取消退回' : '取消退回'}
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              </details>
-            );
-          })}
-          {classPageCount > 1 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <p className="text-xs text-slate-500">
-                顯示第 {classRangeStart}–{classRangeEnd} 班／共 {visibleClasses.length} 班
-                （第 {safeClassPage}/{classPageCount} 頁）
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="上一頁班級"
-                  disabled={safeClassPage <= 1}
-                  onClick={() => setClassPage((p) => Math.max(1, p - 1))}
-                  className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="下一頁班級"
-                  disabled={safeClassPage >= classPageCount}
-                  onClick={() => setClassPage((p) => Math.min(classPageCount, p + 1))}
-                  className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+      {(view === 'gaps' || view === 'classes') && (
+        <>
+          {view === 'classes' && canReview && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                id="class-log-batch-stamp"
+                disabled={readyToBatch === 0}
+                onClick={stampReadyClasses}
+                className="inline-flex items-center min-h-11 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 disabled:opacity-50"
+              >
+                以{myLabel}一次核章（已填齊 {readyToBatch} 班）
+              </button>
+              <span className="text-xs text-slate-500">還有缺漏的班級請改到「缺漏的班級」分頁處理，或先退回。</span>
             </div>
           )}
-        </div>
+
+          {listClasses.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              {classes.length === 0
+                ? '這一週沒有課表課堂。'
+                : view === 'gaps'
+                  ? '本週沒有缺漏的班級。'
+                  : '目前沒有班級可顯示。'}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {listClasses.map((klass) => {
+                const review = reviewMap.get(klass.className);
+                const stamps = weekStampState(review);
+                const shown =
+                  view === 'gaps'
+                    ? klass.rows.filter((r) => r.status !== 'complete')
+                    : klass.rows;
+                const mineStamped =
+                  role === 'teaching_leader'
+                    ? Boolean(stamps.leader)
+                    : role === 'academic_dean'
+                      ? Boolean(stamps.dean)
+                      : false;
+                return (
+                  <details key={klass.className} className="rounded-xl border border-slate-200">
+                    <summary className="cursor-pointer px-3 py-3 text-sm font-bold text-slate-900">
+                      {klass.className}
+                      <span className="ml-2 text-xs font-semibold text-slate-500">
+                        已完成 {klass.rows.length - klass.pendingCount}/{klass.rows.length}
+                        {' · '}
+                        教學組長{stamps.leader ? '已核' : '未核'}
+                        {' · '}
+                        教務主任{stamps.dean ? '已核' : '未核'}
+                      </span>
+                    </summary>
+                    <div className="px-3 pb-3 space-y-3">
+                      <div className="flex flex-wrap items-end gap-4">
+                        <StampBox
+                          label="教學組長"
+                          signOff={stamps.leader}
+                          canStamp={role === 'teaching_leader'}
+                          stamped={Boolean(stamps.leader)}
+                          onStamp={() => stampClass(klass.className)}
+                        />
+                        <StampBox
+                          label="教務主任"
+                          signOff={stamps.dean}
+                          canStamp={role === 'academic_dean'}
+                          stamped={Boolean(stamps.dean)}
+                          onStamp={() => stampClass(klass.className)}
+                        />
+                        {canReview && mineStamped && (
+                          <button
+                            type="button"
+                            onClick={() => stampClass(klass.className)}
+                            className="text-xs font-bold text-slate-600 underline min-h-11"
+                          >
+                            更新我的核章時間
+                          </button>
+                        )}
+                      </div>
+                      <ul className="divide-y divide-slate-100 border border-slate-100 rounded-xl">
+                        {shown.map((row) => {
+                          const dow = dateToDayOfWeek(row.date);
+                          const returnId = row.returned?.id;
+                          return (
+                            <li
+                              key={`${row.date}-${row.duty.slot.period}-${row.duty.slot.sessionId}`}
+                              className="px-3 py-3 flex flex-col sm:flex-row sm:items-start gap-2"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-bold text-slate-900">
+                                  {row.date.slice(5)}
+                                  {dow ? `（${DAY_LABELS[dow]}）` : ''} 第{row.duty.slot.period}節 ·{' '}
+                                  {row.duty.slot.subjectName}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-0.5">
+                                  應填 {row.duty.holderTeacherName}
+                                  {row.entry ? ` · 填寫 ${row.entry.authorTeacherName}` : ''}
+                                </div>
+                                {row.entry?.progress && (
+                                  <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">
+                                    {row.entry.progress}
+                                  </p>
+                                )}
+                                {row.status === 'returned' && row.returned && (
+                                  <p className="mt-1 text-xs text-rose-800">
+                                    {CLASS_LOG_REVIEW_ROLE_LABEL[row.returned.actorRole]}{' '}
+                                    {row.returned.actorName} 退回：{row.returned.reason}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${statusClass[row.status]}`}
+                                >
+                                  {classLogGapLabel(row.status)}
+                                </span>
+                                {canReview && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openReturn(row)}
+                                    className="inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-rose-200 text-xs font-bold text-rose-800 hover:bg-rose-50"
+                                  >
+                                    {row.returned ? '修改退回' : '退回'}
+                                  </button>
+                                )}
+                                {canReview && row.returned && (
+                                  <button
+                                    type="button"
+                                    onClick={() => cancelReturn(row)}
+                                    className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                                  >
+                                    <Undo2 className="w-3.5 h-3.5" />
+                                    {confirmCancelId === returnId ? '再按一次取消退回' : '取消退回'}
+                                  </button>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {returning && (
