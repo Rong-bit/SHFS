@@ -47,7 +47,7 @@ export function isDaytimePeriod(
 }
 
 /**
- * 是否為下午節次（教室日誌連續節、課表標示用）。
+ * 是否為下午節次（課表標示用）。
  * 有自訂時段時以開始時間 ≥ 12:00 判定；否則預設第 5 節起為下午。
  */
 export function isAfternoonPeriod(

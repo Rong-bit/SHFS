@@ -8,7 +8,7 @@ import type {
 } from '../types';
 import { dateToIsoLocal } from './holidays';
 import { dateToDayOfWeek, leaveRangeCoversDate } from './leaveDates';
-import { isAfternoonPeriod, isCounselingPeriod } from './periodConfig';
+import { isCounselingPeriod } from './periodConfig';
 
 type ClassLogPeriodConfig = Pick<
   SystemConfig,
@@ -18,8 +18,9 @@ type ClassLogPeriodConfig = Pick<
 /**
  * 兩節是否可併為教室日誌「連續節」：
  * - 節次須相鄰（相差 1）
- * - 不可跨午休（上午／下午不同）
  * - 不可把課輔與正課併在一起
+ * - 同班同科目可跨午休（如第 4～6 節連堂實習），以便一併套用；
+ *   未送出的節仍只顯示預覽、不顯示截章
  */
 export function canJoinClassLogConsecutivePeriods(
   earlier: number,
@@ -28,9 +29,6 @@ export function canJoinClassLogConsecutivePeriods(
 ): boolean {
   if (later !== earlier + 1) return false;
   if (isCounselingPeriod(earlier, config) !== isCounselingPeriod(later, config)) {
-    return false;
-  }
-  if (isAfternoonPeriod(earlier, config) !== isAfternoonPeriod(later, config)) {
     return false;
   }
   return true;
@@ -233,7 +231,7 @@ function sameClassLogLesson(a: ClassLogSlot, b: ClassLogSlot): boolean {
 
 /**
  * 同一天、同班同科目（同原任課／代課狀態）且節次相連的課堂區塊（含 center）。
- * 例：第 2～4 節同班實習 → 填一節可套用整段；不跨午休、不併課輔。
+ * 例：第 4～6 節同班實習 → 填一節可套用整段（可跨午休）；不併課輔。
  */
 export function findConsecutiveClassLogSlots(
   slots: ClassLogSlot[],

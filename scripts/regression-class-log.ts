@@ -20,7 +20,7 @@ import type { ClassLogEntry } from '../src/types';
 
 assert.equal(canJoinClassLogConsecutivePeriods(2, 3), true);
 assert.equal(canJoinClassLogConsecutivePeriods(3, 4), true);
-assert.equal(canJoinClassLogConsecutivePeriods(4, 5), false, '不可跨午休把第4、5節連成一塊');
+assert.equal(canJoinClassLogConsecutivePeriods(4, 5), true, '同班同科目可跨午休一併套用（第4、5節）');
 assert.equal(canJoinClassLogConsecutivePeriods(5, 6), true);
 assert.equal(canJoinClassLogConsecutivePeriods(7, 8), false, '不可把正課與課輔併成連續節');
 assert.equal(canJoinClassLogConsecutivePeriods(5, 7), false);
@@ -253,16 +253,16 @@ assert.deepEqual(
   '第3節應連到第2～4節；第6節中斷、國文不同科目不併入'
 );
 
-// —— 同班同科目跨午休：上午與下午必須切開 ——
-const lunchBridgeSessions = [2, 3, 4, 5, 6, 7].map((period) =>
+// —— 同班同科目跨午休：第4～6節應成一塊，表單可一併套用 ——
+const lunchBridgeSessions = [4, 5, 6].map((period) =>
   session({
     id: `lunch-${period}`,
     period,
     dayOfWeek: tue,
     teacherId: 't-sub',
     teacherName: '代課乙',
-    className: '機二忠',
-    subjectName: '實習',
+    className: '電機三忠',
+    subjectName: '電力電子實習',
   })
 );
 const lunchSlots = listClassLogSlotsForTeacher({
@@ -274,48 +274,64 @@ const lunchSlots = listClassLogSlotsForTeacher({
 assert.deepEqual(
   findConsecutiveClassLogSlots(
     lunchSlots,
-    lunchSlots.find((s) => s.period === 3)!
+    lunchSlots.find((s) => s.period === 4)!
   ).map((s) => s.period),
-  [2, 3, 4],
-  '上午實習只連 2～4 節'
+  [4, 5, 6],
+  '第4節應連到第4～6節（可跨午休），表單才會顯示一併套用'
 );
 assert.deepEqual(
   findConsecutiveClassLogSlots(
     lunchSlots,
     lunchSlots.find((s) => s.period === 6)!
   ).map((s) => s.period),
-  [5, 6, 7],
-  '下午實習只連 5～7 節，不可鏡射到上午'
+  [4, 5, 6],
+  '從第6節開啟同樣看到第4～6節'
 );
 const morningOnlyEntry: ClassLogEntry = {
-  id: classLogEntryId({ date: '2026-11-10', period: 2, sessionId: 'lunch-2' }),
+  id: classLogEntryId({ date: '2026-11-10', period: 4, sessionId: 'lunch-4' }),
   date: '2026-11-10',
-  period: 2,
+  period: 4,
   dayOfWeek: tue,
-  sessionId: 'lunch-2',
-  className: '機二忠',
-  subjectName: '實習',
+  sessionId: 'lunch-4',
+  className: '電機三忠',
+  subjectName: '電力電子實習',
   venueName: '忠孝301',
   originalTeacherId: 't-sub',
   originalTeacherName: '代課乙',
   authorTeacherId: 't-sub',
   authorTeacherName: '代課乙',
   isSubstituteFill: false,
-  progress: '上午實習',
+  progress: '試運轉與送電',
   stampedAt: '2026-11-10T08:00:00.000Z',
   stampCaption: '教師',
   createdAt: '2026-11-10T08:00:00.000Z',
   updatedAt: '2026-11-10T08:00:00.000Z',
 };
+const mirroredP5 = resolveClassLogDisplayEntry({
+  slot: lunchSlots.find((s) => s.period === 5)!,
+  date: '2026-11-10',
+  slots: lunchSlots,
+  entriesById: new Map([[morningOnlyEntry.id, morningOnlyEntry]]),
+});
 assert.equal(
-  resolveClassLogDisplayEntry({
-    slot: lunchSlots.find((s) => s.period === 5)!,
+  mirroredP5?.progress,
+  '試運轉與送電',
+  '僅填第4節時，第5節可預覽同連續節進度（列表標示尚未截章，不顯示截章）'
+);
+assert.equal(
+  shouldDefaultApplyConsecutive({
+    block: findConsecutiveClassLogSlots(
+      lunchSlots,
+      lunchSlots.find((s) => s.period === 4)!
+    ),
+    center: lunchSlots.find((s) => s.period === 4)!,
     date: '2026-11-10',
-    slots: lunchSlots,
     entriesById: new Map([[morningOnlyEntry.id, morningOnlyEntry]]),
+    displayProgress: morningOnlyEntry.progress,
+    displayNote: '',
   }),
-  undefined,
-  '僅填上午時，第5節不可鏡射上午進度（日誌查詢也不會出現假資料）'
+  true,
+  '第4節已填、第5～6節尚無獨立紀錄時預設一併套用'
 );
 
 const entryP2: ClassLogEntry = {
