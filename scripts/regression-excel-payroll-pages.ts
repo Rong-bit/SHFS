@@ -32,8 +32,8 @@ function makeRow(i: number, remarks: string): OverloadPayrollRow {
 }
 
 function run() {
-  assert.ok(PAYROLL_EXCEL_PAGE_DATA_PT <= 680, 'Excel 資料區預算不可過大');
-  assert.ok(PAYROLL_EXCEL_PAGE_DATA_PT >= 500, 'Excel 資料區預算不可過小');
+  assert.ok(PAYROLL_EXCEL_PAGE_DATA_PT <= 700, 'Excel 資料區預算不可過大（易溢頁）');
+  assert.ok(PAYROLL_EXCEL_PAGE_DATA_PT >= 640, 'Excel 資料區預算不可過小（頁底空白過多）');
 
   const mid =
     '11/2代林怡君公假兼課1節(第1節)；11/3代林怡君公假兼課1節(第3節)；11/4代林怡君公假兼課1節(第5節)；11/5代林怡君公假兼課1節(第7節)';

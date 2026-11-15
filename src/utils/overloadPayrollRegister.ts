@@ -70,10 +70,10 @@ export const PAYROLL_PRINT_HEIGHT_FUDGE = 1.12;
 
 /**
  * Excel 單頁資料列可用高度（point）。
- * A4≈842pt，上下邊界各 0.25"=18pt，標題 28＋雙行表頭 44＋小計 16≈88，
- * 再留安全距，避免小計被擠到下一列印頁（奇數頁不見小計）。
+ * A4≈842pt，上下邊界各 0.25"=18pt，標題 28＋雙行表頭 44＋小計 16≈88；
+ * 620 時實測列印仍約留 30mm 空白，改 665 填滿並保留約一列安全距，避免小計溢頁。
  */
-export const PAYROLL_EXCEL_PAGE_DATA_PT = 620;
+export const PAYROLL_EXCEL_PAGE_DATA_PT = 665;
 
 /**
  * Excel 列高用：略小於 1，讓換行估多一點，避免備註高度不夠被裁切。
