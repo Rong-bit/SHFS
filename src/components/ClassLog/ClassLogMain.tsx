@@ -45,7 +45,8 @@ const sameLogBody = (a: ClassLogEntry, b: ClassLogEntry) =>
   (a.assessment || '') === (b.assessment || '');
 
 export const ClassLogMain: React.FC = () => {
-  const { sessions, requests, currentTeacher, teachers } = useApp();
+  const { sessions, requests, currentTeacher, teachers, systemConfig } = useApp();
+  const periodConfig = systemConfig;
   const {
     entries,
     pendingCount,
@@ -124,9 +125,13 @@ export const ClassLogMain: React.FC = () => {
     const existing = entriesById.get(id);
     const display =
       existing ||
-      resolveClassLogDisplayEntry({ slot, date, slots, entriesById });
+      resolveClassLogDisplayEntry({ slot, date, slots, entriesById, periodConfig });
     if (slot.transferredOut) return;
-    const consecutiveSlots = findConsecutiveClassLogSlots(fillableSlots, slot);
+    const consecutiveSlots = findConsecutiveClassLogSlots(
+      fillableSlots,
+      slot,
+      periodConfig
+    );
     const progress = display?.progress || '';
     const note = display?.note || '';
     const assessment = display?.assessment || '';
@@ -258,7 +263,7 @@ export const ClassLogMain: React.FC = () => {
       draft?.slot ||
       slots.find((s) => s.period === entry.period && s.sessionId === entry.sessionId);
     const block = centerSlot
-      ? findConsecutiveClassLogSlots(fillableSlots, centerSlot)
+      ? findConsecutiveClassLogSlots(fillableSlots, centerSlot, periodConfig)
       : [];
     const toDelete: ClassLogEntry[] = [];
     for (const s of block) {
@@ -311,7 +316,7 @@ export const ClassLogMain: React.FC = () => {
       setActionError('請選擇其他老師');
       return;
     }
-    const block = findConsecutiveClassLogSlots(fillableSlots, transferSlot);
+    const block = findConsecutiveClassLogSlots(fillableSlots, transferSlot, periodConfig);
     const targets = applyConsecutive && block.length > 1 ? block : [transferSlot];
     const now = new Date().toISOString();
     const back = targets.filter((target) => target.naturalHolderId === to.id);
@@ -434,6 +439,7 @@ export const ClassLogMain: React.FC = () => {
               date,
               slots,
               entriesById,
+              periodConfig,
             });
             const mirrored = Boolean(display && !own && !slot.transferredOut);
             const returned = returnsById.get(id);
@@ -492,7 +498,7 @@ export const ClassLogMain: React.FC = () => {
                             </span>
                           ) : mirrored ? (
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
-                              同連續節內容
+                              同連續節內容・尚未截章
                             </span>
                           ) : (
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
@@ -520,8 +526,13 @@ export const ClassLogMain: React.FC = () => {
                           測驗／作業：{display.assessment}
                         </p>
                       )}
+                      {!slot.transferredOut && mirrored && (
+                        <p className="mt-1 text-[11px] text-sky-800">
+                          預覽連續節內容；請開啟本節並送出後才會寫入日誌查詢。
+                        </p>
+                      )}
                     </div>
-                    {!slot.transferredOut && display && (
+                    {!slot.transferredOut && own && display && (
                       <div className="shrink-0 flex flex-col items-center gap-1">
                         <ElectronicStamp
                           stampCaption={display.stampCaption || STAMP_CAPTION}
@@ -711,9 +722,11 @@ export const ClassLogMain: React.FC = () => {
           detail={`${date} 第${transferSlot.period}節 · ${transferSlot.className} · ${transferSlot.subjectName}`}
           teachers={teachers}
           excludeIds={[currentTeacher.id]}
-          consecutivePeriods={findConsecutiveClassLogSlots(fillableSlots, transferSlot).map(
-            (s) => s.period
-          )}
+          consecutivePeriods={findConsecutiveClassLogSlots(
+            fillableSlots,
+            transferSlot,
+            periodConfig
+          ).map((s) => s.period)}
           submitError={actionError}
           onClose={() => {
             setTransferSlot(null);

@@ -4,8 +4,36 @@ import type {
   CourseSession,
   DayOfWeek,
   SubstituteRequest,
+  SystemConfig,
 } from '../types';
 import { dateToDayOfWeek, leaveRangeCoversDate } from './leaveDates';
+import { isAfternoonPeriod, isCounselingPeriod } from './periodConfig';
+
+type ClassLogPeriodConfig = Pick<
+  SystemConfig,
+  'maxPeriod' | 'counselingPeriods' | 'periodTimeRanges'
+> | null;
+
+/**
+ * 兩節是否可併為教室日誌「連續節」：
+ * - 節次須相鄰（相差 1）
+ * - 不可跨午休（上午／下午不同）
+ * - 不可把課輔與正課併在一起
+ */
+export function canJoinClassLogConsecutivePeriods(
+  earlier: number,
+  later: number,
+  config?: ClassLogPeriodConfig
+): boolean {
+  if (later !== earlier + 1) return false;
+  if (isCounselingPeriod(earlier, config) !== isCounselingPeriod(later, config)) {
+    return false;
+  }
+  if (isAfternoonPeriod(earlier, config) !== isAfternoonPeriod(later, config)) {
+    return false;
+  }
+  return true;
+}
 
 /** 教室日誌待填／已填對應的一節課 */
 export type ClassLogSlot = {
@@ -204,11 +232,12 @@ function sameClassLogLesson(a: ClassLogSlot, b: ClassLogSlot): boolean {
 
 /**
  * 同一天、同班同科目（同原任課／代課狀態）且節次相連的課堂區塊（含 center）。
- * 例：第 2～4 節同班實習 → 填一節可套用整段。
+ * 例：第 2～4 節同班實習 → 填一節可套用整段；不跨午休、不併課輔。
  */
 export function findConsecutiveClassLogSlots(
   slots: ClassLogSlot[],
-  center: ClassLogSlot
+  center: ClassLogSlot,
+  config?: ClassLogPeriodConfig
 ): ClassLogSlot[] {
   const same = slots
     .filter((s) => sameClassLogLesson(s, center))
@@ -221,9 +250,19 @@ export function findConsecutiveClassLogSlots(
   if (idx < 0) return [center];
 
   let lo = idx;
-  while (lo > 0 && same[lo].period === same[lo - 1].period + 1) lo -= 1;
+  while (
+    lo > 0 &&
+    canJoinClassLogConsecutivePeriods(same[lo - 1].period, same[lo].period, config)
+  ) {
+    lo -= 1;
+  }
   let hi = idx;
-  while (hi < same.length - 1 && same[hi + 1].period === same[hi].period + 1) hi += 1;
+  while (
+    hi < same.length - 1 &&
+    canJoinClassLogConsecutivePeriods(same[hi].period, same[hi + 1].period, config)
+  ) {
+    hi += 1;
+  }
   return same.slice(lo, hi + 1);
 }
 
@@ -233,8 +272,9 @@ export function resolveClassLogDisplayEntry(params: {
   date: string;
   slots: ClassLogSlot[];
   entriesById: Map<string, ClassLogEntry>;
+  periodConfig?: ClassLogPeriodConfig;
 }): ClassLogEntry | undefined {
-  const { slot, date, slots, entriesById } = params;
+  const { slot, date, slots, entriesById, periodConfig } = params;
   const ownId = classLogEntryId({ date, period: slot.period, sessionId: slot.sessionId });
   const own = entriesById.get(ownId);
   if (own) return own;
@@ -242,7 +282,8 @@ export function resolveClassLogDisplayEntry(params: {
   // 已轉出的節不該把左右兩節連成同一段，否則中間空缺仍會鏡射進度
   const block = findConsecutiveClassLogSlots(
     slots.filter((s) => !s.transferredOut),
-    slot
+    slot,
+    periodConfig
   );
   for (const s of block) {
     const id = classLogEntryId({ date, period: s.period, sessionId: s.sessionId });

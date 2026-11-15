@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import type { ClassLogTransfer, CourseSession, DayOfWeek, SubstituteRequest } from '../src/types';
 import {
   canDeleteClassLogEntry,
+  canJoinClassLogConsecutivePeriods,
   classLogEntryId,
   findConsecutiveClassLogSlots,
   listClassLogSlotsForTeacher,
@@ -14,6 +15,13 @@ import {
 } from '../src/utils/classLogSlots';
 import { retainClassLogEntries, trimPendingOps } from '../src/utils/classLogSync';
 import type { ClassLogEntry } from '../src/types';
+
+assert.equal(canJoinClassLogConsecutivePeriods(2, 3), true);
+assert.equal(canJoinClassLogConsecutivePeriods(3, 4), true);
+assert.equal(canJoinClassLogConsecutivePeriods(4, 5), false, '不可跨午休把第4、5節連成一塊');
+assert.equal(canJoinClassLogConsecutivePeriods(5, 6), true);
+assert.equal(canJoinClassLogConsecutivePeriods(7, 8), false, '不可把正課與課輔併成連續節');
+assert.equal(canJoinClassLogConsecutivePeriods(5, 7), false);
 
 function session(partial: {
   id: string;
@@ -241,6 +249,71 @@ assert.deepEqual(
   block.map((s) => s.period),
   [2, 3, 4],
   '第3節應連到第2～4節；第6節中斷、國文不同科目不併入'
+);
+
+// —— 同班同科目跨午休：上午與下午必須切開 ——
+const lunchBridgeSessions = [2, 3, 4, 5, 6, 7].map((period) =>
+  session({
+    id: `lunch-${period}`,
+    period,
+    dayOfWeek: tue,
+    teacherId: 't-sub',
+    teacherName: '代課乙',
+    className: '機二忠',
+    subjectName: '實習',
+  })
+);
+const lunchSlots = listClassLogSlotsForTeacher({
+  teacherId: 't-sub',
+  isoDate: '2026-11-10',
+  sessions: lunchBridgeSessions,
+  requests: [],
+});
+assert.deepEqual(
+  findConsecutiveClassLogSlots(
+    lunchSlots,
+    lunchSlots.find((s) => s.period === 3)!
+  ).map((s) => s.period),
+  [2, 3, 4],
+  '上午實習只連 2～4 節'
+);
+assert.deepEqual(
+  findConsecutiveClassLogSlots(
+    lunchSlots,
+    lunchSlots.find((s) => s.period === 6)!
+  ).map((s) => s.period),
+  [5, 6, 7],
+  '下午實習只連 5～7 節，不可鏡射到上午'
+);
+const morningOnlyEntry: ClassLogEntry = {
+  id: classLogEntryId({ date: '2026-11-10', period: 2, sessionId: 'lunch-2' }),
+  date: '2026-11-10',
+  period: 2,
+  dayOfWeek: tue,
+  sessionId: 'lunch-2',
+  className: '機二忠',
+  subjectName: '實習',
+  venueName: '忠孝301',
+  originalTeacherId: 't-sub',
+  originalTeacherName: '代課乙',
+  authorTeacherId: 't-sub',
+  authorTeacherName: '代課乙',
+  isSubstituteFill: false,
+  progress: '上午實習',
+  stampedAt: '2026-11-10T08:00:00.000Z',
+  stampCaption: '教師',
+  createdAt: '2026-11-10T08:00:00.000Z',
+  updatedAt: '2026-11-10T08:00:00.000Z',
+};
+assert.equal(
+  resolveClassLogDisplayEntry({
+    slot: lunchSlots.find((s) => s.period === 5)!,
+    date: '2026-11-10',
+    slots: lunchSlots,
+    entriesById: new Map([[morningOnlyEntry.id, morningOnlyEntry]]),
+  }),
+  undefined,
+  '僅填上午時，第5節不可鏡射上午進度（日誌查詢也不會出現假資料）'
 );
 
 const entryP2: ClassLogEntry = {
