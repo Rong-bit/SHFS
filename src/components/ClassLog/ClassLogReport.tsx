@@ -8,7 +8,6 @@ import {
   Stamp,
   Undo2,
   Users,
-  AlertTriangle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ClassLogTransfer } from '../../types';
@@ -32,6 +31,7 @@ import {
   ElectronicStamp,
   stampDisplayWidthPx,
 } from '../Common/ElectronicStamp';
+import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 
 type ClassLogReportTab =
   | ClassLogWeekReviewView
@@ -44,7 +44,7 @@ const firstOfMonth = () => {
 };
 
 const isWeekReviewTab = (tab: ClassLogReportTab): tab is ClassLogWeekReviewView =>
-  tab === 'teachers' || tab === 'gaps' || tab === 'classes';
+  tab === 'teachers' || tab === 'classes';
 
 export const ClassLogReport: React.FC = () => {
   const { teachers, sessions, requests, currentAcademicStaff } = useApp();
@@ -219,7 +219,6 @@ export const ClassLogReport: React.FC = () => {
     <div className="space-y-5 max-w-full min-w-0 overflow-x-clip">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         {tabBtn('teachers', '尚未完成核章的老師', <Users className="w-4 h-4 text-amber-300" />)}
-        {tabBtn('gaps', '缺漏的班級', <AlertTriangle className="w-4 h-4 text-rose-300" />)}
         {tabBtn('classes', '班級彙整核章', <Stamp className="w-4 h-4 text-sky-300" />)}
         {tabBtn('query', '日誌查詢', <BookOpen className="w-4 h-4 text-emerald-300" />)}
         {tabBtn('transfer', '轉移責任', <ArrowRightLeft className="w-4 h-4 text-indigo-300" />)}
@@ -248,20 +247,20 @@ export const ClassLogReport: React.FC = () => {
                 className="mt-1 block bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm"
               />
             </label>
-            <label className="text-[11px] font-semibold text-slate-600">
+            <label className="text-[11px] font-semibold text-slate-600 min-w-[12rem]">
               教師
-              <select
-                value={teacherId}
-                onChange={(e) => setTeacherId(e.target.value)}
-                className="mt-1 block bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-sm min-w-[8rem]"
-              >
-                <option value="all">全部</option>
-                {teacherOptions.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <TeacherSearchCombobox
+                  teachers={teacherOptions}
+                  currentTeacherId={teacherId === 'all' ? '' : teacherId}
+                  onSelectTeacher={(id) => setTeacherId(id || 'all')}
+                  placeholder="輸入姓名或科別搜尋，或點選…"
+                  variant="light"
+                  fullWidth
+                  allowClear
+                  clearLabel="全部教師"
+                />
+              </div>
             </label>
             <label className="text-[11px] font-semibold text-slate-600">
               班級／科目

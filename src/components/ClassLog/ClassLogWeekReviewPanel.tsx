@@ -45,7 +45,7 @@ const statusClass: Record<string, string> = {
 };
 
 /** 教室日誌彙整週核章區的內容分頁 */
-export type ClassLogWeekReviewView = 'teachers' | 'gaps' | 'classes';
+export type ClassLogWeekReviewView = 'teachers' | 'classes';
 
 type ClassLogWeekReviewPanelProps = {
   view: ClassLogWeekReviewView;
@@ -71,6 +71,7 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
   } = useClassLogReturns();
 
   const [week, setWeek] = useState(() => schoolWeekOf(dateToIsoLocal(new Date())));
+  const [onlyGaps, setOnlyGaps] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [returning, setReturning] = useState<ClassLogWeekDuty | null>(null);
   const [reason, setReason] = useState('');
@@ -292,19 +293,12 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
     return role === 'teaching_leader' ? !state.leader : !state.dean;
   }).length;
 
-  const listClasses = view === 'gaps' ? gapClasses : classes;
-  const viewTitle =
-    view === 'teachers'
-      ? '尚未完成核章的老師'
-      : view === 'gaps'
-        ? '缺漏的班級'
-        : '班級彙整核章';
+  const listClasses = onlyGaps ? gapClasses : classes;
+  const viewTitle = view === 'teachers' ? '尚未完成核章的老師' : '班級彙整核章';
   const viewHint =
     view === 'teachers'
       ? '含本週未填寫、內容不完整，或已被退回、尚未改寫重送的應填老師；可勾選後寄通知。課表「未指派教師」的課堂不會列出。'
-      : view === 'gaps'
-        ? '只列仍有缺漏（未填、不完整或已退回）的班級，方便逐班退回或補核。'
-        : '以班級彙整週一至週五的教室日誌。教學組長與教務主任可各自核章；已填齊的班級可一次核章。';
+      : '以班級彙整週一至週五的教室日誌。教學組長與教務主任可各自核章；可勾選只看缺漏班級，已填齊的班級可一次核章。';
 
   return (
     <section id="class-log-week-review" className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
@@ -431,28 +425,39 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
         </div>
       )}
 
-      {(view === 'gaps' || view === 'classes') && (
+      {view === 'classes' && (
         <>
-          {view === 'classes' && canReview && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                id="class-log-batch-stamp"
-                disabled={readyToBatch === 0}
-                onClick={stampReadyClasses}
-                className="inline-flex items-center min-h-11 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 disabled:opacity-50"
-              >
-                以{myLabel}一次核章（已填齊 {readyToBatch} 班）
-              </button>
-              <span className="text-xs text-slate-500">還有缺漏的班級請改到「缺漏的班級」分頁處理，或先退回。</span>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-slate-700">
+              <input
+                id="class-log-only-gaps"
+                type="checkbox"
+                checked={onlyGaps}
+                onChange={(e) => setOnlyGaps(e.target.checked)}
+              />
+              只看缺漏的班級（{gapClasses.length}）
+            </label>
+            {canReview && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  id="class-log-batch-stamp"
+                  disabled={readyToBatch === 0}
+                  onClick={stampReadyClasses}
+                  className="inline-flex items-center min-h-11 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 disabled:opacity-50"
+                >
+                  以{myLabel}一次核章（已填齊 {readyToBatch} 班）
+                </button>
+                <span className="text-xs text-slate-500">還有缺漏的班級請逐班核章，或先退回。</span>
+              </div>
+            )}
+          </div>
 
           {listClasses.length === 0 ? (
             <p className="text-sm text-slate-500">
               {classes.length === 0
                 ? '這一週沒有課表課堂。'
-                : view === 'gaps'
+                : onlyGaps
                   ? '本週沒有缺漏的班級。'
                   : '目前沒有班級可顯示。'}
             </p>
@@ -461,10 +466,9 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
               {listClasses.map((klass) => {
                 const review = reviewMap.get(klass.className);
                 const stamps = weekStampState(review);
-                const shown =
-                  view === 'gaps'
-                    ? klass.rows.filter((r) => r.status !== 'complete')
-                    : klass.rows;
+                const shown = onlyGaps
+                  ? klass.rows.filter((r) => r.status !== 'complete')
+                  : klass.rows;
                 const mineStamped =
                   role === 'teaching_leader'
                     ? Boolean(stamps.leader)
