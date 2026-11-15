@@ -24,27 +24,35 @@ import type { Teacher } from '../types';
  * 畫面／列印／Excel 皆不補空白列；小計緊接資料列。
  * A4 可印區約可容 ~50–54 短列；略留標題／表頭／小計與估算誤差。
  */
-export const PAYROLL_ROWS_PER_PAGE = 48;
+export const PAYROLL_ROWS_PER_PAGE = 54;
 
 /**
  * 末頁單位容量上限。
  * 略少以預留合計＋簽核；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 44;
+export const PAYROLL_ROWS_LAST_PAGE = 50;
 
 /**
  * 分頁時單列最多佔幾個列高單位。
- * 避免長備註佔滿整頁容量、讓同頁只剩十餘人、下方大片空白。
- * Excel 列高另用不封頂估算（僅受 Excel 列高上限約束）。
+ * 避免長備註佔滿整頁容量、造成下方大片空白。
+ * Excel 列高另用不封頂的「備註行數」估算。
  */
-export const PAYROLL_MAX_ROW_UNITS = 10;
+export const PAYROLL_MAX_ROW_UNITS = 8;
 
 /**
  * 分頁／列印用換行係數（乘上備註欄寬＝有效字寬）。
  * 列印備註欄約 35%×200mm，7.5pt 約可容 ~26 全形／行（字寬單位 ~52），
- * 對欄寬 35 約 1.45；略保守取 1.2，避免再因 0.72 過度高估列高而過早換頁。
+ * 對欄寬 35 ≈ 1.45。
  */
-export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 1.2;
+export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 1.45;
+
+/**
+ * 備註「多出來的每一行」折算成幾個短列單位。
+ * 列印短列 min-height≈4.9mm，備註後續行 7.5pt×1.1≈2.9mm → 理論約 0.6；
+ * 實務列印仍偏高估，取 0.4 讓每頁較能填滿（略冒險，靠 maxRowUnits 封頂）。
+ * 若把每一換行都當 1 短列，會嚴重高估列高、過早換頁。
+ */
+export const PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT = 0.4;
 
 /**
  * Excel 列高用：略小於 1，讓換行估多一點，避免備註高度不夠被裁切。
@@ -95,9 +103,28 @@ export function payrollRemarkTextWidth(text: string): number {
 }
 
 /**
- * 依備註長度估算列高單位（至少 1）。
+ * 依備註長度估算「換行行數」（至少 1）。
  * remarksColWidth 為 Excel 備註欄字元寬；wrapFactor 對齊實際換行。
- * maxUnits 預設為分頁上限；傳 Infinity 則不封頂（供 Excel 列高）。
+ * Excel 列高用行數；分頁列高單位請用 estimatePayrollRowUnits。
+ */
+export function estimatePayrollRemarkLines(
+  remarks: string,
+  remarksColWidth: number,
+  wrapFactor = PAYROLL_REMARKS_WRAP_WIDTH_FACTOR
+): number {
+  const col = Math.max(1, remarksColWidth * wrapFactor);
+  const text = remarks || '';
+  if (!text.trim()) return 1;
+  let lines = 0;
+  for (const part of text.split(/\r?\n/)) {
+    lines += Math.max(1, Math.ceil(payrollRemarkTextWidth(part) / col));
+  }
+  return Math.max(1, lines);
+}
+
+/**
+ * 分頁用列高單位（至少 1）：首行＝1 短列，後續備註行 × EXTRA_LINE_TO_ROW_UNIT。
+ * maxUnits 預設為分頁上限；傳 Infinity 則不封頂。
  */
 export function estimatePayrollRowUnits(
   remarks: string,
@@ -105,34 +132,28 @@ export function estimatePayrollRowUnits(
   maxUnits = PAYROLL_MAX_ROW_UNITS,
   wrapFactor = PAYROLL_REMARKS_WRAP_WIDTH_FACTOR
 ): number {
-  const col = Math.max(1, remarksColWidth * wrapFactor);
-  const text = remarks || '';
-  if (!text.trim()) return 1;
-  // 含換行時逐段累加預估行數
-  let lines = 0;
-  for (const part of text.split(/\r?\n/)) {
-    lines += Math.max(1, Math.ceil(payrollRemarkTextWidth(part) / col));
-  }
+  const lines = estimatePayrollRemarkLines(remarks, remarksColWidth, wrapFactor);
+  const raw =
+    lines <= 1 ? 1 : 1 + (lines - 1) * PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT;
   const capped = Number.isFinite(maxUnits)
-    ? Math.min(Math.max(1, lines), Math.max(1, maxUnits))
-    : Math.max(1, lines);
-  return capped;
+    ? Math.min(Math.max(1, raw), Math.max(1, maxUnits))
+    : Math.max(1, raw);
+  return Math.round(capped * 10) / 10;
 }
 
-/** Excel 資料列高（point）：不套分頁單位上限，僅受 Excel 409pt 限制 */
+/** Excel 資料列高（point）：依備註行數，不套分頁單位上限，僅受 Excel 409pt 限制 */
 export function estimatePayrollExcelRowHeightPt(
   remarks: string,
   remarksColWidth: number,
   ptPerUnit = PAYROLL_EXCEL_PT_PER_LINE
 ): number {
-  const rawUnits = estimatePayrollRowUnits(
+  const lines = estimatePayrollRemarkLines(
     remarks,
     remarksColWidth,
-    Number.POSITIVE_INFINITY,
     PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
   );
   // 多行備註略加半行緩衝，避免 fitToWidth／字型量測誤差裁切
-  const units = rawUnits > 1 ? rawUnits + 0.5 : rawUnits;
+  const units = lines > 1 ? lines + 0.5 : lines;
   // 行數極多時略降每行 pt，在 409 上限內盡量顯示完整
   let pt = ptPerUnit;
   if (units * pt > PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT) {

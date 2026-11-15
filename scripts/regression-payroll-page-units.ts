@@ -1,7 +1,7 @@
 /**
  * 印領清冊：備註動態列高單位分頁。
  * 短備註每頁最多 PAYROLL_ROWS_PER_PAGE 人；畫面／列印／Excel 皆不補空白資料列。
- * 列印小計須緊接資料列（不可固定頁高＋footer 貼底造成中間空白）。
+ * 列印小計須緊接資料列；分頁列高須把「備註換行」折算成矮於短列的單位。
  * 執行：npx tsx scripts/regression-payroll-page-units.ts
  */
 import assert from 'node:assert/strict';
@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   estimatePayrollExcelRowHeightPt,
+  estimatePayrollRemarkLines,
   estimatePayrollRowUnits,
   isBlankPayrollRow,
   padPayrollPageRowsForExcel,
@@ -17,6 +18,7 @@ import {
   PAYROLL_EXCEL_MAX_ROW_HEIGHT_PT,
   PAYROLL_EXCEL_PT_PER_LINE,
   PAYROLL_EXCEL_WRAP_WIDTH_FACTOR,
+  PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT,
   PAYROLL_MAX_ROW_UNITS,
   PAYROLL_REMARKS_COL_WIDTH,
   PAYROLL_REMARKS_WRAP_WIDTH_FACTOR,
@@ -52,7 +54,24 @@ function realPeople(rows: Row[]): number {
   return rows.filter((r) => !isBlankPayrollRow(r.teacherId)).length;
 }
 
+function expectedRowUnitsFromLines(lines: number, maxUnits = PAYROLL_MAX_ROW_UNITS): number {
+  const raw = lines <= 1 ? 1 : 1 + (lines - 1) * PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT;
+  const capped = Number.isFinite(maxUnits)
+    ? Math.min(Math.max(1, raw), Math.max(1, maxUnits))
+    : Math.max(1, raw);
+  return Math.round(capped * 10) / 10;
+}
+
 function run() {
+  assert.ok(
+    PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT < 1,
+    '後續備註行必須矮於短列，否則會過早換頁'
+  );
+  assert.ok(
+    PAYROLL_REMARKS_WRAP_WIDTH_FACTOR >= 1.3,
+    '分頁換行係數應接近列印實際可容字寬'
+  );
+
   // 短備註：中間頁每頁容量人；畫面列不補空白
   const shortRows = Array.from({ length: PAYROLL_ROWS_PER_PAGE * 2 }, (_, i) => makeRow(i, '短'));
   const shortSlices = paginatePayrollByUnits(shortRows, (r) => r.remarks, blank, colWidth);
@@ -76,33 +95,31 @@ function run() {
   assert.equal(fewExcel.length, PAYROLL_ROWS_LAST_PAGE, '單位補列輔助應可補至末頁容量');
   assert.ok(fewExcel.some((r) => isBlankPayrollRow(r.teacherId)));
 
-  // 長備註：每人多單位 → 一頁人數 < 容量，真實列單位總和 ≤ 容量
+  // 長備註：列高單位 < 換行行數（後續行較矮）
   const longRemark = '全'.repeat(colWidth + 1);
+  const longLines = estimatePayrollRemarkLines(longRemark, colWidth);
   const longUnits = estimatePayrollRowUnits(longRemark, colWidth);
-  const expectedLongUnits = Math.min(
-    PAYROLL_MAX_ROW_UNITS,
-    Math.max(
-      1,
-      Math.ceil(payrollRemarkTextWidth(longRemark) / (colWidth * PAYROLL_REMARKS_WRAP_WIDTH_FACTOR))
-    )
+  const expectedLongLines = Math.max(
+    1,
+    Math.ceil(payrollRemarkTextWidth(longRemark) / (colWidth * PAYROLL_REMARKS_WRAP_WIDTH_FACTOR))
   );
-  assert.equal(longUnits, expectedLongUnits, `長備註單位應為 ${expectedLongUnits}`);
-  assert.ok(longUnits > 1, `長備註應 >1 單位（實際 ${longUnits}）`);
+  assert.equal(longLines, expectedLongLines, `長備註行數應為 ${expectedLongLines}`);
+  assert.equal(longUnits, expectedRowUnitsFromLines(longLines), '長備註列高單位應依 0.6 折算');
+  assert.ok(longUnits > 1, `長備註列高應 >1（實際 ${longUnits}）`);
+  assert.ok(longUnits < longLines, `列高單位 ${longUnits} 應 < 行數 ${longLines}`);
 
-  // Excel 列高用較小換行係數（估較多行）以加高列、避免裁切；可與分頁係數不同
-  const excelLines = estimatePayrollRowUnits(
+  // Excel 列高依行數（可與分頁單位不同）
+  const excelLines = estimatePayrollRemarkLines(
     longRemark,
     colWidth,
-    Number.POSITIVE_INFINITY,
     PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
   );
   assert.ok(excelLines >= 1, `Excel 行數應 ≥ 1（實際 ${excelLines}）`);
   const sampleRemark =
     '11/2代林怡君公假兼課1節(第1節)；11/3代林怡君公假兼課1節(第3節)；11/4代林怡君公假兼課1節(第5節)；11/5代林怡君公假兼課1節(第7節)';
-  const sampleLines = estimatePayrollRowUnits(
+  const sampleLines = estimatePayrollRemarkLines(
     sampleRemark,
     colWidth,
-    Number.POSITIVE_INFINITY,
     PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
   );
   const samplePt = estimatePayrollExcelRowHeightPt(sampleRemark, colWidth);
@@ -110,18 +127,18 @@ function run() {
   assert.equal(samplePt, expectedSamplePt, '多行備註列高應含半行緩衝');
   assert.ok(samplePt >= PAYROLL_EXCEL_PT_PER_LINE * 2, `四段備註列高應夠顯示（實際 ${samplePt}）`);
   assert.ok(samplePt <= PAYROLL_EXCEL_PT_PER_LINE * 7, `四段備註列高不宜過度虛高（實際 ${samplePt}）`);
-  const longRows = Array.from({ length: 30 }, (_, i) => makeRow(i, longRemark));
+  const longRows = Array.from({ length: 40 }, (_, i) => makeRow(i, longRemark));
   const longSlices = paginatePayrollByUnits(longRows, (r) => r.remarks, blank, colWidth);
   assert.ok(longSlices.length >= 2, '長備註應拆成多頁');
   for (const slice of longSlices) {
     const used = pageRealUnits(slice.rows);
-    assert.ok(used <= PAYROLL_ROWS_PER_PAGE, `頁單位 ${used} 應 ≤ ${PAYROLL_ROWS_PER_PAGE}`);
+    assert.ok(used <= PAYROLL_ROWS_PER_PAGE + 1e-9, `頁單位 ${used} 應 ≤ ${PAYROLL_ROWS_PER_PAGE}`);
     assert.ok(realPeople(slice.paddedRows) < PAYROLL_ROWS_PER_PAGE, '長備註頁人數應少於容量');
     assert.equal(slice.paddedRows.length, slice.rows.length, '畫面列不補空白');
   }
 
   // 極端備註：分頁單位封頂；空間不足時單獨成頁
-  const extreme = '極'.repeat(Math.ceil((colWidth * (PAYROLL_MAX_ROW_UNITS + 5)) / 2));
+  const extreme = '極'.repeat(Math.ceil((colWidth * (PAYROLL_MAX_ROW_UNITS + 20)) / 2));
   const capped = estimatePayrollRowUnits(extreme, colWidth);
   assert.equal(capped, PAYROLL_MAX_ROW_UNITS, '分頁極端備註應封頂 PAYROLL_MAX_ROW_UNITS');
   assert.ok(
@@ -137,7 +154,7 @@ function run() {
   const uncappedUnits = estimatePayrollRowUnits(extreme, colWidth, Number.POSITIVE_INFINITY);
   assert.ok(uncappedUnits > PAYROLL_MAX_ROW_UNITS, '不封頂單位應超過分頁上限');
 
-  const fillers = Array.from({ length: PAYROLL_ROWS_PER_PAGE - capped + 1 }, (_, i) =>
+  const fillers = Array.from({ length: Math.ceil(PAYROLL_ROWS_PER_PAGE - capped) + 1 }, (_, i) =>
     makeRow(100 + i, '短')
   );
   const aloneForced = [...fillers, makeRow(999, extreme)];
@@ -158,10 +175,10 @@ function run() {
     '小計 footer 不可 margin-top:auto（會造成中間空白）'
   );
 
-  // 密度：多數短／中備註＋少數長備註時，第一頁應遠多於舊版「約 14 人就換頁」
+  // 密度：多數短／中備註＋少數長備註時，第一頁應明顯填滿，避免半頁空白
   const denseRemark =
     '11/3代XXX公假兼課1節(第2節)；11/4代XXX公假兼課1節(第3節)；11/5代XXX公假兼課2節(第1、2節)；11/6代XXX公假兼課1節(第4節)；11/7代XXX公假兼課1節(第5節)；11/10代XXX公假兼課1節(第2節)；11/11代XXX公假兼課1節(第3節)；11/12代XXX公假兼課1節(第1節)；11/13代XXX公假兼課1節(第4節)；11/14代XXX公假兼課1節(第5節)';
-  const denseRows = Array.from({ length: 60 }, (_, i) => {
+  const denseRows = Array.from({ length: 80 }, (_, i) => {
     if (i % 12 === 2) return makeRow(i, denseRemark);
     if (i % 5 === 0) return makeRow(i, sampleRemark);
     if (i % 3 === 0) return makeRow(i, '11/3公假兼課1節(第1節)');
@@ -169,12 +186,19 @@ function run() {
   });
   const denseSlices = paginatePayrollByUnits(denseRows, (r) => r.remarks, blank, colWidth);
   assert.ok(
-    realPeople(denseSlices[0].rows) >= 24,
-    `混合備註第一頁應 ≥24 人（實際 ${realPeople(denseSlices[0].rows)}），避免半頁空白`
+    realPeople(denseSlices[0].rows) >= 38,
+    `混合備註第一頁應 ≥38 人（實際 ${realPeople(denseSlices[0].rows)}），避免半頁空白`
   );
   assert.ok(
-    pageRealUnits(denseSlices[0].rows) <= PAYROLL_ROWS_PER_PAGE,
+    pageRealUnits(denseSlices[0].rows) <= PAYROLL_ROWS_PER_PAGE + 1e-9,
     '混合備註第一頁單位不可超容量'
+  );
+  // 先前實測約 28 人就換頁且下半空白；現在同批應明顯低於容量
+  const twentyEight = denseRows.slice(0, 28);
+  const used28 = twentyEight.reduce((s, r) => s + estimatePayrollRowUnits(r.remarks, colWidth), 0);
+  assert.ok(
+    used28 <= PAYROLL_ROWS_PER_PAGE * 0.75,
+    `28 人混合頁單位 ${used28} 應 ≤ 容量 75%（實際容量 ${PAYROLL_ROWS_PER_PAGE}）`
   );
 
   console.log('regression-payroll-page-units: ok');
