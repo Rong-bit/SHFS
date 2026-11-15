@@ -242,11 +242,18 @@ function excelTextWidth(text: string): number {
 }
 
 /**
+ * 簽核職稱相對四等分中心再往左移二字元。
+ * excelTextWidth：全形字／全形空白各佔 2 單位，故二字元＝4。
+ */
+export const SIGNATURE_LABEL_LEFT_SHIFT_UNITS = 4;
+
+/**
  * 對齊瀏覽器列印簽核：四職稱中心約在 12.5%／37.5%／62.5%／87.5%。
  * 不依資料欄寬切分（6 欄備註過寬時會計室／校長會偏左）。
  * 全形空白撐位；略放大單位以補償 Excel 欄寬≠字寬造成的左擠。
+ * 整體再往左二字元（教學組長／出納組／會計室／校長／教務主任同）。
  */
-function buildPrintEqualLabels(labels: string[], totalColWidth: number): string {
+export function buildPrintEqualLabels(labels: string[], totalColWidth: number): string {
   const raw = Math.max(64, Math.round(totalColWidth * 1.22));
   const lineUnits = raw % 2 === 0 ? raw : raw + 1;
 
@@ -256,7 +263,7 @@ function buildPrintEqualLabels(labels: string[], totalColWidth: number): string 
     if (!label) return;
     const tw = excelTextWidth(label);
     const center = ((i + 0.5) / 4) * lineUnits;
-    let start = Math.round(center - tw / 2);
+    let start = Math.round(center - tw / 2) - SIGNATURE_LABEL_LEFT_SHIFT_UNITS;
     if (start % 2 === 1) start -= 1;
     start = Math.max(0, Math.min(start, Math.max(0, lineUnits - tw)));
     if (start % 2 === 1) start += 1;
