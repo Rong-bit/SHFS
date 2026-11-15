@@ -229,6 +229,17 @@ export type PendingClassLogTeacher = {
   gaps: ClassLogWeekDuty[];
 };
 
+/** 課表尚未指派授課教師時，不列入「尚未完成核章的老師」通知名單 */
+export function isUnassignedClassLogHolder(
+  holderTeacherId: string | undefined,
+  holderTeacherName: string | undefined
+): boolean {
+  const name = (holderTeacherName || '').trim();
+  if (name === '未指派教師') return true;
+  const id = (holderTeacherId || '').trim();
+  return !id || id === '未指派教師';
+}
+
 export function listTeachersPendingClassLogStamp(
   rows: ClassLogWeekDuty[],
   teachers: Pick<Teacher, 'id' | 'name' | 'email'>[]
@@ -238,6 +249,9 @@ export function listTeachersPendingClassLogStamp(
   const grouped = new Map<string, ClassLogWeekDuty[]>();
   for (const row of rows) {
     if (row.status === 'complete') continue;
+    if (isUnassignedClassLogHolder(row.duty.holderTeacherId, row.duty.holderTeacherName)) {
+      continue;
+    }
     const id = row.duty.holderTeacherId;
     const list = grouped.get(id);
     if (list) list.push(row);
@@ -250,6 +264,7 @@ export function listTeachersPendingClassLogStamp(
       email: emailById.get(teacherId) || '',
       gaps,
     }))
+    .filter((t) => !isUnassignedClassLogHolder(t.teacherId, t.teacherName))
     .sort((a, b) => a.teacherName.localeCompare(b.teacherName, 'zh-Hant'));
 }
 

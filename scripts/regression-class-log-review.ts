@@ -22,12 +22,17 @@ import {
   formatClassLogGapLine,
   groupClassLogWeekByClass,
   listClassLogWeekDuties,
+  isUnassignedClassLogHolder,
   listTeachersPendingClassLogStamp,
   returnClearedByResubmit,
   schoolWeekOf,
   shiftSchoolWeek,
   weekStampState,
 } from '../src/utils/classLogReview';
+
+assert.equal(isUnassignedClassLogHolder('', '未指派教師'), true);
+assert.equal(isUnassignedClassLogHolder('未指派教師', '未指派教師'), true);
+assert.equal(isUnassignedClassLogHolder('t-1', '王老師'), false);
 
 const staff = (
   title: string,
@@ -179,6 +184,22 @@ const sessions: CourseSession[] = [
     teacherId: 't-back',
     teacherName: '被退回',
   }),
+  session({
+    id: 's-unassigned-1',
+    period: 1,
+    dayOfWeek: 1,
+    className: '三年級選修班',
+    teacherId: '未指派教師',
+    teacherName: '未指派教師',
+  }),
+  session({
+    id: 's-unassigned-2',
+    period: 2,
+    dayOfWeek: 1,
+    className: '三年級選修班',
+    teacherId: '',
+    teacherName: '未指派教師',
+  }),
 ];
 
 const entry = (partial: Partial<ClassLogEntry> & Pick<ClassLogEntry, 'id' | 'date' | 'period' | 'sessionId' | 'progress' | 'authorTeacherId' | 'authorTeacherName'>): ClassLogEntry => ({
@@ -278,6 +299,12 @@ assert.deepEqual(
   ['t-back', 't-miss', 't-short']
 );
 assert.equal(pending.find((t) => t.teacherId === 't-miss')?.email, '');
+assert.ok(
+  !pending.some((t) => t.teacherName === '未指派教師' || t.teacherId === '未指派教師'),
+  '未指派教師不應出現在尚未完成核章的老師名單'
+);
+const elective = classes.find((c) => c.className === '三年級選修班');
+assert.ok(elective && elective.pendingCount >= 2, '缺漏班級仍應列出未指派課堂');
 
 const mail = buildClassLogReminderEmail({
   schoolName: '高雄市立中正高工',
