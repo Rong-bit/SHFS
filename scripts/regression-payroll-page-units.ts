@@ -21,6 +21,8 @@ import {
   PAYROLL_EXCEL_WRAP_WIDTH_FACTOR,
   PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT,
   PAYROLL_MAX_ROW_UNITS,
+  PAYROLL_PRINT_HEIGHT_FUDGE,
+  PAYROLL_PRINT_PAGE_SAFETY_MM,
   PAYROLL_REMARKS_COL_WIDTH,
   PAYROLL_REMARKS_WRAP_WIDTH_FACTOR,
   PAYROLL_ROWS_LAST_PAGE,
@@ -75,8 +77,16 @@ function run() {
     '分頁換行係數應接近列印實際可容字寬'
   );
   assert.ok(
-    PAYROLL_ROWS_PER_PAGE >= 68,
-    `每頁容量應依實測短列≈3.5mm ≥68（實際 ${PAYROLL_ROWS_PER_PAGE}）`
+    PAYROLL_ROWS_PER_PAGE >= 54 && PAYROLL_ROWS_PER_PAGE <= 64,
+    `單位容量應介於填滿與不溢出之間（實際 ${PAYROLL_ROWS_PER_PAGE}）`
+  );
+  assert.ok(
+    PAYROLL_PRINT_PAGE_SAFETY_MM >= 10,
+    `列印安全距須 ≥10mm，避免小計被擠到下一頁（實際 ${PAYROLL_PRINT_PAGE_SAFETY_MM}）`
+  );
+  assert.ok(
+    PAYROLL_PRINT_HEIGHT_FUDGE >= 1.1,
+    `實測列高放大係數須 ≥1.1（實際 ${PAYROLL_PRINT_HEIGHT_FUDGE}）`
   );
 
   // 短備註：中間頁每頁容量人；畫面列不補空白
@@ -195,8 +205,8 @@ function run() {
   });
   const denseSlices = paginatePayrollByUnits(denseRows, (r) => r.remarks, blank, colWidth);
   assert.ok(
-    realPeople(denseSlices[0].rows) >= 40,
-    `混合備註第一頁應 ≥40 人（實際 ${realPeople(denseSlices[0].rows)}），避免半頁空白`
+    realPeople(denseSlices[0].rows) >= 32,
+    `混合備註第一頁應 ≥32 人（實際 ${realPeople(denseSlices[0].rows)}），且不可塞爆溢頁`
   );
   assert.ok(
     pageRealUnits(denseSlices[0].rows) <= PAYROLL_ROWS_PER_PAGE + 1e-9,
