@@ -42,6 +42,35 @@ function styleHeaderCell(cell: ExcelJS.Cell) {
   };
 }
 
+/**
+ * 備註表頭對齊列印／PDF：「備註」粗體，其下日期區間較小、非粗體。
+ */
+export function buildPayrollRemarksHeaderRichText(monthRangeLabel: string): ExcelJS.CellValue {
+  return {
+    richText: [
+      { text: '備註\n', font: { bold: true, size: 11, name: '微軟正黑體' } },
+      { text: monthRangeLabel, font: { bold: false, size: 9, name: '微軟正黑體' } },
+    ],
+  };
+}
+
+function styleRemarksHeaderCell(cell: ExcelJS.Cell, monthRangeLabel: string) {
+  cell.value = buildPayrollRemarksHeaderRichText(monthRangeLabel);
+  cell.alignment = { ...centerAlign };
+  cell.border = thinBorder;
+  cell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFF1F5F9' },
+  };
+}
+
+/** 表頭字串若為「備註\\n日期」，取出日期區間 */
+function remarksHeaderRangeLabel(header: string): string | null {
+  const m = String(header).match(/^備註\n([\s\S]+)$/);
+  return m ? m[1] : null;
+}
+
 function styleDataCell(
   cell: ExcelJS.Cell,
   opts?: {
@@ -124,8 +153,16 @@ function addTitleRow(ws: ExcelJS.Worksheet, title: string, colCount: number): nu
 
 function addHeaderRow(ws: ExcelJS.Worksheet, headers: string[]): number {
   const row = ws.addRow(headers);
-  row.eachCell((cell) => styleHeaderCell(cell));
-  // 「備註」換行後接日期區間（日期可能再折行），需較高表頭
+  row.eachCell((cell, colNumber) => {
+    const header = headers[colNumber - 1] || '';
+    const rangeLabel = remarksHeaderRangeLabel(header);
+    if (rangeLabel != null) {
+      styleRemarksHeaderCell(cell, rangeLabel);
+    } else {
+      styleHeaderCell(cell);
+    }
+  });
+  // 「備註」換行後接日期區間；兼課小計等亦可能雙行，需較高表頭
   const hasMultiLine = headers.some((h) => String(h).includes('\n'));
   row.height = hasMultiLine ? 44 : 32;
   return row.number;
@@ -305,7 +342,7 @@ export async function exportOverloadPayrollExcel(
     '薪資編號',
     '教師姓名',
     '每週兼課',
-    `(${weekRound}週)兼課小計`,
+    `(${weekRound}週)\n兼課小計`,
     '應加兼課',
     '應減兼課',
     '實得兼課',
@@ -456,7 +493,7 @@ export async function exportCounselingPayrollExcel(
     '薪資編號',
     '教師姓名',
     '每週上課時數',
-    `(${weekRound}週)上課小計`,
+    `(${weekRound}週)\n上課小計`,
     '增加節數',
     '減少節數',
     '實上節數',
