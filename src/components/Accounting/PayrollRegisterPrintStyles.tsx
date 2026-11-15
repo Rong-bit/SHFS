@@ -7,15 +7,14 @@ import React from 'react';
  * 改以 display:none 把非清冊節點移出列印流。
  */
 export const PAYROLL_REGISTER_PRINT_CSS = `
-/* 畫面預覽：儲存格強制置中（備註資料列靠左）；頁面以 flex 將小計貼底 */
+/* 畫面預覽：儲存格強制置中（備註資料列靠左）。
+ * 小計緊接資料列（與 Excel 相同，勿用固定頁高＋margin-top:auto 造成中間空白）。 */
 .payroll-register-print-page {
-  display: flex;
-  flex-direction: column;
-  min-height: 287mm;
+  display: block;
 }
 
 .payroll-register-print-page-footer {
-  margin-top: auto;
+  margin-top: 0;
 }
 
 .payroll-register-print-table th,
@@ -140,27 +139,25 @@ export const PAYROLL_REGISTER_PRINT_CSS = `
     display: block !important;
   }
 
-  /* 對齊 Excel horizontalCentered：整頁內容區塊在 A4 上左右置中。
-   * A4 高 297mm、@page margin 5mm → 可用約 287mm；flex 將小計／簽核貼齊頁底。 */
+  /* 對齊 Excel：整頁內容區塊在 A4 上左右置中；高度隨內容，小計緊接資料列。
+   * 分頁靠 break-after；勿固定 287mm＋footer margin-top:auto（會在中間留白）。 */
   .payroll-register-print-page {
     position: relative !important;
     width: 200mm !important;
     max-width: 100% !important;
-    min-height: 287mm !important;
-    height: 287mm !important;
-    max-height: 287mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
     padding: 0 !important;
     margin: 0 auto !important;
     box-shadow: none !important;
     border: none !important;
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
+    overflow: visible !important;
+    display: block !important;
   }
 
   .payroll-register-print-page-footer {
-    margin-top: auto !important;
-    flex-shrink: 0 !important;
+    margin-top: 0 !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
