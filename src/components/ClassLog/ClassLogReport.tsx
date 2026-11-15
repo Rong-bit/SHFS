@@ -47,7 +47,8 @@ const isWeekReviewTab = (tab: ClassLogReportTab): tab is ClassLogWeekReviewView 
   tab === 'teachers' || tab === 'classes';
 
 export const ClassLogReport: React.FC = () => {
-  const { teachers, sessions, requests, currentAcademicStaff } = useApp();
+  const { teachers, sessions, requests, currentAcademicStaff, systemConfig } = useApp();
+  const periodConfig = systemConfig;
   const { entries, loading, error, cloudReady, refresh } = useClassLogs();
   const {
     transfers,
@@ -147,7 +148,8 @@ export const ClassLogReport: React.FC = () => {
     }).filter((d) => d.naturalHolderId === transferDuty.naturalHolderId);
     const block = findConsecutiveClassLogSlots(
       related.map((d) => d.slot),
-      transferDuty.slot
+      transferDuty.slot,
+      periodConfig
     );
     const targets =
       applyConsecutive && block.length > 1
@@ -516,7 +518,8 @@ export const ClassLogReport: React.FC = () => {
             })
               .filter((d) => d.naturalHolderId === transferDuty.naturalHolderId)
               .map((d) => d.slot),
-            transferDuty.slot
+            transferDuty.slot,
+            periodConfig
           ).map((s) => s.period)}
           submitError={actionError}
           onClose={() => {

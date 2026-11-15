@@ -46,6 +46,20 @@ export function isDaytimePeriod(
   return period >= 1 && period <= maxPeriod && !counselingPeriods.includes(period);
 }
 
+/**
+ * 是否為下午節次（教室日誌連續節、課表標示用）。
+ * 有自訂時段時以開始時間 ≥ 12:00 判定；否則預設第 5 節起為下午。
+ */
+export function isAfternoonPeriod(
+  period: number,
+  config?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods' | 'periodTimeRanges'> | null
+): boolean {
+  const timeRange = resolvePeriodTimeRanges(config)[period] || '';
+  const startMins = parseStartMinutes(timeRange);
+  if (startMins != null) return startMins >= 12 * 60;
+  return period >= 5;
+}
+
 export function isCounselingSlot(
   s: Pick<{ dayOfWeek: number; period: number }, 'dayOfWeek' | 'period'>,
   config?: Pick<SystemConfig, 'maxPeriod' | 'counselingPeriods'> | null
@@ -151,12 +165,11 @@ export function buildPeriodDefinitions(
     const isCounseling = counselingSet.has(period);
     const baseLabel = PERIOD_LABELS[period] || `第${period}節`;
     const timeRange = timeRanges[period] || '';
-    const startMins = parseStartMinutes(timeRange);
     return {
       period,
       label: isCounseling ? `${baseLabel}(課輔)` : baseLabel,
       timeRange,
-      isAfternoon: startMins != null ? startMins >= 12 * 60 : period >= 5,
+      isAfternoon: isAfternoonPeriod(period, config),
     };
   });
 }

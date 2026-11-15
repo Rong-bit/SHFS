@@ -143,6 +143,11 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
 
   const stampClass = (className: string) => {
     if (!currentAcademicStaff || !role) return;
+    const klass = classes.find((c) => c.className === className);
+    if (klass && klass.pendingCount > 0) {
+      setActionError('此班尚有缺漏課堂，請先退回或缺漏補齊後再核章。');
+      return;
+    }
     const now = new Date().toISOString();
     const signOff = buildClassLogSignOff(currentAcademicStaff, role, now);
     const next = applyClassLogWeekSignOff(reviewMap.get(className), signOff, {
@@ -492,18 +497,18 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
                         <StampBox
                           label="教學組長"
                           signOff={stamps.leader}
-                          canStamp={role === 'teaching_leader'}
+                          canStamp={role === 'teaching_leader' && klass.pendingCount === 0}
                           stamped={Boolean(stamps.leader)}
                           onStamp={() => stampClass(klass.className)}
                         />
                         <StampBox
                           label="教務主任"
                           signOff={stamps.dean}
-                          canStamp={role === 'academic_dean'}
+                          canStamp={role === 'academic_dean' && klass.pendingCount === 0}
                           stamped={Boolean(stamps.dean)}
                           onStamp={() => stampClass(klass.className)}
                         />
-                        {canReview && mineStamped && (
+                        {canReview && mineStamped && klass.pendingCount === 0 && (
                           <button
                             type="button"
                             onClick={() => stampClass(klass.className)}
@@ -511,6 +516,11 @@ export const ClassLogWeekReviewPanel: React.FC<ClassLogWeekReviewPanelProps> = (
                           >
                             更新我的核章時間
                           </button>
+                        )}
+                        {canReview && klass.pendingCount > 0 && (
+                          <span className="text-xs text-amber-800 self-center">
+                            尚有 {klass.pendingCount} 節缺漏，補齊或退回後再核章
+                          </span>
                         )}
                       </div>
                       <ul className="divide-y divide-slate-100 border border-slate-100 rounded-xl">
