@@ -1,9 +1,13 @@
 /**
  * 印領清冊：備註動態列高單位分頁。
  * 短備註每頁最多 PAYROLL_ROWS_PER_PAGE 人；畫面／列印／Excel 皆不補空白資料列。
+ * 列印小計須緊接資料列（不可固定頁高＋footer 貼底造成中間空白）。
  * 執行：npx tsx scripts/regression-payroll-page-units.ts
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   estimatePayrollExcelRowHeightPt,
   estimatePayrollRowUnits,
@@ -20,6 +24,11 @@ import {
   PAYROLL_ROWS_PER_PAGE,
   payrollRemarkTextWidth,
 } from '../src/utils/overloadPayrollRegister';
+
+const printStylesPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../src/components/Accounting/PayrollRegisterPrintStyles.tsx'
+);
 
 type Row = { teacherId: string; remarks: string };
 
@@ -134,6 +143,16 @@ function run() {
   assert.equal(realPeople(last.paddedRows), 1, '極端備註應單獨成頁');
   assert.equal(last.rows[0].teacherId, 't999');
   assert.equal(estimatePayrollRowUnits(last.rows[0].remarks, colWidth), PAYROLL_MAX_ROW_UNITS);
+
+  // 列印樣式：不可再用固定 A4 頁高＋footer margin-top:auto 把小計貼底（中間會空白）
+  const printCss = readFileSync(printStylesPath, 'utf8');
+  assert.equal(/height:\s*287mm/.test(printCss), false, '列印頁不可固定 height:287mm');
+  assert.equal(/min-height:\s*287mm/.test(printCss), false, '列印頁不可 min-height:287mm');
+  assert.equal(
+    /\.payroll-register-print-page-footer\s*\{[^}]*margin-top:\s*auto/s.test(printCss),
+    false,
+    '小計 footer 不可 margin-top:auto（會造成中間空白）'
+  );
 
   console.log('regression-payroll-page-units: ok');
 }
