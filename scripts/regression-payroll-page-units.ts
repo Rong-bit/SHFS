@@ -89,14 +89,14 @@ function run() {
   assert.equal(longUnits, expectedLongUnits, `長備註單位應為 ${expectedLongUnits}`);
   assert.ok(longUnits > 1, `長備註應 >1 單位（實際 ${longUnits}）`);
 
-  // Excel 換行係數 ≥ 分頁係數 → 估出行數 ≤ 分頁；多行另加半行緩衝
+  // Excel 列高用較小換行係數（估較多行）以加高列、避免裁切；可與分頁係數不同
   const excelLines = estimatePayrollRowUnits(
     longRemark,
     colWidth,
     Number.POSITIVE_INFINITY,
     PAYROLL_EXCEL_WRAP_WIDTH_FACTOR
   );
-  assert.ok(excelLines <= longUnits, `Excel 行數 ${excelLines} 應 ≤ 分頁 ${longUnits}`);
+  assert.ok(excelLines >= 1, `Excel 行數應 ≥ 1（實際 ${excelLines}）`);
   const sampleRemark =
     '11/2代林怡君公假兼課1節(第1節)；11/3代林怡君公假兼課1節(第3節)；11/4代林怡君公假兼課1節(第5節)；11/5代林怡君公假兼課1節(第7節)';
   const sampleLines = estimatePayrollRowUnits(
@@ -120,10 +120,14 @@ function run() {
     assert.equal(slice.paddedRows.length, slice.rows.length, '畫面列不補空白');
   }
 
-  // 極端備註：分頁單位封頂為一頁容量；空間不足時單獨成頁
+  // 極端備註：分頁單位封頂；空間不足時單獨成頁
   const extreme = '極'.repeat(Math.ceil((colWidth * (PAYROLL_MAX_ROW_UNITS + 5)) / 2));
   const capped = estimatePayrollRowUnits(extreme, colWidth);
   assert.equal(capped, PAYROLL_MAX_ROW_UNITS, '分頁極端備註應封頂 PAYROLL_MAX_ROW_UNITS');
+  assert.ok(
+    PAYROLL_MAX_ROW_UNITS < PAYROLL_ROWS_PER_PAGE,
+    '單列上限須小於每頁容量，避免長備註獨佔整頁造成下方空白'
+  );
 
   // Excel 列高不套分頁上限（僅受 409pt 限制），長備註應明顯高於短備註
   const excelShort = estimatePayrollExcelRowHeightPt('短', colWidth);
@@ -152,6 +156,25 @@ function run() {
     /\.payroll-register-print-page-footer\s*\{[^}]*margin-top:\s*auto/s.test(printCss),
     false,
     '小計 footer 不可 margin-top:auto（會造成中間空白）'
+  );
+
+  // 密度：多數短／中備註＋少數長備註時，第一頁應遠多於舊版「約 14 人就換頁」
+  const denseRemark =
+    '11/3代XXX公假兼課1節(第2節)；11/4代XXX公假兼課1節(第3節)；11/5代XXX公假兼課2節(第1、2節)；11/6代XXX公假兼課1節(第4節)；11/7代XXX公假兼課1節(第5節)；11/10代XXX公假兼課1節(第2節)；11/11代XXX公假兼課1節(第3節)；11/12代XXX公假兼課1節(第1節)；11/13代XXX公假兼課1節(第4節)；11/14代XXX公假兼課1節(第5節)';
+  const denseRows = Array.from({ length: 60 }, (_, i) => {
+    if (i % 12 === 2) return makeRow(i, denseRemark);
+    if (i % 5 === 0) return makeRow(i, sampleRemark);
+    if (i % 3 === 0) return makeRow(i, '11/3公假兼課1節(第1節)');
+    return makeRow(i, i % 2 === 0 ? '' : '短');
+  });
+  const denseSlices = paginatePayrollByUnits(denseRows, (r) => r.remarks, blank, colWidth);
+  assert.ok(
+    realPeople(denseSlices[0].rows) >= 24,
+    `混合備註第一頁應 ≥24 人（實際 ${realPeople(denseSlices[0].rows)}），避免半頁空白`
+  );
+  assert.ok(
+    pageRealUnits(denseSlices[0].rows) <= PAYROLL_ROWS_PER_PAGE,
+    '混合備註第一頁單位不可超容量'
   );
 
   console.log('regression-payroll-page-units: ok');

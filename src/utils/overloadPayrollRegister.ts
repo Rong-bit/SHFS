@@ -21,27 +21,30 @@ import type { Teacher } from '../types';
 
 /**
  * 中間頁「列高單位」容量；非末頁小計後換頁。
- * 畫面／列印／Excel 皆不補空白列；小計緊接資料列（勿用固定頁高把小計貼底造成中間空白）。
- * 略小於舊版 44，預留標題／表頭／小計與估算誤差。
+ * 畫面／列印／Excel 皆不補空白列；小計緊接資料列。
+ * A4 可印區約可容 ~50–54 短列；略留標題／表頭／小計與估算誤差。
  */
-export const PAYROLL_ROWS_PER_PAGE = 40;
+export const PAYROLL_ROWS_PER_PAGE = 48;
 
 /**
  * 末頁單位容量上限。
  * 略少以預留合計＋簽核；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 37;
+export const PAYROLL_ROWS_LAST_PAGE = 44;
 
 /**
- * 分頁時單列最多佔幾個列高單位（可佔滿一頁，避免一人跨兩頁邏輯頁）。
+ * 分頁時單列最多佔幾個列高單位。
+ * 避免長備註佔滿整頁容量、讓同頁只剩十餘人、下方大片空白。
  * Excel 列高另用不封頂估算（僅受 Excel 列高上限約束）。
  */
-export const PAYROLL_MAX_ROW_UNITS = PAYROLL_ROWS_PER_PAGE;
+export const PAYROLL_MAX_ROW_UNITS = 10;
 
 /**
- * 分頁／列印用：略保守（較小係數→估較多行），避免動態列高撐破 A4。
+ * 分頁／列印用換行係數（乘上備註欄寬＝有效字寬）。
+ * 列印備註欄約 35%×200mm，7.5pt 約可容 ~26 全形／行（字寬單位 ~52），
+ * 對欄寬 35 約 1.45；略保守取 1.2，避免再因 0.72 過度高估列高而過早換頁。
  */
-export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 0.72;
+export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 1.2;
 
 /**
  * Excel 列高用：略小於 1，讓換行估多一點，避免備註高度不夠被裁切。
