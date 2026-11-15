@@ -69,6 +69,13 @@ export const PAYROLL_PRINT_PAGE_SAFETY_MM = 12;
 export const PAYROLL_PRINT_HEIGHT_FUDGE = 1.12;
 
 /**
+ * Excel 單頁資料列可用高度（point）。
+ * A4≈842pt，上下邊界各 0.25"=18pt，標題 28＋雙行表頭 44＋小計 16≈88，
+ * 再留安全距，避免小計被擠到下一列印頁（奇數頁不見小計）。
+ */
+export const PAYROLL_EXCEL_PAGE_DATA_PT = 620;
+
+/**
  * Excel 列高用：略小於 1，讓換行估多一點，避免備註高度不夠被裁切。
  */
 export const PAYROLL_EXCEL_WRAP_WIDTH_FACTOR = 0.85;
@@ -616,6 +623,29 @@ export function paginateOverloadPayrollByHeights(
     return { pages: [], grandTotal };
   }
   const groups = packPayrollIndicesByHeights(heightsPx, pageCapacityPx);
+  const slices = slicePayrollRowsByIndexGroups(rows, groups);
+  return { pages: buildOverloadPagesFromSlices(slices), grandTotal };
+}
+
+/**
+ * Excel 匯出專用分頁：依 Excel 列高（point）打包，與瀏覽器列印分頁分開。
+ * 避免列印實測頁過密／表頭變高後，Excel 列印時小計掉到下一頁。
+ */
+export function paginateOverloadPayrollForExcel(
+  rows: OverloadPayrollRow[],
+  pageDataPt = PAYROLL_EXCEL_PAGE_DATA_PT
+): {
+  pages: OverloadPayrollPage[];
+  grandTotal: OverloadPayrollTotals;
+} {
+  const grandTotal = sumTotals(rows);
+  if (rows.length === 0) {
+    return { pages: [], grandTotal };
+  }
+  const heights = rows.map((r) =>
+    estimatePayrollExcelRowHeightPt(r.remarks, PAYROLL_REMARKS_COL_WIDTH.overload)
+  );
+  const groups = packPayrollIndicesByHeights(heights, pageDataPt);
   const slices = slicePayrollRowsByIndexGroups(rows, groups);
   return { pages: buildOverloadPagesFromSlices(slices), grandTotal };
 }
