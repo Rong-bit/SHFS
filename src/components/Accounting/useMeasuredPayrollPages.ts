@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  PAYROLL_PRINT_HEIGHT_FUDGE,
   PAYROLL_PRINT_PAGE_MM,
   PAYROLL_PRINT_PAGE_SAFETY_MM,
 } from '../../utils/overloadPayrollRegister';
@@ -7,6 +8,7 @@ import {
 /**
  * 以隱藏探針表量測列印列高，回傳每列 px 與單頁資料區可用高度。
  * 探針需套用 .payroll-register-measure-probe（對齊列印字級／欄寬）。
+ * 列高會乘上 FUDGE、容量扣 SAFETY，避免塞滿後小計被擠到下一頁。
  */
 export function usePayrollRowHeightProbe(rowCount: number) {
   const probeRef = React.useRef<HTMLDivElement | null>(null);
@@ -48,7 +50,10 @@ export function usePayrollRowHeightProbe(rowCount: number) {
         (PAYROLL_PRINT_PAGE_MM - PAYROLL_PRINT_PAGE_SAFETY_MM) * pxPerMm - chromePx
       );
       const heightsPx = Array.from(bodyRows).map((tr) =>
-        Math.max(1, (tr as HTMLElement).getBoundingClientRect().height)
+        Math.max(
+          1,
+          (tr as HTMLElement).getBoundingClientRect().height * PAYROLL_PRINT_HEIGHT_FUDGE
+        )
       );
       setMeasurement({ heightsPx, pageCapacityPx });
     };

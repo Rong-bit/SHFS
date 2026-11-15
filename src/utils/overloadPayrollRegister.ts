@@ -22,22 +22,23 @@ import type { Teacher } from '../types';
 /**
  * 中間頁「列高單位」容量；非末頁小計後換頁。
  * 畫面／列印／Excel 皆不補空白列；小計緊接資料列。
- * 依實際列印 PDF 量測：短列約 3.5mm，A4 可印區扣標題／表頭／小計後約可容 ~72 短列。
+ * 短列實測約 3.5mm，理論可近 72；為避免瀏覽器列印把小計擠到下一頁，單位估算略保守。
+ * 兼課清冊列印另以實測列高分頁（含安全距／列高放大）。
  */
-export const PAYROLL_ROWS_PER_PAGE = 72;
+export const PAYROLL_ROWS_PER_PAGE = 58;
 
 /**
  * 末頁單位容量上限。
  * 略少以預留合計＋簽核；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 66;
+export const PAYROLL_ROWS_LAST_PAGE = 52;
 
 /**
  * 分頁時單列最多佔幾個列高單位。
  * 避免長備註佔滿整頁容量、造成下方大片空白。
  * Excel 列高另用不封頂的「備註行數」估算。
  */
-export const PAYROLL_MAX_ROW_UNITS = 12;
+export const PAYROLL_MAX_ROW_UNITS = 10;
 
 /**
  * 分頁／列印用換行係數（乘上備註欄寬＝有效字寬）。
@@ -56,8 +57,16 @@ export const PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT = 0.75;
 /** A4 可印高度（@page margin 5mm → 297−10） */
 export const PAYROLL_PRINT_PAGE_MM = 287;
 
-/** 列印分頁量測時底部安全距（mm），避免貼底被裁切 */
-export const PAYROLL_PRINT_PAGE_SAFETY_MM = 2;
+/**
+ * 列印分頁量測時底部安全距（mm）。
+ * 過小會讓資料列貼滿、小計因 break-inside:avoid 整段掉到下一頁（出現幾乎空白頁）。
+ */
+export const PAYROLL_PRINT_PAGE_SAFETY_MM = 12;
+
+/**
+ * 實測列高放大係數：畫面字型／mm 與實際列印常有落差，略放大避免塞爆。
+ */
+export const PAYROLL_PRINT_HEIGHT_FUDGE = 1.12;
 
 /**
  * Excel 列高用：略小於 1，讓換行估多一點，避免備註高度不夠被裁切。
