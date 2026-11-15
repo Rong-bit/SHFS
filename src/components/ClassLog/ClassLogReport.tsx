@@ -8,7 +8,6 @@ import {
   Stamp,
   Undo2,
   Users,
-  AlertTriangle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ClassLogTransfer } from '../../types';
@@ -44,7 +43,7 @@ const firstOfMonth = () => {
 };
 
 const isWeekReviewTab = (tab: ClassLogReportTab): tab is ClassLogWeekReviewView =>
-  tab === 'teachers' || tab === 'gaps' || tab === 'classes';
+  tab === 'teachers' || tab === 'classes';
 
 export const ClassLogReport: React.FC = () => {
   const { teachers, sessions, requests, currentAcademicStaff } = useApp();
@@ -219,7 +218,6 @@ export const ClassLogReport: React.FC = () => {
     <div className="space-y-5 max-w-full min-w-0 overflow-x-clip">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         {tabBtn('teachers', '尚未完成核章的老師', <Users className="w-4 h-4 text-amber-300" />)}
-        {tabBtn('gaps', '缺漏的班級', <AlertTriangle className="w-4 h-4 text-rose-300" />)}
         {tabBtn('classes', '班級彙整核章', <Stamp className="w-4 h-4 text-sky-300" />)}
         {tabBtn('query', '日誌查詢', <BookOpen className="w-4 h-4 text-emerald-300" />)}
         {tabBtn('transfer', '轉移責任', <ArrowRightLeft className="w-4 h-4 text-indigo-300" />)}
