@@ -22,16 +22,16 @@ import type { Teacher } from '../types';
 /**
  * 中間頁「列高單位」容量；非末頁小計後換頁。
  * 畫面／列印／Excel 皆不補空白列；小計緊接資料列。
- * 短列實測約 3.5mm，理論可近 72；為避免瀏覽器列印把小計擠到下一頁，單位估算略保守。
+ * 短列實測約 3.5mm，理論可近 72；單位估算略保守作 fallback。
  * 兼課清冊列印另以實測列高分頁（含安全距／列高放大）。
  */
-export const PAYROLL_ROWS_PER_PAGE = 58;
+export const PAYROLL_ROWS_PER_PAGE = 62;
 
 /**
  * 末頁單位容量上限。
  * 略少以預留合計＋簽核；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 52;
+export const PAYROLL_ROWS_LAST_PAGE = 56;
 
 /**
  * 分頁時單列最多佔幾個列高單位。
@@ -59,14 +59,16 @@ export const PAYROLL_PRINT_PAGE_MM = 287;
 
 /**
  * 列印分頁量測時底部安全距（mm）。
- * 過小會讓資料列貼滿、小計因 break-inside:avoid 整段掉到下一頁（出現幾乎空白頁）。
+ * 12mm＋1.12 放大時 333.pdf 每頁小計下仍約 30mm 空白；改 6mm 填滿，
+ * 仍預留小計 break-inside:avoid 空間，避免再出現幾乎空白頁。
  */
-export const PAYROLL_PRINT_PAGE_SAFETY_MM = 12;
+export const PAYROLL_PRINT_PAGE_SAFETY_MM = 6;
 
 /**
  * 實測列高放大係數：畫面字型／mm 與實際列印常有落差，略放大避免塞爆。
+ * 配合 SAFETY 6mm；過大會讓每頁提早換頁、頁底空白過多。
  */
-export const PAYROLL_PRINT_HEIGHT_FUDGE = 1.12;
+export const PAYROLL_PRINT_HEIGHT_FUDGE = 1.05;
 
 /**
  * Excel 單頁資料列可用高度（point）。

@@ -77,16 +77,16 @@ function run() {
     '分頁換行係數應接近列印實際可容字寬'
   );
   assert.ok(
-    PAYROLL_ROWS_PER_PAGE >= 54 && PAYROLL_ROWS_PER_PAGE <= 64,
+    PAYROLL_ROWS_PER_PAGE >= 58 && PAYROLL_ROWS_PER_PAGE <= 68,
     `單位容量應介於填滿與不溢出之間（實際 ${PAYROLL_ROWS_PER_PAGE}）`
   );
   assert.ok(
-    PAYROLL_PRINT_PAGE_SAFETY_MM >= 10,
-    `列印安全距須 ≥10mm，避免小計被擠到下一頁（實際 ${PAYROLL_PRINT_PAGE_SAFETY_MM}）`
+    PAYROLL_PRINT_PAGE_SAFETY_MM >= 5 && PAYROLL_PRINT_PAGE_SAFETY_MM <= 8,
+    `列印安全距宜 5–8mm：過大頁底空白、過小小計易溢頁（實際 ${PAYROLL_PRINT_PAGE_SAFETY_MM}）`
   );
   assert.ok(
-    PAYROLL_PRINT_HEIGHT_FUDGE >= 1.1,
-    `實測列高放大係數須 ≥1.1（實際 ${PAYROLL_PRINT_HEIGHT_FUDGE}）`
+    PAYROLL_PRINT_HEIGHT_FUDGE >= 1.03 && PAYROLL_PRINT_HEIGHT_FUDGE <= 1.08,
+    `實測列高放大宜 1.03–1.08（實際 ${PAYROLL_PRINT_HEIGHT_FUDGE}）`
   );
 
   // 短備註：中間頁每頁容量人；畫面列不補空白
