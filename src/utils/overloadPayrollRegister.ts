@@ -22,22 +22,22 @@ import type { Teacher } from '../types';
 /**
  * 中間頁「列高單位」容量；非末頁小計後換頁。
  * 畫面／列印／Excel 皆不補空白列；小計緊接資料列。
- * A4 可印區約可容 ~50–54 短列；略留標題／表頭／小計與估算誤差。
+ * 依實際列印 PDF 量測：短列約 3.5mm，A4 可印區扣標題／表頭／小計後約可容 ~72 短列。
  */
-export const PAYROLL_ROWS_PER_PAGE = 54;
+export const PAYROLL_ROWS_PER_PAGE = 72;
 
 /**
  * 末頁單位容量上限。
  * 略少以預留合計＋簽核；不另拆頁。
  */
-export const PAYROLL_ROWS_LAST_PAGE = 50;
+export const PAYROLL_ROWS_LAST_PAGE = 66;
 
 /**
  * 分頁時單列最多佔幾個列高單位。
  * 避免長備註佔滿整頁容量、造成下方大片空白。
  * Excel 列高另用不封頂的「備註行數」估算。
  */
-export const PAYROLL_MAX_ROW_UNITS = 8;
+export const PAYROLL_MAX_ROW_UNITS = 12;
 
 /**
  * 分頁／列印用換行係數（乘上備註欄寬＝有效字寬）。
@@ -48,11 +48,16 @@ export const PAYROLL_REMARKS_WRAP_WIDTH_FACTOR = 1.45;
 
 /**
  * 備註「多出來的每一行」折算成幾個短列單位。
- * 列印短列 min-height≈4.9mm，備註後續行 7.5pt×1.1≈2.9mm → 理論約 0.6；
- * 實務列印仍偏高估，取 0.4 讓每頁較能填滿（略冒險，靠 maxRowUnits 封頂）。
+ * 實測短列 ≈3.5mm，備註後續行 ≈2.6–2.9mm → 約 0.75。
  * 若把每一換行都當 1 短列，會嚴重高估列高、過早換頁。
  */
-export const PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT = 0.4;
+export const PAYROLL_EXTRA_REMARK_LINE_TO_ROW_UNIT = 0.75;
+
+/** A4 可印高度（@page margin 5mm → 297−10） */
+export const PAYROLL_PRINT_PAGE_MM = 287;
+
+/** 列印分頁量測時底部安全距（mm），避免貼底被裁切 */
+export const PAYROLL_PRINT_PAGE_SAFETY_MM = 2;
 
 /**
  * Excel 列高用：略小於 1，讓換行估多一點，避免備註高度不夠被裁切。
@@ -245,6 +250,47 @@ export function paginatePayrollByUnits<T>(
     rows: p.real,
     paddedRows: p.real,
   }));
+}
+
+/**
+ * 依實測列高（px）打包列索引；容量為單頁資料區可用高度。
+ * 單列高於整頁容量時仍單獨成頁，避免無限迴圈。
+ */
+export function packPayrollIndicesByHeights(
+  heightsPx: number[],
+  pageCapacityPx: number
+): number[][] {
+  const capacity = Math.max(1, pageCapacityPx);
+  if (heightsPx.length === 0) return [];
+
+  const pages: number[][] = [];
+  let current: number[] = [];
+  let used = 0;
+
+  for (let i = 0; i < heightsPx.length; i++) {
+    const h = Math.max(1, heightsPx[i] || 1);
+    if (current.length > 0 && used + h > capacity) {
+      pages.push(current);
+      current = [i];
+      used = h;
+    } else {
+      current.push(i);
+      used += h;
+    }
+  }
+  if (current.length > 0) pages.push(current);
+  return pages;
+}
+
+/** 將列索引分組轉成資料列分頁（不含空白補列） */
+export function slicePayrollRowsByIndexGroups<T>(
+  rows: T[],
+  indexGroups: number[][]
+): PayrollUnitPageSlice<T>[] {
+  return indexGroups.map((idxs) => {
+    const slice = idxs.map((i) => rows[i]).filter(Boolean);
+    return { rows: slice, paddedRows: slice };
+  });
 }
 
 /** 依本頁已用單位補空白列（輔助／回歸用；實際匯出不再補空白資料列） */
@@ -519,6 +565,16 @@ export function buildOverloadPayrollRows(
     });
 }
 
+export function buildOverloadPagesFromSlices(
+  slices: PayrollUnitPageSlice<OverloadPayrollRow>[]
+): OverloadPayrollPage[] {
+  return slices.map((slice, idx) => ({
+    pageIndex: idx + 1,
+    rows: slice.paddedRows,
+    subtotal: sumTotals(slice.rows),
+  }));
+}
+
 export function paginateOverloadPayroll(rows: OverloadPayrollRow[]): {
   pages: OverloadPayrollPage[];
   grandTotal: OverloadPayrollTotals;
@@ -534,10 +590,23 @@ export function paginateOverloadPayroll(rows: OverloadPayrollRow[]): {
     createBlankOverloadRow,
     PAYROLL_REMARKS_COL_WIDTH.overload
   );
-  const pages: OverloadPayrollPage[] = slices.map((slice, idx) => ({
-    pageIndex: idx + 1,
-    rows: slice.paddedRows,
-    subtotal: sumTotals(slice.rows),
-  }));
-  return { pages, grandTotal };
+  return { pages: buildOverloadPagesFromSlices(slices), grandTotal };
+}
+
+/** 以實測列高重新分頁（列印／畫面用，避免單位估算留下半頁空白） */
+export function paginateOverloadPayrollByHeights(
+  rows: OverloadPayrollRow[],
+  heightsPx: number[],
+  pageCapacityPx: number
+): {
+  pages: OverloadPayrollPage[];
+  grandTotal: OverloadPayrollTotals;
+} {
+  const grandTotal = sumTotals(rows);
+  if (rows.length === 0) {
+    return { pages: [], grandTotal };
+  }
+  const groups = packPayrollIndicesByHeights(heightsPx, pageCapacityPx);
+  const slices = slicePayrollRowsByIndexGroups(rows, groups);
+  return { pages: buildOverloadPagesFromSlices(slices), grandTotal };
 }

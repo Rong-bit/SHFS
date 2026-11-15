@@ -13,6 +13,7 @@ import {
   formatRocYear,
   isBlankPayrollRow,
   paginateOverloadPayroll,
+  paginateOverloadPayrollByHeights,
   type OverloadPayrollTotals,
 } from '../../utils/overloadPayrollRegister';
 import { formatExportError } from '../../utils/downloadBlob';
@@ -25,6 +26,7 @@ import {
 import { printWithDocumentTitle } from '../../utils/printWithDocumentTitle';
 import { PayrollRegisterPrintStyles, CELL_CENTER, CELL_LEFT } from './PayrollRegisterPrintStyles';
 import { PayrollRegisterSignatureBlock } from './PayrollRegisterSignatureBlock';
+import { usePayrollRowHeightProbe } from './useMeasuredPayrollPages';
 
 import type { MonthlyTeacherSettlement } from '../../types';
 
@@ -100,7 +102,24 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
     settlementYear,
     { fundName: activeFund, weeks: weekRound }
   );
-  const { pages, grandTotal } = paginateOverloadPayroll(rows);
+  const fallback = React.useMemo(() => paginateOverloadPayroll(rows), [rows]);
+  const { probeRef, measurement } = usePayrollRowHeightProbe(rows.length);
+  const measured = React.useMemo(() => {
+    if (
+      !measurement ||
+      measurement.heightsPx.length !== rows.length ||
+      rows.length === 0
+    ) {
+      return null;
+    }
+    return paginateOverloadPayrollByHeights(
+      rows,
+      measurement.heightsPx,
+      measurement.pageCapacityPx
+    );
+  }, [measurement, rows]);
+  const pages = measured?.pages ?? fallback.pages;
+  const grandTotal = measured?.grandTotal ?? fallback.grandTotal;
   const totalPages = Math.max(pages.length, 1);
 
   const fundSuffix = hasExternalFunds ? `（${activeFund}經費）` : '';
@@ -195,6 +214,87 @@ export const OverloadPayrollRegisterModal: React.FC<OverloadPayrollRegisterModal
 
       <div className="payroll-register-print-root overflow-y-auto flex-1 p-4 print:p-0 print:overflow-visible bg-slate-100 print:bg-white">
         <PayrollRegisterPrintStyles />
+        {/* 離屏探針：以列印字級量測列高，供實高分頁（避免估算留下半頁空白） */}
+        {rows.length > 0 && (
+          <div ref={probeRef} className="payroll-register-measure-probe" aria-hidden>
+            <div className="payroll-register-measure-title">{title}</div>
+            <table className="payroll-register-measure-table payroll-register-overload-table">
+              <colgroup>
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '6.5%' }} />
+                <col style={{ width: '8.6%' }} />
+                <col style={{ width: '6.5%' }} />
+                <col style={{ width: '6.5%' }} />
+                <col style={{ width: '6.5%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '35%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>薪資編號</th>
+                  <th>教師姓名</th>
+                  <th>每週兼課</th>
+                  <th>
+                    ({weekRound}週)
+                    <br />
+                    兼課小計
+                  </th>
+                  <th>應加兼課</th>
+                  <th>應減兼課</th>
+                  <th>實得兼課</th>
+                  <th>實發金額</th>
+                  <th className="payroll-register-remarks-col">
+                    備註
+                    <div style={{ fontSize: '7.5pt', fontWeight: 400 }}>{monthRangeLabel}</div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={`probe-${row.teacherId}`}>
+                    <td>{row.salaryCode || '—'}</td>
+                    <td>{row.teacherName}</td>
+                    <td>{row.weeklyConcurrent || ''}</td>
+                    <td>{row.baseMonthlyConcurrent || ''}</td>
+                    <td>{row.addConcurrent || ''}</td>
+                    <td>{row.subtractConcurrent || ''}</td>
+                    <td>{row.actualConcurrent || ''}</td>
+                    <td>{row.amount.toLocaleString()}</td>
+                    <td className="payroll-register-remarks-col">{row.remarks}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="payroll-register-measure-footer">
+              <table className="payroll-register-measure-table payroll-register-overload-table">
+                <colgroup>
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '6.5%' }} />
+                  <col style={{ width: '8.6%' }} />
+                  <col style={{ width: '6.5%' }} />
+                  <col style={{ width: '6.5%' }} />
+                  <col style={{ width: '6.5%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '35%' }} />
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <td colSpan={2}>小計</td>
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td>1 of 1</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {pages.length === 0 ? (
           <div className="bg-white rounded-xl p-8 text-center text-slate-500 text-sm">
             {activeFund === SCHOOL_FUND_NAME
