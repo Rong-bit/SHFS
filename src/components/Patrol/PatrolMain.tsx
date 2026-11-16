@@ -22,6 +22,11 @@ import {
 } from '../../utils/patrolSchedule';
 import { patrolRecordId, usePatrolRecords } from '../../utils/patrolSync';
 import {
+  allTargetsAreNormal,
+  isBlankNormalRecord,
+  planAllNormalRooms,
+} from '../../utils/patrolAllNormal';
+import {
   buildPatrolReviewCase,
   EMPTY_PATROL_NOTIFY_ROLES,
   mergeNotifyRolesFromGroups,
@@ -64,8 +69,18 @@ const MODES: { id: PatrolKind; label: string; hint: string }[] = [
 
 export const PatrolMain: React.FC = () => {
   const { systemConfig, sessions, requests, currentTeacher, teachers, academicStaffList } = useApp();
-  const { records, pendingCount, loading, error, cloudReady, saveRecord, deleteRecord, refresh } =
-    usePatrolRecords();
+  const {
+    records,
+    pendingCount,
+    loading,
+    error,
+    cloudReady,
+    saveRecord,
+    saveRecords,
+    deleteRecord,
+    deleteRecords,
+    refresh,
+  } = usePatrolRecords();
   const { cases, saveCase, deleteCase, refresh: refreshReviews } = usePatrolReviews();
   const periodDefs = useMemo(() => buildPeriodDefinitions(systemConfig), [systemConfig]);
   const fullPatrolAllowed = canPerformFullPatrol(currentTeacher);
@@ -79,6 +94,8 @@ export const PatrolMain: React.FC = () => {
   const [buildingIdx, setBuildingIdx] = useState(0);
   const [openRoomId, setOpenRoomId] = useState<string | null>(null);
   const [notifyMsg, setNotifyMsg] = useState('');
+  /** 取消勾選「一切正常」時，用來把核取方塊同步回實際狀態 */
+  const [allNormalEpoch, setAllNormalEpoch] = useState(0);
   /** 異常會辦：勾選要通知的群組 */
   const [groupPick, setGroupPick] = useState<{
     record: PatrolRecord;
@@ -336,8 +353,12 @@ export const PatrolMain: React.FC = () => {
     }
   };
 
-  const handleSave = (room: PatrolRoom, draft: Pick<PatrolRecord, 'observations' | 'checks' | 'note'>) => {
-    if (!currentTeacher) return;
+  const buildRecord = (
+    room: PatrolRoom,
+    draft: Pick<PatrolRecord, 'observations' | 'checks' | 'note'>,
+    createdAt?: string
+  ): PatrolRecord | null => {
+    if (!currentTeacher) return null;
     const o = occupancy.get(room.id);
     const info = o?.here ?? o?.away ?? null;
     const itemLabels: Record<string, string> = {};
@@ -349,7 +370,7 @@ export const PatrolMain: React.FC = () => {
     }
     const recPeriod = usesPeriod ? period : undefined;
     const existing = myRecordFor(room.id);
-    const record: PatrolRecord = {
+    return {
       id: patrolRecordId({ date, kind: mode, period: recPeriod, roomId: room.id, patrollerId: currentTeacher.id }),
       date,
       kind: mode,
@@ -367,8 +388,13 @@ export const PatrolMain: React.FC = () => {
       note: draft.note,
       patrollerId: currentTeacher.id,
       patrollerName: currentTeacher.name,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      createdAt: existing?.createdAt ?? createdAt ?? new Date().toISOString(),
     };
+  };
+
+  const handleSave = (room: PatrolRoom, draft: Pick<PatrolRecord, 'observations' | 'checks' | 'note'>) => {
+    const record = buildRecord(room, draft);
+    if (!record) return;
     saveRecord(record);
     if (patrolRecordHasIssue(record)) {
       // 首次與後續增修異常：皆依「異常項目 → 通知群組」對應。
@@ -433,6 +459,73 @@ export const PatrolMain: React.FC = () => {
       if (ghost) deleteCase(ghost);
     }
     setOpenRoomId(null);
+  };
+
+  const allNormalPlan = planAllNormalRooms(targets, recordsByRoom);
+  const allClear = allTargetsAreNormal(targets, recordsByRoom);
+  const slotLabel = usesPeriod ? '本節' : '本次';
+  const allNormalScope = grouped.length > 1 ? `全部大樓、${slotLabel}` : slotLabel;
+
+  const markAllNormal = () => {
+    if (!currentTeacher || !canRecordToday) return;
+    if (allNormalPlan.toMark.length === 0) {
+      setNotifyMsg(
+        allNormalPlan.skippedIssue.length > 0
+          ? `尚有 ${allNormalPlan.skippedIssue.length} 間已登錄缺失，未改成正常。其餘應巡教室都已是正常。`
+          : '應巡教室都已登錄。'
+      );
+      return;
+    }
+    const createdAt = new Date().toISOString();
+    const normalChecks =
+      mode === 'class' || mode === 'exam'
+        ? {}
+        : Object.fromEntries(checkItems.map((item) => [item.id, true]));
+    const batch: PatrolRecord[] = [];
+    for (const room of allNormalPlan.toMark) {
+      const record = buildRecord(room, { observations: [], checks: normalChecks, note: '' }, createdAt);
+      if (record) batch.push(record);
+    }
+    if (batch.length === 0) return;
+    saveRecords(batch);
+    const issueHint =
+      allNormalPlan.skippedIssue.length > 0
+        ? `；${allNormalPlan.skippedIssue.length} 間已有缺失，維持原紀錄`
+        : '';
+    setNotifyMsg(`已將 ${batch.length} 間尚未登錄的教室標為正常${issueHint}`);
+  };
+
+  const clearMyBlankNormals = () => {
+    if (!currentTeacher) return;
+    const mine: PatrolRecord[] = [];
+    for (const room of targets) {
+      const rec = myRecordFor(room.id);
+      if (rec && isBlankNormalRecord(rec)) mine.push(rec);
+    }
+    if (mine.length === 0) {
+      setNotifyMsg('沒有可取消的正常紀錄。已有缺失、備註，或其他人登錄的教室會保留。');
+      return;
+    }
+    const ok = window.confirm(
+      `取消「一切正常」會移除您在${slotLabel}登錄、且沒有缺失也沒有備註的 ${mine.length} 筆正常紀錄。已有缺失或備註的班級會保留。確定要取消嗎？`
+    );
+    if (!ok) return;
+    for (const record of mine) {
+      notifyGenRef.current.set(record.id, (notifyGenRef.current.get(record.id) || 0) + 1);
+      const existing =
+        loadLocalPatrolReviews().find((c) => c.recordId === record.id) ||
+        cases.find((c) => c.recordId === record.id);
+      if (existing) deleteCase(existing);
+      else {
+        const ghostId = patrolReviewCaseId(record.id);
+        const ghost =
+          loadLocalPatrolReviews().find((c) => c.id === ghostId) ||
+          cases.find((c) => c.id === ghostId);
+        if (ghost) deleteCase(ghost);
+      }
+    }
+    deleteRecords(mine);
+    setNotifyMsg(`已取消 ${mine.length} 筆正常紀錄。有缺失、有備註，或其他人登錄的教室會保留。`);
   };
 
   if (!currentTeacher) {
@@ -585,6 +678,51 @@ export const PatrolMain: React.FC = () => {
             <span>重新載入</span>
           </button>
         )}
+        <label
+          htmlFor="patrol-all-normal"
+          className={`w-full flex items-start gap-3 rounded-xl border px-3 py-2.5 touch-manipulation ${
+            allClear
+              ? 'border-emerald-400 bg-emerald-50'
+              : 'border-slate-200 bg-slate-50'
+          } ${
+            !canRecordToday || targets.length === 0 ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+          }`}
+        >
+          <input
+            id="patrol-all-normal"
+            key={allNormalEpoch}
+            type="checkbox"
+            checked={allClear}
+            disabled={!canRecordToday || targets.length === 0}
+            onChange={(e) => {
+              if (!canRecordToday || targets.length === 0) return;
+              if (e.target.checked) markAllNormal();
+              else clearMyBlankNormals();
+              setAllNormalEpoch((n) => n + 1);
+            }}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600 disabled:cursor-not-allowed"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-extrabold text-slate-900">一切正常</span>
+            <span className="block text-[11px] font-medium text-slate-600 leading-snug mt-0.5">
+              {!canRecordToday
+                ? '目前無法登錄，不能勾選一切正常。'
+                : targets.length === 0
+                  ? usesOccupancy
+                    ? '這一節沒有應巡教室。'
+                    : '尚未設定應巡教室。'
+                  : allClear
+                    ? `${slotLabel}應巡教室都已標為正常。取消勾選只會移除您登錄、且沒有缺失也沒有備註的正常紀錄。`
+                    : allNormalPlan.toMark.length === 0
+                      ? `尚有 ${allNormalPlan.skippedIssue.length} 間已登錄缺失，所以不能視為一切正常；再勾選也不會改掉那些缺失。`
+                      : `勾選後，${allNormalScope}尚未登錄的 ${allNormalPlan.toMark.length} 間應巡教室會一次標成正常，不必逐班按。${
+                          allNormalPlan.skippedIssue.length > 0
+                            ? `已有缺失的 ${allNormalPlan.skippedIssue.length} 間不會被改掉。`
+                            : ''
+                        }`}
+            </span>
+          </span>
+        </label>
       </div>
 
       {!cloudReady && (

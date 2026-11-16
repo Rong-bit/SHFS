@@ -156,6 +156,30 @@ const upsert = (records: PatrolRecord[], record: PatrolRecord) => [
   record,
 ];
 
+const upsertMany = (records: PatrolRecord[], incoming: PatrolRecord[]) => {
+  if (incoming.length === 0) return records;
+  const incomingIds = new Set(incoming.map((r) => r.id));
+  return [...records.filter((r) => !incomingIds.has(r.id)), ...incoming];
+};
+
+/**
+ * 磁碟只留近期。畫面上若已用 refresh 拉回較舊資料，勿被此次寫入沖掉。
+ * touchedIds 是這次新增或刪除的 id；extras 是磁碟沒留下、仍要留在畫面上的紀錄。
+ */
+const mergeMemoryRecords = (
+  prev: PatrolRecord[],
+  saved: PatrolRecord[],
+  touchedIds: Set<string>,
+  extras: PatrolRecord[]
+) => {
+  const savedIds = new Set(saved.map((r) => r.id));
+  const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && !touchedIds.has(r.id));
+  const missing = extras.filter((r) => !savedIds.has(r.id));
+  return [...olderInMemory, ...saved, ...missing];
+};
+
+const pendingId = (op: PendingOp) => (op.op === 'put' ? op.record.id : op.id);
+
 /** 巡堂紀錄：本機優先寫入，雲端可用時逐筆上傳；離線時排入待上傳 */
 type RecentOp = { id: string; at: number; record?: PatrolRecord };
 
@@ -216,13 +240,7 @@ export function usePatrolRecords() {
         if (!isLocalStorageQuotaError(err)) throw err;
       }
       const saved = persisted ?? nextDisk;
-      // 磁碟只留近期；畫面上若已用 refresh 拉回較舊資料，勿被此次寫入沖掉
-      setRecords((prev) => {
-        const savedIds = new Set(saved.map((r) => r.id));
-        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
-        const withRecord = savedIds.has(record.id) ? saved : [...saved, record];
-        return [...olderInMemory, ...withRecord];
-      });
+      setRecords((prev) => mergeMemoryRecords(prev, saved, new Set([record.id]), [record]));
       recentOpsRef.current.set(record.id, { id: record.id, at: Date.now(), record });
       savePending([
         ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
@@ -244,15 +262,77 @@ export function usePatrolRecords() {
         if (!isLocalStorageQuotaError(err)) throw err;
       }
       const saved = (persisted ?? nextDisk).filter((r) => r.id !== record.id);
-      setRecords((prev) => {
-        const savedIds = new Set(saved.map((r) => r.id));
-        const olderInMemory = prev.filter((r) => !savedIds.has(r.id) && r.id !== record.id);
-        return [...olderInMemory, ...saved];
-      });
+      setRecords((prev) => mergeMemoryRecords(prev, saved, new Set([record.id]), []));
       recentOpsRef.current.set(record.id, { id: record.id, at: Date.now() });
       savePending([
         ...loadPending().filter((op) => (op.op === 'put' ? op.record.id : op.id) !== record.id),
         { opId: newOpId(), op: 'delete', id: record.id, date: record.date },
+      ]);
+      setPendingCount(loadPending().length);
+      void flush();
+    },
+    [flush]
+  );
+
+  /** 一次寫入多筆（例如「一切正常」），只寫磁碟與待上傳佇列各一次 */
+  const saveRecords = useCallback(
+    (incoming: PatrolRecord[]) => {
+      if (incoming.length === 0) return;
+      const byId = new Map<string, PatrolRecord>();
+      for (const record of incoming) byId.set(record.id, record);
+      const list = Array.from(byId.values());
+      const ids = new Set(list.map((r) => r.id));
+      const nextDisk = upsertMany(loadLocalPatrolRecords(), list);
+      let persisted: PatrolRecord[] | null = null;
+      try {
+        persisted = saveLocalPatrolRecords(nextDisk);
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
+      }
+      const saved = persisted ?? nextDisk;
+      setRecords((prev) => mergeMemoryRecords(prev, saved, ids, list));
+      const now = Date.now();
+      for (const record of list) {
+        recentOpsRef.current.set(record.id, { id: record.id, at: now, record });
+      }
+      savePending([
+        ...loadPending().filter((op) => !ids.has(pendingId(op))),
+        ...list.map((record) => ({ opId: newOpId(), op: 'put' as const, record })),
+      ]);
+      setPendingCount(loadPending().length);
+      void flush();
+    },
+    [flush]
+  );
+
+  const deleteRecords = useCallback(
+    (incoming: PatrolRecord[]) => {
+      if (incoming.length === 0) return;
+      const byId = new Map<string, PatrolRecord>();
+      for (const record of incoming) byId.set(record.id, record);
+      const list = Array.from(byId.values());
+      const ids = new Set(list.map((r) => r.id));
+      const nextDisk = loadLocalPatrolRecords().filter((r) => !ids.has(r.id));
+      let persisted: PatrolRecord[] | null = null;
+      try {
+        persisted = saveLocalPatrolRecords(nextDisk);
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
+      }
+      const saved = (persisted ?? nextDisk).filter((r) => !ids.has(r.id));
+      setRecords((prev) => mergeMemoryRecords(prev, saved, ids, []));
+      const now = Date.now();
+      for (const record of list) {
+        recentOpsRef.current.set(record.id, { id: record.id, at: now });
+      }
+      savePending([
+        ...loadPending().filter((op) => !ids.has(pendingId(op))),
+        ...list.map((record) => ({
+          opId: newOpId(),
+          op: 'delete' as const,
+          id: record.id,
+          date: record.date,
+        })),
       ]);
       setPendingCount(loadPending().length);
       void flush();
@@ -304,5 +384,16 @@ export function usePatrolRecords() {
     [flush]
   );
 
-  return { records, pendingCount, loading, error, cloudReady, saveRecord, deleteRecord, refresh };
+  return {
+    records,
+    pendingCount,
+    loading,
+    error,
+    cloudReady,
+    saveRecord,
+    saveRecords,
+    deleteRecord,
+    deleteRecords,
+    refresh,
+  };
 }
