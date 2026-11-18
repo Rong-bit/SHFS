@@ -12,7 +12,11 @@ export const LOCAL_STORAGE_QUOTA_HINT =
  * 雲端同步仍可繼續；重整後會再從雲端載入。
  */
 export const SCHOOL_LOCAL_CACHE_QUOTA_HINT =
-  '手機儲存空間不足，無法完整快取課表／通知單到本機。目前仍可使用雲端資料；請按「清除巡堂與日誌快取」後再同步，或清除此網站資料後重新加入同步。雲端資料不會因此刪除。';
+  '手機儲存空間不足。請先按「精簡通知單快取（保留巡堂／日誌）」；通知單較不重要，會優先精簡。雲端資料不會刪除。若仍不足再清除此網站資料後加入同步。';
+
+/** 申請單／通知單本機鍵（空間不足時優先精簡，以保留巡堂／教室日誌） */
+export const DEFAULT_REQUESTS_STORAGE_KEY = 'voc_requests_v1';
+export const DEFAULT_REQUESTS_META_KEY = 'voc_requests_meta_v1';
 
 /** 會與課表／申請共用配額、但可再從雲端載回的大型暫存 */
 export const SHRINKABLE_LOCAL_CACHE_KEYS = [
@@ -256,22 +260,50 @@ export function purgeShrinkableLocalCaches(storage: StorageLike): number {
 }
 
 /**
- * 寫入課表／申請單等整包資料；配額不足時先精簡、再清空可重建暫存後重試。
- * 仍失敗回傳 false（呼叫端勿把雲端同步標成失敗，也勿把 updatedAt 歸零造成反覆重抓）。
+ * 釋出通知單／申請單本機快取（保留 meta 筆數）。
+ * 手機以巡堂／教室日誌為主時，應優先於此步驟，而不是清巡堂暫存。
+ */
+export function freeRequestsLocalBody(
+  storage: StorageLike,
+  requestsKey = DEFAULT_REQUESTS_STORAGE_KEY
+): void {
+  try {
+    storage.removeItem(requestsKey);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 寫入課表等整包資料。
+ * 配額不足時優先刪通知單本機快取 → 再精簡巡堂／日誌 → 最後才清空巡堂／日誌。
+ * 仍失敗回傳 false（勿把雲端同步標失敗、勿把 updatedAt 歸零）。
  */
 export function persistSchoolLocalJson(
   storage: StorageLike,
   key: string,
   value: unknown,
-  opts?: { todayIso?: string }
+  opts?: { todayIso?: string; requestsKey?: string }
 ): boolean {
   const text = JSON.stringify(value);
+  const requestsKey = opts?.requestsKey ?? DEFAULT_REQUESTS_STORAGE_KEY;
   try {
     writeItemFreeingKey(storage, key, text);
     return true;
   } catch (err) {
     if (!isLocalStorageQuotaError(err)) throw err;
   }
+  // 1) 優先犧牲通知單本機快取（雲端仍在；巡堂／日誌較重要）
+  if (key !== requestsKey) {
+    try {
+      freeRequestsLocalBody(storage, requestsKey);
+      writeItemFreeingKey(storage, key, text);
+      return true;
+    } catch (err) {
+      if (!isLocalStorageQuotaError(err)) throw err;
+    }
+  }
+  // 2) 精簡巡堂／日誌（留近 7 日）
   try {
     relieveDatedCaches(storage, SHRINKABLE_LOCAL_CACHE_KEYS, 7, opts?.todayIso);
     writeItemFreeingKey(storage, key, text);
@@ -279,6 +311,7 @@ export function persistSchoolLocalJson(
   } catch (err) {
     if (!isLocalStorageQuotaError(err)) throw err;
   }
+  // 3) 最後才清空可重建的巡堂／日誌暫存
   try {
     purgeShrinkableLocalCaches(storage);
     writeItemFreeingKey(storage, key, text);

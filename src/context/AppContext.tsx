@@ -50,7 +50,6 @@ import {
 import {
   SCHOOL_LOCAL_CACHE_QUOTA_HINT,
   persistSchoolLocalJson,
-  purgeShrinkableLocalCaches,
 } from '../utils/localStorageQuota';
 import {
   REQUESTS_LOCAL_TRUNCATED_HINT,
@@ -888,17 +887,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const retrySchoolLocalCacheAfterQuota = () => {
-    purgeShrinkableLocalCaches(localStorage);
+    // 手機以巡堂／教室日誌為主：先精簡通知單，預設不清巡堂／日誌暫存
     schoolPersistQuotaFailedRef.current = false;
     const reqResult = persistRequestsLocalCache(localStorage, STORAGE_KEYS.REQUESTS, requests);
     setRequestsLocalMeta(reqResult.meta);
     const ok =
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.TEACHERS, teachersRef.current) &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.VENUES, venues) &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.SESSIONS, sessions) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.TEACHERS, teachersRef.current, {
+        requestsKey: STORAGE_KEYS.REQUESTS,
+      }) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.VENUES, venues, {
+        requestsKey: STORAGE_KEYS.REQUESTS,
+      }) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.SESSIONS, sessions, {
+        requestsKey: STORAGE_KEYS.REQUESTS,
+      }) &&
       reqResult.ok &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.STAFF_LIST, academicStaffListRef.current) &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.CONFIG, systemConfigRef.current);
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.STAFF_LIST, academicStaffListRef.current, {
+        requestsKey: STORAGE_KEYS.REQUESTS,
+      }) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.CONFIG, systemConfigRef.current, {
+        requestsKey: STORAGE_KEYS.REQUESTS,
+      });
     if (!ok) {
       markSchoolPersistQuotaFailure();
       return false;
@@ -915,8 +924,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       reqResult.truncated
         ? REQUESTS_LOCAL_TRUNCATED_HINT
         : isCloudSyncReady(cloudSyncSettings)
-          ? '已清除巡堂／日誌快取，本機課表快取已恢復；可繼續同步。'
-          : '已清除巡堂／日誌快取，本機課表快取已恢復。'
+          ? '已精簡通知單本機快取，巡堂／教室日誌已保留；可繼續同步。'
+          : '已精簡通知單本機快取，巡堂／教室日誌已保留。'
     );
     if (isCloudSyncReady(cloudSyncSettings)) setCloudSyncStatus('synced');
     return true;

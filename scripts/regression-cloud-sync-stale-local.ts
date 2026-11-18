@@ -117,8 +117,23 @@ function createWebKitStorage(maxBytes: number): StorageLike & { map: Map<string,
   });
   assert.equal(ok, false, '仍不足配額應回傳 false');
   assert.match(LOCAL_STORAGE_QUOTA_HINT, /手機儲存空間不足/);
-  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /無法完整快取/);
-  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /清除巡堂與日誌快取/);
+  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /精簡通知單快取/);
+  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /保留巡堂／日誌/);
+}
+
+{
+  // 寫入課表時：應先刪通知單本機，保留巡堂
+  const storage = createWebKitStorage(700);
+  storage.map.set('voc_requests_v1', JSON.stringify({ fat: 'r'.repeat(400) }));
+  storage.map.set(
+    'voc_patrol_records_v1',
+    JSON.stringify([{ id: 'p1', date: '2026-11-01', note: 'keep-patrol' }])
+  );
+  // 400+~40 + 新 sessions 會超過 700，迫使走「先釋出通知單」路徑
+  const ok = persistSchoolLocalJson(storage, 'voc_sessions_v1', { sessions: 's'.repeat(300) });
+  assert.equal(ok, true);
+  assert.equal(storage.getItem('voc_requests_v1'), null, '應先釋放通知單本機');
+  assert.ok(storage.getItem('voc_patrol_records_v1'), '應保留巡堂暫存');
 }
 
 {

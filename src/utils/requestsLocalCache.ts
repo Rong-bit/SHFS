@@ -6,16 +6,13 @@ import { SubstituteRequest } from '../types';
 import { isActingHomeroomOnlyRequest } from './actingHomeroomPayrollRegister';
 import { listPrintableNoticeAnchors, noticeSheetKey } from './noticeDocument';
 import {
-  persistSchoolLocalJson,
-  purgeShrinkableLocalCaches,
   type StorageLike,
   writeItemFreeingKey,
   isLocalStorageQuotaError,
-  relieveDatedCaches,
-  SHRINKABLE_LOCAL_CACHE_KEYS,
+  DEFAULT_REQUESTS_META_KEY,
 } from './localStorageQuota';
 
-export const REQUESTS_META_KEY = 'voc_requests_meta_v1';
+export const REQUESTS_META_KEY = DEFAULT_REQUESTS_META_KEY;
 
 /** 本機快取申請列上限（由多到少嘗試） */
 export const REQUEST_CACHE_KEEP_LIMITS = [120, 80, 50, 30, 15] as const;
@@ -149,18 +146,23 @@ export type PersistRequestsResult = {
 
 /**
  * 寫入申請單本機快取：空間不足時改留最近幾筆，meta 仍記完整筆數（雲端不刪）。
+ * 刻意不清巡堂／教室日誌——手機以巡堂與日誌為主，通知單較不重要。
  */
 export function persistRequestsLocalCache(
   storage: StorageLike,
   requestsKey: string,
   requests: SubstituteRequest[],
-  opts?: { todayIso?: string }
+  _opts?: { todayIso?: string }
 ): PersistRequestsResult {
+  void _opts;
   const fullMeta = buildRequestsLocalMeta(requests, { truncated: false });
 
-  if (persistSchoolLocalJson(storage, requestsKey, requests, opts)) {
+  try {
+    writeItemFreeingKey(storage, requestsKey, JSON.stringify(requests));
     writeRequestsLocalMeta(storage, fullMeta);
     return { ok: true, truncated: false, retained: requests, meta: fullMeta };
+  } catch (err) {
+    if (!isLocalStorageQuotaError(err)) throw err;
   }
 
   for (const keep of REQUEST_CACHE_KEEP_LIMITS) {
@@ -170,25 +172,27 @@ export function persistRequestsLocalCache(
       retainedCount: retained.length,
     });
     try {
-      purgeShrinkableLocalCaches(storage);
       writeItemFreeingKey(storage, requestsKey, JSON.stringify(retained));
       writeRequestsLocalMeta(storage, meta);
       return { ok: true, truncated: meta.truncated, retained, meta };
     } catch (err) {
       if (!isLocalStorageQuotaError(err)) throw err;
-      try {
-        relieveDatedCaches(storage, SHRINKABLE_LOCAL_CACHE_KEYS, 3, opts?.todayIso);
-      } catch {
-        // ignore
-      }
     }
   }
 
+  // 連最近幾筆都寫不進：拿掉通知單本機內容，仍保留完整筆數 meta；不動巡堂／日誌
+  try {
+    storage.removeItem(requestsKey);
+  } catch {
+    // ignore
+  }
+  const emptyMeta = buildRequestsLocalMeta(requests, { truncated: true, retainedCount: 0 });
+  const metaOk = writeRequestsLocalMeta(storage, emptyMeta);
   return {
-    ok: false,
+    ok: metaOk,
     truncated: true,
     retained: [],
-    meta: buildRequestsLocalMeta(requests, { truncated: true, retainedCount: 0 }),
+    meta: emptyMeta,
   };
 }
 
@@ -219,4 +223,4 @@ export function resolveDisplayedCaseCount(
 }
 
 export const REQUESTS_LOCAL_TRUNCATED_HINT =
-  '手機儲存空間不足，本機僅快取最近通知單；完整筆數仍與電腦相同（資料在雲端，未刪除）。';
+  '手機儲存空間不足，已優先精簡通知單本機快取（完整筆數仍與電腦相同；雲端未刪除），以保留巡堂與教室日誌。';
