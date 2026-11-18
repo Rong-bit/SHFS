@@ -1180,7 +1180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cloudDirtyRef.current = false;
       setCloudSyncStatus('error');
       setCloudSyncMessage(
-        '剛匯入整份備份，已暫停自動覆寫雲端。若要以本機備份為準請按「強制推送本機」；若要以雲端為準請按「拉取遠端（採用對方）」。'
+        '剛匯入整份備份，已暫停自動覆寫雲端。若要以雲端為準請按「拉取遠端（採用對方）」；若確定要以本機備份為準，請在電腦按「強制推送本機」。'
       );
     } else {
       setCloudSyncStatus('connecting');
@@ -1220,7 +1220,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             // 衝突待處理：不可靜默套用遠端，否則衝突提示／本機變更會被蓋掉
             setCloudSyncStatus('error');
             setCloudSyncMessage(
-              '其他電腦有較新資料，已暫停自動覆寫。請至「雲端同步」選擇「拉取遠端（採用對方）」或「強制推送本機」。'
+              '其他電腦有較新資料，已暫停自動覆寫。請至「雲端同步」按「拉取遠端（採用對方）」；若確定要以本機為準，請在電腦按「強制推送本機」。'
             );
           } else if (cloudDirtyRef.current) {
             // 本機尚有待推送變更：暫不套用遠端，避免覆蓋本機異動
@@ -1322,7 +1322,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cloudConflictRef.current = true;
       setCloudSyncStatus('error');
       setCloudSyncMessage(
-        '其他電腦有較新資料，已暫停自動覆寫以免覆蓋對方變更。請至「雲端同步」選擇「拉取遠端（採用對方）」或「強制推送本機」。'
+        '其他電腦有較新資料，已暫停自動覆寫以免覆蓋對方變更。請至「雲端同步」按「拉取遠端（採用對方）」；若確定要以本機為準，請在電腦按「強制推送本機」。'
       );
       cloudDirtyRef.current = false;
       return;
