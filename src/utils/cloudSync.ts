@@ -375,22 +375,6 @@ export type CloudSyncProbeResult = {
 };
 
 /**
- * 是否把雲端整包套用到本機。
- * 首次完整拉取時，時間戳相同也要套用：避免本機因儲存空間不足沒寫入申請單／通知單，
- * 卻已記下 updatedAt，重整後畫面仍顯示「已跨電腦同步」但通知單數量偏少。
- */
-export function shouldApplyRemoteSchoolData(opts: {
-  remoteUpdatedAt: number;
-  localUpdatedAt: number;
-  isFirstFullPull: boolean;
-}): boolean {
-  if (!(opts.remoteUpdatedAt > 0)) return false;
-  if (opts.remoteUpdatedAt > opts.localUpdatedAt) return true;
-  if (opts.isFirstFullPull && opts.remoteUpdatedAt === opts.localUpdatedAt) return true;
-  return false;
-}
-
-/**
  * 探測同步連線。
  * 注意：同步密碼會決定雲端路徑，密碼差一個字就連到另一個空位置（看起來像「無法同步」）。
  */
