@@ -116,7 +116,7 @@ export const CloudSyncPanel: React.FC = () => {
                     const ok = retrySchoolLocalCacheAfterQuota();
                     if (!ok) {
                       window.alert(
-                        '清除快取後仍無法寫入本機。請到瀏覽器設定清除此網站資料，再重新「加入同步」。'
+                        '精簡通知單後仍無法寫入本機。請到瀏覽器設定清除此網站資料，再重新「加入同步」。'
                       );
                     }
                   } finally {
@@ -125,7 +125,7 @@ export const CloudSyncPanel: React.FC = () => {
                 }}
                 className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
               >
-                清除巡堂與日誌快取
+                精簡通知單快取（保留巡堂／日誌）
               </button>
             )}
             {cloudSyncMessage.includes('暫停自動覆寫') && (

@@ -209,8 +209,8 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
                 setMsgTone(ok ? 'ok' : 'err');
                 setMsg(
                   ok
-                    ? '已清除巡堂／日誌快取，本機課表快取已恢復。'
-                    : '清除後仍不足。請清除此網站資料後再加入同步。'
+                    ? '已精簡通知單本機快取，巡堂／教室日誌已保留。'
+                    : '精簡後仍不足。請清除此網站資料後再加入同步。'
                 );
               } finally {
                 setSaving(false);
@@ -218,7 +218,7 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
             }}
             className="w-full px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50"
           >
-            清除巡堂與日誌快取
+            精簡通知單快取（保留巡堂／日誌）
           </button>
         )}
       </div>
