@@ -99,27 +99,52 @@ const many = Array.from({ length: 40 }, (_, i) =>
 }
 
 {
+  // 手機：可只留筆數、保留巡堂
   const storage = createWebKitStorage(6_000);
   const patrolJson = JSON.stringify(
     Array.from({ length: 20 }, (_, i) => ({ id: `p${i}`, date: '2025-01-01', note: 'n'.repeat(120) }))
   );
   storage.map.set('voc_patrol_records_v1', patrolJson);
   const huge = many.map((r) => ({ ...r, reason: 'z'.repeat(200) }));
-  const fullJson = JSON.stringify(huge);
-  assert.ok(fullJson.length > 8000, '測資應大到難以一次塞進配額');
-  const result = persistRequestsLocalCache(storage, 'voc_requests_v1', huge);
-  assert.equal(result.ok, true, '至少應寫入完整筆數 meta');
-  assert.equal(result.meta.totalCount, huge.length);
-  assert.ok(result.meta.noticeCount > 0);
-  assert.equal(result.truncated, true, '應標記為本機截斷');
-  assert.equal(result.retained.length, 0, '空間不足可不存通知單內容');
+  assert.ok(JSON.stringify(huge).length > 8000);
+  const result = persistRequestsLocalCache(storage, 'voc_requests_v1', huge, {
+    allowCountOnly: true,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.truncated, true);
+  assert.equal(result.retained.length, 0);
+  assert.equal(storage.getItem('voc_requests_v1'), null);
+  assert.ok(storage.getItem('voc_requests_meta_v1'));
+  assert.equal(storage.getItem('voc_patrol_records_v1'), patrolJson);
   assert.match(REQUESTS_LOCAL_TRUNCATED_HINT, /筆數/);
-  assert.equal(storage.getItem('voc_requests_v1'), null, '可不存通知單內容');
-  assert.ok(storage.getItem('voc_requests_meta_v1'), '必須留下正確筆數');
-  assert.equal(
-    storage.getItem('voc_patrol_records_v1'),
-    patrolJson,
-    '不可清掉巡堂暫存'
+}
+
+{
+  // 電腦：應清巡堂暫存後寫入完整通知單
+  const desktopSet = many.slice(0, 20).map((r) => ({ ...r, reason: 'desk' }));
+  const fullLen = JSON.stringify(desktopSet).length;
+  const storage = createWebKitStorage(fullLen + 800);
+  storage.map.set(
+    'voc_patrol_records_v1',
+    JSON.stringify(
+      Array.from({ length: 30 }, (_, i) => ({ id: `p${i}`, date: '2025-01-01', note: 'n'.repeat(80) }))
+    )
+  );
+  assert.ok(
+    fullLen + storage.getItem('voc_patrol_records_v1')!.length > fullLen + 800,
+    '合計應超過配額，迫使先清巡堂'
+  );
+  const result = persistRequestsLocalCache(storage, 'voc_requests_v1', desktopSet, {
+    allowCountOnly: false,
+  });
+  assert.equal(result.ok, true, '電腦應寫入成功');
+  assert.equal(result.truncated, false, '電腦應為完整內容');
+  assert.equal(result.retained.length, desktopSet.length);
+  assert.ok(storage.getItem('voc_requests_v1'));
+  const patrolLeft = storage.getItem('voc_patrol_records_v1');
+  assert.ok(
+    patrolLeft == null || patrolLeft === '[]',
+    '電腦可精簡／清空巡堂暫存以保住完整通知單'
   );
   assert.ok(REQUEST_CACHE_KEEP_LIMITS.length > 0);
 }

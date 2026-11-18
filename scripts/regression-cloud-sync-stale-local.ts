@@ -122,18 +122,39 @@ function createWebKitStorage(maxBytes: number): StorageLike & { map: Map<string,
 }
 
 {
-  // 寫入課表時：應先刪通知單本機，保留巡堂
+  // 手機：寫入課表時可先刪通知單本機，保留巡堂
   const storage = createWebKitStorage(700);
   storage.map.set('voc_requests_v1', JSON.stringify({ fat: 'r'.repeat(400) }));
   storage.map.set(
     'voc_patrol_records_v1',
     JSON.stringify([{ id: 'p1', date: '2026-11-01', note: 'keep-patrol' }])
   );
-  // 400+~40 + 新 sessions 會超過 700，迫使走「先釋出通知單」路徑
-  const ok = persistSchoolLocalJson(storage, 'voc_sessions_v1', { sessions: 's'.repeat(300) });
+  const ok = persistSchoolLocalJson(storage, 'voc_sessions_v1', { sessions: 's'.repeat(300) }, {
+    preferPatrolOverNotices: true,
+  });
   assert.equal(ok, true);
-  assert.equal(storage.getItem('voc_requests_v1'), null, '應先釋放通知單本機');
+  assert.equal(storage.getItem('voc_requests_v1'), null, '手機應先釋放通知單本機');
   assert.ok(storage.getItem('voc_patrol_records_v1'), '應保留巡堂暫存');
+}
+
+{
+  // 電腦：不可為寫課表而丟通知單；應清巡堂暫存保住通知單
+  const requestsJson = JSON.stringify({ fat: 'r'.repeat(400) });
+  const sessionsValue = { sessions: 's'.repeat(200) };
+  const sessionsLen = JSON.stringify(sessionsValue).length;
+  const storage = createWebKitStorage(requestsJson.length + sessionsLen + 50);
+  storage.map.set('voc_requests_v1', requestsJson);
+  storage.map.set(
+    'voc_patrol_records_v1',
+    JSON.stringify([{ id: 'p1', date: '2026-11-01', note: 'x'.repeat(300) }])
+  );
+  const ok = persistSchoolLocalJson(storage, 'voc_sessions_v1', sessionsValue, {
+    preferPatrolOverNotices: false,
+  });
+  assert.equal(ok, true);
+  assert.ok(storage.getItem('voc_requests_v1'), '電腦應保留通知單本機');
+  const patrolLeft = storage.getItem('voc_patrol_records_v1');
+  assert.ok(patrolLeft == null || patrolLeft === '[]', '電腦可清巡堂暫存騰位');
 }
 
 {
