@@ -7,32 +7,6 @@ import { dateToIsoLocal } from './holidays';
 export const LOCAL_STORAGE_QUOTA_HINT =
   '手機儲存空間不足。已改顯示較新的資料，較舊紀錄仍可從學校同步讀取。若這則訊息一直出現，請清除此網站資料後再加入學校同步。';
 
-/**
- * 課表／申請單寫不進本機時用（與巡堂「只留較新」不同）。
- * 雲端同步仍可繼續；重整後會再從雲端載入。
- */
-export const SCHOOL_LOCAL_CACHE_QUOTA_HINT =
-  '手機儲存空間不足。已優先保留巡堂／教室日誌；通知單可能僅顯示筆數。雲端資料不會刪除。若持續出現請清除此網站資料後再加入同步。';
-
-/** 申請單／通知單本機鍵（手機空間不足時可精簡；電腦應保留完整） */
-export const DEFAULT_REQUESTS_STORAGE_KEY = 'voc_requests_v1';
-export const DEFAULT_REQUESTS_META_KEY = 'voc_requests_meta_v1';
-
-/**
- * 是否為窄螢幕／手機瀏覽器（本機配額策略用）。
- * 電腦：通知單要完整；手機：巡堂／日誌優先，通知單可只留筆數。
- */
-export function isCompactDeviceStorage(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    if (window.matchMedia('(max-width: 767px)').matches) return true;
-  } catch {
-    // ignore
-  }
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-  return /iPhone|iPod|Android.+Mobile/i.test(ua);
-}
-
 /** 會與課表／申請共用配額、但可再從雲端載回的大型暫存 */
 export const SHRINKABLE_LOCAL_CACHE_KEYS = [
   'voc_class_log_v1',
@@ -251,100 +225,6 @@ export function persistTextAttempts(
       ? opts?.quotaHint || LOCAL_STORAGE_QUOTA_HINT
       : '本機儲存失敗，請再試一次'
   );
-}
-
-/** 整包刪除可從雲端重建的巡堂／教室日誌暫存，釋出手機配額。 */
-export function purgeShrinkableLocalCaches(storage: StorageLike): number {
-  let removed = 0;
-  for (const key of SHRINKABLE_LOCAL_CACHE_KEYS) {
-    try {
-      if (safeGetItem(storage, key) != null) {
-        storage.removeItem(key);
-        removed += 1;
-      }
-    } catch {
-      try {
-        storage.removeItem(key);
-        removed += 1;
-      } catch {
-        // ignore
-      }
-    }
-  }
-  return removed;
-}
-
-/**
- * 釋出通知單／申請單本機快取（保留 meta 筆數）。
- * 手機以巡堂／教室日誌為主時，應優先於此步驟，而不是清巡堂暫存。
- */
-export function freeRequestsLocalBody(
-  storage: StorageLike,
-  requestsKey = DEFAULT_REQUESTS_STORAGE_KEY
-): void {
-  try {
-    storage.removeItem(requestsKey);
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * 寫入課表等整包資料。
- * - 手機：可先釋出通知單本機，以保留巡堂／日誌
- * - 電腦：不丟通知單內容；改先精簡／清空可重建的巡堂／日誌暫存
- * 仍失敗回傳 false（勿把雲端同步標失敗、勿把 updatedAt 歸零）。
- */
-export function persistSchoolLocalJson(
-  storage: StorageLike,
-  key: string,
-  value: unknown,
-  opts?: {
-    todayIso?: string;
-    requestsKey?: string;
-    /** 預設依裝置：手機 true、電腦 false */
-    preferPatrolOverNotices?: boolean;
-  }
-): boolean {
-  const text = JSON.stringify(value);
-  const requestsKey = opts?.requestsKey ?? DEFAULT_REQUESTS_STORAGE_KEY;
-  const preferPatrol =
-    typeof opts?.preferPatrolOverNotices === 'boolean'
-      ? opts.preferPatrolOverNotices
-      : isCompactDeviceStorage();
-  try {
-    writeItemFreeingKey(storage, key, text);
-    return true;
-  } catch (err) {
-    if (!isLocalStorageQuotaError(err)) throw err;
-  }
-  // 手機：可先犧牲通知單本機快取；電腦要完整通知單，跳過此步
-  if (preferPatrol && key !== requestsKey) {
-    try {
-      freeRequestsLocalBody(storage, requestsKey);
-      writeItemFreeingKey(storage, key, text);
-      return true;
-    } catch (err) {
-      if (!isLocalStorageQuotaError(err)) throw err;
-    }
-  }
-  // 精簡巡堂／日誌（留近 7 日）
-  try {
-    relieveDatedCaches(storage, SHRINKABLE_LOCAL_CACHE_KEYS, 7, opts?.todayIso);
-    writeItemFreeingKey(storage, key, text);
-    return true;
-  } catch (err) {
-    if (!isLocalStorageQuotaError(err)) throw err;
-  }
-  // 清空可重建的巡堂／日誌暫存（電腦為保住完整通知單可走到這步）
-  try {
-    purgeShrinkableLocalCaches(storage);
-    writeItemFreeingKey(storage, key, text);
-    return true;
-  } catch (err) {
-    if (isLocalStorageQuotaError(err)) return false;
-    throw err;
-  }
 }
 
 /** 空間不夠就縮短保留天數，必要時先清其他暫存。回傳實際寫入的紀錄。 */
