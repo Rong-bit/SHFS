@@ -227,6 +227,33 @@ export function persistTextAttempts(
   );
 }
 
+/**
+ * 寫入課表／申請單等整包資料；配額不足時先精簡可重建的巡堂／日誌暫存再重試。
+ * 仍失敗回傳 false（呼叫端應清掉同步時間戳，避免「已同步」卻缺通知單）。
+ */
+export function persistSchoolLocalJson(
+  storage: StorageLike,
+  key: string,
+  value: unknown,
+  opts?: { todayIso?: string }
+): boolean {
+  const text = JSON.stringify(value);
+  try {
+    writeItemFreeingKey(storage, key, text);
+    return true;
+  } catch (err) {
+    if (!isLocalStorageQuotaError(err)) throw err;
+  }
+  try {
+    relieveDatedCaches(storage, SHRINKABLE_LOCAL_CACHE_KEYS, 7, opts?.todayIso);
+    writeItemFreeingKey(storage, key, text);
+    return true;
+  } catch (err) {
+    if (isLocalStorageQuotaError(err)) return false;
+    throw err;
+  }
+}
+
 /** 空間不夠就縮短保留天數，必要時先清其他暫存。回傳實際寫入的紀錄。 */
 export function persistDatedRecords<T extends { date?: string }>(
   storage: StorageLike,

@@ -44,8 +44,13 @@ import {
   pushSharedSchoolData,
   testCloudSyncConnection,
   mergeLocalSecretsIntoRemote,
+  shouldApplyRemoteSchoolData,
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
+import {
+  LOCAL_STORAGE_QUOTA_HINT,
+  persistSchoolLocalJson,
+} from '../utils/localStorageQuota';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from '../utils/patrolSync';
 import {
   isPrincipalOfficeStaff,
@@ -798,8 +803,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const markSchoolPersistQuotaFailure = () => {
+    try {
+      localStorage.removeItem(CLOUD_SYNC_UPDATED_AT_KEY);
+    } catch {
+      // ignore
+    }
+    lastCloudSyncAtRef.current = 0;
+    setLastCloudSyncAt(null);
+    setCloudSyncStatus('error');
+    setCloudSyncMessage(LOCAL_STORAGE_QUOTA_HINT);
+  };
+
+  const persistSchoolKey = (key: string, value: unknown) => {
+    try {
+      if (!persistSchoolLocalJson(localStorage, key, value)) {
+        markSchoolPersistQuotaFailure();
+      }
+    } catch (err) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        (err as { name?: string }).name === 'QuotaExceededError'
+      ) {
+        markSchoolPersistQuotaFailure();
+        return;
+      }
+      throw err;
+    }
+  };
+
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.STAFF_LIST, JSON.stringify(academicStaffList));
+    persistSchoolKey(STORAGE_KEYS.STAFF_LIST, academicStaffList);
   }, [academicStaffList]);
 
   useEffect(() => {
@@ -823,19 +858,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [teachers, currentTeacherId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TEACHERS, JSON.stringify(teachers));
+    persistSchoolKey(STORAGE_KEYS.TEACHERS, teachers);
   }, [teachers]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.VENUES, JSON.stringify(venues));
+    persistSchoolKey(STORAGE_KEYS.VENUES, venues);
   }, [venues]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
+    persistSchoolKey(STORAGE_KEYS.SESSIONS, sessions);
   }, [sessions]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+    persistSchoolKey(STORAGE_KEYS.REQUESTS, requests);
   }, [requests]);
 
   // 一次性：還原舊版請假把任課改走的課堂（申請人課表不應少節）
@@ -859,7 +894,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(systemConfig));
+    persistSchoolKey(STORAGE_KEYS.CONFIG, systemConfig);
   }, [systemConfig]);
 
   /** 新學年度自動匯入人事總處國定假日（僅補缺少的平日，不覆蓋校慶等手動項目） */
@@ -1169,10 +1204,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return;
           }
         }
+        const isFirstFullPull = !fullPullDone;
         const remote = await pullSharedSchoolData(cloudSyncSettings);
         fullPullDone = true;
         if (stopped) return;
-        if (remote && remote.updatedAt > lastCloudSyncAtRef.current) {
+        if (
+          remote &&
+          shouldApplyRemoteSchoolData({
+            remoteUpdatedAt: remote.updatedAt,
+            localUpdatedAt: lastCloudSyncAtRef.current,
+            isFirstFullPull,
+          })
+        ) {
           if (cloudConflictRef.current) {
             // 衝突待處理：不可靜默套用遠端，否則衝突提示／本機變更會被蓋掉
             setCloudSyncStatus('error');
