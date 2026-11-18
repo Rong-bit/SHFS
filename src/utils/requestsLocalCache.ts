@@ -9,6 +9,10 @@ import {
   type StorageLike,
   writeItemFreeingKey,
   isLocalStorageQuotaError,
+  isCompactDeviceStorage,
+  purgeShrinkableLocalCaches,
+  relieveDatedCaches,
+  SHRINKABLE_LOCAL_CACHE_KEYS,
   DEFAULT_REQUESTS_META_KEY,
 } from './localStorageQuota';
 
@@ -146,27 +150,71 @@ export type PersistRequestsResult = {
 
 /**
  * 寫入申請單本機快取。
- * 空間不足時：手機以巡堂／日誌為優先，通知單可不存內容，但 meta 必須留下正確筆數。
- * 不清巡堂／教室日誌。
+ * - 電腦：必須盡力保留完整通知單內容（可清巡堂／日誌暫存騰位）
+ * - 手機：空間不足時可不存內容，只留正確筆數；優先保留巡堂／日誌
  */
 export function persistRequestsLocalCache(
   storage: StorageLike,
   requestsKey: string,
   requests: SubstituteRequest[],
-  _opts?: { todayIso?: string }
+  opts?: { todayIso?: string; allowCountOnly?: boolean }
 ): PersistRequestsResult {
-  void _opts;
+  const allowCountOnly =
+    typeof opts?.allowCountOnly === 'boolean'
+      ? opts.allowCountOnly
+      : isCompactDeviceStorage();
   const fullMeta = buildRequestsLocalMeta(requests, { truncated: false });
+  const payload = JSON.stringify(requests);
 
   try {
-    writeItemFreeingKey(storage, requestsKey, JSON.stringify(requests));
+    writeItemFreeingKey(storage, requestsKey, payload);
     writeRequestsLocalMeta(storage, fullMeta);
     return { ok: true, truncated: false, retained: requests, meta: fullMeta };
   } catch (err) {
     if (!isLocalStorageQuotaError(err)) throw err;
   }
 
-  // 空間不足：不硬塞通知單內容，只保留完整筆數（內容可在電腦看／之後從雲端拉）
+  // 電腦（或不允許只留筆數）：清可重建暫存後仍要寫完整內容
+  if (!allowCountOnly) {
+    try {
+      relieveDatedCaches(storage, SHRINKABLE_LOCAL_CACHE_KEYS, 7, opts?.todayIso);
+      writeItemFreeingKey(storage, requestsKey, payload);
+      writeRequestsLocalMeta(storage, fullMeta);
+      return { ok: true, truncated: false, retained: requests, meta: fullMeta };
+    } catch (err) {
+      if (!isLocalStorageQuotaError(err)) throw err;
+    }
+    try {
+      purgeShrinkableLocalCaches(storage);
+      writeItemFreeingKey(storage, requestsKey, payload);
+      writeRequestsLocalMeta(storage, fullMeta);
+      return { ok: true, truncated: false, retained: requests, meta: fullMeta };
+    } catch (err) {
+      if (!isLocalStorageQuotaError(err)) throw err;
+    }
+    for (const keep of REQUEST_CACHE_KEEP_LIMITS) {
+      const retained = retainRecentRequestsForLocalCache(requests, keep);
+      const meta = buildRequestsLocalMeta(requests, {
+        truncated: retained.length < requests.length,
+        retainedCount: retained.length,
+      });
+      try {
+        writeItemFreeingKey(storage, requestsKey, JSON.stringify(retained));
+        writeRequestsLocalMeta(storage, meta);
+        return { ok: true, truncated: meta.truncated, retained, meta };
+      } catch (err) {
+        if (!isLocalStorageQuotaError(err)) throw err;
+      }
+    }
+    return {
+      ok: false,
+      truncated: false,
+      retained: requests,
+      meta: fullMeta,
+    };
+  }
+
+  // 手機：可不存通知單內容，只留正確筆數；不動巡堂／日誌
   try {
     storage.removeItem(requestsKey);
   } catch {

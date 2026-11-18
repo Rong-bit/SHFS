@@ -49,6 +49,7 @@ import {
 } from '../utils/cloudSync';
 import {
   SCHOOL_LOCAL_CACHE_QUOTA_HINT,
+  isCompactDeviceStorage,
   persistSchoolLocalJson,
 } from '../utils/localStorageQuota';
 import {
@@ -837,7 +838,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const persistSchoolKey = (key: string, value: unknown) => {
     if (schoolPersistQuotaFailedRef.current) return;
     try {
-      if (!persistSchoolLocalJson(localStorage, key, value)) {
+      if (
+        !persistSchoolLocalJson(localStorage, key, value, {
+          requestsKey: STORAGE_KEYS.REQUESTS,
+          // 手機：可犧牲通知單保巡堂；電腦：通知單要完整
+          preferPatrolOverNotices: isCompactDeviceStorage(),
+        })
+      ) {
         markSchoolPersistQuotaFailure();
         return;
       }
@@ -859,7 +866,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const persistRequestsKey = (nextRequests: SubstituteRequest[]) => {
     if (schoolPersistQuotaFailedRef.current) return;
     try {
-      const result = persistRequestsLocalCache(localStorage, STORAGE_KEYS.REQUESTS, nextRequests);
+      const result = persistRequestsLocalCache(localStorage, STORAGE_KEYS.REQUESTS, nextRequests, {
+        // 手機可只留筆數；電腦必須盡力存完整內容
+        allowCountOnly: isCompactDeviceStorage(),
+      });
       setRequestsLocalMeta(result.meta);
       if (!result.ok) {
         markSchoolPersistQuotaFailure();
