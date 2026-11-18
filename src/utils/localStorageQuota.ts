@@ -7,6 +7,13 @@ import { dateToIsoLocal } from './holidays';
 export const LOCAL_STORAGE_QUOTA_HINT =
   '手機儲存空間不足。已改顯示較新的資料，較舊紀錄仍可從學校同步讀取。若這則訊息一直出現，請清除此網站資料後再加入學校同步。';
 
+/**
+ * 課表／申請單寫不進本機時用（與巡堂「只留較新」不同）。
+ * 雲端同步仍可繼續；重整後會再從雲端載入。
+ */
+export const SCHOOL_LOCAL_CACHE_QUOTA_HINT =
+  '手機儲存空間不足，無法完整快取課表／通知單到本機。目前仍可使用雲端資料；請按「清除巡堂與日誌快取」後再同步，或清除此網站資料後重新加入同步。';
+
 /** 會與課表／申請共用配額、但可再從雲端載回的大型暫存 */
 export const SHRINKABLE_LOCAL_CACHE_KEYS = [
   'voc_class_log_v1',
@@ -227,9 +234,30 @@ export function persistTextAttempts(
   );
 }
 
+/** 整包刪除可從雲端重建的巡堂／教室日誌暫存，釋出手機配額。 */
+export function purgeShrinkableLocalCaches(storage: StorageLike): number {
+  let removed = 0;
+  for (const key of SHRINKABLE_LOCAL_CACHE_KEYS) {
+    try {
+      if (safeGetItem(storage, key) != null) {
+        storage.removeItem(key);
+        removed += 1;
+      }
+    } catch {
+      try {
+        storage.removeItem(key);
+        removed += 1;
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return removed;
+}
+
 /**
- * 寫入課表／申請單等整包資料；配額不足時先精簡可重建的巡堂／日誌暫存再重試。
- * 仍失敗回傳 false（呼叫端應清掉同步時間戳，避免「已同步」卻缺通知單）。
+ * 寫入課表／申請單等整包資料；配額不足時先精簡、再清空可重建暫存後重試。
+ * 仍失敗回傳 false（呼叫端勿把雲端同步標成失敗，也勿把 updatedAt 歸零造成反覆重抓）。
  */
 export function persistSchoolLocalJson(
   storage: StorageLike,
@@ -246,6 +274,13 @@ export function persistSchoolLocalJson(
   }
   try {
     relieveDatedCaches(storage, SHRINKABLE_LOCAL_CACHE_KEYS, 7, opts?.todayIso);
+    writeItemFreeingKey(storage, key, text);
+    return true;
+  } catch (err) {
+    if (!isLocalStorageQuotaError(err)) throw err;
+  }
+  try {
+    purgeShrinkableLocalCaches(storage);
     writeItemFreeingKey(storage, key, text);
     return true;
   } catch (err) {

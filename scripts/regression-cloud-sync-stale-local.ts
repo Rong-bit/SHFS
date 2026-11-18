@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 import { shouldApplyRemoteSchoolData } from '../src/utils/cloudSync';
 import {
   LOCAL_STORAGE_QUOTA_HINT,
+  SCHOOL_LOCAL_CACHE_QUOTA_HINT,
   persistSchoolLocalJson,
+  purgeShrinkableLocalCaches,
   type StorageLike,
 } from '../src/utils/localStorageQuota';
 
@@ -115,6 +117,29 @@ function createWebKitStorage(maxBytes: number): StorageLike & { map: Map<string,
   });
   assert.equal(ok, false, '仍不足配額應回傳 false');
   assert.match(LOCAL_STORAGE_QUOTA_HINT, /手機儲存空間不足/);
+  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /無法完整快取/);
+  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /清除巡堂與日誌快取/);
+}
+
+{
+  const storage = createWebKitStorage(500);
+  storage.map.set(
+    'voc_class_log_v1',
+    JSON.stringify([{ id: '1', date: '2025-01-01', note: 'x'.repeat(200) }])
+  );
+  storage.map.set(
+    'voc_patrol_records_v1',
+    JSON.stringify([{ id: '2', date: '2025-01-01', note: 'y'.repeat(200) }])
+  );
+  const removed = purgeShrinkableLocalCaches(storage);
+  assert.ok(removed >= 2, '應刪除可重建暫存');
+  assert.equal(storage.getItem('voc_class_log_v1'), null);
+  assert.equal(storage.getItem('voc_patrol_records_v1'), null);
+  const ok = persistSchoolLocalJson(storage, 'voc_requests_v1', {
+    id: 'r1',
+    status: 'approved',
+  });
+  assert.equal(ok, true, '清空暫存後應可寫入申請單');
 }
 
 console.log('regression-cloud-sync-stale-local: ok');

@@ -17,7 +17,13 @@ interface CloudSyncJoinModalProps {
 }
 
 export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, onClose }) => {
-  const { cloudSyncSettings, cloudSyncStatus, cloudSyncMessage, updateCloudSyncSettings } = useApp();
+  const {
+    cloudSyncSettings,
+    cloudSyncStatus,
+    cloudSyncMessage,
+    updateCloudSyncSettings,
+    retrySchoolLocalCacheAfterQuota,
+  } = useApp();
   const [schoolKey, setSchoolKey] = useState(cloudSyncSettings.schoolKey || '');
   const initialWeb = resolveFirebaseWebConfig(cloudSyncSettings);
   const [apiKey, setApiKey] = useState(initialWeb.apiKey);
@@ -191,6 +197,29 @@ export const CloudSyncJoinModal: React.FC<CloudSyncJoinModalProps> = ({ isOpen, 
             )}
             <span>{msg || cloudSyncMessage}</span>
           </div>
+        )}
+        {(msg.includes('儲存空間不足') || cloudSyncMessage.includes('儲存空間不足')) && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              setSaving(true);
+              try {
+                const ok = retrySchoolLocalCacheAfterQuota();
+                setMsgTone(ok ? 'ok' : 'err');
+                setMsg(
+                  ok
+                    ? '已清除巡堂／日誌快取，本機課表快取已恢復。'
+                    : '清除後仍不足。請清除此網站資料後再加入同步。'
+                );
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="w-full px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50"
+          >
+            清除巡堂與日誌快取
+          </button>
         )}
       </div>
 

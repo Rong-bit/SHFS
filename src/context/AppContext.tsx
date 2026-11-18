@@ -48,8 +48,9 @@ import {
   CLOUD_SYNC_UPDATED_AT_KEY,
 } from '../utils/cloudSync';
 import {
-  LOCAL_STORAGE_QUOTA_HINT,
+  SCHOOL_LOCAL_CACHE_QUOTA_HINT,
   persistSchoolLocalJson,
+  purgeShrinkableLocalCaches,
 } from '../utils/localStorageQuota';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from '../utils/patrolSync';
 import {
@@ -330,6 +331,8 @@ interface AppContextType {
   pullCloudOverwriteLocal: () => Promise<void>;
   /** 衝突時：強制推送本機（覆蓋雲端） */
   forcePushLocalToCloud: () => Promise<void>;
+  /** 手機配額不足：清巡堂／日誌快取後重試寫入課表申請單 */
+  retrySchoolLocalCacheAfterQuota: () => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -803,34 +806,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** 本機寫入課表失敗時為 true；避免每鍵失敗都重設狀態／把 updatedAt 歸零造成同步空轉 */
+  const schoolPersistQuotaFailedRef = useRef(false);
+
   const markSchoolPersistQuotaFailure = () => {
+    // 只清本機時間戳：下次冷啟動會再拉雲端。記憶體中的 lastCloudSyncAtRef 保留，避免 15 秒反覆整包下載。
     try {
       localStorage.removeItem(CLOUD_SYNC_UPDATED_AT_KEY);
     } catch {
       // ignore
     }
-    lastCloudSyncAtRef.current = 0;
-    setLastCloudSyncAt(null);
-    setCloudSyncStatus('error');
-    setCloudSyncMessage(LOCAL_STORAGE_QUOTA_HINT);
+    if (schoolPersistQuotaFailedRef.current) return;
+    schoolPersistQuotaFailedRef.current = true;
+    // 雲端資料已在記憶體：勿標「同步失敗」，否則使用者以為無法同步
+    if (isCloudSyncReady(cloudSyncSettings)) {
+      setCloudSyncStatus('synced');
+    }
+    setCloudSyncMessage(SCHOOL_LOCAL_CACHE_QUOTA_HINT);
   };
 
   const persistSchoolKey = (key: string, value: unknown) => {
+    if (schoolPersistQuotaFailedRef.current) return;
     try {
       if (!persistSchoolLocalJson(localStorage, key, value)) {
         markSchoolPersistQuotaFailure();
+        return;
       }
+      schoolPersistQuotaFailedRef.current = false;
     } catch (err) {
       if (
         err &&
         typeof err === 'object' &&
-        (err as { name?: string }).name === 'QuotaExceededError'
+        ((err as { name?: string }).name === 'QuotaExceededError' ||
+          /quota|儲存空間|exceeded/i.test(String((err as { message?: string }).message || err)))
       ) {
         markSchoolPersistQuotaFailure();
         return;
       }
       throw err;
     }
+  };
+
+  const retrySchoolLocalCacheAfterQuota = () => {
+    purgeShrinkableLocalCaches(localStorage);
+    schoolPersistQuotaFailedRef.current = false;
+    const ok =
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.TEACHERS, teachersRef.current) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.VENUES, venues) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.SESSIONS, sessions) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.REQUESTS, requests) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.STAFF_LIST, academicStaffListRef.current) &&
+      persistSchoolLocalJson(localStorage, STORAGE_KEYS.CONFIG, systemConfigRef.current);
+    if (!ok) {
+      markSchoolPersistQuotaFailure();
+      return false;
+    }
+    if (lastCloudSyncAtRef.current > 0) {
+      try {
+        localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(lastCloudSyncAtRef.current));
+      } catch {
+        // ignore
+      }
+      setLastCloudSyncAt(lastCloudSyncAtRef.current);
+    }
+    setCloudSyncMessage(
+      isCloudSyncReady(cloudSyncSettings)
+        ? '已清除巡堂／日誌快取，本機課表快取已恢復；可繼續同步。'
+        : '已清除巡堂／日誌快取，本機課表快取已恢復。'
+    );
+    if (isCloudSyncReady(cloudSyncSettings)) setCloudSyncStatus('synced');
+    return true;
   };
 
   useEffect(() => {
@@ -944,6 +989,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     academicStaffList: AcademicStaff[];
   }) => {
     skipCloudPushRef.current = true;
+    // 允許本輪再嘗試寫入本機；寫入函式會先清可重建快取
+    schoolPersistQuotaFailedRef.current = false;
     const merged = mergeLocalSecretsIntoRemote(
       remote,
       teachersRef.current,
@@ -4003,6 +4050,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         testCloudSync,
         pullCloudOverwriteLocal,
         forcePushLocalToCloud,
+        retrySchoolLocalCacheAfterQuota,
       }}
     >
       {children}
