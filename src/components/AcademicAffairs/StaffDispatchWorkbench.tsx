@@ -64,7 +64,12 @@ import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
-import { resolveDisplayClassSubject } from '../../utils/noticeDocument';
+import { listPrintableNoticeAnchors, resolveDisplayClassSubject } from '../../utils/noticeDocument';
+import {
+  REQUESTS_LOCAL_TRUNCATED_HINT,
+  resolveDisplayedCaseCount,
+  resolveDisplayedNoticeCount,
+} from '../../utils/requestsLocalCache';
 import { resolveStaffEmailForNameChange } from '../../utils/teacherEmailImporter';
 import {
   MAX_NOTICE_TABLE_ROWS,
@@ -148,6 +153,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
     venues,
     sessions,
     requests,
+    requestsLocalMeta,
     systemConfig,
     createStaffDirectDispatches,
     approveRequest,
@@ -1519,6 +1525,13 @@ export const StaffDispatchWorkbench: React.FC = () => {
     }>
   ) => new Set(list.map(leaveCaseKey)).size;
 
+  const requestsLocallyIncomplete = Boolean(
+    requestsLocalMeta?.truncated && requests.length < (requestsLocalMeta?.totalCount || 0)
+  );
+  const displayedCaseCount = resolveDisplayedCaseCount(requests, requestsLocalMeta);
+  const displayedNoticeCount = resolveDisplayedNoticeCount(requests, requestsLocalMeta);
+  const localNoticeCount = listPrintableNoticeAnchors(requests).length;
+
   const displayedPendingIds = useMemo(
     () =>
       groupedListRows.flatMap((g) =>
@@ -1867,7 +1880,7 @@ export const StaffDispatchWorkbench: React.FC = () => {
             <FileText className="w-4 h-4" />
             <span>全校調代課登錄簿與公假代課清冊</span>
             <span className="px-1.5 py-0.2 bg-amber-500 text-slate-950 rounded-full text-[10px] font-black">
-              {countRequestGroups(requests)}
+              {displayedCaseCount}
             </span>
           </button>
         </div>
@@ -3006,6 +3019,16 @@ export const StaffDispatchWorkbench: React.FC = () => {
       {/* Sub View 2: Ledger & Batch Approval/Printing List */}
       {activeSubView === 'list' && (
         <div className="space-y-4">
+          {requestsLocallyIncomplete && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950 leading-relaxed">
+              <p className="font-bold">
+                通知單共 {displayedNoticeCount} 張；案件共 {displayedCaseCount} 件
+                {localNoticeCount > 0 ? `（本機另載入 ${localNoticeCount} 張內容）` : '（本機未載入內容）'}
+                。
+              </p>
+              <p className="mt-1 text-amber-900/90">{REQUESTS_LOCAL_TRUNCATED_HINT}</p>
+            </div>
+          )}
           
           {/* Controls Bar */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
@@ -3013,12 +3036,23 @@ export const StaffDispatchWorkbench: React.FC = () => {
             {/* Filter Pills */}
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               {[
-                { key: 'all', label: `全部案件 (${countRequestGroups(annotatedRequests)})` },
+                {
+                  key: 'all',
+                  label: `全部案件 (${
+                    requestsLocallyIncomplete
+                      ? displayedCaseCount
+                      : countRequestGroups(annotatedRequests)
+                  })`,
+                },
                 {
                   key: 'pending',
-                  label: `⏳ 待簽核 (${countRequestGroups(
-                    annotatedRequests.filter((r) => r.status === 'pending')
-                  )})`,
+                  label: `⏳ 待簽核 (${
+                    requestsLocallyIncomplete && typeof requestsLocalMeta?.pendingCaseCount === 'number'
+                      ? requestsLocalMeta.pendingCaseCount
+                      : countRequestGroups(
+                          annotatedRequests.filter((r) => r.status === 'pending')
+                        )
+                  })`,
                 },
                 {
                   key: 'public',
