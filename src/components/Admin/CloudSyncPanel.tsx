@@ -126,6 +126,7 @@ export const CloudSyncPanel: React.FC = () => {
             >
               拉取遠端（採用對方）
             </button>
+            {/* 手機不顯示：避免本機資料偏少時誤蓋雲端；僅電腦可強制推送 */}
             <button
               type="button"
               disabled={resolving}
@@ -144,7 +145,7 @@ export const CloudSyncPanel: React.FC = () => {
                   setResolving(false);
                 }
               }}
-              className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50"
+              className="hidden sm:inline-flex px-3 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50"
             >
               強制推送本機
             </button>
