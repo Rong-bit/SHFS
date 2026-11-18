@@ -145,8 +145,9 @@ export type PersistRequestsResult = {
 };
 
 /**
- * 寫入申請單本機快取：空間不足時改留最近幾筆，meta 仍記完整筆數（雲端不刪）。
- * 刻意不清巡堂／教室日誌——手機以巡堂與日誌為主，通知單較不重要。
+ * 寫入申請單本機快取。
+ * 空間不足時：手機以巡堂／日誌為優先，通知單可不存內容，但 meta 必須留下正確筆數。
+ * 不清巡堂／教室日誌。
  */
 export function persistRequestsLocalCache(
   storage: StorageLike,
@@ -165,34 +166,22 @@ export function persistRequestsLocalCache(
     if (!isLocalStorageQuotaError(err)) throw err;
   }
 
-  for (const keep of REQUEST_CACHE_KEEP_LIMITS) {
-    const retained = retainRecentRequestsForLocalCache(requests, keep);
-    const meta = buildRequestsLocalMeta(requests, {
-      truncated: retained.length < requests.length,
-      retainedCount: retained.length,
-    });
-    try {
-      writeItemFreeingKey(storage, requestsKey, JSON.stringify(retained));
-      writeRequestsLocalMeta(storage, meta);
-      return { ok: true, truncated: meta.truncated, retained, meta };
-    } catch (err) {
-      if (!isLocalStorageQuotaError(err)) throw err;
-    }
-  }
-
-  // 連最近幾筆都寫不進：拿掉通知單本機內容，仍保留完整筆數 meta；不動巡堂／日誌
+  // 空間不足：不硬塞通知單內容，只保留完整筆數（內容可在電腦看／之後從雲端拉）
   try {
     storage.removeItem(requestsKey);
   } catch {
     // ignore
   }
-  const emptyMeta = buildRequestsLocalMeta(requests, { truncated: true, retainedCount: 0 });
-  const metaOk = writeRequestsLocalMeta(storage, emptyMeta);
+  const countOnlyMeta = buildRequestsLocalMeta(requests, {
+    truncated: true,
+    retainedCount: 0,
+  });
+  const metaOk = writeRequestsLocalMeta(storage, countOnlyMeta);
   return {
     ok: metaOk,
     truncated: true,
     retained: [],
-    meta: emptyMeta,
+    meta: countOnlyMeta,
   };
 }
 
@@ -223,4 +212,4 @@ export function resolveDisplayedCaseCount(
 }
 
 export const REQUESTS_LOCAL_TRUNCATED_HINT =
-  '手機儲存空間不足，已優先精簡通知單本機快取（完整筆數仍與電腦相同；雲端未刪除），以保留巡堂與教室日誌。';
+  '手機儲存空間不足，已優先保留巡堂／教室日誌；通知單僅顯示正確筆數（內容可略），資料在雲端未刪除。';

@@ -339,8 +339,6 @@ interface AppContextType {
   pullCloudOverwriteLocal: () => Promise<void>;
   /** 衝突時：強制推送本機（覆蓋雲端） */
   forcePushLocalToCloud: () => Promise<void>;
-  /** 手機配額不足：清巡堂／日誌快取後重試寫入課表申請單 */
-  retrySchoolLocalCacheAfterQuota: () => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -886,51 +884,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const retrySchoolLocalCacheAfterQuota = () => {
-    // 手機以巡堂／教室日誌為主：先精簡通知單，預設不清巡堂／日誌暫存
-    schoolPersistQuotaFailedRef.current = false;
-    const reqResult = persistRequestsLocalCache(localStorage, STORAGE_KEYS.REQUESTS, requests);
-    setRequestsLocalMeta(reqResult.meta);
-    const ok =
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.TEACHERS, teachersRef.current, {
-        requestsKey: STORAGE_KEYS.REQUESTS,
-      }) &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.VENUES, venues, {
-        requestsKey: STORAGE_KEYS.REQUESTS,
-      }) &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.SESSIONS, sessions, {
-        requestsKey: STORAGE_KEYS.REQUESTS,
-      }) &&
-      reqResult.ok &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.STAFF_LIST, academicStaffListRef.current, {
-        requestsKey: STORAGE_KEYS.REQUESTS,
-      }) &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.CONFIG, systemConfigRef.current, {
-        requestsKey: STORAGE_KEYS.REQUESTS,
-      });
-    if (!ok) {
-      markSchoolPersistQuotaFailure();
-      return false;
-    }
-    if (lastCloudSyncAtRef.current > 0) {
-      try {
-        localStorage.setItem(CLOUD_SYNC_UPDATED_AT_KEY, String(lastCloudSyncAtRef.current));
-      } catch {
-        // ignore
-      }
-      setLastCloudSyncAt(lastCloudSyncAtRef.current);
-    }
-    setCloudSyncMessage(
-      reqResult.truncated
-        ? REQUESTS_LOCAL_TRUNCATED_HINT
-        : isCloudSyncReady(cloudSyncSettings)
-          ? '已精簡通知單本機快取，巡堂／教室日誌已保留；可繼續同步。'
-          : '已精簡通知單本機快取，巡堂／教室日誌已保留。'
-    );
-    if (isCloudSyncReady(cloudSyncSettings)) setCloudSyncStatus('synced');
-    return true;
-  };
-
   useEffect(() => {
     persistSchoolKey(STORAGE_KEYS.STAFF_LIST, academicStaffList);
   }, [academicStaffList]);
@@ -1287,7 +1240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cloudDirtyRef.current = false;
       setCloudSyncStatus('error');
       setCloudSyncMessage(
-        '剛匯入整份備份，已暫停自動覆寫雲端。若要以雲端為準請按「拉取遠端（採用對方）」；若確定要以本機備份為準，請在電腦按「強制推送本機」。'
+        '剛匯入整份備份，已暫停自動覆寫雲端。若要以本機備份為準請按「強制推送本機」；若要以雲端為準請按「拉取遠端（採用對方）」。'
       );
     } else {
       setCloudSyncStatus('connecting');
@@ -1327,7 +1280,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             // 衝突待處理：不可靜默套用遠端，否則衝突提示／本機變更會被蓋掉
             setCloudSyncStatus('error');
             setCloudSyncMessage(
-              '其他電腦有較新資料，已暫停自動覆寫。請至「雲端同步」按「拉取遠端（採用對方）」；若確定要以本機為準，請在電腦按「強制推送本機」。'
+              '其他電腦有較新資料，已暫停自動覆寫。請至「雲端同步」選擇「拉取遠端（採用對方）」或「強制推送本機」。'
             );
           } else if (cloudDirtyRef.current) {
             // 本機尚有待推送變更：暫不套用遠端，避免覆蓋本機異動
@@ -1433,7 +1386,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cloudConflictRef.current = true;
       setCloudSyncStatus('error');
       setCloudSyncMessage(
-        '其他電腦有較新資料，已暫停自動覆寫以免覆蓋對方變更。請至「雲端同步」按「拉取遠端（採用對方）」；若確定要以本機為準，請在電腦按「強制推送本機」。'
+        '其他電腦有較新資料，已暫停自動覆寫以免覆蓋對方變更。請至「雲端同步」選擇「拉取遠端（採用對方）」或「強制推送本機」。'
       );
       cloudDirtyRef.current = false;
       return;
@@ -4115,7 +4068,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         testCloudSync,
         pullCloudOverwriteLocal,
         forcePushLocalToCloud,
-        retrySchoolLocalCacheAfterQuota,
       }}
     >
       {children}
