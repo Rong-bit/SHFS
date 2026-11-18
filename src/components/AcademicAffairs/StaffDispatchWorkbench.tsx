@@ -3022,8 +3022,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
           {requestsLocallyIncomplete && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950 leading-relaxed">
               <p className="font-bold">
-                通知單共 {displayedNoticeCount} 張（本機目前載入最近 {localNoticeCount}{' '}
-                張）；案件共 {displayedCaseCount} 件。
+                通知單共 {displayedNoticeCount} 張；案件共 {displayedCaseCount} 件
+                {localNoticeCount > 0 ? `（本機另載入 ${localNoticeCount} 張內容）` : '（本機未載入內容）'}
+                。
               </p>
               <p className="mt-1 text-amber-900/90">{REQUESTS_LOCAL_TRUNCATED_HINT}</p>
             </div>

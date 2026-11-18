@@ -27,7 +27,6 @@ export const CloudSyncPanel: React.FC = () => {
     updateCloudSyncSettings,
     pullCloudOverwriteLocal,
     forcePushLocalToCloud,
-    retrySchoolLocalCacheAfterQuota,
   } = useApp();
 
   const [form, setForm] = useState<CloudSyncSettings>(cloudSyncSettings);
@@ -103,80 +102,52 @@ export const CloudSyncPanel: React.FC = () => {
         {cloudSyncMessage && (
           <p className="text-xs text-slate-600 mt-3">{cloudSyncMessage}</p>
         )}
-        {(cloudSyncMessage.includes('儲存空間不足') ||
-          cloudSyncMessage.includes('暫停自動覆寫')) && (
+        {cloudSyncMessage.includes('暫停自動覆寫') && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {cloudSyncMessage.includes('儲存空間不足') && (
-              <button
-                type="button"
-                disabled={resolving}
-                onClick={() => {
-                  setResolving(true);
-                  try {
-                    const ok = retrySchoolLocalCacheAfterQuota();
-                    if (!ok) {
-                      window.alert(
-                        '精簡通知單後仍無法寫入本機。請到瀏覽器設定清除此網站資料，再重新「加入同步」。'
-                      );
-                    }
-                  } finally {
-                    setResolving(false);
-                  }
-                }}
-                className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
-              >
-                精簡通知單快取（保留巡堂／日誌）
-              </button>
-            )}
-            {cloudSyncMessage.includes('暫停自動覆寫') && (
-              <>
-                <button
-                  type="button"
-                  disabled={resolving}
-                  onClick={async () => {
-                    if (
-                      !window.confirm(
-                        '將以雲端資料覆蓋本機（本機尚未推送的變更會消失）。確定採用對方資料？'
-                      )
-                    ) {
-                      return;
-                    }
-                    setResolving(true);
-                    try {
-                      await pullCloudOverwriteLocal();
-                    } finally {
-                      setResolving(false);
-                    }
-                  }}
-                  className="px-3 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50"
-                >
-                  拉取遠端（採用對方）
-                </button>
-                {/* 手機不顯示：避免本機資料偏少時誤蓋雲端；僅電腦可強制推送 */}
-                <button
-                  type="button"
-                  disabled={resolving}
-                  onClick={async () => {
-                    if (
-                      !window.confirm(
-                        '將以本機資料強制覆寫雲端（其他電腦未同步變更可能被蓋掉）。確定推送本機？'
-                      )
-                    ) {
-                      return;
-                    }
-                    setResolving(true);
-                    try {
-                      await forcePushLocalToCloud();
-                    } finally {
-                      setResolving(false);
-                    }
-                  }}
-                  className="hidden sm:inline-flex px-3 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50"
-                >
-                  強制推送本機
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              disabled={resolving}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    '將以雲端資料覆蓋本機（本機尚未推送的變更會消失）。確定採用對方資料？'
+                  )
+                ) {
+                  return;
+                }
+                setResolving(true);
+                try {
+                  await pullCloudOverwriteLocal();
+                } finally {
+                  setResolving(false);
+                }
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white disabled:opacity-50"
+            >
+              拉取遠端（採用對方）
+            </button>
+            <button
+              type="button"
+              disabled={resolving}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    '將以本機資料強制覆寫雲端（其他電腦未同步變更可能被蓋掉）。確定推送本機？'
+                  )
+                ) {
+                  return;
+                }
+                setResolving(true);
+                try {
+                  await forcePushLocalToCloud();
+                } finally {
+                  setResolving(false);
+                }
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50"
+            >
+              強制推送本機
+            </button>
           </div>
         )}
         {lastCloudSyncAt && (

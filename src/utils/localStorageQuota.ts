@@ -12,7 +12,7 @@ export const LOCAL_STORAGE_QUOTA_HINT =
  * 雲端同步仍可繼續；重整後會再從雲端載入。
  */
 export const SCHOOL_LOCAL_CACHE_QUOTA_HINT =
-  '手機儲存空間不足。請先按「精簡通知單快取（保留巡堂／日誌）」；通知單較不重要，會優先精簡。雲端資料不會刪除。若仍不足再清除此網站資料後加入同步。';
+  '手機儲存空間不足。已優先保留巡堂／教室日誌；通知單可能僅顯示筆數。雲端資料不會刪除。若持續出現請清除此網站資料後再加入同步。';
 
 /** 申請單／通知單本機鍵（空間不足時優先精簡，以保留巡堂／教室日誌） */
 export const DEFAULT_REQUESTS_STORAGE_KEY = 'voc_requests_v1';

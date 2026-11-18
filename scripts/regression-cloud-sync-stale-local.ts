@@ -117,8 +117,8 @@ function createWebKitStorage(maxBytes: number): StorageLike & { map: Map<string,
   });
   assert.equal(ok, false, '仍不足配額應回傳 false');
   assert.match(LOCAL_STORAGE_QUOTA_HINT, /手機儲存空間不足/);
-  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /精簡通知單快取/);
-  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /保留巡堂／日誌/);
+  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /保留巡堂／教室日誌/);
+  assert.match(SCHOOL_LOCAL_CACHE_QUOTA_HINT, /僅顯示筆數/);
 }
 
 {

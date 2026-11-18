@@ -99,7 +99,7 @@ const many = Array.from({ length: 40 }, (_, i) =>
 }
 
 {
-  const storage = createWebKitStorage(20_000);
+  const storage = createWebKitStorage(6_000);
   const patrolJson = JSON.stringify(
     Array.from({ length: 20 }, (_, i) => ({ id: `p${i}`, date: '2025-01-01', note: 'n'.repeat(120) }))
   );
@@ -108,20 +108,20 @@ const many = Array.from({ length: 40 }, (_, i) =>
   const fullJson = JSON.stringify(huge);
   assert.ok(fullJson.length > 8000, '測資應大到難以一次塞進配額');
   const result = persistRequestsLocalCache(storage, 'voc_requests_v1', huge);
-  assert.equal(result.ok, true, '截斷後應寫入成功');
+  assert.equal(result.ok, true, '至少應寫入完整筆數 meta');
   assert.equal(result.meta.totalCount, huge.length);
   assert.ok(result.meta.noticeCount > 0);
   assert.equal(result.truncated, true, '應標記為本機截斷');
-  assert.ok(result.retained.length < huge.length);
-  assert.ok(result.retained.length <= REQUEST_CACHE_KEEP_LIMITS[0]);
-  assert.match(REQUESTS_LOCAL_TRUNCATED_HINT, /保留巡堂/);
-  assert.ok(storage.getItem('voc_requests_v1'));
-  assert.ok(storage.getItem('voc_requests_meta_v1'));
+  assert.equal(result.retained.length, 0, '空間不足可不存通知單內容');
+  assert.match(REQUESTS_LOCAL_TRUNCATED_HINT, /筆數/);
+  assert.equal(storage.getItem('voc_requests_v1'), null, '可不存通知單內容');
+  assert.ok(storage.getItem('voc_requests_meta_v1'), '必須留下正確筆數');
   assert.equal(
     storage.getItem('voc_patrol_records_v1'),
     patrolJson,
-    '精簡通知單時不可清掉巡堂暫存'
+    '不可清掉巡堂暫存'
   );
+  assert.ok(REQUEST_CACHE_KEEP_LIMITS.length > 0);
 }
 
 console.log('regression-requests-local-cache: ok');
