@@ -93,6 +93,12 @@ const NOTICE_PRINT_CSS = `
   text-align: right;
   white-space: nowrap;
 }
+.substitute-notice-dept {
+  font-size: 12pt;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: nowrap;
+}
 .substitute-notice-body {
   font-size: 16pt;
   line-height: 1.35;
@@ -238,6 +244,13 @@ const NOTICE_PRINT_CSS = `
 }
 `;
 
+/** 群科科別字間空一格，例如 電機科 → 電 機 科 */
+const formatSpacedDepartment = (department?: string): string => {
+  const text = String(department || '').trim();
+  if (!text) return '';
+  return Array.from(text).join(' ');
+};
+
 const NoticeCopy: React.FC<{
   title: string;
   requestNumber: string;
@@ -247,13 +260,26 @@ const NoticeCopy: React.FC<{
   issueDateLabel: string;
   showSignatureBlock?: boolean;
   isLowerCopy?: boolean;
-}> = ({ title, requestNumber, addressee, greeting, rows, issueDateLabel, showSignatureBlock = true, isLowerCopy = false }) => {
+  department?: string;
+}> = ({
+  title,
+  requestNumber,
+  addressee,
+  greeting,
+  rows,
+  issueDateLabel,
+  showSignatureBlock = true,
+  isLowerCopy = false,
+  department,
+}) => {
   const tableRows = normalizeNoticeRows(rows);
+  const spacedDepartment =
+    isLowerCopy && department ? formatSpacedDepartment(department) : '';
 
   return (
   <div className={`substitute-notice-copy${isLowerCopy ? ' substitute-notice-copy-lower' : ''}`}>
     <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1.2fr)] items-end gap-2">
-      <div />
+      <div className="substitute-notice-dept">{spacedDepartment || '\u00A0'}</div>
       <div className="substitute-notice-title">
         <span>{title}</span>
       </div>
@@ -468,6 +494,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 issueDateLabel={issueDateLabel}
                 showSignatureBlock={false}
                 isLowerCopy
+                department={liveRequest.applicantDepartment}
               />
               <NoticePageStamp dateLabel={stampDateLabel} schoolName={systemConfig.schoolName} />
             </div>
