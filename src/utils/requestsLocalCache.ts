@@ -1,5 +1,9 @@
 /**
- * 手機本機配額不足時：只快取最近通知單／申請列，完整筆數寫入 meta。
+ * 手機本機配額不足時（優先保留巡堂／教室日誌）：
+ * 1) 空間夠 → 完整通知單
+ * 2) 不夠 → 最近通知單內容，完整筆數寫入 meta
+ * 3) 再不夠 → 僅 meta 總筆數（不存內容）
+ * 騰位刪 body 時必須標 truncated，避免重整後筆數變 0／誤推空資料。
  * 雲端資料不刪除；截斷本機時不可把不完整資料推上雲端。
  */
 import { SubstituteRequest } from '../types';
@@ -141,6 +145,47 @@ export function writeRequestsLocalMeta(storage: StorageLike, meta: RequestsLocal
   }
 }
 
+export function clearRequestsLocalMeta(storage: StorageLike): void {
+  try {
+    storage.removeItem(REQUESTS_META_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 騰位刪除通知單本機內容，但把完整筆數標成 truncated meta。
+ * 避免只刪 body、meta 仍像「完整」→ 重整後筆數變 0，甚至誤推空資料上雲。
+ */
+export function freeRequestsLocalBodyKeepingMeta(
+  storage: StorageLike,
+  requestsKey: string
+): RequestsLocalMeta | null {
+  let meta = loadRequestsLocalMeta(storage);
+  if (!meta) {
+    try {
+      const raw = storage.getItem(requestsKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SubstituteRequest[];
+        if (Array.isArray(parsed)) {
+          meta = buildRequestsLocalMeta(parsed, { truncated: true, retainedCount: 0 });
+        }
+      }
+    } catch {
+      // ignore malformed body
+    }
+  } else {
+    meta = { ...meta, truncated: true, retainedCount: 0 };
+  }
+  try {
+    storage.removeItem(requestsKey);
+  } catch {
+    // ignore
+  }
+  if (meta) writeRequestsLocalMeta(storage, meta);
+  return meta;
+}
+
 export type PersistRequestsResult = {
   ok: boolean;
   truncated: boolean;
@@ -192,20 +237,7 @@ export function persistRequestsLocalCache(
     } catch (err) {
       if (!isLocalStorageQuotaError(err)) throw err;
     }
-    for (const keep of REQUEST_CACHE_KEEP_LIMITS) {
-      const retained = retainRecentRequestsForLocalCache(requests, keep);
-      const meta = buildRequestsLocalMeta(requests, {
-        truncated: retained.length < requests.length,
-        retainedCount: retained.length,
-      });
-      try {
-        writeItemFreeingKey(storage, requestsKey, JSON.stringify(retained));
-        writeRequestsLocalMeta(storage, meta);
-        return { ok: true, truncated: meta.truncated, retained, meta };
-      } catch (err) {
-        if (!isLocalStorageQuotaError(err)) throw err;
-      }
-    }
+    // 電腦不降級成「最近幾筆」：寫不進就失敗，避免本機／雲端誤以為完整
     return {
       ok: false,
       truncated: false,
@@ -253,8 +285,11 @@ export function shouldBlockCloudPushForTruncatedRequests(
   localRequests: SubstituteRequest[],
   meta: RequestsLocalMeta | null
 ): boolean {
-  if (!meta?.truncated) return false;
-  return localRequests.length < meta.totalCount;
+  if (!meta) return false;
+  if (meta.truncated && localRequests.length < meta.totalCount) return true;
+  // 防禦：meta 仍記有通知單筆數，但本機申請列已空（例如只刪了 body）
+  if (meta.totalCount > 0 && meta.noticeCount > 0 && localRequests.length === 0) return true;
+  return false;
 }
 
 /** 供 UI：截斷時用 meta 的完整通知單／案件數 */

@@ -9,12 +9,14 @@ import {
   REQUEST_CACHE_KEEP_LIMITS,
   REQUESTS_LOCAL_TRUNCATED_HINT,
   buildRequestsLocalMeta,
+  freeRequestsLocalBodyKeepingMeta,
   persistRequestsLocalCache,
   retainRecentRequestsForLocalCache,
   resolveDisplayedCaseCount,
   resolveDisplayedNoticeCount,
   shouldBlockCloudPushForTruncatedRequests,
 } from '../src/utils/requestsLocalCache';
+import { persistSchoolLocalJson } from '../src/utils/localStorageQuota';
 
 function quotaError(): Error {
   const err = new Error('The quota has been exceeded.');
@@ -179,6 +181,64 @@ const many = Array.from({ length: 40 }, (_, i) =>
     patrolLeft == null || patrolLeft === '[]',
     '電腦可精簡／清空巡堂暫存以保住完整通知單'
   );
+  assert.ok(REQUEST_CACHE_KEEP_LIMITS.length > 0);
+}
+
+{
+  // 騰位刪 body 時必須標 truncated，筆數仍正確，並擋推送
+  const storage = createWebKitStorage(200_000);
+  const full = many.slice(0, 12);
+  const written = persistRequestsLocalCache(storage, 'voc_requests_v1', full, {
+    allowCountOnly: true,
+  });
+  assert.equal(written.ok, true);
+  assert.equal(written.truncated, false);
+  const meta = freeRequestsLocalBodyKeepingMeta(storage, 'voc_requests_v1');
+  assert.ok(meta);
+  assert.equal(meta!.truncated, true);
+  assert.equal(meta!.retainedCount, 0);
+  assert.equal(meta!.totalCount, full.length);
+  assert.equal(meta!.noticeCount, buildRequestsLocalMeta(full).noticeCount);
+  assert.equal(storage.getItem('voc_requests_v1'), null);
+  assert.equal(resolveDisplayedNoticeCount([], meta), meta!.noticeCount);
+  assert.equal(shouldBlockCloudPushForTruncatedRequests([], meta), true);
+}
+
+{
+  // 手機寫入課表騰位：刪通知單 body 後仍可用 callback 保住 meta 筆數
+  const notices = many.slice(0, 10).map((r) => ({ ...r, reason: 'n'.repeat(100) }));
+  const noticeJson = JSON.stringify(notices);
+  const sessionsJson = JSON.stringify({ sessions: 's'.repeat(noticeJson.length) });
+  const storage = createWebKitStorage(noticeJson.length + 900);
+  storage.map.set('voc_requests_v1', noticeJson);
+  storage.map.set(
+    'voc_requests_meta_v1',
+    JSON.stringify(buildRequestsLocalMeta(notices, { truncated: false }))
+  );
+  let freedMeta: ReturnType<typeof freeRequestsLocalBodyKeepingMeta> = null;
+  const ok = persistSchoolLocalJson(storage, 'voc_sessions_v1', JSON.parse(sessionsJson), {
+    preferPatrolOverNotices: true,
+    requestsKey: 'voc_requests_v1',
+    freeRequestsBody: (s, key) => {
+      freedMeta = freeRequestsLocalBodyKeepingMeta(s, key);
+    },
+  });
+  assert.equal(ok, true);
+  assert.equal(storage.getItem('voc_requests_v1'), null);
+  assert.ok(freedMeta?.truncated);
+  assert.equal(freedMeta!.noticeCount, buildRequestsLocalMeta(notices).noticeCount);
+  assert.equal(shouldBlockCloudPushForTruncatedRequests([], freedMeta), true);
+}
+
+{
+  // 電腦：配額仍不夠時不可降級成截斷成功
+  const desktopHuge = many.map((r) => ({ ...r, reason: 'D'.repeat(400) }));
+  const storage = createWebKitStorage(2_000);
+  const result = persistRequestsLocalCache(storage, 'voc_requests_v1', desktopHuge, {
+    allowCountOnly: false,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.truncated, false);
   assert.ok(REQUEST_CACHE_KEEP_LIMITS.length > 0);
 }
 

@@ -275,8 +275,8 @@ export function purgeShrinkableLocalCaches(storage: StorageLike): number {
 }
 
 /**
- * 釋出通知單／申請單本機快取（保留 meta 筆數）。
- * 手機以巡堂／教室日誌為主時，應優先於此步驟，而不是清巡堂暫存。
+ * 釋出通知單／申請單本機快取（僅刪 body）。
+ * 呼叫端若要保留正確筆數，請改用 requestsLocalCache.freeRequestsLocalBodyKeepingMeta。
  */
 export function freeRequestsLocalBody(
   storage: StorageLike,
@@ -304,6 +304,11 @@ export function persistSchoolLocalJson(
     requestsKey?: string;
     /** 預設依裝置：手機 true、電腦 false */
     preferPatrolOverNotices?: boolean;
+    /**
+     * 手機騰位時釋出通知單本機。應寫入 truncated meta（保留正確筆數）。
+     * 未提供時退回只刪 body（不建議）。
+     */
+    freeRequestsBody?: (storage: StorageLike, requestsKey: string) => void;
   }
 ): boolean {
   const text = JSON.stringify(value);
@@ -321,7 +326,8 @@ export function persistSchoolLocalJson(
   // 手機：可先犧牲通知單本機快取；電腦要完整通知單，跳過此步
   if (preferPatrol && key !== requestsKey) {
     try {
-      freeRequestsLocalBody(storage, requestsKey);
+      if (opts?.freeRequestsBody) opts.freeRequestsBody(storage, requestsKey);
+      else freeRequestsLocalBody(storage, requestsKey);
       writeItemFreeingKey(storage, key, text);
       return true;
     } catch (err) {
