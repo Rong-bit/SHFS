@@ -52,6 +52,13 @@ import {
   persistSchoolLocalJson,
   purgeShrinkableLocalCaches,
 } from '../utils/localStorageQuota';
+import {
+  REQUESTS_LOCAL_TRUNCATED_HINT,
+  RequestsLocalMeta,
+  loadRequestsLocalMeta,
+  persistRequestsLocalCache,
+  shouldBlockCloudPushForTruncatedRequests,
+} from '../utils/requestsLocalCache';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from '../utils/patrolSync';
 import {
   isPrincipalOfficeStaff,
@@ -160,6 +167,8 @@ interface AppContextType {
   venues: WorkshopVenue[];
   sessions: CourseSession[];
   requests: SubstituteRequest[];
+  /** 本機申請單快取 meta（空間不足時 truncated，筆數仍記完整值） */
+  requestsLocalMeta: RequestsLocalMeta | null;
   systemConfig: SystemConfig;
 
   // Academic Staff Identity
@@ -442,6 +451,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
   });
+  const [requestsLocalMeta, setRequestsLocalMeta] = useState<RequestsLocalMeta | null>(() =>
+    typeof localStorage === 'undefined' ? null : loadRequestsLocalMeta(localStorage)
+  );
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CONFIG);
@@ -847,14 +859,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const persistRequestsKey = (nextRequests: SubstituteRequest[]) => {
+    if (schoolPersistQuotaFailedRef.current) return;
+    try {
+      const result = persistRequestsLocalCache(localStorage, STORAGE_KEYS.REQUESTS, nextRequests);
+      setRequestsLocalMeta(result.meta);
+      if (!result.ok) {
+        markSchoolPersistQuotaFailure();
+        return;
+      }
+      schoolPersistQuotaFailedRef.current = false;
+      if (result.truncated) {
+        if (isCloudSyncReady(cloudSyncSettings)) setCloudSyncStatus('synced');
+        setCloudSyncMessage(REQUESTS_LOCAL_TRUNCATED_HINT);
+      }
+    } catch (err) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        ((err as { name?: string }).name === 'QuotaExceededError' ||
+          /quota|儲存空間|exceeded/i.test(String((err as { message?: string }).message || err)))
+      ) {
+        markSchoolPersistQuotaFailure();
+        return;
+      }
+      throw err;
+    }
+  };
+
   const retrySchoolLocalCacheAfterQuota = () => {
     purgeShrinkableLocalCaches(localStorage);
     schoolPersistQuotaFailedRef.current = false;
+    const reqResult = persistRequestsLocalCache(localStorage, STORAGE_KEYS.REQUESTS, requests);
+    setRequestsLocalMeta(reqResult.meta);
     const ok =
       persistSchoolLocalJson(localStorage, STORAGE_KEYS.TEACHERS, teachersRef.current) &&
       persistSchoolLocalJson(localStorage, STORAGE_KEYS.VENUES, venues) &&
       persistSchoolLocalJson(localStorage, STORAGE_KEYS.SESSIONS, sessions) &&
-      persistSchoolLocalJson(localStorage, STORAGE_KEYS.REQUESTS, requests) &&
+      reqResult.ok &&
       persistSchoolLocalJson(localStorage, STORAGE_KEYS.STAFF_LIST, academicStaffListRef.current) &&
       persistSchoolLocalJson(localStorage, STORAGE_KEYS.CONFIG, systemConfigRef.current);
     if (!ok) {
@@ -870,9 +912,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLastCloudSyncAt(lastCloudSyncAtRef.current);
     }
     setCloudSyncMessage(
-      isCloudSyncReady(cloudSyncSettings)
-        ? '已清除巡堂／日誌快取，本機課表快取已恢復；可繼續同步。'
-        : '已清除巡堂／日誌快取，本機課表快取已恢復。'
+      reqResult.truncated
+        ? REQUESTS_LOCAL_TRUNCATED_HINT
+        : isCloudSyncReady(cloudSyncSettings)
+          ? '已清除巡堂／日誌快取，本機課表快取已恢復；可繼續同步。'
+          : '已清除巡堂／日誌快取，本機課表快取已恢復。'
     );
     if (isCloudSyncReady(cloudSyncSettings)) setCloudSyncStatus('synced');
     return true;
@@ -915,7 +959,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [sessions]);
 
   useEffect(() => {
-    persistSchoolKey(STORAGE_KEYS.REQUESTS, requests);
+    persistRequestsKey(requests);
   }, [requests]);
 
   // 一次性：還原舊版請假把任課改走的課堂（申請人課表不應少節）
@@ -1159,6 +1203,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCloudSyncMessage('尚未啟用跨電腦同步');
       return;
     }
+    if (shouldBlockCloudPushForTruncatedRequests(requests, requestsLocalMeta)) {
+      setCloudSyncStatus('error');
+      setCloudSyncMessage(
+        '本機僅有最近通知單快取，不可強制推送（以免覆蓋雲端完整資料）。請先「拉取遠端」取得完整資料。'
+      );
+      return;
+    }
     if (cloudBusyRef.current) {
       setCloudSyncMessage('同步進行中，請稍後再強制推送');
       return;
@@ -1340,6 +1391,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (cloudConflictRef.current) return; // 衝突待手動處理：暫停自動推送
     if (skipCloudPushRef.current) {
       skipCloudPushRef.current = false;
+      return;
+    }
+    // 本機僅快取最近通知單時不可推送，以免覆蓋雲端完整資料
+    if (shouldBlockCloudPushForTruncatedRequests(requests, requestsLocalMeta)) {
       return;
     }
     const handle = window.setTimeout(async () => {
@@ -4003,6 +4058,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         venues,
         sessions,
         requests,
+        requestsLocalMeta,
         systemConfig,
         addSubstituteRequest,
         addSubstituteRequests,
