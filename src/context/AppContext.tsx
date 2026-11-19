@@ -55,6 +55,8 @@ import {
 import {
   REQUESTS_LOCAL_TRUNCATED_HINT,
   RequestsLocalMeta,
+  clearRequestsLocalMeta,
+  freeRequestsLocalBodyKeepingMeta,
   loadRequestsLocalMeta,
   persistRequestsLocalCache,
   shouldBlockCloudPushForTruncatedRequests,
@@ -843,6 +845,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           requestsKey: STORAGE_KEYS.REQUESTS,
           // 手機：可犧牲通知單保巡堂；電腦：通知單要完整
           preferPatrolOverNotices: isCompactDeviceStorage(),
+          freeRequestsBody: (storage, requestsKey) => {
+            const meta = freeRequestsLocalBodyKeepingMeta(storage, requestsKey);
+            if (meta) setRequestsLocalMeta(meta);
+          },
         })
       ) {
         markSchoolPersistQuotaFailure();
@@ -2992,7 +2998,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setSessions(nextSessions);
     setRequests([]);
+    setRequestsLocalMeta(null);
     localStorage.removeItem(STORAGE_KEYS.REQUESTS);
+    clearRequestsLocalMeta(localStorage);
   };
 
   const updateSystemConfig = (newConfig: Partial<SystemConfig>) => {
@@ -3271,7 +3279,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addedCount = newSessionsList.length;
       if (clearRequests) {
         setRequests([]);
+        setRequestsLocalMeta(null);
         localStorage.removeItem(STORAGE_KEYS.REQUESTS);
+        clearRequestsLocalMeta(localStorage);
       }
     } else {
       // 增量：檔案有寫到的「班級＋星期＋節次」整格換成新課，舊教師那一筆刪除。檔案沒有的時段仍保留。
@@ -3547,6 +3557,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem(STORAGE_KEYS.VENUES);
     localStorage.removeItem(STORAGE_KEYS.SESSIONS);
     localStorage.removeItem(STORAGE_KEYS.REQUESTS);
+    clearRequestsLocalMeta(localStorage);
+    setRequestsLocalMeta(null);
     localStorage.removeItem(STORAGE_KEYS.CONFIG);
     localStorage.removeItem(STORAGE_KEYS.STAFF_LIST);
     // 巡堂教室已隨 INITIAL_SYSTEM_CONFIG 清空；本機紀錄／待上傳佇列也一併清除，避免孤兒資料進備份
