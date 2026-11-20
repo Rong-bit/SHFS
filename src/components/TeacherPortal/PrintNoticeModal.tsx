@@ -8,6 +8,7 @@ import { exportSingleNoticeToExcel } from '../../utils/noticeExcel';
 import {
   formatNoticeIssueRocDate,
   formatStampRocDate,
+  resolveNoticeApplicantDepartment,
   resolveNoticeIssueDate,
 } from '../../utils/noticeDocument';
 import {
@@ -494,10 +495,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 issueDateLabel={issueDateLabel}
                 showSignatureBlock={false}
                 isLowerCopy
-                department={
-                  teachers.find((t) => t.id === liveRequest.applicantTeacherId)?.department ||
-                  liveRequest.applicantDepartment
-                }
+                department={resolveNoticeApplicantDepartment(liveRequest, teachers)}
               />
               <NoticePageStamp dateLabel={stampDateLabel} schoolName={systemConfig.schoolName} />
             </div>

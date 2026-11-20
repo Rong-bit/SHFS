@@ -10,6 +10,7 @@ import {
   inferTeacherDepartmentFromPracticalRows,
   inferTeacherDepartmentFromSessions,
 } from '../src/utils/schoolDepartments';
+import { resolveNoticeApplicantDepartment } from '../src/utils/noticeDocument';
 
 const commonTeacher: Teacher = {
   id: 't-common',
@@ -62,6 +63,33 @@ const mechPractical: CourseSession = {
   // 相容函式亦不可再覆寫
   const next = applyTeacherDepartmentsFromSessions([commonTeacher], [mechPractical]);
   assert.equal(next[0].department, '共同科目');
+}
+
+{
+  // 列印：id 對不到時改以姓名對名冊（避免覆寫匯入後仍印舊快照）
+  const renamedId = { ...commonTeacher, id: 't-reimported' };
+  assert.equal(
+    resolveNoticeApplicantDepartment(
+      {
+        applicantTeacherId: 't-old-gone',
+        applicantTeacherName: '王共同',
+        applicantDepartment: '機械科',
+      },
+      [renamedId]
+    ),
+    '共同科目'
+  );
+  assert.equal(
+    resolveNoticeApplicantDepartment(
+      {
+        applicantTeacherId: 't-common',
+        applicantTeacherName: '王共同',
+        applicantDepartment: '機械科',
+      },
+      [commonTeacher]
+    ),
+    '共同科目'
+  );
 }
 
 console.log('regression-preserve-roster-department: ok');
