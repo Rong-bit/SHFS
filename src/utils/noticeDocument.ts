@@ -605,14 +605,17 @@ export function formatNoticeIssueRocDate(date: Date = new Date()): string {
   return `${roc}.${date.getMonth() + 1}.${date.getDate()}`;
 }
 
-/** 從師資名冊解析請假教師群科科別；對不到名冊時回傳 null（勿用班名／舊快照猜） */
-export function resolveRosterApplicantDepartment(
-  request: Pick<SubstituteRequest, 'applicantTeacherId' | 'applicantTeacherName'>,
+/** 從師資名冊以 id／姓名解析群科科別；對不到時回傳 null */
+export function resolveRosterTeacherDepartment(
+  teacherId: string | undefined,
+  teacherName: string | undefined,
   teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
 ): Teacher['department'] | null {
-  const byId = teachers.find((t) => t.id === request.applicantTeacherId);
-  if (byId?.department) return byId.department;
-  const name = (request.applicantTeacherName || '').trim();
+  if (teacherId) {
+    const byId = teachers.find((t) => t.id === teacherId);
+    if (byId?.department) return byId.department;
+  }
+  const name = (teacherName || '').trim();
   if (name) {
     const byName = teachers.find((t) => teacherNameMatches(t.name, name));
     if (byName?.department) return byName.department;
@@ -620,7 +623,55 @@ export function resolveRosterApplicantDepartment(
   return null;
 }
 
-/** 通知單下聯科別：優先師資名冊（id，其次姓名），再退回申請單快照 */
+/** 從師資名冊解析請假教師群科科別；對不到名冊時回傳 null（勿用班名／舊快照猜） */
+export function resolveRosterApplicantDepartment(
+  request: Pick<SubstituteRequest, 'applicantTeacherId' | 'applicantTeacherName'>,
+  teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
+): Teacher['department'] | null {
+  return resolveRosterTeacherDepartment(
+    request.applicantTeacherId,
+    request.applicantTeacherName,
+    teachers
+  );
+}
+
+/**
+ * 通知單下聯左上角科別＝**代理人**（代課教師／對調對象）的群科科別，非請假人。
+ * 自行移課無代理人時回傳空字串。
+ */
+export function resolveNoticeAgentDepartment(
+  request: Pick<
+    SubstituteRequest,
+    | 'requestType'
+    | 'substituteTeacherId'
+    | 'substituteTeacherName'
+    | 'swapTargetTeacherId'
+    | 'swapTargetTeacherName'
+  >,
+  teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
+): string {
+  if (request.requestType === 'swap') {
+    return (
+      resolveRosterTeacherDepartment(
+        request.swapTargetTeacherId,
+        request.swapTargetTeacherName,
+        teachers
+      ) || ''
+    );
+  }
+  if (request.requestType === 'substitute') {
+    return (
+      resolveRosterTeacherDepartment(
+        request.substituteTeacherId,
+        request.substituteTeacherName,
+        teachers
+      ) || ''
+    );
+  }
+  return '';
+}
+
+/** 登錄簿等：請假人科別（優先名冊，再退回申請單快照） */
 export function resolveNoticeApplicantDepartment(
   request: Pick<SubstituteRequest, 'applicantTeacherId' | 'applicantTeacherName' | 'applicantDepartment'>,
   teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
