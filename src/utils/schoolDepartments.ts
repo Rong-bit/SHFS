@@ -860,16 +860,14 @@ export const inferTeacherDepartmentFromSessions = (
       .map((s) => ({ teacherName: teacher.name, className: s.className, isPractical: true }))
   );
 
+/**
+ * @deprecated 師資名冊群科科別為權威來源，勿用課表覆寫。
+ * 保留函式僅供測試／相容；enrichTeachersFromSessions 已不再呼叫。
+ */
 export const applyTeacherDepartmentsFromSessions = <T extends Pick<Teacher, 'id' | 'name' | 'department'>>(
   teachers: T[],
-  sessions: CourseSession[]
-): T[] => {
-  if (!sessions.some((s) => isInternshipCourse(s.subjectName))) return teachers;
-  return teachers.map((t) => {
-    const department = inferTeacherDepartmentFromSessions(t, sessions);
-    return department === t.department ? t : { ...t, department };
-  });
-};
+  _sessions: CourseSession[]
+): T[] => teachers;
 
 const sessionTeacherKeys = (session: CourseSession) => {
   const names = String(session.teacherName || '')
@@ -1049,11 +1047,8 @@ export const enrichTeachersFromSessions = (
   directorStandard = DIRECTOR_BASE_PERIODS,
   homeroomSlot?: HomeroomSlotConfig | null
 ) => {
-  const next = applyTeacherHomeroomFromSessions(
-    applyTeacherDepartmentsFromSessions(teachers, sessions),
-    sessions,
-    homeroomSlot
-  );
+  // 群科科別以師資名冊為準，不依課表實習班別覆寫（避免共同科目被標成機械科等）
+  const next = applyTeacherHomeroomFromSessions(teachers, sessions, homeroomSlot);
   return next.map((t) => {
     const { dutyReductionPeriods, basePeriods, title } = resolveTeacherBasePeriods(
       t,

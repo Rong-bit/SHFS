@@ -3142,14 +3142,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (mode === 'overwrite') {
       // OVERWRITE MODE: Completely purge old mock demo teachers (e.g. 鄭志華) and only keep real in-school teachers from file
       importedTeacherNames.forEach((name, idx) => {
-        // 同名教師保留聯絡資料與密碼；導師班不沿用上一份課表，稍後依新課表重算
+        // 同名教師保留聯絡資料、密碼與名冊群科科別；導師班不沿用上一份課表，稍後依新課表重算
         const existing = teachers.find((t) => teacherNameMatches(t.name, name));
-        const dept = inferTeacherDepartmentFromPracticalRows(name, validRows);
+        const dept = existing?.department || inferTeacherDepartmentFromPracticalRows(name, validRows);
 
         const teacherObj: Teacher = existing
           ? clearInferredHomeroom({
               ...existing,
-              department: dept,
+              // 已在師資名冊者保留群科科別，勿用課表推斷覆寫
+              department: existing.department,
               weeklyActualPeriods: 0,
               email: normalizeSchoolEmail(existing.email),
             })

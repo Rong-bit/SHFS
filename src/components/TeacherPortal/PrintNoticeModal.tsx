@@ -354,7 +354,7 @@ const NoticeCopy: React.FC<{
 };
 
 export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onClose }) => {
-  const { systemConfig, requests, sessions } = useApp();
+  const { systemConfig, requests, sessions, teachers } = useApp();
   const [exporting, setExporting] = useState(false);
   const {
     liveRequest,
@@ -494,7 +494,10 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 issueDateLabel={issueDateLabel}
                 showSignatureBlock={false}
                 isLowerCopy
-                department={liveRequest.applicantDepartment}
+                department={
+                  teachers.find((t) => t.id === liveRequest.applicantTeacherId)?.department ||
+                  liveRequest.applicantDepartment
+                }
               />
               <NoticePageStamp dateLabel={stampDateLabel} schoolName={systemConfig.schoolName} />
             </div>
