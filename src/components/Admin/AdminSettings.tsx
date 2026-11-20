@@ -796,11 +796,16 @@ export const AdminSettings: React.FC = () => {
 
   const handleSaveVenue = (e: React.FormEvent) => {
     e.preventDefault();
-    ensureDepartmentInSchoolList(String(venueFormData.department || ''));
+    const nextDepartment = String(venueFormData.department || '').trim();
+    ensureDepartmentInSchoolList(nextDepartment);
+    const payload = {
+      ...venueFormData,
+      department: nextDepartment as typeof venueFormData.department,
+    };
     if (editingVenue) {
-      updateVenue(editingVenue.id, venueFormData);
+      updateVenue(editingVenue.id, payload);
     } else {
-      addVenue(venueFormData);
+      addVenue(payload);
     }
     setIsVenueModalOpen(false);
     setEditingVenue(null);
@@ -869,13 +874,14 @@ export const AdminSettings: React.FC = () => {
       .filter(Boolean);
 
     const nextBasePeriods = calcTeacherFormBase();
-    ensureDepartmentInSchoolList(teacherFormData.department);
+    const nextDepartment = String(teacherFormData.department || '').trim();
+    ensureDepartmentInSchoolList(nextDepartment);
 
     if (editingTeacher) {
       updateTeacher(editingTeacher.id, {
         name: teacherFormData.name,
         title: teacherFormData.title,
-        department: teacherFormData.department,
+        department: nextDepartment as typeof teacherFormData.department,
         dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
         basePeriods: nextBasePeriods,
         email: normalizeSchoolEmail(teacherFormData.email),
@@ -886,7 +892,7 @@ export const AdminSettings: React.FC = () => {
       addTeacher({
         name: teacherFormData.name,
         title: teacherFormData.title,
-        department: teacherFormData.department,
+        department: nextDepartment as typeof teacherFormData.department,
         dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
         basePeriods: nextBasePeriods,
         email: normalizeSchoolEmail(teacherFormData.email),

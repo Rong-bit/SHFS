@@ -154,6 +154,26 @@ export function clearRequestsLocalMeta(storage: StorageLike): void {
 }
 
 /**
+ * 本機已是截斷快取時，後續只帶部分列寫入（例如名冊回寫科別、小幅編輯）
+ * 不可把 meta 重寫成「完整、筆數＝本機列數」，否則筆數變少且可能誤推上雲。
+ */
+export function preservePriorTruncatedMeta(
+  prior: RequestsLocalMeta | null,
+  built: RequestsLocalMeta,
+  retainedCount: number
+): RequestsLocalMeta {
+  if (!prior?.truncated) return built;
+  if (prior.totalCount <= retainedCount) return built;
+  // 這次 built 若已涵蓋先前完整筆數（例如剛拉完整包），採用 built
+  if (!built.truncated && built.totalCount >= prior.totalCount) return built;
+  return {
+    ...prior,
+    truncated: true,
+    retainedCount,
+  };
+}
+
+/**
  * 騰位刪除通知單本機內容，但把完整筆數標成 truncated meta。
  * 避免只刪 body、meta 仍像「完整」→ 重整後筆數變 0，甚至誤推空資料上雲。
  */
@@ -208,13 +228,20 @@ export function persistRequestsLocalCache(
     typeof opts?.allowCountOnly === 'boolean'
       ? opts.allowCountOnly
       : isCompactDeviceStorage();
-  const fullMeta = buildRequestsLocalMeta(requests, { truncated: false });
+  const priorMeta = loadRequestsLocalMeta(storage);
+  const builtFullMeta = buildRequestsLocalMeta(requests, { truncated: false });
+  const fullMeta = preservePriorTruncatedMeta(priorMeta, builtFullMeta, requests.length);
   const payload = JSON.stringify(requests);
 
   try {
     writeItemFreeingKey(storage, requestsKey, payload);
     writeRequestsLocalMeta(storage, fullMeta);
-    return { ok: true, truncated: false, retained: requests, meta: fullMeta };
+    return {
+      ok: true,
+      truncated: fullMeta.truncated,
+      retained: requests,
+      meta: fullMeta,
+    };
   } catch (err) {
     if (!isLocalStorageQuotaError(err)) throw err;
   }
@@ -225,7 +252,12 @@ export function persistRequestsLocalCache(
       relieveDatedCaches(storage, SHRINKABLE_LOCAL_CACHE_KEYS, 7, opts?.todayIso);
       writeItemFreeingKey(storage, requestsKey, payload);
       writeRequestsLocalMeta(storage, fullMeta);
-      return { ok: true, truncated: false, retained: requests, meta: fullMeta };
+      return {
+        ok: true,
+        truncated: fullMeta.truncated,
+        retained: requests,
+        meta: fullMeta,
+      };
     } catch (err) {
       if (!isLocalStorageQuotaError(err)) throw err;
     }
@@ -233,14 +265,19 @@ export function persistRequestsLocalCache(
       purgeShrinkableLocalCaches(storage);
       writeItemFreeingKey(storage, requestsKey, payload);
       writeRequestsLocalMeta(storage, fullMeta);
-      return { ok: true, truncated: false, retained: requests, meta: fullMeta };
+      return {
+        ok: true,
+        truncated: fullMeta.truncated,
+        retained: requests,
+        meta: fullMeta,
+      };
     } catch (err) {
       if (!isLocalStorageQuotaError(err)) throw err;
     }
     // 電腦不降級成「最近幾筆」：寫不進就失敗，避免本機／雲端誤以為完整
     return {
       ok: false,
-      truncated: false,
+      truncated: fullMeta.truncated,
       retained: requests,
       meta: fullMeta,
     };
@@ -249,10 +286,11 @@ export function persistRequestsLocalCache(
   // 手機：不動巡堂／日誌；依空間遞減：最近通知單（筆數正確）→ 僅總筆數
   for (const keep of REQUEST_CACHE_KEEP_LIMITS) {
     const retained = retainRecentRequestsForLocalCache(requests, keep);
-    const meta = buildRequestsLocalMeta(requests, {
+    const built = buildRequestsLocalMeta(requests, {
       truncated: retained.length < requests.length,
       retainedCount: retained.length,
     });
+    const meta = preservePriorTruncatedMeta(priorMeta, built, retained.length);
     try {
       writeItemFreeingKey(storage, requestsKey, JSON.stringify(retained));
       writeRequestsLocalMeta(storage, meta);
@@ -267,10 +305,11 @@ export function persistRequestsLocalCache(
   } catch {
     // ignore
   }
-  const countOnlyMeta = buildRequestsLocalMeta(requests, {
+  const builtCountOnly = buildRequestsLocalMeta(requests, {
     truncated: true,
     retainedCount: 0,
   });
+  const countOnlyMeta = preservePriorTruncatedMeta(priorMeta, builtCountOnly, 0);
   const metaOk = writeRequestsLocalMeta(storage, countOnlyMeta);
   return {
     ok: metaOk,

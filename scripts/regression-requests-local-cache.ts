@@ -11,10 +11,12 @@ import {
   buildRequestsLocalMeta,
   freeRequestsLocalBodyKeepingMeta,
   persistRequestsLocalCache,
+  preservePriorTruncatedMeta,
   retainRecentRequestsForLocalCache,
   resolveDisplayedCaseCount,
   resolveDisplayedNoticeCount,
   shouldBlockCloudPushForTruncatedRequests,
+  writeRequestsLocalMeta,
 } from '../src/utils/requestsLocalCache';
 import { persistSchoolLocalJson } from '../src/utils/localStorageQuota';
 
@@ -240,6 +242,35 @@ const many = Array.from({ length: 40 }, (_, i) =>
   assert.equal(result.ok, false);
   assert.equal(result.truncated, false);
   assert.ok(REQUEST_CACHE_KEEP_LIMITS.length > 0);
+}
+
+{
+  // 截斷後若只帶部分列再寫入（名冊回寫科別等），不可把 meta 降成「完整／少筆數」
+  const full = many.slice(0, 20);
+  const prior = buildRequestsLocalMeta(full, { truncated: true, retainedCount: 5 });
+  const subset = full.slice(0, 5).map((r) => ({
+    ...r,
+    applicantDepartment: '共同科目' as SubstituteRequest['applicantDepartment'],
+  }));
+  const built = buildRequestsLocalMeta(subset, { truncated: false });
+  const kept = preservePriorTruncatedMeta(prior, built, subset.length);
+  assert.equal(kept.truncated, true);
+  assert.equal(kept.totalCount, full.length);
+  assert.equal(kept.noticeCount, prior.noticeCount);
+  assert.equal(kept.retainedCount, 5);
+  assert.equal(shouldBlockCloudPushForTruncatedRequests(subset, kept), true);
+
+  const storage = createWebKitStorage(500_000);
+  writeRequestsLocalMeta(storage, prior);
+  storage.setItem('voc_requests_v1', JSON.stringify(subset));
+  const result = persistRequestsLocalCache(storage, 'voc_requests_v1', subset, {
+    allowCountOnly: true,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.truncated, true);
+  assert.equal(result.meta.totalCount, full.length);
+  assert.equal(result.meta.noticeCount, prior.noticeCount);
+  assert.equal(shouldBlockCloudPushForTruncatedRequests(subset, result.meta), true);
 }
 
 console.log('regression-requests-local-cache: ok');
