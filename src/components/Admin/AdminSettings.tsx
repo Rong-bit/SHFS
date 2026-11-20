@@ -117,7 +117,6 @@ import {
   breakdownWeeklyOverloadPeriods,
   DEFAULT_SCHOOL_DEPARTMENTS,
   departmentOptionsForFilter,
-  departmentOptionsForSelect,
   normalizeSchoolDepartmentsList,
   normalizeStandardBasePeriods,
   normalizeTeacherTitle,
@@ -131,6 +130,7 @@ import { isPasswordHash } from '../../utils/passwordCrypto';
 import { ModalShell } from '../Common/ModalShell';
 import { MobileDock } from '../Common/MobileDock';
 import { DraftNumberInput } from '../Common/DraftNumberInput';
+import { DepartmentCombobox } from '../Common/DepartmentCombobox';
 
 type AdminTab =
   | 'config'
@@ -800,6 +800,7 @@ export const AdminSettings: React.FC = () => {
 
   const handleSaveVenue = (e: React.FormEvent) => {
     e.preventDefault();
+    ensureDepartmentInSchoolList(String(venueFormData.department || ''));
     if (editingVenue) {
       updateVenue(editingVenue.id, venueFormData);
     } else {
@@ -855,6 +856,21 @@ export const AdminSettings: React.FC = () => {
     return 0;
   };
 
+  /** 名冊／場地下拉新增的科別，立刻寫入學校清單並同步 */
+  const ensureDepartmentInSchoolList = (department: string) => {
+    const nextName = String(department || '').trim();
+    if (!nextName || nextName === '通用教室') return;
+    const current = resolveSchoolDepartments(
+      formConfig.schoolDepartments?.length
+        ? formConfig
+        : systemConfig
+    );
+    if (current.includes(nextName)) return;
+    const schoolDepartments = [...current, nextName];
+    setFormConfig((prev) => ({ ...prev, schoolDepartments }));
+    updateSystemConfig({ schoolDepartments });
+  };
+
   const handleSaveTeacher = (e: React.FormEvent) => {
     e.preventDefault();
     const certArray = teacherFormData.certifications
@@ -863,6 +879,7 @@ export const AdminSettings: React.FC = () => {
       .filter(Boolean);
 
     const nextBasePeriods = calcTeacherFormBase();
+    ensureDepartmentInSchoolList(teacherFormData.department);
 
     if (editingTeacher) {
       updateTeacher(editingTeacher.id, {
@@ -1563,7 +1580,8 @@ export const AdminSettings: React.FC = () => {
               </button>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              供師資名冊、場地科別與各處室篩選下拉使用。每行一個名稱；不影響課表匯入依班名自動推科。
+              供師資名冊、場地科別與各處室篩選使用。也可在編輯教師／場地的「群科科別」直接輸入新名稱加入。
+              每行一個；不影響課表匯入依班名自動推科。
             </p>
             <textarea
               value={(formConfig.schoolDepartments || resolveSchoolDepartments(formConfig)).join('\n')}
@@ -3737,18 +3755,17 @@ export const AdminSettings: React.FC = () => {
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">所屬群科</label>
-                  <select
-                    value={venueFormData.department}
-                    onChange={(e) => setVenueFormData({ ...venueFormData, department: e.target.value as any })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                  >
-                    {departmentOptionsForSelect(formConfig, venueFormData.department)
-                      .filter((d) => d !== '共同科目')
-                      .map((d) => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    <option value="通用教室">通用教室</option>
-                  </select>
+                  <DepartmentCombobox
+                    value={String(venueFormData.department || '')}
+                    onChange={(department) =>
+                      setVenueFormData({ ...venueFormData, department: department as any })
+                    }
+                    systemConfig={formConfig}
+                    onEnsureInSchoolList={ensureDepartmentInSchoolList}
+                    excludeCommonSubject
+                    includeGeneralClassroom
+                    required
+                  />
                 </div>
               </div>
 
@@ -3896,15 +3913,18 @@ export const AdminSettings: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">群科科別</label>
-                  <select
+                  <DepartmentCombobox
                     value={teacherFormData.department}
-                    onChange={(e) => setTeacherFormData({ ...teacherFormData, department: e.target.value as any })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                  >
-                    {departmentOptionsForSelect(formConfig, teacherFormData.department).map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
+                    onChange={(department) =>
+                      setTeacherFormData({
+                        ...teacherFormData,
+                        department: department as any,
+                      })
+                    }
+                    systemConfig={formConfig}
+                    onEnsureInSchoolList={ensureDepartmentInSchoolList}
+                    required
+                  />
                 </div>
 
                 <div>
