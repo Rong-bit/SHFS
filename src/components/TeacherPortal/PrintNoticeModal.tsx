@@ -8,7 +8,7 @@ import { exportSingleNoticeToExcel } from '../../utils/noticeExcel';
 import {
   formatNoticeIssueRocDate,
   formatStampRocDate,
-  resolveNoticeApplicantDepartment,
+  resolveNoticeAgentDepartment,
   resolveNoticeIssueDate,
 } from '../../utils/noticeDocument';
 import {
@@ -245,7 +245,7 @@ const NOTICE_PRINT_CSS = `
 }
 `;
 
-/** 群科科別字間空一格，例如 電機科 → 電 機 科 */
+/** 下聯左上角：代理人群科科別，字間空一格（例如 電機科 → 電 機 科） */
 const formatSpacedDepartment = (department?: string): string => {
   const text = String(department || '').trim();
   if (!text) return '';
@@ -495,7 +495,7 @@ export const PrintNoticeModal: React.FC<PrintNoticeModalProps> = ({ request, onC
                 issueDateLabel={issueDateLabel}
                 showSignatureBlock={false}
                 isLowerCopy
-                department={resolveNoticeApplicantDepartment(liveRequest, teachers)}
+                department={resolveNoticeAgentDepartment(liveRequest, teachers)}
               />
               <NoticePageStamp dateLabel={stampDateLabel} schoolName={systemConfig.schoolName} />
             </div>

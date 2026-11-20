@@ -12,6 +12,7 @@ import {
 } from '../src/utils/schoolDepartments';
 import {
   healRequestsApplicantDepartments,
+  resolveNoticeAgentDepartment,
   resolveNoticeApplicantDepartment,
 } from '../src/utils/noticeDocument';
 
@@ -96,7 +97,7 @@ const mechPractical: CourseSession = {
 }
 
 {
-  // 賴寶玉情境：名冊共同科目、舊快照機械科 → 回寫後通知單應為共同科目
+  // 請假人名冊共同科目、舊快照機械科 → 回寫後登錄簿顯示共同科目
   const roster = {
     ...commonTeacher,
     id: 't-paoyu',
@@ -112,6 +113,8 @@ const mechPractical: CourseSession = {
     applicantTeacherId: 't-paoyu',
     applicantTeacherName: '賴寶玉',
     applicantDepartment: '機械科',
+    substituteTeacherId: 't-agent',
+    substituteTeacherName: '李代課',
     reason: '公假',
     paymentType: 'public',
     originalSession: mechPractical,
@@ -122,6 +125,53 @@ const mechPractical: CourseSession = {
   const healed = healRequestsApplicantDepartments([stale], [roster]);
   assert.equal(healed[0].applicantDepartment, '共同科目');
   assert.equal(resolveNoticeApplicantDepartment(healed[0], [roster]), '共同科目');
+}
+
+{
+  // 下聯左上角＝代理人科別，不是請假人
+  const applicant = {
+    ...commonTeacher,
+    id: 't-paoyu',
+    name: '賴寶玉',
+    department: '共同科目' as const,
+  };
+  const agent = {
+    ...commonTeacher,
+    id: 't-agent',
+    name: '李代課',
+    department: '機械科' as const,
+  };
+  const req = {
+    id: 'req-2',
+    requestNumber: '115-1-2',
+    requestType: 'substitute',
+    applicantTeacherId: 't-paoyu',
+    applicantTeacherName: '賴寶玉',
+    applicantDepartment: '共同科目',
+    substituteTeacherId: 't-agent',
+    substituteTeacherName: '李代課',
+    reason: '公假',
+    paymentType: 'public',
+    originalSession: mechPractical,
+    status: 'approved',
+    clashStatus: { hasClash: false, severity: 'none', messages: [] },
+    createdAt: '2026-11-20 10:00',
+  } as SubstituteRequest;
+  assert.equal(resolveNoticeAgentDepartment(req, [applicant, agent]), '機械科');
+  assert.equal(
+    resolveNoticeAgentDepartment({ ...req, requestType: 'reschedule' }, [applicant, agent]),
+    '',
+    '自行移課無代理人，下聯科別空白'
+  );
+  const swapReq = {
+    ...req,
+    requestType: 'swap' as const,
+    substituteTeacherId: undefined,
+    substituteTeacherName: undefined,
+    swapTargetTeacherId: 't-agent',
+    swapTargetTeacherName: '李代課',
+  };
+  assert.equal(resolveNoticeAgentDepartment(swapReq, [applicant, agent]), '機械科');
 }
 
 console.log('regression-preserve-roster-department: ok');
