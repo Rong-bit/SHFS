@@ -115,9 +115,7 @@ import { CloudSyncPanel } from './CloudSyncPanel';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
 import {
   breakdownWeeklyOverloadPeriods,
-  DEFAULT_SCHOOL_DEPARTMENTS,
   departmentOptionsForFilter,
-  normalizeSchoolDepartmentsList,
   normalizeStandardBasePeriods,
   normalizeTeacherTitle,
   resolveSchoolDepartments,
@@ -316,7 +314,6 @@ const configToForm = (systemConfig: SystemConfig): SystemConfig => ({
     resolveLeaveThresholds(systemConfig).sickLeaveConsecutiveDayThreshold,
   wellnessLeaveHoursPerYear: resolveLeaveThresholds(systemConfig).wellnessLeaveHoursPerYear,
   schoolName: normalizeSchoolName(systemConfig?.schoolName ?? '高雄市立中正高工'),
-  schoolDepartments: resolveSchoolDepartments(systemConfig),
   academicYear: systemConfig?.academicYear ?? '114',
   semester: systemConfig?.semester ?? '1',
   currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
@@ -721,9 +718,8 @@ export const AdminSettings: React.FC = () => {
       homeroomDayOfWeek: homeroomSlot.dayOfWeek,
       homeroomPeriod: Math.min(homeroomSlot.period, maxP),
       schoolName: normalizeSchoolName(formConfig.schoolName),
-      schoolDepartments:
-        normalizeSchoolDepartmentsList(formConfig.schoolDepartments) ??
-        [...DEFAULT_SCHOOL_DEPARTMENTS],
+      // 科別清單僅由名冊／場地輸入累積，學校與學制頁不整批編輯
+      schoolDepartments: systemConfig.schoolDepartments,
       counselingStartDate,
       counselingEndDate,
       nonTeachingDays: prunedHolidays,
@@ -860,15 +856,9 @@ export const AdminSettings: React.FC = () => {
   const ensureDepartmentInSchoolList = (department: string) => {
     const nextName = String(department || '').trim();
     if (!nextName || nextName === '通用教室') return;
-    const current = resolveSchoolDepartments(
-      formConfig.schoolDepartments?.length
-        ? formConfig
-        : systemConfig
-    );
+    const current = resolveSchoolDepartments(systemConfig);
     if (current.includes(nextName)) return;
-    const schoolDepartments = [...current, nextName];
-    setFormConfig((prev) => ({ ...prev, schoolDepartments }));
-    updateSystemConfig({ schoolDepartments });
+    updateSystemConfig({ schoolDepartments: [...current, nextName] });
   };
 
   const handleSaveTeacher = (e: React.FormEvent) => {
@@ -1559,50 +1549,6 @@ export const AdminSettings: React.FC = () => {
             </div>
             <p className="text-[11px] text-indigo-600 mt-1.5">
               限 {SCHOOL_NAME_MAX_LENGTH} 個字，作為通知單教務戳章上弧校名；並套用於頁首、匯出 Excel 課表標題與列印檔名。
-            </p>
-          </div>
-
-          {/* 群科／領域清單 */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
-              <h3 className="font-bold text-slate-900 text-sm">群科／領域清單</h3>
-              <button
-                type="button"
-                onClick={() =>
-                  setFormConfig((prev) => ({
-                    ...prev,
-                    schoolDepartments: [...DEFAULT_SCHOOL_DEPARTMENTS],
-                  }))
-                }
-                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
-              >
-                還原系統預設
-              </button>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              供師資名冊、場地科別與各處室篩選使用。也可在編輯教師／場地的「群科科別」直接輸入新名稱加入。
-              每行一個；不影響課表匯入依班名自動推科。
-            </p>
-            <textarea
-              value={(formConfig.schoolDepartments || resolveSchoolDepartments(formConfig)).join('\n')}
-              onChange={(e) => {
-                const lines = e.target.value.split(/\r?\n/).map((s) => s.trimEnd());
-                setFormConfig((prev) => ({ ...prev, schoolDepartments: lines }));
-              }}
-              onBlur={() => {
-                setFormConfig((prev) => ({
-                  ...prev,
-                  schoolDepartments:
-                    normalizeSchoolDepartmentsList(prev.schoolDepartments) ??
-                    [...DEFAULT_SCHOOL_DEPARTMENTS],
-                }));
-              }}
-              rows={10}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-medium text-slate-800 leading-relaxed focus:ring-2 focus:ring-indigo-500"
-              placeholder={'電機科\n機械科\n共同科目'}
-            />
-            <p className="text-[11px] text-slate-500">
-              目前 {resolveSchoolDepartments(formConfig).length} 項；儲存後會同步至其他已加入同步的電腦。
             </p>
           </div>
 
@@ -2813,7 +2759,7 @@ export const AdminSettings: React.FC = () => {
               >
                 <option value="ALL">全部科別與場域</option>
                 {departmentOptionsForFilter(
-                  formConfig,
+                  systemConfig,
                   venues.map((v) => v.department)
                 )
                   .filter((d) => d !== '共同科目')
@@ -3224,7 +3170,7 @@ export const AdminSettings: React.FC = () => {
               >
                 <option value="ALL">全部群科科別</option>
                 {departmentOptionsForFilter(
-                  formConfig,
+                  systemConfig,
                   teachers.map((t) => t.department)
                 ).map((d) => (
                   <option key={d} value={d}>{d}</option>
@@ -3760,7 +3706,7 @@ export const AdminSettings: React.FC = () => {
                     onChange={(department) =>
                       setVenueFormData({ ...venueFormData, department: department as any })
                     }
-                    systemConfig={formConfig}
+                    systemConfig={systemConfig}
                     onEnsureInSchoolList={ensureDepartmentInSchoolList}
                     excludeCommonSubject
                     includeGeneralClassroom
@@ -3921,7 +3867,7 @@ export const AdminSettings: React.FC = () => {
                         department: department as any,
                       })
                     }
-                    systemConfig={formConfig}
+                    systemConfig={systemConfig}
                     onEnsureInSchoolList={ensureDepartmentInSchoolList}
                     required
                   />
