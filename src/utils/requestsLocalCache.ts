@@ -174,8 +174,23 @@ export function preservePriorTruncatedMeta(
 }
 
 /**
+ * 冷啟動：body 缺席時若已有 truncated／count-only meta，回傳 []，
+ * 切勿落到示範用 INITIAL_REQUESTS（否則小校可能誤推 mock 上雲）。
+ */
+export function resolveRequestsColdStartBody(
+  storedBody: SubstituteRequest[] | null,
+  meta: RequestsLocalMeta | null,
+  mockFallback: SubstituteRequest[]
+): SubstituteRequest[] {
+  if (storedBody != null) return storedBody;
+  if (meta?.truncated) return [];
+  if (meta && meta.totalCount > 0 && meta.retainedCount === 0) return [];
+  return mockFallback;
+}
+
+/**
  * 騰位刪除通知單本機內容，但把完整筆數標成 truncated meta。
- * 避免只刪 body、meta 仍像「完整」→ 重整後筆數變 0，甚至誤推空資料上雲。
+ * body 寫成 []（勿 removeItem），避免重整時被當成「尚無資料」而灌入 mock。
  */
 export function freeRequestsLocalBodyKeepingMeta(
   storage: StorageLike,
@@ -197,10 +212,16 @@ export function freeRequestsLocalBodyKeepingMeta(
   } else {
     meta = { ...meta, truncated: true, retainedCount: 0 };
   }
+  // 先寫 meta，再清 body；meta 失敗時仍盡力留下 truncated 標記
+  if (meta) writeRequestsLocalMeta(storage, meta);
   try {
-    storage.removeItem(requestsKey);
+    writeItemFreeingKey(storage, requestsKey, '[]');
   } catch {
-    // ignore
+    try {
+      storage.removeItem(requestsKey);
+    } catch {
+      // ignore
+    }
   }
   if (meta) writeRequestsLocalMeta(storage, meta);
   return meta;
@@ -300,17 +321,23 @@ export function persistRequestsLocalCache(
     }
   }
 
-  try {
-    storage.removeItem(requestsKey);
-  } catch {
-    // ignore
-  }
   const builtCountOnly = buildRequestsLocalMeta(requests, {
     truncated: true,
     retainedCount: 0,
   });
   const countOnlyMeta = preservePriorTruncatedMeta(priorMeta, builtCountOnly, 0);
+  // 先寫 meta，再寫空陣列（勿 removeItem，避免冷啟動灌入 mock）
   const metaOk = writeRequestsLocalMeta(storage, countOnlyMeta);
+  try {
+    writeItemFreeingKey(storage, requestsKey, '[]');
+  } catch {
+    try {
+      storage.removeItem(requestsKey);
+    } catch {
+      // ignore
+    }
+  }
+  if (metaOk) writeRequestsLocalMeta(storage, countOnlyMeta);
   return {
     ok: metaOk,
     truncated: true,
@@ -337,6 +364,10 @@ export function resolveDisplayedNoticeCount(
   meta: RequestsLocalMeta | null
 ): number {
   if (meta?.truncated && requests.length < meta.totalCount) return meta.noticeCount;
+  // 與推送防護同口徑：body 已空但 meta 仍記有通知單
+  if (meta && meta.totalCount > 0 && meta.noticeCount > 0 && requests.length === 0) {
+    return meta.noticeCount;
+  }
   return listPrintableNoticeAnchors(requests).length;
 }
 
@@ -345,6 +376,9 @@ export function resolveDisplayedCaseCount(
   meta: RequestsLocalMeta | null
 ): number {
   if (meta?.truncated && requests.length < meta.totalCount) return meta.allCaseCount;
+  if (meta && meta.totalCount > 0 && meta.allCaseCount > 0 && requests.length === 0) {
+    return meta.allCaseCount;
+  }
   return countLeaveCases(requests);
 }
 

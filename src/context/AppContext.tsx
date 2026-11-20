@@ -59,6 +59,7 @@ import {
   freeRequestsLocalBodyKeepingMeta,
   loadRequestsLocalMeta,
   persistRequestsLocalCache,
+  resolveRequestsColdStartBody,
   shouldBlockCloudPushForTruncatedRequests,
 } from '../utils/requestsLocalCache';
 import { healRequestsApplicantDepartments } from '../utils/noticeDocument';
@@ -442,9 +443,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   });
 
+  const [requestsLocalMeta, setRequestsLocalMeta] = useState<RequestsLocalMeta | null>(() =>
+    typeof localStorage === 'undefined' ? null : loadRequestsLocalMeta(localStorage)
+  );
   const [requests, setRequests] = useState<SubstituteRequest[]>(() => {
-    const raw = safeLocalJson<SubstituteRequest[]>(STORAGE_KEYS.REQUESTS, INITIAL_REQUESTS);
-    const list = Array.isArray(raw) ? raw : INITIAL_REQUESTS;
+    const meta =
+      typeof localStorage === 'undefined' ? null : loadRequestsLocalMeta(localStorage);
+    let storedBody: SubstituteRequest[] | null = null;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.REQUESTS);
+      if (saved) {
+        const parsed = JSON.parse(saved) as SubstituteRequest[];
+        if (Array.isArray(parsed)) storedBody = parsed;
+      }
+    } catch {
+      storedBody = null;
+    }
+    const list = resolveRequestsColdStartBody(storedBody, meta, INITIAL_REQUESTS);
     return list.map((r) =>
       sanitizeActingHomeroomOnlyClashStatus({
         ...r,
@@ -452,9 +467,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
   });
-  const [requestsLocalMeta, setRequestsLocalMeta] = useState<RequestsLocalMeta | null>(() =>
-    typeof localStorage === 'undefined' ? null : loadRequestsLocalMeta(localStorage)
-  );
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CONFIG);
