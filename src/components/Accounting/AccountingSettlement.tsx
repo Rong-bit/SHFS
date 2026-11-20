@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { calendarYearForSettlementMonth, displayTeacherTitle, expectedRocAcademicYear, SCHOOL_DEPARTMENTS } from '../../utils/schoolDepartments';
+import {
+  calendarYearForSettlementMonth,
+  departmentOptionsForFilter,
+  displayTeacherTitle,
+  expectedRocAcademicYear,
+} from '../../utils/schoolDepartments';
 import { formatPayrollMonthRangeLabel } from '../../utils/overloadPayrollRegister';
 import { nonTeachingDateSet } from '../../utils/holidays';
 import { countSalaryCodes } from '../../utils/salaryCodes';
@@ -45,6 +50,10 @@ export const AccountingSettlement: React.FC = () => {
     !Number.isNaN(Number(systemConfig.academicYear));
 
   const settlements = calculateMonthlySettlement(selectedMonth);
+  const departmentFilterOptions = departmentOptionsForFilter(
+    systemConfig,
+    settlements.map((r) => r.department)
+  );
 
   const filteredSettlements = settlements.filter((s) => {
     if (departmentFilter === 'all') return true;
@@ -350,7 +359,7 @@ export const AccountingSettlement: React.FC = () => {
           <div className="flex items-center space-x-2">
             <span className="text-xs font-bold text-slate-700">科別過濾：</span>
             <div className="flex flex-wrap gap-1 text-xs">
-              {['all', ...SCHOOL_DEPARTMENTS].map((d) => (
+              {['all', ...departmentFilterOptions].map((d) => (
                 <button
                   key={d}
                   onClick={() => setDepartmentFilter(d)}

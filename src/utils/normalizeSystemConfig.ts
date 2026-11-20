@@ -1,6 +1,9 @@
 import type { SystemConfig } from '../types';
 import { normalizeTimeRange, resolvePeriodConfig } from './periodConfig';
-import { resolveHomeroomSlot } from './schoolDepartments';
+import {
+  normalizeSchoolDepartmentsList,
+  resolveHomeroomSlot,
+} from './schoolDepartments';
 import { normalizeSchoolLevel, type SchoolLevel } from './schoolLevelPresets';
 import { resolveLeaveThresholds } from './leavePayrollPolicy';
 import { normalizeSchoolName } from './schoolName';
@@ -44,6 +47,7 @@ export function normalizeLoadedSystemConfig(
   | 'sickLeaveConsecutiveDayThreshold'
   | 'wellnessLeaveHoursPerYear'
   | 'schoolName'
+  | 'schoolDepartments'
   | 'concurrentFundingSources'
   | 'concurrentFundingByName'
 > {
@@ -93,6 +97,12 @@ export function normalizeLoadedSystemConfig(
     schoolName: normalizeSchoolName(
       typeof parsed.schoolName === 'string' ? parsed.schoolName : base.schoolName
     ),
+    schoolDepartments:
+      normalizeSchoolDepartmentsList(
+        parsed.schoolDepartments !== undefined
+          ? parsed.schoolDepartments
+          : base.schoolDepartments
+      ) ?? undefined,
     ...sanitizeConcurrentFunding(
       parsed.concurrentFundingByName !== undefined ? parsed : base
     ),

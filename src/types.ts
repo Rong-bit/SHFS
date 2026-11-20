@@ -222,6 +222,11 @@ export interface SystemConfig {
   wellnessLeaveHoursPerYear?: number;
   /** 學校名稱（最多 8 字；頁首、匯出標題、列印檔名、通知單戳章上弧） */
   schoolName: string;
+  /**
+   * 學校自訂群科／領域清單（師資名冊、場地、篩選下拉用）。
+   * 未設定或空陣列時使用系統預設清單；不影響課表匯入班名自動推科。
+   */
+  schoolDepartments?: string[];
   academicYear: string; // 114
   semester: string; // 1
   currentMonth: number; // 10

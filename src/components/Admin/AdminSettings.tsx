@@ -113,7 +113,18 @@ import {
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
+import {
+  breakdownWeeklyOverloadPeriods,
+  DEFAULT_SCHOOL_DEPARTMENTS,
+  departmentOptionsForFilter,
+  departmentOptionsForSelect,
+  normalizeSchoolDepartmentsList,
+  normalizeStandardBasePeriods,
+  normalizeTeacherTitle,
+  resolveSchoolDepartments,
+  teacherWeeklyOverload,
+  TEACHER_TITLES,
+} from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadPatrolTeacherManual, downloadSystemManual } from '../../utils/generateManual';
 import { isPasswordHash } from '../../utils/passwordCrypto';
@@ -305,6 +316,7 @@ const configToForm = (systemConfig: SystemConfig): SystemConfig => ({
     resolveLeaveThresholds(systemConfig).sickLeaveConsecutiveDayThreshold,
   wellnessLeaveHoursPerYear: resolveLeaveThresholds(systemConfig).wellnessLeaveHoursPerYear,
   schoolName: normalizeSchoolName(systemConfig?.schoolName ?? '高雄市立中正高工'),
+  schoolDepartments: resolveSchoolDepartments(systemConfig),
   academicYear: systemConfig?.academicYear ?? '114',
   semester: systemConfig?.semester ?? '1',
   currentMonth: systemConfig?.currentMonth ?? new Date().getMonth() + 1,
@@ -709,6 +721,9 @@ export const AdminSettings: React.FC = () => {
       homeroomDayOfWeek: homeroomSlot.dayOfWeek,
       homeroomPeriod: Math.min(homeroomSlot.period, maxP),
       schoolName: normalizeSchoolName(formConfig.schoolName),
+      schoolDepartments:
+        normalizeSchoolDepartmentsList(formConfig.schoolDepartments) ??
+        [...DEFAULT_SCHOOL_DEPARTMENTS],
       counselingStartDate,
       counselingEndDate,
       nonTeachingDays: prunedHolidays,
@@ -1527,6 +1542,49 @@ export const AdminSettings: React.FC = () => {
             </div>
             <p className="text-[11px] text-indigo-600 mt-1.5">
               限 {SCHOOL_NAME_MAX_LENGTH} 個字，作為通知單教務戳章上弧校名；並套用於頁首、匯出 Excel 課表標題與列印檔名。
+            </p>
+          </div>
+
+          {/* 群科／領域清單 */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="font-bold text-slate-900 text-sm">群科／領域清單</h3>
+              <button
+                type="button"
+                onClick={() =>
+                  setFormConfig((prev) => ({
+                    ...prev,
+                    schoolDepartments: [...DEFAULT_SCHOOL_DEPARTMENTS],
+                  }))
+                }
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+              >
+                還原系統預設
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              供師資名冊、場地科別與各處室篩選下拉使用。每行一個名稱；不影響課表匯入依班名自動推科。
+            </p>
+            <textarea
+              value={(formConfig.schoolDepartments || resolveSchoolDepartments(formConfig)).join('\n')}
+              onChange={(e) => {
+                const lines = e.target.value.split(/\r?\n/).map((s) => s.trimEnd());
+                setFormConfig((prev) => ({ ...prev, schoolDepartments: lines }));
+              }}
+              onBlur={() => {
+                setFormConfig((prev) => ({
+                  ...prev,
+                  schoolDepartments:
+                    normalizeSchoolDepartmentsList(prev.schoolDepartments) ??
+                    [...DEFAULT_SCHOOL_DEPARTMENTS],
+                }));
+              }}
+              rows={10}
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm font-medium text-slate-800 leading-relaxed focus:ring-2 focus:ring-indigo-500"
+              placeholder={'電機科\n機械科\n共同科目'}
+            />
+            <p className="text-[11px] text-slate-500">
+              目前 {resolveSchoolDepartments(formConfig).length} 項；儲存後會同步至其他已加入同步的電腦。
             </p>
           </div>
 
@@ -2736,9 +2794,14 @@ export const AdminSettings: React.FC = () => {
                 className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">全部科別與場域</option>
-                {SCHOOL_DEPARTMENTS.filter((d) => d !== '共同科目').map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
+                {departmentOptionsForFilter(
+                  formConfig,
+                  venues.map((v) => v.department)
+                )
+                  .filter((d) => d !== '共同科目')
+                  .map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 <option value="通用教室">通用教室</option>
               </select>
 
@@ -3142,7 +3205,10 @@ export const AdminSettings: React.FC = () => {
                 className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">全部群科科別</option>
-                {SCHOOL_DEPARTMENTS.map((d) => (
+                {departmentOptionsForFilter(
+                  formConfig,
+                  teachers.map((t) => t.department)
+                ).map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -3676,9 +3742,11 @@ export const AdminSettings: React.FC = () => {
                     onChange={(e) => setVenueFormData({ ...venueFormData, department: e.target.value as any })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
-                    {SCHOOL_DEPARTMENTS.filter((d) => d !== '共同科目').map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
+                    {departmentOptionsForSelect(formConfig, venueFormData.department)
+                      .filter((d) => d !== '共同科目')
+                      .map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
                     <option value="通用教室">通用教室</option>
                   </select>
                 </div>
@@ -3833,7 +3901,7 @@ export const AdminSettings: React.FC = () => {
                     onChange={(e) => setTeacherFormData({ ...teacherFormData, department: e.target.value as any })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
                   >
-                    {SCHOOL_DEPARTMENTS.map((d) => (
+                    {departmentOptionsForSelect(formConfig, teacherFormData.department).map((d) => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>

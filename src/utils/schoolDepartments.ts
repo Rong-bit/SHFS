@@ -15,8 +15,8 @@ import {
 } from './periodConfig';
 import { eachDateInSettlementPeriod, resolveSettlementPeriod } from './settlementPeriod';
 
-/** 建議科別／領域清單（高職示範；國中小可自填領域或班級語意） */
-export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
+/** 系統預設科別／領域清單（高職示範；學校可於系統維護覆寫） */
+export const DEFAULT_SCHOOL_DEPARTMENTS: DepartmentType[] = [
   '電機科',
   '電子科',
   '控制科',
@@ -41,6 +41,64 @@ export const SCHOOL_DEPARTMENTS: DepartmentType[] = [
   '綜合活動領域',
   '科技領域',
 ];
+
+/** @deprecated 請改用 resolveSchoolDepartments(systemConfig)；保留為預設清單別名 */
+export const SCHOOL_DEPARTMENTS = DEFAULT_SCHOOL_DEPARTMENTS;
+
+/** 整理學校科別清單：去空白、去重、略過空行；空則回傳 null（表示用預設） */
+export function normalizeSchoolDepartmentsList(
+  raw: unknown
+): DepartmentType[] | null {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of raw) {
+    const text = String(item || '').trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+  }
+  return out.length > 0 ? out : null;
+}
+
+/** 解析目前學校應使用的科別清單（設定有值用設定，否則系統預設） */
+export function resolveSchoolDepartments(
+  config?: Pick<SystemConfig, 'schoolDepartments'> | null
+): DepartmentType[] {
+  const normalized = normalizeSchoolDepartmentsList(config?.schoolDepartments);
+  return normalized ? [...normalized] : [...DEFAULT_SCHOOL_DEPARTMENTS];
+}
+
+/**
+ * 下拉選項：學校清單＋必要時附上目前值（清單已刪但仍在名冊／場地者）。
+ */
+export function departmentOptionsForSelect(
+  config?: Pick<SystemConfig, 'schoolDepartments'> | null,
+  currentValue?: string | null
+): DepartmentType[] {
+  const base = resolveSchoolDepartments(config);
+  const cur = String(currentValue || '').trim();
+  if (!cur || base.includes(cur)) return base;
+  return [...base, cur];
+}
+
+/** 篩選用：學校清單＋實際出現在資料中、但不在清單的科別 */
+export function departmentOptionsForFilter(
+  config?: Pick<SystemConfig, 'schoolDepartments'> | null,
+  presentDepartments: readonly string[] = []
+): DepartmentType[] {
+  const base = resolveSchoolDepartments(config);
+  const seen = new Set(base);
+  const extras: string[] = [];
+  for (const d of presentDepartments) {
+    const text = String(d || '').trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    extras.push(text);
+  }
+  extras.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  return [...base, ...extras];
+}
 
 /** 班級名稱字首，較長／易混淆的（電圖、電子、電機）放前面 */
 const CLASS_DEPT_PREFIXES: Array<[string, DepartmentType]> = [
@@ -285,8 +343,8 @@ export function departmentsFromSessions(sessions: CourseSession[]): DepartmentTy
     const fromSubject = departmentFromLabel(s.subjectName || '');
     if (fromSubject) set.add(fromSubject);
   });
-  const known = SCHOOL_DEPARTMENTS.filter((d) => set.has(d));
-  const extras = [...set].filter((d) => !SCHOOL_DEPARTMENTS.includes(d)).sort();
+  const known = DEFAULT_SCHOOL_DEPARTMENTS.filter((d) => set.has(d));
+  const extras = [...set].filter((d) => !DEFAULT_SCHOOL_DEPARTMENTS.includes(d)).sort();
   return [...known, ...extras];
 }
 
