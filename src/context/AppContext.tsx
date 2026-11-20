@@ -61,6 +61,7 @@ import {
   persistRequestsLocalCache,
   shouldBlockCloudPushForTruncatedRequests,
 } from '../utils/requestsLocalCache';
+import { healRequestsApplicantDepartments } from '../utils/noticeDocument';
 import { PATROL_PENDING_KEY, PATROL_RECORDS_KEY } from '../utils/patrolSync';
 import {
   isPrincipalOfficeStaff,
@@ -940,6 +941,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     persistRequestsKey(requests);
   }, [requests]);
 
+  // 名冊群科科別變更後，回寫申請單快照（避免通知單仍印舊的機械科等）
+  useEffect(() => {
+    setRequests((prev) => healRequestsApplicantDepartments(prev, teachers));
+  }, [teachers]);
+
   // 一次性：還原舊版請假把任課改走的課堂（申請人課表不應少節）
   const didHealSubstituteRef = useRef(false);
   useEffect(() => {
@@ -1035,24 +1041,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...systemConfigRef.current,
       ...(merged.systemConfig || {}),
     });
-    setTeachers(
-      enrichTeachersFromSessions(
-        remoteTeachers,
-        remoteSessions,
-        remoteStd.fulltime,
-        remoteStd.homeroom,
-        remoteStd.head,
-        remoteStd.sectionChief,
-        remoteStd.director,
-        { homeroomDayOfWeek: remoteSlot.dayOfWeek, homeroomPeriod: remoteSlot.period }
-      )
+    const enrichedRemoteTeachers = enrichTeachersFromSessions(
+      remoteTeachers,
+      remoteSessions,
+      remoteStd.fulltime,
+      remoteStd.homeroom,
+      remoteStd.head,
+      remoteStd.sectionChief,
+      remoteStd.director,
+      { homeroomDayOfWeek: remoteSlot.dayOfWeek, homeroomPeriod: remoteSlot.period }
     );
+    setTeachers(enrichedRemoteTeachers);
     setVenues(merged.venues || []);
     setSessions(remoteSessions);
-    setRequests((merged.requests || []).map((r) => sanitizeActingHomeroomOnlyClashStatus({
-      ...r,
-      requestNumber: migrateRequestNumber(r.requestNumber),
-    })));
+    setRequests(
+      healRequestsApplicantDepartments(
+        (merged.requests || []).map((r) =>
+          sanitizeActingHomeroomOnlyClashStatus({
+            ...r,
+            requestNumber: migrateRequestNumber(r.requestNumber),
+          })
+        ),
+        enrichedRemoteTeachers
+      )
+    );
     setSystemConfig({
       ...INITIAL_SYSTEM_CONFIG,
       ...systemConfigRef.current,
@@ -3442,29 +3454,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateTeacher = (id: string, data: Partial<Teacher>) => {
-    setTeachers((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        const merged = { ...t, ...data };
-        if (data.title === '專任教師') {
-          merged.homeroomClass = undefined;
-        }
-        if ((data.dutyReductionPeriods !== undefined || data.title !== undefined) && data.basePeriods === undefined) {
-          const resolved = resolveTeacherBasePeriods(
-            merged,
-            systemConfig.standardBasePeriods.fulltime,
-            systemConfig.standardBasePeriods.homeroom,
-            systemConfig.standardBasePeriods.head,
-            systemConfig.standardBasePeriods.sectionChief,
-            systemConfig.standardBasePeriods.director
-          );
-          merged.basePeriods = resolved.basePeriods;
-          merged.dutyReductionPeriods = resolved.dutyReductionPeriods;
-          merged.title = resolved.title;
-        }
-        return merged;
-      })
-    );
+    const nextTeachers = teachers.map((t) => {
+      if (t.id !== id) return t;
+      const merged = { ...t, ...data };
+      if (data.title === '專任教師') {
+        merged.homeroomClass = undefined;
+      }
+      if ((data.dutyReductionPeriods !== undefined || data.title !== undefined) && data.basePeriods === undefined) {
+        const resolved = resolveTeacherBasePeriods(
+          merged,
+          systemConfig.standardBasePeriods.fulltime,
+          systemConfig.standardBasePeriods.homeroom,
+          systemConfig.standardBasePeriods.head,
+          systemConfig.standardBasePeriods.sectionChief,
+          systemConfig.standardBasePeriods.director
+        );
+        merged.basePeriods = resolved.basePeriods;
+        merged.dutyReductionPeriods = resolved.dutyReductionPeriods;
+        merged.title = resolved.title;
+      }
+      return merged;
+    });
+    setTeachers(nextTeachers);
+    if (data.department !== undefined) {
+      setRequests((prev) => healRequestsApplicantDepartments(prev, nextTeachers));
+    }
   };
 
   const importTeacherEmails = (emailsByName: Record<string, string>) => {
