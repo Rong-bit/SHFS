@@ -17,7 +17,7 @@ import {
   formatCombinedLeaveCount,
   markCombinedSlotConcurrent,
   isPracticalSession,
-  SCHOOL_DEPARTMENTS,
+  departmentOptionsForFilter,
 } from '../../utils/schoolDepartments';
 import {
   BEREAVEMENT_LEAVE_LEGAL_NOTE,
@@ -2124,7 +2124,10 @@ export const StaffDispatchWorkbench: React.FC = () => {
                       className="bg-slate-100 text-slate-800 font-medium px-2 py-1 rounded border border-slate-300 text-xs"
                     >
                       <option value="全部">全部科別</option>
-                      {SCHOOL_DEPARTMENTS.map((d) => (
+                      {departmentOptionsForFilter(
+                        systemConfig,
+                        teachers.map((t) => t.department)
+                      ).map((d) => (
                         <option key={d} value={d}>{d}</option>
                       ))}
                     </select>

@@ -113,13 +113,22 @@ import {
 import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
-import { breakdownWeeklyOverloadPeriods, normalizeStandardBasePeriods, normalizeTeacherTitle, SCHOOL_DEPARTMENTS, teacherWeeklyOverload, TEACHER_TITLES } from '../../utils/schoolDepartments';
+import {
+  breakdownWeeklyOverloadPeriods,
+  departmentOptionsForFilter,
+  normalizeStandardBasePeriods,
+  normalizeTeacherTitle,
+  resolveSchoolDepartments,
+  teacherWeeklyOverload,
+  TEACHER_TITLES,
+} from '../../utils/schoolDepartments';
 import { DEFAULT_ADMIN_PASSWORD } from '../../data/mockData';
 import { downloadPatrolTeacherManual, downloadSystemManual } from '../../utils/generateManual';
 import { isPasswordHash } from '../../utils/passwordCrypto';
 import { ModalShell } from '../Common/ModalShell';
 import { MobileDock } from '../Common/MobileDock';
 import { DraftNumberInput } from '../Common/DraftNumberInput';
+import { DepartmentCombobox } from '../Common/DepartmentCombobox';
 
 type AdminTab =
   | 'config'
@@ -709,6 +718,8 @@ export const AdminSettings: React.FC = () => {
       homeroomDayOfWeek: homeroomSlot.dayOfWeek,
       homeroomPeriod: Math.min(homeroomSlot.period, maxP),
       schoolName: normalizeSchoolName(formConfig.schoolName),
+      // 科別清單僅由名冊／場地輸入累積，學校與學制頁不整批編輯
+      schoolDepartments: systemConfig.schoolDepartments,
       counselingStartDate,
       counselingEndDate,
       nonTeachingDays: prunedHolidays,
@@ -785,6 +796,7 @@ export const AdminSettings: React.FC = () => {
 
   const handleSaveVenue = (e: React.FormEvent) => {
     e.preventDefault();
+    ensureDepartmentInSchoolList(String(venueFormData.department || ''));
     if (editingVenue) {
       updateVenue(editingVenue.id, venueFormData);
     } else {
@@ -840,6 +852,15 @@ export const AdminSettings: React.FC = () => {
     return 0;
   };
 
+  /** 名冊／場地下拉新增的科別，立刻寫入學校清單並同步 */
+  const ensureDepartmentInSchoolList = (department: string) => {
+    const nextName = String(department || '').trim();
+    if (!nextName || nextName === '通用教室') return;
+    const current = resolveSchoolDepartments(systemConfig);
+    if (current.includes(nextName)) return;
+    updateSystemConfig({ schoolDepartments: [...current, nextName] });
+  };
+
   const handleSaveTeacher = (e: React.FormEvent) => {
     e.preventDefault();
     const certArray = teacherFormData.certifications
@@ -848,6 +869,7 @@ export const AdminSettings: React.FC = () => {
       .filter(Boolean);
 
     const nextBasePeriods = calcTeacherFormBase();
+    ensureDepartmentInSchoolList(teacherFormData.department);
 
     if (editingTeacher) {
       updateTeacher(editingTeacher.id, {
@@ -2736,9 +2758,14 @@ export const AdminSettings: React.FC = () => {
                 className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">全部科別與場域</option>
-                {SCHOOL_DEPARTMENTS.filter((d) => d !== '共同科目').map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
+                {departmentOptionsForFilter(
+                  systemConfig,
+                  venues.map((v) => v.department)
+                )
+                  .filter((d) => d !== '共同科目')
+                  .map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 <option value="通用教室">通用教室</option>
               </select>
 
@@ -3142,7 +3169,10 @@ export const AdminSettings: React.FC = () => {
                 className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">全部群科科別</option>
-                {SCHOOL_DEPARTMENTS.map((d) => (
+                {departmentOptionsForFilter(
+                  systemConfig,
+                  teachers.map((t) => t.department)
+                ).map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -3671,16 +3701,17 @@ export const AdminSettings: React.FC = () => {
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">所屬群科</label>
-                  <select
-                    value={venueFormData.department}
-                    onChange={(e) => setVenueFormData({ ...venueFormData, department: e.target.value as any })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                  >
-                    {SCHOOL_DEPARTMENTS.filter((d) => d !== '共同科目').map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                    <option value="通用教室">通用教室</option>
-                  </select>
+                  <DepartmentCombobox
+                    value={String(venueFormData.department || '')}
+                    onChange={(department) =>
+                      setVenueFormData({ ...venueFormData, department: department as any })
+                    }
+                    systemConfig={systemConfig}
+                    onEnsureInSchoolList={ensureDepartmentInSchoolList}
+                    excludeCommonSubject
+                    includeGeneralClassroom
+                    required
+                  />
                 </div>
               </div>
 
@@ -3828,15 +3859,18 @@ export const AdminSettings: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">群科科別</label>
-                  <select
+                  <DepartmentCombobox
                     value={teacherFormData.department}
-                    onChange={(e) => setTeacherFormData({ ...teacherFormData, department: e.target.value as any })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
-                  >
-                    {SCHOOL_DEPARTMENTS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
+                    onChange={(department) =>
+                      setTeacherFormData({
+                        ...teacherFormData,
+                        department: department as any,
+                      })
+                    }
+                    systemConfig={systemConfig}
+                    onEnsureInSchoolList={ensureDepartmentInSchoolList}
+                    required
+                  />
                 </div>
 
                 <div>
