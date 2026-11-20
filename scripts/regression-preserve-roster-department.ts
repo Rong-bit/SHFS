@@ -3,7 +3,7 @@
  * 執行：npx tsx scripts/regression-preserve-roster-department.ts
  */
 import assert from 'node:assert/strict';
-import { CourseSession, SubstituteRequest, Teacher } from '../src/types';
+import { ClashCheckResult, CourseSession, SubstituteRequest, Teacher } from '../src/types';
 import {
   applyTeacherDepartmentsFromSessions,
   enrichTeachersFromSessions,
@@ -116,7 +116,7 @@ const mechPractical: CourseSession = {
     paymentType: 'public',
     originalSession: mechPractical,
     status: 'approved',
-    clashStatus: 'ok',
+    clashStatus: 'ok' as ClashCheckResult,
     createdAt: '2026-11-20 10:00',
   } as SubstituteRequest;
   const healed = healRequestsApplicantDepartments([stale], [roster]);
