@@ -1,16 +1,11 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
-import {
-  departmentOptionsForSelect,
-  resolveSchoolDepartments,
-} from '../../utils/schoolDepartments';
+import { departmentOptionsForSelect } from '../../utils/schoolDepartments';
 import type { SystemConfig } from '../../types';
 
 type Props = {
   value: string;
   onChange: (next: string) => void;
   systemConfig: Pick<SystemConfig, 'schoolDepartments'> | null | undefined;
-  /** 新科別寫入學校清單（會觸發設定儲存／同步） */
-  onEnsureInSchoolList?: (department: string) => void;
   className?: string;
   /** 場地用：可含「通用教室」，並可排除共同科目 */
   includeGeneralClassroom?: boolean;
@@ -20,13 +15,13 @@ type Props = {
 };
 
 /**
- * 群科科別：可從清單選，也可直接輸入新名稱；新名稱會併入學校科別清單。
+ * 群科科別：可從清單選，也可直接輸入新名稱。
+ * 新名稱由外層「儲存」寫入學校清單（勿在 blur 寫入，以免取消後仍留下）。
  */
 export const DepartmentCombobox: React.FC<Props> = ({
   value,
   onChange,
   systemConfig,
-  onEnsureInSchoolList,
   className,
   includeGeneralClassroom = false,
   excludeCommonSubject = false,
@@ -49,15 +44,10 @@ export const DepartmentCombobox: React.FC<Props> = ({
     return list;
   }, [systemConfig, value, excludeCommonSubject, includeGeneralClassroom]);
 
-  const commit = (raw: string) => {
+  const trimCommit = (raw: string) => {
     const next = String(raw || '').trim();
     setDraft(next);
     onChange(next);
-    if (!next) return;
-    if (next === '通用教室') return;
-    const school = resolveSchoolDepartments(systemConfig);
-    if (school.includes(next)) return;
-    onEnsureInSchoolList?.(next);
   };
 
   return (
@@ -71,7 +61,7 @@ export const DepartmentCombobox: React.FC<Props> = ({
           setDraft(e.target.value);
           onChange(e.target.value);
         }}
-        onBlur={(e) => commit(e.target.value)}
+        onBlur={(e) => trimCommit(e.target.value)}
         className={
           className ||
           'w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold'
@@ -85,7 +75,7 @@ export const DepartmentCombobox: React.FC<Props> = ({
         ))}
       </datalist>
       <p className="text-[10px] text-slate-500 mt-1">
-        可點選建議，或自行輸入；新科別會加入學校清單
+        可點選建議，或自行輸入；儲存後新科別會加入學校清單
       </p>
     </>
   );

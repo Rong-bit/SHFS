@@ -100,6 +100,20 @@ export function departmentOptionsForFilter(
   return [...base, ...extras];
 }
 
+/**
+ * 將新科別併入學校清單。無需變更時回傳 null（已存在／空白／通用教室）。
+ */
+export function appendDepartmentToSchoolList(
+  config: Pick<SystemConfig, 'schoolDepartments'> | null | undefined,
+  department: string
+): DepartmentType[] | null {
+  const nextName = String(department || '').trim();
+  if (!nextName || nextName === '通用教室') return null;
+  const current = resolveSchoolDepartments(config);
+  if (current.includes(nextName)) return null;
+  return [...current, nextName];
+}
+
 /** 班級名稱字首，較長／易混淆的（電圖、電子、電機）放前面 */
 const CLASS_DEPT_PREFIXES: Array<[string, DepartmentType]> = [
   ['電圖', '電圖科'],

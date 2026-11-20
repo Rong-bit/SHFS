@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SCHOOL_DEPARTMENTS,
+  appendDepartmentToSchoolList,
   departmentOptionsForFilter,
   departmentOptionsForSelect,
   normalizeSchoolDepartmentsList,
@@ -52,6 +53,17 @@ assert.deepEqual(SCHOOL_DEPARTMENTS, DEFAULT_SCHOOL_DEPARTMENTS);
   assert.deepEqual(normalized.schoolDepartments, ['資訊科', '語文領域']);
   const empty = normalizeLoadedSystemConfig({ schoolDepartments: [] }, INITIAL_SYSTEM_CONFIG);
   assert.equal(empty.schoolDepartments, undefined);
+}
+
+{
+  assert.equal(appendDepartmentToSchoolList(null, '  '), null);
+  assert.equal(appendDepartmentToSchoolList(null, '通用教室'), null);
+  assert.equal(appendDepartmentToSchoolList(null, '電機科'), null, '預設清單已有則不重複寫入');
+  const appended = appendDepartmentToSchoolList({ schoolDepartments: ['共同科目'] }, '光電科');
+  assert.deepEqual(appended, ['共同科目', '光電科']);
+  // 連續合併：第二次以第一次結果為基準，不應覆蓋掉光電科
+  const again = appendDepartmentToSchoolList({ schoolDepartments: appended! }, '特教科');
+  assert.deepEqual(again, ['共同科目', '光電科', '特教科']);
 }
 
 console.log('regression-school-departments-config: ok');
