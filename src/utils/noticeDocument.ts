@@ -3,6 +3,7 @@ import {
   DayOfWeek,
   SubstituteNoticeRow,
   SubstituteRequest,
+  Teacher,
 } from '../types';
 import { resolveOriginalSession } from './resolveOriginalSession';
 import { resolveLeaveDateEnd } from './leaveDates';
@@ -14,6 +15,7 @@ import {
 } from './temporarySwap';
 import { mergeCustomizedNoticeRowsFromPool, parseNoticeRowDateToIso } from './noticePayroll';
 import { isActingHomeroomOnlyRequest } from './actingHomeroomPayrollRegister';
+import { teacherNameMatches } from './schoolDepartments';
 
 export type NoticeRow = SubstituteNoticeRow;
 
@@ -601,6 +603,21 @@ export function resolveNoticeIssueDate(
 export function formatNoticeIssueRocDate(date: Date = new Date()): string {
   const roc = date.getFullYear() - 1911;
   return `${roc}.${date.getMonth() + 1}.${date.getDate()}`;
+}
+
+/** 通知單下聯科別：優先師資名冊（id，其次姓名），再退回申請單快照 */
+export function resolveNoticeApplicantDepartment(
+  request: Pick<SubstituteRequest, 'applicantTeacherId' | 'applicantTeacherName' | 'applicantDepartment'>,
+  teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
+): string {
+  const byId = teachers.find((t) => t.id === request.applicantTeacherId);
+  if (byId?.department) return byId.department;
+  const name = (request.applicantTeacherName || '').trim();
+  if (name) {
+    const byName = teachers.find((t) => teacherNameMatches(t.name, name));
+    if (byName?.department) return byName.department;
+  }
+  return request.applicantDepartment || '';
 }
 
 /** 戳章日期格式，例 115. 8. 28（與表格下開立日期同源） */
