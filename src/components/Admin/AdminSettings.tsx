@@ -114,11 +114,11 @@ import { BackupTransferButtons } from '../Common/BackupTransferButtons';
 import { CloudSyncPanel } from './CloudSyncPanel';
 import { normalizeSchoolEmail, SCHOOL_EMAIL_EXAMPLE } from '../../utils/schoolEmail';
 import {
+  appendDepartmentToSchoolList,
   breakdownWeeklyOverloadPeriods,
   departmentOptionsForFilter,
   normalizeStandardBasePeriods,
   normalizeTeacherTitle,
-  resolveSchoolDepartments,
   teacherWeeklyOverload,
   TEACHER_TITLES,
 } from '../../utils/schoolDepartments';
@@ -796,11 +796,20 @@ export const AdminSettings: React.FC = () => {
 
   const handleSaveVenue = (e: React.FormEvent) => {
     e.preventDefault();
-    ensureDepartmentInSchoolList(String(venueFormData.department || ''));
+    const nextDepartment = String(venueFormData.department || '').trim();
+    if (!nextDepartment) {
+      window.alert('請填寫所屬群科');
+      return;
+    }
+    ensureDepartmentInSchoolList(nextDepartment);
+    const payload = {
+      ...venueFormData,
+      department: nextDepartment as typeof venueFormData.department,
+    };
     if (editingVenue) {
-      updateVenue(editingVenue.id, venueFormData);
+      updateVenue(editingVenue.id, payload);
     } else {
-      addVenue(venueFormData);
+      addVenue(payload);
     }
     setIsVenueModalOpen(false);
     setEditingVenue(null);
@@ -852,13 +861,15 @@ export const AdminSettings: React.FC = () => {
     return 0;
   };
 
-  /** 名冊／場地下拉新增的科別，立刻寫入學校清單並同步 */
+  /** 名冊／場地儲存時併入學校清單（用 latestConfigRef，避免連續新增互相覆蓋） */
   const ensureDepartmentInSchoolList = (department: string) => {
-    const nextName = String(department || '').trim();
-    if (!nextName || nextName === '通用教室') return;
-    const current = resolveSchoolDepartments(systemConfig);
-    if (current.includes(nextName)) return;
-    updateSystemConfig({ schoolDepartments: [...current, nextName] });
+    const nextList = appendDepartmentToSchoolList(latestConfigRef.current, department);
+    if (!nextList) return;
+    latestConfigRef.current = {
+      ...latestConfigRef.current,
+      schoolDepartments: nextList,
+    };
+    updateSystemConfig({ schoolDepartments: nextList });
   };
 
   const handleSaveTeacher = (e: React.FormEvent) => {
@@ -869,13 +880,18 @@ export const AdminSettings: React.FC = () => {
       .filter(Boolean);
 
     const nextBasePeriods = calcTeacherFormBase();
-    ensureDepartmentInSchoolList(teacherFormData.department);
+    const nextDepartment = String(teacherFormData.department || '').trim();
+    if (!nextDepartment) {
+      window.alert('請填寫群科科別');
+      return;
+    }
+    ensureDepartmentInSchoolList(nextDepartment);
 
     if (editingTeacher) {
       updateTeacher(editingTeacher.id, {
         name: teacherFormData.name,
         title: teacherFormData.title,
-        department: teacherFormData.department,
+        department: nextDepartment as typeof teacherFormData.department,
         dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
         basePeriods: nextBasePeriods,
         email: normalizeSchoolEmail(teacherFormData.email),
@@ -886,7 +902,7 @@ export const AdminSettings: React.FC = () => {
       addTeacher({
         name: teacherFormData.name,
         title: teacherFormData.title,
-        department: teacherFormData.department,
+        department: nextDepartment as typeof teacherFormData.department,
         dutyReductionPeriods: Number(teacherFormData.dutyReductionPeriods) || 0,
         basePeriods: nextBasePeriods,
         email: normalizeSchoolEmail(teacherFormData.email),
@@ -2758,15 +2774,16 @@ export const AdminSettings: React.FC = () => {
                 className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 <option value="ALL">全部科別與場域</option>
-                {departmentOptionsForFilter(
-                  systemConfig,
-                  venues.map((v) => v.department)
-                )
+                {departmentOptionsForFilter(systemConfig, [
+                  ...venues.map((v) => v.department),
+                  '通用教室',
+                ])
                   .filter((d) => d !== '共同科目')
                   .map((d) => (
-                    <option key={d} value={d}>{d}</option>
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
                   ))}
-                <option value="通用教室">通用教室</option>
               </select>
 
               <select
@@ -3707,7 +3724,6 @@ export const AdminSettings: React.FC = () => {
                       setVenueFormData({ ...venueFormData, department: department as any })
                     }
                     systemConfig={systemConfig}
-                    onEnsureInSchoolList={ensureDepartmentInSchoolList}
                     excludeCommonSubject
                     includeGeneralClassroom
                     required
@@ -3868,7 +3884,6 @@ export const AdminSettings: React.FC = () => {
                       })
                     }
                     systemConfig={systemConfig}
-                    onEnsureInSchoolList={ensureDepartmentInSchoolList}
                     required
                   />
                 </div>

@@ -11,10 +11,13 @@ import {
   buildRequestsLocalMeta,
   freeRequestsLocalBodyKeepingMeta,
   persistRequestsLocalCache,
+  preservePriorTruncatedMeta,
   retainRecentRequestsForLocalCache,
   resolveDisplayedCaseCount,
   resolveDisplayedNoticeCount,
+  resolveRequestsColdStartBody,
   shouldBlockCloudPushForTruncatedRequests,
+  writeRequestsLocalMeta,
 } from '../src/utils/requestsLocalCache';
 import { persistSchoolLocalJson } from '../src/utils/localStorageQuota';
 
@@ -148,7 +151,7 @@ const many = Array.from({ length: 40 }, (_, i) =>
   assert.equal(result.truncated, true);
   assert.equal(result.retained.length, 0);
   assert.equal(result.meta.totalCount, huge.length);
-  assert.equal(storage.getItem('voc_requests_v1'), null);
+  assert.equal(storage.getItem('voc_requests_v1'), '[]');
   assert.ok(storage.getItem('voc_requests_meta_v1'));
   assert.equal(storage.getItem('voc_patrol_records_v1'), patrolJson);
   assert.match(REQUESTS_LOCAL_TRUNCATED_HINT, /筆數/);
@@ -199,7 +202,7 @@ const many = Array.from({ length: 40 }, (_, i) =>
   assert.equal(meta!.retainedCount, 0);
   assert.equal(meta!.totalCount, full.length);
   assert.equal(meta!.noticeCount, buildRequestsLocalMeta(full).noticeCount);
-  assert.equal(storage.getItem('voc_requests_v1'), null);
+  assert.equal(storage.getItem('voc_requests_v1'), '[]');
   assert.equal(resolveDisplayedNoticeCount([], meta), meta!.noticeCount);
   assert.equal(shouldBlockCloudPushForTruncatedRequests([], meta), true);
 }
@@ -224,7 +227,7 @@ const many = Array.from({ length: 40 }, (_, i) =>
     },
   });
   assert.equal(ok, true);
-  assert.equal(storage.getItem('voc_requests_v1'), null);
+  assert.equal(storage.getItem('voc_requests_v1'), '[]');
   assert.ok(freedMeta?.truncated);
   assert.equal(freedMeta!.noticeCount, buildRequestsLocalMeta(notices).noticeCount);
   assert.equal(shouldBlockCloudPushForTruncatedRequests([], freedMeta), true);
@@ -240,6 +243,53 @@ const many = Array.from({ length: 40 }, (_, i) =>
   assert.equal(result.ok, false);
   assert.equal(result.truncated, false);
   assert.ok(REQUEST_CACHE_KEEP_LIMITS.length > 0);
+}
+
+{
+  // 截斷後若只帶部分列再寫入（名冊回寫科別等），不可把 meta 降成「完整／少筆數」
+  const full = many.slice(0, 20);
+  const prior = buildRequestsLocalMeta(full, { truncated: true, retainedCount: 5 });
+  const subset = full.slice(0, 5).map((r) => ({
+    ...r,
+    applicantDepartment: '共同科目' as SubstituteRequest['applicantDepartment'],
+  }));
+  const built = buildRequestsLocalMeta(subset, { truncated: false });
+  const kept = preservePriorTruncatedMeta(prior, built, subset.length);
+  assert.equal(kept.truncated, true);
+  assert.equal(kept.totalCount, full.length);
+  assert.equal(kept.noticeCount, prior.noticeCount);
+  assert.equal(kept.retainedCount, 5);
+  assert.equal(shouldBlockCloudPushForTruncatedRequests(subset, kept), true);
+
+  const storage = createWebKitStorage(500_000);
+  writeRequestsLocalMeta(storage, prior);
+  storage.setItem('voc_requests_v1', JSON.stringify(subset));
+  const result = persistRequestsLocalCache(storage, 'voc_requests_v1', subset, {
+    allowCountOnly: true,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.truncated, true);
+  assert.equal(result.meta.totalCount, full.length);
+  assert.equal(result.meta.noticeCount, prior.noticeCount);
+  assert.equal(shouldBlockCloudPushForTruncatedRequests(subset, result.meta), true);
+}
+
+{
+  // count-only／body 缺席：冷啟動不可灌入 mock（小校 totalCount≤mock 筆數時會誤推）
+  const mock = many.slice(0, 12);
+  const meta = buildRequestsLocalMeta(many.slice(0, 8), {
+    truncated: true,
+    retainedCount: 0,
+  });
+  assert.equal(meta.totalCount, 8);
+  assert.ok(mock.length > meta.totalCount);
+  const cold = resolveRequestsColdStartBody(null, meta, mock);
+  assert.equal(cold.length, 0);
+  assert.equal(shouldBlockCloudPushForTruncatedRequests(cold, meta), true);
+  // 正式寫成 [] 後亦同
+  assert.deepEqual(resolveRequestsColdStartBody([], meta, mock), []);
+  // 真正首次安裝（無 meta）仍可用 mock
+  assert.equal(resolveRequestsColdStartBody(null, null, mock), mock);
 }
 
 console.log('regression-requests-local-cache: ok');
