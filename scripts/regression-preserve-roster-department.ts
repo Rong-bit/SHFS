@@ -3,14 +3,17 @@
  * 執行：npx tsx scripts/regression-preserve-roster-department.ts
  */
 import assert from 'node:assert/strict';
-import { CourseSession, Teacher } from '../src/types';
+import { CourseSession, SubstituteRequest, Teacher } from '../src/types';
 import {
   applyTeacherDepartmentsFromSessions,
   enrichTeachersFromSessions,
   inferTeacherDepartmentFromPracticalRows,
   inferTeacherDepartmentFromSessions,
 } from '../src/utils/schoolDepartments';
-import { resolveNoticeApplicantDepartment } from '../src/utils/noticeDocument';
+import {
+  healRequestsApplicantDepartments,
+  resolveNoticeApplicantDepartment,
+} from '../src/utils/noticeDocument';
 
 const commonTeacher: Teacher = {
   id: 't-common',
@@ -90,6 +93,35 @@ const mechPractical: CourseSession = {
     ),
     '共同科目'
   );
+}
+
+{
+  // 賴寶玉情境：名冊共同科目、舊快照機械科 → 回寫後通知單應為共同科目
+  const roster = {
+    ...commonTeacher,
+    id: 't-paoyu',
+    name: '賴寶玉',
+    department: '共同科目' as const,
+    title: '導師' as const,
+    homeroomClass: '機械三忠',
+  };
+  const stale = {
+    id: 'req-1',
+    requestNumber: '115-1-1',
+    requestType: 'substitute',
+    applicantTeacherId: 't-paoyu',
+    applicantTeacherName: '賴寶玉',
+    applicantDepartment: '機械科',
+    reason: '公假',
+    paymentType: 'public',
+    originalSession: mechPractical,
+    status: 'approved',
+    clashStatus: 'ok',
+    createdAt: '2026-11-20 10:00',
+  } as SubstituteRequest;
+  const healed = healRequestsApplicantDepartments([stale], [roster]);
+  assert.equal(healed[0].applicantDepartment, '共同科目');
+  assert.equal(resolveNoticeApplicantDepartment(healed[0], [roster]), '共同科目');
 }
 
 console.log('regression-preserve-roster-department: ok');

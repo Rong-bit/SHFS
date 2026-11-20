@@ -64,7 +64,11 @@ import { SessionVenueSelect } from '../Common/SessionVenueSelect';
 import { TeacherSearchCombobox } from '../Common/TeacherSearchCombobox';
 import { isHomeroomTeacher, isActingHomeroomOnlyRequest } from '../../utils/actingHomeroomPayrollRegister';
 import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
-import { listPrintableNoticeAnchors, resolveDisplayClassSubject } from '../../utils/noticeDocument';
+import {
+  listPrintableNoticeAnchors,
+  resolveDisplayClassSubject,
+  resolveNoticeApplicantDepartment,
+} from '../../utils/noticeDocument';
 import {
   REQUESTS_LOCAL_TRUNCATED_HINT,
   resolveDisplayedCaseCount,
@@ -3295,7 +3299,9 @@ export const StaffDispatchWorkbench: React.FC = () => {
 
                           <td className="p-3">
                             <div className="font-bold text-slate-900">{req.applicantTeacherName}</div>
-                            <div className="text-[11px] text-slate-500">{req.applicantDepartment}</div>
+                            <div className="text-[11px] text-slate-500">
+                              {resolveNoticeApplicantDepartment(req, teachers)}
+                            </div>
                           </td>
 
                           <td className="p-3">

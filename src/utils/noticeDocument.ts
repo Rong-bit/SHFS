@@ -605,11 +605,11 @@ export function formatNoticeIssueRocDate(date: Date = new Date()): string {
   return `${roc}.${date.getMonth() + 1}.${date.getDate()}`;
 }
 
-/** 通知單下聯科別：優先師資名冊（id，其次姓名），再退回申請單快照 */
-export function resolveNoticeApplicantDepartment(
-  request: Pick<SubstituteRequest, 'applicantTeacherId' | 'applicantTeacherName' | 'applicantDepartment'>,
+/** 從師資名冊解析請假教師群科科別；對不到名冊時回傳 null（勿用班名／舊快照猜） */
+export function resolveRosterApplicantDepartment(
+  request: Pick<SubstituteRequest, 'applicantTeacherId' | 'applicantTeacherName'>,
   teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
-): string {
+): Teacher['department'] | null {
   const byId = teachers.find((t) => t.id === request.applicantTeacherId);
   if (byId?.department) return byId.department;
   const name = (request.applicantTeacherName || '').trim();
@@ -617,7 +617,33 @@ export function resolveNoticeApplicantDepartment(
     const byName = teachers.find((t) => teacherNameMatches(t.name, name));
     if (byName?.department) return byName.department;
   }
-  return request.applicantDepartment || '';
+  return null;
+}
+
+/** 通知單下聯科別：優先師資名冊（id，其次姓名），再退回申請單快照 */
+export function resolveNoticeApplicantDepartment(
+  request: Pick<SubstituteRequest, 'applicantTeacherId' | 'applicantTeacherName' | 'applicantDepartment'>,
+  teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
+): string {
+  return resolveRosterApplicantDepartment(request, teachers) || request.applicantDepartment || '';
+}
+
+/**
+ * 以師資名冊回寫申請單上的群科科別快照。
+ * 修正「名冊已是共同科目，但舊快照仍是機械科」導致通知單／登錄簿顯示錯誤。
+ */
+export function healRequestsApplicantDepartments<T extends SubstituteRequest>(
+  requests: T[],
+  teachers: Array<Pick<Teacher, 'id' | 'name' | 'department'>>
+): T[] {
+  let changed = false;
+  const next = requests.map((r) => {
+    const rosterDept = resolveRosterApplicantDepartment(r, teachers);
+    if (!rosterDept || rosterDept === r.applicantDepartment) return r;
+    changed = true;
+    return { ...r, applicantDepartment: rosterDept };
+  });
+  return changed ? next : requests;
 }
 
 /** 戳章日期格式，例 115. 8. 28（與表格下開立日期同源） */

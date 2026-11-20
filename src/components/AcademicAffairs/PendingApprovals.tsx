@@ -9,7 +9,7 @@ import { isActingHomeroomOnlyRequest, displayClashStatus } from '../../utils/act
 import { formatCombinedLeaveCount } from '../../utils/schoolDepartments';
 import { ModalShell } from '../Common/ModalShell';
 import { isTeachingAffairsWorkbenchStaff } from '../../utils/academicOfficeStaff';
-import { resolveDisplayClassSubject } from '../../utils/noticeDocument';
+import { resolveDisplayClassSubject, resolveNoticeApplicantDepartment } from '../../utils/noticeDocument';
 import { 
   ClipboardCheck, 
   CheckCircle, 
@@ -28,7 +28,8 @@ import {
 
 export const PendingApprovals: React.FC = () => {
   const { 
-    requests, 
+    requests,
+    teachers,
     approveRequest, 
     rejectRequest, 
     deleteRequest, 
@@ -200,7 +201,7 @@ export const PendingApprovals: React.FC = () => {
                       {req.requestNumber}
                     </span>
                     <span className="font-bold text-slate-800 text-sm">
-                      {req.applicantTeacherName} ({req.applicantDepartment})
+                      {req.applicantTeacherName} ({resolveNoticeApplicantDepartment(req, teachers)})
                     </span>
                     <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-700 rounded font-medium">
                       {req.requestType === 'substitute'
